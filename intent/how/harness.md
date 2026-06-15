@@ -1,11 +1,9 @@
 # How-Intent: Agent Harness Integration
 
-Durable choices behind the **agent harness** seam (`../what/07-subsystem-seams.md`). The *what*
-— that an agent runs within a session at a scope, with a persona and a model, and exposes
-something Ward can record and resume — lives in `../what/04-sessions-and-lifecycle.md` and
-`../what/02-domain-model.md`. This doc records how Ward integrates a harness without binding the
-concepts to any one of them. Context loading is harness-neutral and has its own doc
-(`context-loading.md`); this doc is about the *integration surface*.
+Durable choices behind the **agent harness** seam (`../what/07-subsystem-seams.md`); the *what*
+lives in `../what/04-sessions-and-lifecycle.md` and `../what/02-domain-model.md`. This records
+how Ward integrates a harness — the *integration surface* — without binding the concepts to any
+one of them. (Context loading is separate: `context-loading.md`.)
 
 ## Choice: harnesses are pluggable behind a thin adapter
 
@@ -20,16 +18,13 @@ mixed in one workspace — without touching the role model, the session model, o
 
 ## Choice: the harness handle is the recorded link to the underlying run
 
-For every session Ward records a **harness handle** — the harness type plus that harness's
-**native run id** (`../what/04-sessions-and-lifecycle.md`). The handle is a recorded *attribute*,
-**not** a second identity: Ward addresses a session by its own identity and *uses* the handle to
-re-attach, exactly as a task carries a remote-work-item link without that link being its
-identity (`../what/05-work-lifecycle.md`).
+For every session Ward records a **harness handle** — the harness type plus its **native run
+id** — a recorded *attribute*, not a second identity: Ward addresses a session by its own
+identity and *uses* the handle to re-attach (`../what/04-sessions-and-lifecycle.md`).
 
-**Why.** Each harness stores its conversation history in its own format and location. The handle
-is the only reliable way to find that run again — to **resume** it after a reboot and to
-**reflect** over it later (`../what/06-reflection-and-evolution.md`). Without it, recovery would
-depend on a human remembering which run was which.
+**Why.** It is the only reliable way to locate the underlying run again — to resume it after a
+reboot and to reflect over it later — without depending on a human remembering which run was
+which (`../what/06-reflection-and-evolution.md`).
 
 ## Choice: session forking is an optional capability, not a requirement
 
@@ -70,5 +65,4 @@ harnesses are installed.
 
 Within the guardrails: the exact adapter interface; the per-harness handle format and history
 location; how start/resume are invoked per harness; how the optional fork capability is detected
-and exercised; and the default harness and the per-scope override mechanism. These are the focus
-areas; this doc fixes the constraints, not the answers.
+and exercised; and the default harness and the per-scope override mechanism.

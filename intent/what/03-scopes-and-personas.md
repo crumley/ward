@@ -10,21 +10,12 @@ The whole model serves the prime directive: **keep senior judgment free of detai
 delegating detail downward and evaluating what returns** — and, because the ward is a
 teaching environment, **let learning flow back up.**
 
-## Scope and working directory: the two axes of a session
+## Scope and working directory; persona
 
-A session is bound on two independent axes (`02-domain-model.md`):
-
-- **Scope** — the level in the hierarchy it is responsible for (project / task / room).
-  *What* it is responsible for.
-- **Working directory** — where it stands and loads its context from. *Where* it operates.
-
-The two are chosen independently when a session starts, and together they bound what an
-agent attends to. **Why two:** what an agent is responsible for and where it stands are
-genuinely different choices — separating them is what lets a project-scope agent read
-broadly while a room stays narrow.
-
-How an agent attends — whether it reasons about outcomes and delegates, or does the
-hands-on work — is shaped by its **persona**, not by a further axis.
+A session is bound on two independent axes — **scope** (*what* it is responsible for) and
+**working directory** (*where* it operates), chosen independently when it starts
+(`02-domain-model.md`). How an agent attends within those bounds — whether it reasons and
+delegates or does the hands-on work — is shaped by its **persona**, not by a further axis.
 
 ## Personas have names
 
@@ -145,18 +136,10 @@ When work in a scope uncovers a sub-problem that would derail it, the scope **fo
 3. The fork reports back a clean result — "done, to your satisfaction."
 4. The origin's context stays focused; it simply learns the side quest is resolved.
 
-A fork inherits its origin's context in one of **two modes**:
-
-- **Exact-clone** — branch the origin's *actual* session state, so the fork begins knowing
-  everything the origin knew. High fidelity, but **harness-dependent**: available only where
-  the harness can fork a session (`07-subsystem-seams.md`).
-- **Brief (distilled)** — open a *fresh* session seeded by a **brief** that compacts the
-  relevant context (`02-domain-model.md`). Lower fidelity but **harness-neutral** and more
-  focused, since the brief carries only what the side quest needs.
-
-Both share the same return contract. The brief mode is the universal baseline; exact-clone is
-an optimization where the harness offers it. (Which to lean on, and which ships first, is open
-— `08-open-questions.md`.)
+A fork inherits its origin's context by **exact-clone** or **distilled brief**
+(`02-domain-model.md` defines both); both share the same return contract. The brief mode is the
+harness-neutral baseline, exact-clone an optimization where the harness offers it. (Which ships
+first is open — `08-open-questions.md`.)
 
 Forking exists to protect context; it should be cheap to start and cheap to return from. It
 is distinct from dispatch (ongoing work handed *down* the hierarchy); a fork is a bounded

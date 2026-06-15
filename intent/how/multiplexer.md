@@ -1,10 +1,8 @@
 # How-Intent: Session Multiplexer
 
-Durable choices behind the **session multiplexer** seam (`../what/07-subsystem-seams.md`). The
-*what* — that live agent sessions can be started, attached to, observed, detached from, and
-resumed, and that they survive a human walking away — lives in
-`../what/04-sessions-and-lifecycle.md`. This doc records the *kind* of technology Ward leans on
-to host those live sessions, and the line between it and the record.
+Durable choices behind the **session multiplexer** seam (`../what/07-subsystem-seams.md`); the
+*what* lives in `../what/04-sessions-and-lifecycle.md`. This records the kind of technology that
+hosts live sessions, and the line between it and the record.
 
 ## Choice: a terminal multiplexer hosts live sessions
 
@@ -49,10 +47,8 @@ indistinguishable panes is the human-side equivalent of an unfocused context win
   themeable, treated as a cache over the durable record.
 - **Is not:** the source of truth. Anything that must survive a reboot lives in the store, not
   the multiplexer.
-- **Is not:** a commitment to one specific multiplexer or grouping scheme. The contract
-  (`../what/07-subsystem-seams.md`) — start, keep-alive-when-detached, re-attach, observe
-  read-only, map a recorded reference back to a live session — is what must hold; the tool may
-  change.
+- **Is not:** a commitment to one specific multiplexer or grouping scheme. The seam contract
+  (`../what/07-subsystem-seams.md`) is what must hold; the tool may change.
 - **Is not:** the messaging channel itself. Live delivery may *ride on* the multiplexer
   (`messaging-dispatch-wake.md`), but the multiplexer's job is hosting sessions, not routing
   messages.
@@ -61,5 +57,4 @@ indistinguishable panes is the human-side equivalent of an unfocused context win
 
 Within the guardrails: the specific multiplexer; the exact grouping/window/pane layout and
 naming; how a recorded session is mapped to and from a live pane; how read-only observation is
-exposed; and how the multiplexer surface is themed (`theming.md`). These are the focus areas;
-this doc fixes the constraints, not the answers.
+exposed; and how the multiplexer surface is themed (`theming.md`).

@@ -56,4 +56,4 @@ place and survive upgrades.
 Within the guardrails: the exact set of transition points; how a hook **declares its
 satisfied-check** (exit code, marker artifact, declared probe — `../what/08-open-questions.md`);
 the hook definition format and where it lives in the workspace; ordering when multiple hooks
-attach to one transition; and how failures are surfaced. These are the focus areas.
+attach to one transition; and how failures are surfaced.

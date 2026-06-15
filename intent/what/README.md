@@ -1,17 +1,11 @@
 # What-Intent
 
-This directory holds the **what-intent**: the purpose of Ward, the concepts it models,
-and the invariants it honors — together with the reasoning for each. It is the *what* and
-the *why*, at a level above any implementation.
+The **what-intent**: Ward's purpose, the concepts it models, and the invariants it honors —
+each with its *why*, at a level above any implementation.
 
-## The rule for this layer
-
-A statement belongs here only if it would **survive swapping every tool we use**. Nothing
-in this layer names a multiplexer, a store, a harness, or a model. If a claim would change
-because we replaced one of those, it is a *how* and belongs in `../how/`.
-
-Every concept here should also carry its **why** — why it exists and why it is shaped this
-way — so the reader can apply judgment, not just follow rules.
+**The rule for this layer:** a statement belongs here only if it would survive swapping every
+tool (multiplexer, store, harness, model); nothing here names one. If a claim would change
+when a tool is swapped, it is a *how* — see `../how/`. (Full rule: `../README.md`.)
 
 ## Reading order
 

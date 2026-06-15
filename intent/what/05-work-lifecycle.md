@@ -29,16 +29,13 @@ remote item, and a task started from a remote item can be found to duplicate an 
 local task and the two **merged**. Identity stays stable across these changes; the remote
 link is an attribute of the task, not its identity.
 
-## The privacy boundary (restated, because it is load-bearing)
+## The privacy boundary
 
-The local task and the remote work item are two views with different audiences. The local
-view is personal — local paths, private notes, informal framing, and Ward's internal
-machinery (including **persona names and roles**). The remote view is shared.
-
-> **Rule.** When Ward reflects progress outward to a remote item, it **translates**:
-> composes content for the remote audience and strips everything local, personal, or
-> internal. Nothing crosses by accident. The strict direction is **outward**: local
-> context must not leak out (`01-principles.md` §4).
+The local task and the remote work item are two views with different audiences: the local view
+is personal (paths, private notes, internal machinery including **persona names**), the remote
+view is shared. When Ward reflects progress outward it **translates** — composing for the remote
+audience and stripping everything local; nothing crosses by accident, and the boundary guards
+strictly **outward** (`01-principles.md` §4).
 
 ## The cardinal rule: never merge to main directly
 
@@ -117,27 +114,11 @@ remember.
 ## Workflow policy: opinionated but evolvable
 
 Much of the above — branch from main, commit granularity, when to amend, PR-before-merge,
-the never-merge-to-main rule — is **opinion**. Ward ships **specific, opinionated defaults**
-and **injects them into a workspace at creation**, so a new workspace is immediately
-productive with a sensible workflow.
-
-But workflows evolve with the human and the kind of work, so the policy must be **modifiable,
-not baked into the tooling**:
-
-- The workflow policy lives in a **specific, encoded place inside the workspace** — the
-  current intent is a **skill** the workspace owns (mechanism: `../how/workflow-policy.md`).
-- Ward installs the default at creation; thereafter the workspace's own agents and sessions
-  may **evolve** it.
-- On a Ward **update/migration** (`06-reflection-and-evolution.md`), Ward checks whether the
-  workspace still uses the default. If so, it updates directly. If the workspace has
-  **diverged**, Ward does not clobber it — it **flags the divergence and offers a
-  reconciliation process**: an agent that walks the human through whether and how the new
-  defaults should fold into their customized policy.
-
-**Why this shape:** it keeps the human in control of their own workflow while still offering
-Ward's improvements. This pattern — opinionated default, encoded in the workspace, evolvable
-by the workspace, reconciled on upgrade — is the **general shape for any opinion Ward ships**
-(workflow policy, lifecycle hooks, personas, scaffolding).
+never-merge-to-main — is **opinion**. Ward ships opinionated defaults and injects them into a
+workspace at creation, so a new workspace is immediately productive; thereafter the workspace
+owns and evolves them, and a Ward upgrade reconciles rather than clobbers any divergence. This
+is the **opinionated-but-evolvable** pattern Ward uses for everything it ships into a workspace
+(policy, lifecycle hooks, personas, scaffolding) — defined in `../how/workflow-policy.md`.
 
 ## Summary of task states (conceptual)
 

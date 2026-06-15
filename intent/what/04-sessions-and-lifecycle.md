@@ -26,7 +26,7 @@ remote-work-item link without that link being its identity (`05-work-lifecycle.m
 the indirection:** it lets Ward span a mix of harnesses without assuming any one of them
 (`../how/context-loading.md`).
 
-## Open vs. running — a load-bearing distinction
+## Open vs. running
 
 **Open** and **running** are not the same:
 

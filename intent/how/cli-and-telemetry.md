@@ -78,4 +78,4 @@ of the workspace's own record and is never surfaced to remote artifacts.
 Within the guardrails: the exact command tree and naming; the specific environment-variable
 name and the set of context fields it carries (and which are required vs. inferred,
 `../what/08-open-questions.md`); the initial alias bindings; and the telemetry storage format,
-fields, and analysis tooling. These are the focus areas.
+fields, and analysis tooling.

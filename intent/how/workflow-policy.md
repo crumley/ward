@@ -69,4 +69,3 @@ the canonical example; reuse the mechanism rather than reinventing it per artifa
 
 Within the guardrails: the exact content of the default policy; the skill's format and location;
 how divergence is detected (hashes, version stamps, semantic diff); and the reconciliation UX.
-These are the focus areas.

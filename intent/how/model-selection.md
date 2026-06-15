@@ -1,9 +1,8 @@
 # How-Intent: Model Selection
 
-Durable choices behind the **model selection** seam (`../what/07-subsystem-seams.md`). The *what*
-— that a session runs on a chosen model and thinking depth, fast where the job is bookkeeping and
-deep where the job is hard — lives in `../what/03-scopes-and-personas.md` and the per-scope
-configuration there. This doc records how that choice is structured and kept model-agnostic.
+Durable choices behind the **model selection** seam (`../what/07-subsystem-seams.md`); the *what*
+lives in `../what/03-scopes-and-personas.md`. This records how the choice is structured and kept
+model-agnostic.
 
 ## Choice: model and thinking depth resolve through the scope hierarchy
 
@@ -58,4 +57,3 @@ models without any change to intent.
 Within the guardrails: the exact configuration shape for defaults and overrides; the initial
 persona → tier mapping and the concrete model ids behind "fast" and "deep"; how thinking depth is
 expressed; and how an override at one scope is recorded and resolved against broader defaults.
-These are the focus areas; this doc fixes the constraints, not the answers.

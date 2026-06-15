@@ -7,10 +7,9 @@ as Ward changes underneath them.
 
 ## Reflection is a family of goal-directed routines, not one routine
 
-The single most important idea here: **reflection is scoped and goal-directed.** It is not
-one undifferentiated "look back at everything" pass. Different reflections have different
-**goals** and operate over different **scopes and intervals**, and Ward pursues several
-kinds:
+**Reflection is scoped and goal-directed** — not one undifferentiated "look back at everything"
+pass. Different reflections have different **goals** and operate over different **scopes and
+intervals**, and Ward pursues several kinds:
 
 - **Cadence reflection** — on a regular interval, over the work since the last reflection.
 - **Scope-boundary reflection** — when a scope reaches a natural close, reflect over *that
@@ -90,17 +89,12 @@ for structural change keeps the risky path rare and explicit.
 
 ### Reconciliation when a workspace has diverged
 
-A workspace is meant to be customized — its agents evolve its skills, policies, and hooks.
-So update/migration must **never blindly clobber** local changes:
-
-- If the workspace still matches Ward's defaults, update directly.
-- If it has **diverged**, **flag it** and offer a **reconciliation process**: an agent that
-  asks the human whether and how the new defaults should fold into their customized
-  artifacts, and guides the choices that produce the merged result.
-
-**Why:** the whole point of evolvable artifacts is defeated if an upgrade silently overwrites
-local changes. This is the same opinionated-but-evolvable pattern described for workflow
-policy (`05-work-lifecycle.md`), applied to everything Ward installs.
+A workspace is meant to be customized, so update/migration must **never blindly clobber** local
+changes: unchanged artifacts update directly, diverged ones are flagged for **reconciliation**
+(an agent that folds the new defaults into the customized version with the human). **Why:** the
+point of evolvable artifacts is defeated if an upgrade silently overwrites them. This is the
+opinionated-but-evolvable pattern (`05-work-lifecycle.md`, `../how/workflow-policy.md`), applied
+to everything Ward installs.
 
 ## The relationship between reflection and migration
 
