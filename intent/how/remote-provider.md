@@ -1,11 +1,10 @@
 # How-Intent: Remote Work-Item Provider & the Privacy Translation
 
 Durable choices behind the **remote work-item provider** seam (`../what/07-subsystem-seams.md`)
-— the shared system where work items and pull requests live — and, crucially, **how the
-local↔remote privacy boundary is enforced** at the crossing. The *what* — that a task may be
-local-only or remote-linked, and that local/personal/internal context must never leak outward —
-lives in `../what/05-work-lifecycle.md` and `../what/01-principles.md` §4. Ward is deliberately
-opinionated here because the crossing is the one place local context can escape.
+— the shared system where work items and pull requests live — and **how the local↔remote
+privacy boundary is enforced** at the crossing. The *what* lives in `../what/05-work-lifecycle.md`
+and `../what/01-principles.md` §4. Ward is deliberately opinionated here because the crossing is
+where local context could escape.
 
 ## Choice: a hosted git forge is the provider, behind a thin adapter
 
@@ -33,9 +32,9 @@ The provider only ever receives **already-sanitized** content. The translation f
 to *remote view* happens **before** anything reaches the adapter, and it is a **deliberate
 re-authoring, not a copy** (`../what/02-domain-model.md`, `../what/05-work-lifecycle.md`):
 
-- **Direction is strictly outward-guarding.** Local, personal, and internal content — local
-  paths, private notes, informal framing, provenance, and **persona names and roles** — must
-  never appear in a remote artifact (`../what/01-principles.md` §4).
+- **Direction is strictly outward-guarding.** The local, personal, and internal content listed
+  in `../what/01-principles.md` §4 (down to **persona names and roles**) must never appear in a
+  remote artifact.
 - **Every outward path is a crossing,** not just issue/PR text: a comment posted to a remote
   item, *and* an artifact **committed into a worktree's files** (which reaches the remote when
   the PR merges). Each is re-authored for its destination, exactly as the agent would write any
@@ -74,5 +73,4 @@ the gate governs *whether* it crosses now.
 Within the guardrails: which forge and the exact adapter API; how a task records its remote link
 and reconciles attach/merge; **what the translation step concretely strips and rewrites, and where
 it runs** (the single upstream gate); how PR status is polled or received; and how gated outward
-posts request authority. The translation gate is the highest-stakes blank — design it first. This
-doc fixes the constraints, not the answers.
+posts request authority. The translation gate is the highest-stakes blank — design it first.

@@ -49,29 +49,24 @@ Context management has several dimensions, all of which Ward pursues:
 
 ## The setting: local and personal, working on the shared and remote
 
-A workspace is **local and personal** — it belongs to one human and the agents running on
-their machine. Through it, those agents work on **remote repositories** that may be shared
-with many other humans and agents elsewhere.
+A workspace is **local and personal** — it belongs to one human and the agents on their
+machine. Through it, those agents work on **remote repositories** shared with many other humans
+and agents elsewhere.
 
-This creates a hard boundary Ward must respect: **local, personal context must not leak
-into shared, remote artifacts.** Not local paths. Not private notes. And not the internal
-machinery of how the work was produced — for example, the **names and roles of personas
-are internal** and must never appear in a commit message, PR, or issue ("the resident
-asked me to do this" must never be written to a remote). When we reflect progress outward,
-the content is composed for people and agents on *other* machines who do not share our
-local context. The translation between *local task* and *remote work item* is a
-first-class concern, not an afterthought.
+This creates a hard boundary Ward must respect: **local, personal context must not leak into
+shared, remote artifacts** (the full rule, down to internal persona names, is
+`01-principles.md` §4). Progress reflected outward is composed for readers on *other* machines
+who do not share our context, so the translation between *local task* and *remote work item* is
+a first-class concern, not an afterthought.
 
 ## Pause and resume as a baseline assumption
 
-Any thread of work may be **paused** — for an hour, or for weeks. The machine may reboot
-with a dozen agent sessions open. Ward assumes work is interrupted constantly and resumed
-cold. So the workspace records enough about each thread that a human or agent can return
-and quickly reconstruct: what was being done, under **which harness handle** (which harness,
-which native run), in what state — and resume exactly there, without re-doing finished work
-and without burning tokens restarting things that already completed. Because each harness
-stores its own session history in its own format, Ward records this handle for each thread, so
-any of them can be located again — to resume, or to reflect.
+Any thread of work may be **paused** — for an hour, or for weeks. The machine may reboot with a
+dozen agent sessions open. Ward assumes work is interrupted constantly and resumed cold, so the
+workspace records enough about each thread to return and reconstruct it: what was being done, in
+what state, and under which **harness handle** — and resume exactly there, without re-doing
+finished work or burning tokens on what already completed. (How the handle locates a run:
+`04-sessions-and-lifecycle.md`.)
 
 ## The metaphor: a hospital ward
 

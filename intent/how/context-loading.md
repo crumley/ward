@@ -53,15 +53,13 @@ genuinely necessary. Append preserves the cacheable prefix; rewrite invalidates 
 
 ## Choice: record a harness handle for every session
 
-For every session, Ward records a **harness handle** — which harness produced it and that
-harness's native run id — in the session log (`../what/04-sessions-and-lifecycle.md`). The
-handle is a recorded *attribute*, not a second identity (`harness.md`).
+For every session, Ward records a **harness handle** in the session log
+(`../what/04-sessions-and-lifecycle.md`) — a recorded *attribute*, not a second identity
+(`harness.md`).
 
-**Why.** Each harness stores its conversation history in its own format and location. The
-recorded handle is the only reliable way to **locate the underlying run again** — to *resume* it
-after a reboot, and to *reflect* over it later (`../what/06-reflection-and-evolution.md`).
-Without it, reflection could not span a mix of harnesses, and recovery would depend on a human
-remembering which run was which.
+**Why.** It is the only reliable way to locate the underlying run again — to resume it after a
+reboot and to reflect over it later — across a mix of harnesses
+(`../what/04-sessions-and-lifecycle.md`, `../what/06-reflection-and-evolution.md`).
 
 ## Guardrails — what this is, and what it is not
 
@@ -80,4 +78,3 @@ remembering which run was which.
 Within the guardrails: the precise `AGENTS.md` field conventions; how skills are referenced and
 resolved; the **exact ordering algorithm** for the cacheable prefix and where the mutable tail
 begins; the per-harness handle formats and history locations; and any caching configuration.
-These are the focus areas; this doc fixes the constraints, not the answers.

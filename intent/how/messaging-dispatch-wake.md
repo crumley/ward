@@ -1,11 +1,10 @@
 # How-Intent: Messaging, Dispatch & Wake
 
 Durable choices behind the **inter-scope messaging & coordination** seam
-(`../what/07-subsystem-seams.md`). The *what* — that dispatch (down), report (up), and wake
-(notify) exist — lives in `../what/02-domain-model.md` and `../what/03-scopes-and-personas.md`.
-This doc records how Ward realizes them. Ward is deliberately **opinionated** here because
-these flows overlap heavily with the multiplexer and the metadata store, and an unprincipled
-realization would leak live, unrecoverable state.
+(`../what/07-subsystem-seams.md`); the *what* (dispatch down, report up, wake on a condition)
+lives in `../what/02-domain-model.md` and `../what/03-scopes-and-personas.md`. Ward is
+deliberately opinionated here because these flows overlap with the multiplexer and the store,
+and an unprincipled realization would leak live, unrecoverable state.
 
 ## Choice: messages and dispatch are addressed by identity, and recorded
 
@@ -52,12 +51,11 @@ a condition that was **satisfied while the machine was down** fires **once** and
 (idempotently, never double-acting). A detached waiter learns on resume that its condition is
 met.
 
-**Why this is the crux.** The motivating scenario for the whole system is a reboot with many
-threads in flight (`../what/04-sessions-and-lifecycle.md`). The delegate-and-return pattern — a
-resident detaches and is woken when its room finishes — only holds if the wake survives the
-reboot. A wake that lived only in a running process would silently vanish exactly when it is
-needed most. Recording-first is what lets the asynchronous model survive the very event it
-exists to survive.
+**Why.** The motivating scenario is a reboot with many threads in flight
+(`../what/04-sessions-and-lifecycle.md`). The delegate-and-return pattern — a resident detaches
+and is woken when its room finishes — only holds if the wake survives the reboot. A wake that
+lived only in a running process would vanish exactly when it is needed most; recording it first
+is what lets the asynchronous model survive that event.
 
 ## Guardrails — what this is, and what it is not
 
@@ -75,4 +73,4 @@ exists to survive.
 Within the guardrails: the message/dispatch record format and where it lives relative to the
 session log; how a wake **condition** is expressed and evaluated; the split of responsibility
 between multiplexer and store for the running vs. not-running cases; and how waits are re-armed
-during recovery (`../what/08-open-questions.md`). These are the focus areas.
+during recovery (`../what/08-open-questions.md`).

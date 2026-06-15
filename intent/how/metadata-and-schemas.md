@@ -1,8 +1,8 @@
 # How-Intent: Metadata Store, Documents & Schemas
 
 Durable choices behind the **metadata store** seam (`../what/07-subsystem-seams.md`) and the
-shape of the data Ward keeps. These are *how* choices — independent of the concepts, and
-replaceable — recorded here because they should outlive any one implementation.
+shape of the data Ward keeps (`../what/02-domain-model.md`) — recorded because they should
+outlive any one implementation.
 
 ## Choice: the filesystem is the store
 
@@ -115,5 +115,4 @@ Within the guardrails above, the implementer decides: the exact directory paths 
 the precise front-matter fields per document type and the full type list; the schema library
 and version; serialization details; the **concurrency primitive** for the serialized shared
 writes (advisory lock, atomic rename, or compare-and-set); and the `.gitignore` policy for
-which artifacts are tracked vs. regenerated. These are the focus areas; this doc fixes the
-constraints, not the answers.
+which artifacts are tracked vs. regenerated.

@@ -1,9 +1,8 @@
 # How-Intent: Visual Theming & Identity Coordination
 
 Durable choices behind the **visual theming / identity coordination** seam
-(`../what/07-subsystem-seams.md`). The *what* — that each unit of work has a consistent visual
-identity so a human can tell at a glance which task or room a window belongs to — lives in the
-seam contract. This doc records how that identity is assigned and applied.
+(`../what/07-subsystem-seams.md`); the *what* lives in the seam contract there. This records how
+that visual identity is assigned and applied.
 
 ## Choice: a deterministic, collision-free accent identity per unit of work
 
@@ -56,5 +55,4 @@ the idempotency every hook requires.
 
 Within the guardrails: the palette and the deterministic assignment function (and its
 collision-avoidance scope); which surfaces are themed and how each is driven; the exact setup and
-teardown hook steps; and how the accent is recorded so it stays stable across resumes. These are
-the focus areas; this doc fixes the constraints, not the answers.
+teardown hook steps; and how the accent is recorded so it stays stable across resumes.

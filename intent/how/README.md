@@ -1,50 +1,28 @@
 # How-Intent
 
-This directory holds the **how-intent**: the durable, cross-cutting choices about *how*
-Ward's concepts are modeled and *which kinds of technology* realize them — **and why** each
-choice was made.
-
-## Where this sits
-
-```
-what-intent   →   how-intent   →   implementation plan   →   tests + code
-(../what + why)   (this dir + why)  (sequenced work)         (the system)
-```
-
-- **Above** the implementation plan: it does not sequence work or write code.
-- **Below** the what-intent: it may name *kinds* of technology and modeling patterns, which
-  the what-intent never does.
-
-A how-intent doc records a **choice that should outlive any single implementation**, and the
-reasoning that justifies it — so that when the implementation is rewritten, the choice and
-its rationale are not lost, and a reader can tell a deliberate decision from an incidental
-one.
+The **how-intent**: durable, cross-cutting choices about *which kinds of technology* realize
+Ward's concepts, and *why* — recorded so a rewrite of the implementation never loses the
+decision or its rationale. It sits above the implementation plan (no sequence, no code) and
+below the what-intent (it may name *kinds* of technology, which `../what/` never does). For the
+layering and the separation rule, see `../README.md`.
 
 ## Conventions every how-doc follows
 
-These conventions exist so the docs are useful to the agent (or human) who later implements
-against them:
-
-1. **Why, always.** Every choice states its reasoning. *How* without *why* is just an
-   assertion, and an implementer cannot weigh a trade-off they do not understand.
-2. **Guardrails with counterfactuals — what it *is*, and what it is *not*.** A constraint is
-   defined more sharply by its boundary than by its center. Each doc says not only what the
-   choice requires but what it explicitly does **not** require or forbid, so the implementer
-   knows the room they have to move in.
-3. **Mark the blanks for the implementation plan.** These docs set guardrails; they do **not**
-   fill in every detail. Each doc ends by naming, explicitly, **where the implementer must
-   fill in the blanks** within the guardrails — the spots where downstream design attention
-   should concentrate. (`context-loading.md` is the canonical example: it fixes the
-   *constraints* on context assembly and deliberately leaves the *exact ordering algorithm*
-   to the implementation.)
+1. **Why, always** (`../README.md`). A *how* without its *why* is an assertion an implementer
+   cannot weigh.
+2. **Guardrails with counterfactuals.** Each doc says what the choice requires **and** what it
+   explicitly does *not* — a constraint is defined by its boundary, not just its center.
+3. **Mark the blanks.** These docs set constraints, not every detail. Each ends with **where
+   the implementer fills in the blanks** within the guardrails — that section fixes the focus
+   areas, not the answers, so it lists the blanks and stops. (`context-loading.md` is the
+   canonical example: it fixes the constraints on context assembly and leaves the exact
+   ordering algorithm open.)
 
 ## Relationship to the seams
 
-`../what/07-subsystem-seams.md` names each of the eight seams as a contract, and **every seam
-now has a how-doc behind it** (metadata store, session multiplexer, messaging & coordination,
-agent harness, model selection, visual theming, remote work-item provider, human shell). Some
-how-intent cuts across several seams and stands on its own — context loading, lifecycle hooks,
-and reflection (a major mechanism, though not itself a seam).
+`../what/07-subsystem-seams.md` names eight seams as contracts, and **every seam has a how-doc
+behind it**. Some how-intent cuts across seams and stands alone — context loading, lifecycle
+hooks, and reflection (a major mechanism, though not itself a seam).
 
 ## Contents
 
@@ -65,7 +43,6 @@ and reflection (a major mechanism, though not itself a seam).
 
 ## What does *not* belong here
 
-*What*-statements (concepts, invariants) — those live in `../what/`. And exact libraries,
-file paths, field names, CLI flags, and wire formats — those live in the implementation plan
-and the code. A how-doc may *illustrate* with an example, but the example is never the
-contract.
+*What*-statements (concepts, invariants) live in `../what/`; exact libraries, paths, field
+names, CLI flags, and wire formats live in the plan and the code. A how-doc may *illustrate*
+with an example, but the example is never the contract.

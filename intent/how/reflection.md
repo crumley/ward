@@ -1,11 +1,9 @@
 # How-Intent: Reflection Mechanism
 
 Durable choices for *how* Ward realizes **reflection** — the compounding loop that turns
-accumulated experience and the teaching loop into better skills, tooling, personas, and Ward
-itself. The *what* — that reflection is a **family of goal-directed routines**, runs on a cadence
-and at scope boundaries, and is chunked and rolled up to scale — lives in
-`../what/06-reflection-and-evolution.md`. Reflection is not a subsystem seam, but it is a major
-mechanism that cuts across the store, the harness, and the workflow, so its durable choices are
+experience and the teaching loop into better skills, tooling, personas, and Ward itself. The
+*what* lives in `../what/06-reflection-and-evolution.md`. Reflection is not a seam, but it is a
+major mechanism cutting across the store, the harness, and the workflow, so its choices are
 recorded here.
 
 ## Choice: a reflection is an evolvable routine, encoded in the workspace
@@ -34,17 +32,13 @@ same way.
 
 ## Choice: reflection is map-reduce over chunks, to stay tractable at any size
 
-A reflection may have to cover far more than fits in one context window, so it is a **map-reduce**,
-not a single pass (`../what/06`):
+A reflection may cover far more than fits in one context window, so it is the **map-reduce** of
+`../what/06` — chunk the interval, distill each chunk to its core learnings, roll up into one
+coherent reflection and its proposals.
 
-1. **Chunk** the interval's work into pieces (by time, task, scope, or volume).
-2. **Distill** each chunk independently to its **core learnings** — a small, dense summary.
-3. **Roll up** the distilled learnings into one coherent reflection and its proposals.
-
-**Why.** A long-deferred reflection must degrade into **more chunks**, not failure
-(`../what/06`). Map-reduce is what makes the cost scale with how much accumulated rather than
-overflow. The chunks read the underlying runs via their **harness handles** (`harness.md`), which
-is why reflection can span a mix of harnesses.
+**Why.** A long-deferred reflection degrades into more chunks, not failure. The chunks read the
+underlying runs via their **harness handles** (`harness.md`), which is why reflection can span a
+mix of harnesses.
 
 > **Open — cross-chunk learnings.** Some insights emerge only in aggregate and are invisible to
 > any single chunk. How the roll-up surfaces these (a second pass over distillations, a
@@ -87,5 +81,4 @@ reason update/migration reconciles rather than clobbers (`../what/06`).
 Within the guardrails: the default set of reflection goals and how a new one is added; the chunk
 boundary heuristics and the distillation prompt/shape; the roll-up procedure and how cross-chunk
 themes are preserved; the cursor's concrete form per goal; the cadence and boundary **triggers**
-(`../what/08-open-questions.md`); and how proposals are recorded and surfaced for adoption. These
-are the focus areas; this doc fixes the constraints, not the answers.
+(`../what/08-open-questions.md`); and how proposals are recorded and surfaced for adoption.
