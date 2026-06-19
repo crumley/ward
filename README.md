@@ -2,7 +2,7 @@
 
 Ward is a command-line tool and toolset that sets up and operates **opinionated, structured
 workspaces** in which humans and agents work together on software. (Full purpose:
-[`intent/foundation/vision.md`](intent/foundation/vision.md).)
+[`intent/00-foundation/00-vision.md`](intent/00-foundation/00-vision.md).)
 
 This repository is where Ward is **designed and built** — it is not itself a Ward workspace.
 

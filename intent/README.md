@@ -22,11 +22,11 @@ and format names — if you find a tool name here, it has leaked from `design/`.
 
 ## Three groupings
 
-| Group                        | Holds                                                                                                   | Has a `design/` counterpart?                                                                                             |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| [`foundation/`](foundation/) | **Global** intent — vision and the cross-cutting principles every slice honors, plus shared vocabulary. | Only global architecture (`design/foundation.md`).                                                                       |
-| [`concepts/`](concepts/)     | The **domain**: design-independent nouns and processes.                                                 | Only where a concept has its own realization (`sessions`, `delivery`, `reflection`); the rest realize through the store. |
-| [`subsystems/`](subsystems/) | The **swappable machinery** (the eight seams): the constraints any design of each must satisfy.         | Always — one design file per subsystem.                                                                                  |
+| Group                              | Holds                                                                                                   | Has a `design/` counterpart?                                                                                             |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| [`00-foundation/`](00-foundation/) | **Global** intent — vision and the cross-cutting principles every slice honors, plus shared vocabulary. | Only global architecture (`design/00-foundation.md`).                                                                    |
+| [`01-concepts/`](01-concepts/)     | The **domain**: design-independent nouns and processes.                                                 | Only where a concept has its own realization (`sessions`, `delivery`, `reflection`); the rest realize through the store. |
+| [`02-subsystems/`](02-subsystems/) | The **swappable machinery** (the eight seams): the constraints any design of each must satisfy.         | Always — one design file per subsystem.                                                                                  |
 
 ## The two governing rules
 
@@ -39,11 +39,20 @@ and format names — if you find a tool name here, it has leaked from `design/`.
 
 ## Reading order
 
-1. [`foundation/vision.md`](foundation/vision.md) — why Ward exists.
-2. [`foundation/principles.md`](foundation/principles.md) — the invariants every slice honors.
-3. [`concepts/`](concepts/) — the domain model: `work-hierarchy`, `identity`, `roles`, `artifacts`,
-   `sessions`, `delivery`, `reflection`.
-4. [`subsystems/`](subsystems/) — the machinery, each as a contract pointing to its design.
-5. [`walkthrough.md`](walkthrough.md) — one task threaded through the concepts.
-6. [`foundation/open-questions.md`](foundation/open-questions.md) — cross-cutting unresolved
+Directories and files are **numbered in the order to read them** — `00-`, `01-`, `02-` … sort into
+the path to follow. **Unnumbered** files are _references_, not steps: consult them as needed or read
+them last; they sort to the end of their directory. (`README.md`, `00-foundation/glossary.md`, and
+`00-foundation/open-questions.md` are the references here.)
+
+1. [`00-foundation/00-vision.md`](00-foundation/00-vision.md) — why Ward exists.
+2. [`00-foundation/01-principles.md`](00-foundation/01-principles.md) — the invariants every slice
+   honors.
+3. [`01-concepts/`](01-concepts/) — the domain model, in order: `work-hierarchy`, `identity`,
+   `roles`, `artifacts`, `sessions`, `delivery`, `reflection`.
+4. [`02-subsystems/`](02-subsystems/) — the machinery, in order from the store outward, each a
+   contract pointing to its design.
+5. [`03-walkthrough.md`](03-walkthrough.md) — one task threaded through the concepts.
+6. [`00-foundation/open-questions.md`](00-foundation/open-questions.md) — cross-cutting unresolved
    tensions (each slice also carries its own _Open questions_ section).
+   [`00-foundation/glossary.md`](00-foundation/glossary.md) maps every term to its home — consult it
+   anytime.

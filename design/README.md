@@ -17,15 +17,19 @@ it is a _constraint_, not a design, and it belongs up in `../intent/`. Each desi
 
 ## How this tree mirrors intent
 
-| Design area                      | Realizes                                        | Notes                                                                                                                                  |
-| -------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| [`foundation.md`](foundation.md) | `intent/foundation/`                            | Global architecture: language and schema approach, the four-leg repo layout, cross-cutting conventions.                                |
-| [`concepts/`](concepts/)         | the few concepts with their **own** realization | Only `sessions` (context loading, recovery), `delivery` (hooks, policy encoding, refresh/rebase), and `reflection` (chunking, cursor). |
-| [`subsystems/`](subsystems/)     | each of the eight seams                         | One file per subsystem — this is where most realization lives.                                                                         |
+Numbering matches intent: `00-`, `01-`, `02-` prefixes sort dirs and files into reading order, and
+subsystems run from the store outward. Unnumbered files (`README.md`, `blanks-register.md`) are
+references read out of sequence.
+
+| Design area                            | Realizes                                        | Notes                                                                                                                                  |
+| -------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| [`00-foundation.md`](00-foundation.md) | `intent/00-foundation/`                         | Global architecture: language and schema approach, the four-leg repo layout, cross-cutting conventions.                                |
+| [`01-concepts/`](01-concepts/)         | the few concepts with their **own** realization | Only `sessions` (context loading, recovery), `delivery` (hooks, policy encoding, refresh/rebase), and `reflection` (chunking, cursor). |
+| [`02-subsystems/`](02-subsystems/)     | each of the eight seams                         | One file per subsystem — this is where most realization lives.                                                                         |
 
 **Most domain concepts have no design file of their own.** The hierarchy, identity, and artifacts
 are _recorded_, and their realization is the store — so they are designed once, in
-[`subsystems/metadata-store.md`](subsystems/metadata-store.md), not scattered.
+[`02-subsystems/00-metadata-store.md`](02-subsystems/00-metadata-store.md), not scattered.
 
 ## Where the blanks are
 
@@ -33,6 +37,6 @@ are _recorded_, and their realization is the store — so they are designed once
 open — the spine an implementation plan must consume before code is written.
 
 > **Note on the walkthrough.** The intent walkthrough
-> ([`../intent/walkthrough.md`](../intent/walkthrough.md)) threads one task through the concepts. We
-> are intentionally **not** duplicating it here unless a concrete, record-and-tool-naming version
-> earns its keep during implementation.
+> ([`../intent/03-walkthrough.md`](../intent/03-walkthrough.md)) threads one task through the
+> concepts. We are intentionally **not** duplicating it here unless a concrete,
+> record-and-tool-naming version earns its keep during implementation.

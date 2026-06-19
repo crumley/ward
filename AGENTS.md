@@ -2,16 +2,16 @@
 
 You are in the repository where **Ward** is designed and built. This is the harness-neutral guide
 for any agent working here; read it first. Ward's full purpose is in
-[`intent/foundation/vision.md`](intent/foundation/vision.md). **This repo _builds_ Ward — it is not
-itself a Ward workspace.**
+[`intent/00-foundation/00-vision.md`](intent/00-foundation/00-vision.md). **This repo _builds_ Ward
+— it is not itself a Ward workspace.**
 
 ## The four legs
 
 The repo stands on four parallel trees; **`intent` governs the other three** (`README.md`):
 
 - [`intent/`](intent/) — the **durable** purpose, concepts, and constraints, design-independent.
-  Three groupings: `foundation/` (global vision + principles + glossary), `concepts/` (the domain),
-  `subsystems/` (the eight swappable seams, each a contract). Start at
+  Three groupings: `00-foundation/` (global vision + principles + glossary), `01-concepts/` (the
+  domain), `02-subsystems/` (the eight swappable seams, each a contract). Start at
   [`intent/README.md`](intent/README.md).
 - [`design/`](design/) — **one realization**: the tools, structures, formats, and algorithms chosen
   to satisfy the intent. Includes [`design/blanks-register.md`](design/blanks-register.md), the
@@ -37,7 +37,8 @@ The repo stands on four parallel trees; **`intent` governs the other three** (`R
 ## If you are here to…
 
 - **Understand Ward** — follow the reading order in [`intent/README.md`](intent/README.md):
-  `foundation/` → `concepts/` → `subsystems/` → [`intent/walkthrough.md`](intent/walkthrough.md).
+  `00-foundation/` → `01-concepts/` → `02-subsystems/` →
+  [`intent/03-walkthrough.md`](intent/03-walkthrough.md).
 - **Fill a slice** — write the durable constraints into the `intent/` file and the chosen technology
   into the matching `design/` file. Keep tool names out of `intent/`.
 - **Build Ward** — read [`design/blanks-register.md`](design/blanks-register.md), settle the 🔴
@@ -46,6 +47,9 @@ The repo stands on four parallel trees; **`intent` governs the other three** (`R
 ## Conventions
 
 - Markdown, hard-wrapped ~95 columns, matching the surrounding files.
+- **Numbered for reading order.** `00-`, `01-`, `02-` prefixes on dirs and files sort into the order
+  to read them; unnumbered files (`README.md`, glossaries, open-questions, registers) are references
+  read out of sequence. Renumber neighbors if you insert a step, and update references.
 - Cross-reference by relative path; keep links live.
 - **Never name a tool, format, path, or field in `intent/`** — that is what `design/` is for.
 - Don't introduce a concept that isn't needed.

@@ -8,6 +8,6 @@ constraints set by [`../intent/`](../intent/).
 > `harness`, `model-selection`, `theming`, `remote-provider`, `shell-cli`) plus the cross-cutting
 > concept mechanisms (`sessions`/context-loading, `delivery`/hooks, `reflection`). The concrete
 > module layout is itself a **design** decision — record it in
-> [`../design/foundation.md`](../design/foundation.md) before populating this tree.
+> [`../design/00-foundation.md`](../design/00-foundation.md) before populating this tree.
 
 `src` moves with `design` and `test`; all three reconcile back to `intent` when they diverge.
