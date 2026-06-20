@@ -20,13 +20,13 @@ knowing one repository `meal-planner` whose canonical main checkout is kept curr
 answer "what's in flight?" by *deriving* status across projects
 (`01-concepts/00-domain-model.md`, status) — right now, nothing.
 
-## 1. Open a project — floor A
+## 1. Open a project — floor 1
 
-The human starts a project, *meal-plan-exports*. It is given identity **slug + code `A`** (its
-floor letter, `01-concepts/00-domain-model.md`). An **attending** persona owns its outcome and a
+The human starts a project, *meal-plan-exports*. It is given identity **slug + code `1`** (its
+floor number, `01-concepts/00-domain-model.md`). An **attending** persona owns its outcome and a
 **charge nurse** tracks its status (`01-concepts/01-scopes-and-personas.md`).
 
-**Records written:** a *project record* on floor `A` (type from the document catalog,
+**Records written:** a *project record* on floor `1` (type from the document catalog,
 `02-subsystems/00-metadata-store.md`); a *session log* entry as the human opens a project-scope
 session (`01-concepts/02-sessions-and-lifecycle.md`), capturing persona, working directory (the
 workspace root, for breadth), model, and **harness handle**.
@@ -36,7 +36,7 @@ workspace root, for breadth), model, and **harness handle**.
 
 ## 2. Open a task
 
-Under floor `A`, the human opens a task *csv-export*, **local-only** for now
+Under floor `1`, the human opens a task *csv-export*, **local-only** for now
 (`01-concepts/03-work-lifecycle.md`). A **resident** persona owns it. The task record captures its
 scope, success criteria ("a CSV endpoint, tested, merged"), and that it touches `meal-planner`.
 
@@ -54,22 +54,22 @@ line (`01-concepts/03-work-lifecycle.md`, never-merge-to-main).
 **Records written:** the *worktree* registered against the task (natural key: repo + branch); a
 record (or marker) that each setup hook is satisfied, so a later resume is a no-op.
 
-## 4. Brief and open a room — A1
+## 4. Brief and open a room — 1A1
 
 The resident writes a **brief** — the artifact that conjures and orients the hands-on agent: what
 the room is for, where it operates (the worktree directory), what "done" means
-(`01-concepts/00-domain-model.md`, briefs). It opens **room `A1`** (floor A, first room) on the
+(`01-concepts/00-domain-model.md`, briefs). It opens **room `1A1`** (floor 1, first room) on the
 worktree and **dispatches** the brief down into it (`01-concepts/01-scopes-and-personas.md`). The
-resident then **detaches** and arms a **wake**: "notify me when `A1` reports done"
+resident then **detaches** and arms a **wake**: "notify me when `1A1` reports done"
 (`02-subsystems/02-messaging-coordination.md`) — it does not sit blocked.
 
 **Records written:** a *brief artifact* with provenance (which persona, working dir, session,
-why); the *room record* `A1` (active, on the worktree); the *dispatch record*; the *wake
-condition* against `A1`'s identity; a *session log* entry for the room's first session.
+why); the *room record* `1A1` (active, on the worktree); the *dispatch record*; the *wake
+condition* against `1A1`'s identity; a *session log* entry for the room's first session.
 
 ## 5. Deep work in the room
 
-In room `A1`, a **medical student** persona does the actual work in the worktree's own working
+In room `1A1`, a **medical student** persona does the actual work in the worktree's own working
 directory, loading *that* directory's `AGENTS.md` context and skills
 (`01-concepts/05-context-loading.md`) — its whole context spent on the code, not the project. It
 writes the endpoint, adds tests, and may produce its own **artifacts** (a decision note, a data
@@ -84,10 +84,10 @@ metadata store).
 The room reports **done** upward. This **satisfies the wake**, so the detached resident is
 nudged back (`02-subsystems/02-messaging-coordination.md`). The resident evaluates the result
 against the bar; suppose it asks for clearer error handling. It dispatches the revision back into
-`A1` (still the same room, `01-concepts/01-scopes-and-personas.md`) and detaches again. The room
+`1A1` (still the same room, `01-concepts/01-scopes-and-personas.md`) and detaches again. The room
 revises and reports done; the resident is satisfied.
 
-**Records written:** *report* and updated *session log*; a re-armed *wake*; on acceptance, `A1`'s
+**Records written:** *report* and updated *session log*; a re-armed *wake*; on acceptance, `1A1`'s
 record moves toward closed.
 
 ## 7. Present to the attending; open the PR
@@ -117,10 +117,10 @@ the worktree record.
 With the PR merged, the resident closes the task (`01-concepts/03-work-lifecycle.md`):
 
 1. **Disposition artifacts.** Decide if any room artifact deserves a wider home — committed into
-   the repo, posted to the issue, or promoted to a floor-`A` artifact — each **re-authored, not
+   the repo, posted to the issue, or promoted to a floor-`1` artifact — each **re-authored, not
    copied** across the boundary (`01-concepts/00-domain-model.md`).
 2. **Close.** The task closes; **closed stays closed** (`01-concepts/02-sessions-and-lifecycle.md`).
-   Room `A1` and its worktree tear down via **idempotent teardown hooks**
+   Room `1A1` and its worktree tear down via **idempotent teardown hooks**
    (`../design/lifecycle-hooks.md`); the main checkout is refreshed.
 3. **Scope-boundary reflection.** Closing the task triggers a reflection on *that task's arc*
    (`01-concepts/04-reflection-and-evolution.md`, `../design/reflection.md`): it reads the task's
@@ -136,8 +136,8 @@ teardown-satisfied markers; a *reflection output* (proposals) and an advanced *r
 Suppose the machine had rebooted at step 6 (room mid-revision, resident detached). On cold start,
 recovery (`01-concepts/02-sessions-and-lifecycle.md`) enumerates sessions, keeps the **open, not
 closed** ones, re-attaches each via its **harness handle**, **re-arms the resident's wake** so it
-is still notified when `A1` finishes, and **re-validates** the worktree's setup hooks (no-ops if
-satisfied). The human returns to exactly the threads in flight — `A1` and its waiting resident —
+is still notified when `1A1` finishes, and **re-validates** the worktree's setup hooks (no-ops if
+satisfied). The human returns to exactly the threads in flight — `1A1` and its waiting resident —
 and nothing that was already closed.
 
 ---

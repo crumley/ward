@@ -4,9 +4,15 @@
 
 This file describes the **role model**: who operates at each scope, what each is
 responsible for, and how work, information, and learning flow between them. The personas
-are named after roles in a hospital ward. The set is **open and configurable** — personas
-can be added, changed, or retired; what follows is the current intent, with its reasoning,
-not a closed list.
+are named after roles in a hospital ward.
+
+These roles are the **opinionated defaults Ward injects into a workspace at creation** — and
+from that point they are **living, evolving parts of the workspace**, not fixed in the CLI.
+The set is **open and configurable**: reflection (`04-reflection-and-evolution.md`) may
+**add, modify, retire, or recommend** personas to better fit the work the workspace actually
+does. This is the same opinionated-but-evolvable, reconciled-on-upgrade pattern Ward applies to
+everything it ships (`03-work-lifecycle.md`). What follows is the current default cast, with its
+reasoning — not a closed list.
 
 The whole model serves the prime directive: **keep senior judgment free of detail by
 delegating detail downward and evaluating what returns** — and, because the ward is a
@@ -31,11 +37,17 @@ hands-on work — is shaped by its **persona**, not by a further axis.
 ## Personas have names
 
 Each persona has a **name** in addition to a **role**. The name personalizes the agent and
-makes it easy to address ("ask the resident on A3"). But the name and role are **internal
+makes it easy to address ("ask the resident on `4A12`"). But the name and role are **internal
 to the workspace** and must never appear in remote artifacts (`../00-foundation/01-principles.md` §4): a
 commit or PR never says "the resident did this." **Why a name at all:** humans (and agents)
 reason better about a named collaborator than an anonymous one; the cost is only that the
 name must be kept inside the boundary.
+
+**Names come from a static list, and configuring names + personas is part of workspace setup.**
+The human picks (or accepts) the cast when the workspace is created, and can adjust it later (the
+set is evolvable, above). **Why a curated list:** a stable, memorable set of names is easier to
+hold in the head than ad-hoc or generated ones, and keeps addressing ("the resident on `4A12`")
+consistent across sessions.
 
 ## The roles
 
@@ -45,7 +57,8 @@ Holds the **status of the whole workspace** — every project and how each is mo
 owning any one project's outcome and without descending into detail. The workspace's
 **direction** is the human's to set (`../00-foundation/00-vision.md`: the workspace is personal to one human);
 the house supervisor is the human's counterpart for *awareness and routing* — pointing work
-and questions to the right project and surfacing where things stand across all of them. It is
+and questions to the right project, surfacing where things stand across all of them, and
+**directing a human or agent to the right session** (see *Flow of work*, below). It is
 the charge nurse's function raised one level, from a project to the workspace. **Why a fast
 model:** like the charge nurse, the job is status and routing, not deep reasoning. (Call it
 "house supervisor," or just "supervisor.")
@@ -54,15 +67,18 @@ model:** like the charge nurse, the job is status and routing, not deep reasonin
 
 Owns the outcome of a **project**. Understands deeply what success means and how the tasks
 fit together to achieve it. Sets direction and gives the **final approval** that a unit of
-work is good to go. Delegates and evaluates; does not do the hands-on work. As a teacher,
-raises the standard of everyone beneath it.
+work is good to go. Delegates and evaluates; does not do the hands-on work. As a teacher, it
+**defines the standards** the project's work is held to and **evolves them** as it notices
+sessions repeatedly needing the same correction — feeding those refinements into reflection
+(`04-reflection-and-evolution.md`). It raises the standard of everyone beneath it.
 
 ### Charge nurse — status across a project's work, teacher
 
 Holds the **status of everything** within a project without doing the work. Pure
 bookkeeping and routing: knows which agents are involved in each task, what state each is
 in, and where to point a human or agent who needs detail. **Dispatches** work to the right
-place and **redirects** queries to where the detail lives — but never descends into detail.
+place and **redirects** queries to where the detail lives — resolving them to the **right
+session** (see *Flow of work*, below) — but never descends into detail.
 **Why a fast model:** the job is status and routing, not deep reasoning, so it should be
 fast and cheap rather than deep. Commonly works shoulder-to-shoulder with the attending and
 residents (see "multiple personas per scope").
@@ -109,6 +125,14 @@ one-directional**:
   document**, or the **workspace itself** should improve.
 - That decision becomes input to reflection (`04-reflection-and-evolution.md`).
 
+**What is learned is broad, and any teaching scope can capture it.** It is not only "this code
+was wrong." Learning can be about **how to interact** with residents and students, **how to work
+within the ward system** itself, or **how to make future sessions at any scope go better** —
+sharper briefs, clearer standards, missing tooling. And **defining and evolving standards is not
+the attending's job alone:** a **resident** that keeps correcting the same thing in its rooms
+evolves the standard for *that* work the same way and feeds it to reflection. Any teaching scope
+that notices a pattern can turn it into a durable improvement.
+
 So teaching and learning is also the act of the **system learning about itself**. **Why it
 matters:** every supervisory interaction is a potential source of compounding, not just the
 scheduled reflection pass.
@@ -125,6 +149,16 @@ The hierarchy is a two-way communication structure (concepts in `00-domain-model
   current status without holding detail.
 - **Return — wake.** A senior scope can wait on a junior one, or detach and be woken when
   it finishes, rather than blocking (`02-sessions-and-lifecycle.md`).
+
+**Routing resolves to a session.** A large part of what the **house supervisor** and **charge
+nurse** do is point a human or agent to the *right session* — resolving "who's handling X?" to
+the session that holds it. For an **agent**, that routing is a **dispatch**
+(`../02-subsystems/02-messaging-coordination.md`). For the **human**, it is handing over the
+**command to switch to — attach to — that session**, so they can follow along or interact
+(`../02-subsystems/01-session-multiplexer.md`, which keeps sessions attachable). **Why:** finding
+the right window among a dozen is exactly the human-side context-management problem the status
+personas exist to solve. (Whether dispatch *always* passes through these personas or may be
+issued directly is open — `../00-foundation/open-questions.md`.)
 
 Ward makes both directions **deterministic and consistent**: one well-defined way to
 dispatch into a scope, one well-defined way for it to report back (mechanism:
@@ -182,7 +216,14 @@ These are *what* can vary per scope; the mechanism that applies them is a *how*
 
 - **The role model** — house supervisor, attending physician, charge nurse, resident, and
   room/medical students — what each owns and why seniors *delegate and evaluate* rather than do.
-- **The teaching-and-learning loop** (and that learning flows back *up* into reflection).
+- **Personas as the workspace's opinionated, evolvable default cast** — injected at setup
+  (names from a static list), then living artifacts reflection can add/modify/retire/recommend.
+- **Standards** — that the attending (and residents) **define and evolve** them, feeding
+  reflection.
+- **Routing to a session** — the supervisor/charge-nurse job of resolving a human or agent to
+  the right session (agent → dispatch; human → an attach/switch command).
+- **The teaching-and-learning loop** (and that learning — broad, not just about code — flows
+  back *up* into reflection).
 - **Forking for side quests** as a role-level act, and **multiple personas at one scope**.
 - **Per-scope configuration** — what can vary per scope (persona, model/depth, harness, working
   directory).
@@ -191,6 +232,13 @@ The two axes (scope, working directory) are defined in
 [`00-domain-model.md`](00-domain-model.md); the persona-names-are-internal rule is
 [`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §4 — this slice links
 rather than restating them.
+
+## Left to implementation
+
+- **The static persona-name list**, and how **workspace setup** presents and applies the default
+  cast (names + roles). *Bound:* a stable, curated list, kept evolvable and reconciled on upgrade
+  like every other artifact Ward ships — the same machinery as
+  [`../../design/workflow-policy.md`](../../design/workflow-policy.md).
 
 ## Open questions
 

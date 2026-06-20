@@ -56,3 +56,8 @@ realization would leak live, unrecoverable state.
   [`01-session-multiplexer.md`](01-session-multiplexer.md)).
 - **Wake across a reboot** — the exact re-arm path (with
   [`../01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md)).
+- **Dispatch routing.** Does dispatch always pass *through* the charge nurse (the per-project
+  router, [`../01-concepts/01-scopes-and-personas.md`](../01-concepts/01-scopes-and-personas.md)),
+  or is it issued **directly** — e.g. via the CLI resolving the target identity to its session
+  handle? The contract (deliver to an addressable target) holds either way; the routing path is
+  what is unsettled.

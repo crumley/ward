@@ -14,7 +14,8 @@ crossing is the one place local context can escape.
 - **Link a local task to a remote work item, and carry status both ways;** the link is an
   **attribute, not the task's identity**. A local-only task can be **attached** later, and a
   remote-started task **merged** with a duplicate local one — identity stays stable across both.
-- **Report PR status** so Ward can drive a task to completion.
+- **Report PR status** — review state **and checks (CI) status** — so Ward can drive a task to
+  completion and surface what is blocking a merge.
 - **Receive only already-sanitized content.** The translation from *local view* to *remote view*
   happens **upstream of this seam**, as a deliberate **re-authoring, not a copy**. Direction is
   strictly **outward-guarding** (§4): local paths, private notes, provenance, and **persona names

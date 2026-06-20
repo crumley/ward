@@ -4,10 +4,10 @@
 
 This file describes the life of a **task** — from creation, through execution across
 worktrees, to completion via merged pull requests and cleanup. It also covers the
-**local↔remote boundary**, the **setup/teardown hooks** that customize lifecycle
-transitions, and the **workflow policy** that governs how work is committed and merged.
-Several rules here are *opinions* Ward ships with; the policy section explains how those
-opinions are made evolvable rather than baked in.
+**local↔remote boundary**, the **recurring maintenance toil Ward takes off the human's hands**,
+the **setup/teardown hooks** that customize lifecycle transitions, and the **workflow policy**
+that governs how work is committed and merged. Several rules here are *opinions* Ward ships with;
+the policy section explains how those opinions are made evolvable rather than baked in.
 
 ## The task as the unit of trackable work
 
@@ -16,6 +16,26 @@ A task is the level at which work is started, paused, resumed, and closed
 understands what it is for and what "done" means: its scope, dependencies, and success
 criteria. A task can span **multiple worktrees across multiple repositories**, and may be
 ad hoc and lightweight or durable and long-running.
+
+### Who is involved — the task's cast
+
+Tracking a task means more than its success criteria: at any moment Ward can answer **who is (or
+was) involved** — which resident is working it, which charge nurse is responsible for knowing
+about it, which rooms and sessions it spawned. This is **discoverable, and mostly derived rather
+than separately stored** (`00-domain-model.md`, status; `../00-foundation/01-principles.md` §17):
+
+- **The resident** that owns the task is the **persona configured at the task scope**
+  (`01-scopes-and-personas.md`); its work appears in the task's own **session log**, where each
+  entry records its persona and harness handle (`02-sessions-and-lifecycle.md`).
+- **The rooms and their sessions** beneath the task (the medical students doing the work) are its
+  sub-scopes, nested in its record.
+- **The charge nurse and attending** responsible for knowing about it are **derived by
+  containment** — they are the owning and status personas of the task's **project**
+  (`01-scopes-and-personas.md`), not re-recorded on the task.
+
+**Why derive, not duplicate:** a separately stored roster of "who's on this task" would go stale
+the moment a session opens or closes; reading it from the session logs and the containment chain
+keeps the answer always correct — the same reason status is derived (§17).
 
 ## Local-only vs. remote-linked tasks
 
@@ -78,18 +98,28 @@ the deep work, evaluates results, and presents to the attending for approval. Th
 recorded state tracks which worktrees exist, which rooms are active, and where each stands —
 so the task is resumable at any time.
 
-## Keeping worktrees current: refresh and rebase
+## Ward absorbs the recurring toil
 
-Two related maintenance operations must be **automated and made easily visible through
-Ward's CLI tooling**:
+A pile of **recurring, tedious maintenance** surrounds live work, and Ward's intent is to **take
+it on so the human does not have to track or remember it** — spending the human's attention only
+where a real decision is needed (the prime directive, `../00-foundation/00-vision.md`). These are
+**examples, not an exhaustive list** — the specific operations will grow and change over time:
 
-- **Refresh** — the workspace's canonical main checkouts are pulled from origin on a
-  cadence, so new worktrees branch from current code.
-- **Rebase** — existing worktrees are rebased onto the refreshed main line, so work in
-  progress stays current and merge surprises shrink.
+- **Refresh** — pull the workspace's canonical main checkouts from origin on a cadence, so new
+  worktrees branch from current code.
+- **Rebase** — rebase existing worktrees onto the refreshed main line so work in progress stays
+  current and merge surprises shrink — **including the sub-work that follows**, such as resolving
+  (or, where it needs judgment, surfacing) rebase conflicts.
+- **Watch PR and CI status** — follow each PR's review state and its checks, and know what is
+  blocking a merge (driving the PR set to a merged close is *Completion*, below).
+- **…and more** as it emerges.
 
-**Why visible and easy:** which worktrees are behind and which are clean should be readable
-at a glance and easy to act on, rather than relying on the human to remember.
+**What is durable here is the intent, not the catalog.** Ward **owns the toil**: it performs what
+it safely can autonomously (local, reversible work — §18) and **surfaces only what needs a
+human** — what is behind, what is conflicted, what is blocked, what is ready. **Why:** which
+worktrees are behind, which are clean, which are blocked should be readable at a glance, not held
+in the human's head; and anything gated or outward (the merge itself) still requires authority
+(§18). The evolving set of operations is a *how* — `../../design/`.
 
 ## Completion: pull requests, merge, and cleanup
 
@@ -153,9 +183,13 @@ attribute that can change in any non-closed state.
 
 - **The task lifecycle** — creation → execution → PR-set → merge → close → cleanup — and the
   conceptual task states.
+- **The task's discoverable cast** — who is involved (resident, charge nurse, rooms, sessions),
+  derived from its session logs and containment rather than stored.
 - **Local-only vs. remote-linked tasks** and the attach/merge transitions (identity stays
   stable).
-- **The never-merge-to-main cardinal rule** and refresh/rebase of worktrees.
+- **The never-merge-to-main cardinal rule.**
+- **Ward absorbing the recurring maintenance toil** (refresh, rebase + conflict handling, PR/CI
+  status-watching, …) and surfacing only what needs a human — the durable intent, not the catalog.
 - **Lifecycle hooks** — that they exist and must be **idempotent / validate-on-resume**
   (build planned in [`../../design/lifecycle-hooks.md`](../../design/lifecycle-hooks.md)).
 - **Workflow policy** — opinionated-but-evolvable, and the **general pattern for any opinion
@@ -171,5 +205,6 @@ applies it to task completion and links there.
 - **Task state machine.** The precise states, transitions, and which are recorded vs. derived.
 - **Delegated authority for gated actions** (§18) — how it is represented and bounded so it
   cannot be silently assumed.
-- **Hook validation**, **refresh/rebase cadence**, and the **policy encoding home** (skill vs.
-  dedicated config) — each deferred to the matching design draft.
+- **Hook validation**, the **maintenance cadence** (and how conflicts/blocks are auto-resolved
+  vs. surfaced for a human), and the **policy encoding home** (skill vs. dedicated config) — each
+  deferred to the matching design draft.

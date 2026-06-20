@@ -30,7 +30,8 @@ into the relevant slice (and reflected in tests and code).
 
 - [`01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md) — when each level exists;
   artifact taxonomy; provenance depth; cross-task mutation; identity edges (task codes,
-  floor-letter uniqueness, reuse-after-close).
+  floor-number uniqueness, reuse-after-close); **dispatch routing** (through the charge nurse vs.
+  directly via the CLI).
 - [`01-concepts/01-scopes-and-personas.md`](../01-concepts/01-scopes-and-personas.md) — persona↔scope
   cardinality; which fork mode ships first.
 - [`01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md) —
@@ -46,7 +47,7 @@ into the relevant slice (and reflected in tests and code).
   taxonomy; the concurrency primitive.
 - [`02-subsystems/01-session-multiplexer.md`](../02-subsystems/01-session-multiplexer.md) and
   [`02-subsystems/02-messaging-coordination.md`](../02-subsystems/02-messaging-coordination.md) —
-  the messaging-vs-multiplexer split; wake re-arm on recovery.
+  the messaging-vs-multiplexer split; wake re-arm on recovery; dispatch routing.
 - [`02-subsystems/03-agent-harness.md`](../02-subsystems/03-agent-harness.md) — fork mode first.
 - [`02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md) — caller-identity
   enforcement; whether the telemetry analysis loop is a reflection type.
@@ -54,8 +55,9 @@ into the relevant slice (and reflected in tests and code).
 ## Recently resolved (kept briefly for context)
 
 - **"Mission" is not a containment level** — if it returns, it is an *attribute of a project*.
-- **Identity need not be globally unique** — prefer memorable codes sized to real cardinality;
-  a project's code is a floor letter, a room's is floor + number (`A3`).
+- **Identity need not be globally unique** — prefer memorable codes sized to real cardinality,
+  with time and context as further ambiguity-breakers; a project's code is a **floor number**, a
+  room's is **floor number + room code** (`4A12`).
 - **Workspace-wide coordinator** — a **house supervisor** persona holds workspace status; the
   human owns workspace direction; the charge nurse is per-project.
 - **A session has one identity** — the harness's native run id is a recorded **handle**, not a

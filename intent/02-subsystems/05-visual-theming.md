@@ -14,7 +14,7 @@ task/room a window belongs to — coordinated across *all* surfaces.
   ([`../01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md)), and **without
   collisions** among the things a human sees at once. *Why deterministic:* the same work should
   always look the same across reboots and machines, so the human builds muscle memory ("the blue
-  one is `A3`"); a random or session-order assignment would re-color on every restart. *Why
+  one is `4A12`"); a random or session-order assignment would re-color on every restart. *Why
   collision-free:* the identity exists to **distinguish** — two concurrent rooms sharing a color
   is the one failure that makes it useless; collisions need only be avoided among what is visible
   together.

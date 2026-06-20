@@ -23,4 +23,4 @@ design it first.**
   what is safe.
 - **Attach/merge reconciliation** — how a task records its remote link and reconciles attaching to
   or merging with a duplicate.
-- **PR-status polling** and **how gated outward posts request authority** (§18).
+- **PR + CI/checks status polling** and **how gated outward posts request authority** (§18).

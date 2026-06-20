@@ -38,8 +38,11 @@ Whatever its goal, a reflection proposes improvements to how the workspace works
 - **Skills** — create or improve skills, capturing patterns so future agents do not
   rediscover them.
 - **Tooling** — create or improve CLI tooling that removes recurring friction.
-- **Personas** — refine persona definitions in light of what worked and what surprised
-  (fed by the teaching loop, `01-scopes-and-personas.md`).
+- **Personas** — **create, refine, retire, or recommend** personas in light of what worked and
+  what surprised, to better fit the work the workspace actually does (fed by the teaching loop,
+  `01-scopes-and-personas.md`).
+- **Standards** — capture and evolve the **standards** work is held to (the bar the attending and
+  residents set and refine), so a lesson learned once raises the bar for future sessions.
 - **Ward itself** — surface improvements that belong upstream in the Ward CLI.
 
 Reflection is **asynchronous and non-blocking**: it runs on its cadence or at a boundary and

@@ -50,10 +50,12 @@ managing persona that holds the whole picture. Projects may be heavyweight and d
 ### Task
 
 One unit of deliverable work — the level at which work is started, tracked, paused,
-resumed, and closed (lifecycle: `03-work-lifecycle.md`). A task may exist **purely
-locally** or be **linked to a remote work item**. A task can span **multiple worktrees
-across multiple repositories** — the change it represents is not always confined to one
-repo. Tasks, too, may be ad hoc and lightweight.
+resumed, and closed (lifecycle: `03-work-lifecycle.md`). A task **has an identity** and may
+exist **purely locally** or be **linked to a remote work item**; when linked, it can be
+**referenced by either its local identity or its remote identity** (the work-item id) — both
+routes resolve to the same task. A task can span **multiple worktrees across multiple
+repositories** — the change it represents is not always confined to one repo. Tasks, too, may
+be ad hoc and lightweight.
 
 ### Worktree
 
@@ -138,16 +140,28 @@ independently chosen when a session starts. **Why two axes:** what an agent is r
 for and where it stands are genuinely different choices; separating them is what lets a
 project-scope agent read broadly while a room stays narrow.
 
+**Reaching beyond the working directory.** A narrow, worktree-scoped session is not walled off
+from the rest of its task or project. Its **brief** may reference artifacts that live *outside*
+the worktree but within the enclosing scope — a decision note at the task level, a dataset from
+a sibling worktree, a project-level analysis. Such references are **allowed and encouraged**,
+but each carries a **short summary and why it might matter**, so the agent can judge for itself
+when to pull it into context and when to leave it out. **Why:** this is context economy
+(`../00-foundation/01-principles.md` §12) made concrete — the agent spends tokens on what *it*
+decides is relevant, rather than having everything in scope forced into the window or hidden
+from it entirely.
+
 ## Artifacts
 
 An **artifact** is **any durable piece of output that should be shareable across sessions
 and agents** — not just a brief. Decisions, notes, generated data files, scripts, analyses,
 status snapshots, handoffs: if it should outlive the session that made it and be usable by
-others, it is an artifact. Artifacts are how a scope's accumulated output persists outside
-any one agent's memory and outside the code itself. (Where artifacts live and in what
-format is a *how* — `../02-subsystems/00-metadata-store.md`.) **Why a first-class noun:** durable
-shared output is the connective tissue between sessions and scopes; without naming it, it
-scatters and is lost.
+others, it is an artifact. Artifacts are how a scope's accumulated output persists outside any
+one agent's memory and outside the code itself: they are the **durable context that informs the
+work**, carried between agent sessions. The *output* of a task is generally (but not always)
+**git commits in its worktrees**; the artifacts are the context that made that work possible and
+that lets a later session resume it. (Where artifacts live and in what format is a *how* —
+`../02-subsystems/00-metadata-store.md`.) **Why a first-class noun:** durable shared output is
+the connective tissue between sessions and scopes; without naming it, it scatters and is lost.
 
 ### Artifacts carry provenance (lineage)
 
@@ -175,10 +189,13 @@ output trustworthy and debuggable, not just present (`../00-foundation/01-princi
 
 A **brief** is one artifact *type*: a handoff document created at one scope to **conjure
 and orient another agent** — what the room or task is for, where and at what scope it
-operates, what is expected, and why it is being brought into existence. A resident briefs a
-room it starts. A room *may* fold its brief into the durable output that lands in the
-worktree, but need not — so the model accounts for briefs that live as scope artifacts
-independent of any worktree.
+operates, what is expected, and why it is being brought into existence. Like every artifact, a
+brief carries its provenance — **who created it and why** — and, in addition, **who it is for**
+(the target scope/persona), **using stable identities wherever possible** so the handoff stays
+unambiguous later. It may also reference in-scope artifacts beyond the working directory, each
+with a short summary (see *Working directory*, above). A resident briefs a room it starts. A
+room *may* fold its brief into the durable output that lands in the worktree, but need not — so
+the model accounts for briefs that live as scope artifacts independent of any worktree.
 
 ### Capturing artifacts elsewhere is part of closing work
 
@@ -206,26 +223,32 @@ enough context** — not that every code is unique across the entire machine. Tw
 commitments follow:
 
 - **Lean on memorable conventions, not entropy.** Borrow the hospital metaphor: a **project
-  is a floor** and its short code *is* a floor letter (`A`, `B`, `C…`); its **rooms are
-  numbered on that floor** (`A1`, `A2`, `A3…`), so a room's code already names its project and
-  its room in a few keystrokes. "The resident on A3" is unambiguous and costs no lookup. A
-  convention that mirrors the structure beats a random string. **Why:** memorability *is*
-  context management — a name you can hold in your head costs no lookup.
+  is a floor**, addressed by a **floor number** (`1`, `2`, `3…`, starting at 1); its **rooms
+  carry the floor number plus a room code** — e.g. `4A12` is room `A12` on floor `4` — so a
+  room's address already names its floor and its room in a few keystrokes. "The resident on
+  `4A12`" costs no lookup. A convention that mirrors the structure beats a random string.
+  **Why:** memorability *is* context management — a name you can hold in your head costs no
+  lookup.
 - **Size codes to real cardinality.** A person is not working on a thousand projects at
   once, and a hospital floor does not have ten thousand rooms. Identifiers should carry only
   as many digits/prefixes as the realistic number of *in-flight* things requires. **Why:**
   this is personal, small-scale, and human; over-provisioned identity is just noise to
   remember.
+- **Time is another ambiguity-breaker.** Because codes are sized to in-flight cardinality and
+  may be reused over time, a bare code can be ambiguous across *history* — but it rarely has to
+  stand alone. "The resident in `4A12`" may be ambiguous over weeks; "the resident in `4A12` on
+  Tuesday" is not. **Why:** anchoring to a moment (or to any surrounding context) is usually
+  enough, so identity can stay short instead of buying global uniqueness with entropy.
 
 **Identity need not mirror containment.** A room is *contained* under a task and a worktree,
-but it is *addressed* by its floor + number alone (`A3`); the task and worktree it belongs to
-are **attributes discoverable from the room's record**, not parts of its address. The two are
-different lookups on purpose — addressing optimizes for memory, containment for structure. The
-cost to accept is that room numbers run as a simple per-project sequence (opening order on the
-floor), not grouped by task.
+but it is *addressed* by its floor number + room code alone (`4A12`); the task and worktree it
+belongs to are **attributes discoverable from the room's record**, not parts of its address.
+The two are different lookups on purpose — addressing optimizes for memory, containment for
+structure. The cost to accept is that room codes run as a simple per-floor sequence (opening
+order on the floor), not grouped by task.
 
-Where global uniqueness genuinely is needed, it can be composed (e.g. floor letter +
-room number); where **scope-relative** identity suffices (a session within its scope), that is
+Where global uniqueness genuinely is needed, it can be composed (e.g. floor number + room
+code); where **scope-relative** identity suffices (a session within its scope), that is
 preferred. (Remaining edges — task codes, cross-workspace uniqueness, reuse after close:
 `../00-foundation/open-questions.md`.)
 
@@ -233,9 +256,9 @@ preferred. (Remaining edges — task codes, cross-workspace uniqueness, reuse af
 
 | Thing | Identity |
 |-------|----------|
-| Project | slug + code; the **code is a floor letter** (`A`, `B`, `C…`) |
-| Task | slug + code (scope-relative to its project may suffice) |
-| Room | **floor + number** (`A3`), by memorable convention; addresses the room workspace-wide without naming its task or worktree |
+| Project | slug + code; the **code is a floor number** (`1`, `2`, `3…`) |
+| Task | slug + code (scope-relative to its project may suffice); when remote-linked, also **referenceable by its remote work-item id** |
+| Room | **floor number + room code** (`4A12`), by memorable convention; addresses the room workspace-wide without naming its task or worktree |
 | Session | slug + code, scope-relative to its scope |
 | Worktree | natural key (repository + branch) |
 | Workspace | the root itself; identified by location |
@@ -261,6 +284,13 @@ message is delivered, *how* dispatch routes, *how* a wait is satisfied — becau
 overlap heavily with the multiplexer. That opinion is recorded in
 `../02-subsystems/02-messaging-coordination.md`; the *what* here is only that these three flows exist
 and are first-class.
+
+> **Open — how dispatch routes.** Whether dispatch always passes *through* the charge nurse
+> (the per-project router, `01-scopes-and-personas.md`) or is issued **directly** — e.g. via
+> the CLI, which resolves the target identity to its session handle and delivers there — is
+> unsettled (see *Open questions*, and `../02-subsystems/02-messaging-coordination.md`). The
+> *what* holds either way: work flows down to an addressable target and the dispatcher can see
+> where it landed.
 
 ## Forking a context (side quests)
 
@@ -305,5 +335,9 @@ Every other slice links here rather than redefining these nouns.
 - **Provenance depth**, and how a cross-task artifact reference is recorded so the borrower
   doesn't appear to own it. **Cross-task mutation:** what "specific guidance to alter another
   task's artifact" looks like concretely.
-- **Identity edges.** Task codes (and whether project-relative); floor-letter uniqueness and the
-  past-26 case; reuse-after-close. (Indexed in [`../00-foundation/open-questions.md`](../00-foundation/open-questions.md).)
+- **Identity edges.** Task codes (and whether project-relative); floor-number uniqueness within
+  a workspace; whether a closed floor number / room code is reused, retired, or retained for
+  history. (Indexed in [`../00-foundation/open-questions.md`](../00-foundation/open-questions.md).)
+- **Dispatch routing.** Does dispatch always route through the charge nurse, or is it issued
+  directly (e.g. via the CLI, resolving the target to its session handle)? (Also in
+  [`../02-subsystems/02-messaging-coordination.md`](../02-subsystems/02-messaging-coordination.md).)
