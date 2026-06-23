@@ -1,1 +1,7 @@
 .DS_Store
+node_modules/
+
+# Regenerable git checkouts inside a Ward workspace (restored from origin + recorded branches).
+# Not part of THIS repo, but listed so dogfooding a workspace under here stays clean.
+/repos/
+/worktrees/
