@@ -157,8 +157,11 @@ the session that holds it. For an **agent**, that routing is a **dispatch**
 **command to switch to — attach to — that session**, so they can follow along or interact
 (`../02-subsystems/01-session-multiplexer.md`, which keeps sessions attachable). **Why:** finding
 the right window among a dozen is exactly the human-side context-management problem the status
-personas exist to solve. (Whether dispatch *always* passes through these personas or may be
-issued directly is open — `../00-foundation/open-questions.md`.)
+personas exist to solve — and an individual session, which knows its neighbors but not the whole
+workspace, often cannot resolve a target on its own, so it addresses **by intent** to its scope's
+status persona and lets that persona route. Direct addressing still holds when the sender already
+knows the target; routing through the status persona is the path when it does not (mechanism:
+`../02-subsystems/02-messaging-coordination.md`).
 
 Ward makes both directions **deterministic and consistent**: one well-defined way to
 dispatch into a scope, one well-defined way for it to report back (mechanism:

@@ -16,8 +16,9 @@ with an intent slice, the intent slice wins.
 The workspace already exists, tracked as a git repository (`00-foundation/01-principles.md` §15),
 knowing one repository `meal-planner` whose canonical main checkout is kept current on a cadence
 (`01-concepts/03-work-lifecycle.md`, refresh). It carries a **version stamp**
-(`01-concepts/04-reflection-and-evolution.md`). The **house supervisor** persona can already
-answer "what's in flight?" by *deriving* status across projects
+(`01-concepts/04-reflection-and-evolution.md`). The **house supervisor** persona
+(`01-concepts/01-scopes-and-personas.md`) can already answer "what's in flight?" by *deriving*
+status across projects
 (`01-concepts/00-domain-model.md`, status) — right now, nothing.
 
 ## 1. Open a project — floor 1
@@ -47,7 +48,8 @@ for the resident's task-scope session.
 
 The resident creates a worktree off `meal-planner`'s refreshed main — branch `csv-export`. Its
 **idempotent setup hooks** run (`../design/lifecycle-hooks.md`): install dependencies, apply the
-worktree's **accent color** so its windows are recognizable (`02-subsystems/05-visual-theming.md`).
+worktree's **accent color and type glyph** so its windows are recognizable — and so the human can
+later say "the blue one" and have an agent resolve it (`02-subsystems/05-visual-theming.md`).
 Because the work is never committed to main directly, this branch is the only path to the main
 line (`01-concepts/03-work-lifecycle.md`, never-merge-to-main).
 
@@ -59,7 +61,10 @@ record (or marker) that each setup hook is satisfied, so a later resume is a no-
 The resident writes a **brief** — the artifact that conjures and orients the hands-on agent: what
 the room is for, where it operates (the worktree directory), what "done" means
 (`01-concepts/00-domain-model.md`, briefs). It opens **room `1A1`** (floor 1, first room) on the
-worktree and **dispatches** the brief down into it (`01-concepts/01-scopes-and-personas.md`). The
+worktree and **dispatches** the brief down into it (`01-concepts/01-scopes-and-personas.md`) — a
+**direct** dispatch, since the resident knows its own room; a sender that does *not* know its
+target routes instead through the scope's status persona — the charge nurse, or the house
+supervisor across the workspace (`02-subsystems/02-messaging-coordination.md`). The
 resident then **detaches** and arms a **wake**: "notify me when `1A1` reports done"
 (`02-subsystems/02-messaging-coordination.md`) — it does not sit blocked.
 
@@ -145,7 +150,9 @@ and nothing that was already closed.
 ### What this exercises (and where it would catch a gap)
 
 It threads every seam and every settled decision: floor/room identity, harness handle, derived
-status, brief-as-orientation, dispatch/wake with detach, gated outward actions, privacy
+status (rolled up to the house supervisor's workspace-wide view), brief-as-orientation, dispatch
+(direct here, status-persona routing the settled alternative) and wake with detach, gated outward
+actions, privacy
 translation on *both* the PR text and the committed artifacts, idempotent hooks, scope-boundary
 reflection with a cursor, and reboot recovery. If a future change to intent breaks one of these,
 re-running this walkthrough on paper is the cheapest way to find it.

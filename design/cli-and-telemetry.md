@@ -15,6 +15,12 @@ telemetry.
 
 - **The exact command tree and naming** — the noun/verb surface (workspace, project, task,
   worktree, room, session, repo × create/list/open/close/resume/dispatch…).
+- **The interactive resolution & autocomplete UX (delight bar).** How a verb missing a required
+  noun (or given an ambiguous one) prompts a **quick picker** instead of erroring, how
+  partially-typed nouns/verbs/identities **autocomplete**, and how candidates are **sourced,
+  scoped, ranked, and rendered with their accent + glyph** ([`theming.md`](theming.md)) so "the
+  blue one" is selectable. *Bound:* human-only — a declared agent gets deterministic handling,
+  never a blocking prompt.
 - **The caller-identity signal (settle-early).** The specific **environment-variable name** and
   the **set of context fields** it carries (persona, scope, working directory — which required vs.
   inferred), set when Ward starts an agent and **propagated to subprocesses**. *Bound:* absence =

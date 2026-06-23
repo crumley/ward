@@ -30,8 +30,8 @@ into the relevant slice (and reflected in tests and code).
 
 - [`01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md) — when each level exists;
   artifact taxonomy; provenance depth; cross-task mutation; identity edges (task codes,
-  floor-number uniqueness, reuse-after-close); **dispatch routing** (through the charge nurse vs.
-  directly via the CLI).
+  floor-number uniqueness, reuse-after-close); the **dispatch-routing mechanism** (both paths now
+  settled; the resolution mechanism is owned by the messaging seam).
 - [`01-concepts/01-scopes-and-personas.md`](../01-concepts/01-scopes-and-personas.md) — persona↔scope
   cardinality; which fork mode ships first.
 - [`01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md) —
@@ -47,7 +47,8 @@ into the relevant slice (and reflected in tests and code).
   taxonomy; the concurrency primitive.
 - [`02-subsystems/01-session-multiplexer.md`](../02-subsystems/01-session-multiplexer.md) and
   [`02-subsystems/02-messaging-coordination.md`](../02-subsystems/02-messaging-coordination.md) —
-  the messaging-vs-multiplexer split; wake re-arm on recovery; dispatch routing.
+  the messaging-vs-multiplexer split; wake re-arm on recovery; the dispatch-routing **mechanism**
+  (the path — direct vs. via status persona — is settled; the resolution mechanism is open).
 - [`02-subsystems/03-agent-harness.md`](../02-subsystems/03-agent-harness.md) — fork mode first.
 - [`02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md) — caller-identity
   enforcement; whether the telemetry analysis loop is a reflection type.
@@ -62,3 +63,7 @@ into the relevant slice (and reflected in tests and code).
   human owns workspace direction; the charge nurse is per-project.
 - **A session has one identity** — the harness's native run id is a recorded **handle**, not a
   second identity.
+- **Dispatch routing has two paths** — **direct** identity-addressing when the sender knows the
+  target, and **routing through the originating scope's status persona** (charge nurse / supervisor)
+  when it does not, because a session knows its neighbors but not the whole workspace. Only the
+  resolution *mechanism* remains open (owned by the messaging seam).

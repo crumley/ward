@@ -285,12 +285,13 @@ overlap heavily with the multiplexer. That opinion is recorded in
 `../02-subsystems/02-messaging-coordination.md`; the *what* here is only that these three flows exist
 and are first-class.
 
-> **Open — how dispatch routes.** Whether dispatch always passes *through* the charge nurse
-> (the per-project router, `01-scopes-and-personas.md`) or is issued **directly** — e.g. via
-> the CLI, which resolves the target identity to its session handle and delivers there — is
-> unsettled (see *Open questions*, and `../02-subsystems/02-messaging-coordination.md`). The
-> *what* holds either way: work flows down to an addressable target and the dispatcher can see
-> where it landed.
+> **How dispatch routes.** Two paths, by whether the sender knows the target: **direct** when it
+> does (address the target identity, e.g. via the CLI resolving it to a session handle), and
+> **through the originating scope's status persona** — charge nurse or house supervisor — when it
+> does not, since a session knows its neighbors, not the whole workspace
+> (`01-scopes-and-personas.md`). The routing *mechanism* is owned by the messaging seam
+> (`../02-subsystems/02-messaging-coordination.md`); the *what* here is only that work flows down
+> to an addressable target and the dispatcher can see where it landed.
 
 ## Forking a context (side quests)
 
@@ -338,6 +339,7 @@ Every other slice links here rather than redefining these nouns.
 - **Identity edges.** Task codes (and whether project-relative); floor-number uniqueness within
   a workspace; whether a closed floor number / room code is reused, retired, or retained for
   history. (Indexed in [`../00-foundation/open-questions.md`](../00-foundation/open-questions.md).)
-- **Dispatch routing.** Does dispatch always route through the charge nurse, or is it issued
-  directly (e.g. via the CLI, resolving the target to its session handle)? (Also in
-  [`../02-subsystems/02-messaging-coordination.md`](../02-subsystems/02-messaging-coordination.md).)
+- **Dispatch routing.** *Settled:* both paths hold — direct addressing when the sender knows the
+  target, routing through the originating scope's status persona when it does not. The remaining
+  **mechanism** is owned by
+  [`../02-subsystems/02-messaging-coordination.md`](../02-subsystems/02-messaging-coordination.md).
