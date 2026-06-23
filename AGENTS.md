@@ -47,6 +47,12 @@ The repo stands on four parallel trees; **`intent` governs the other three** (se
   into the matching `design/` draft.
 - **Plan or do the build** → work in [`design/`](design/), spine first, each plan pointing back to
   the intent it serves. Trace every plan to a contract.
+- **Build Ward (make it run)** → the build is journaled in [`build/`](build/): start at
+  [`build/README.md`](build/README.md), then [`build/v1-scope.md`](build/v1-scope.md) and the tail
+  of [`build/LOG.md`](build/LOG.md). Record critical choices as ADRs in
+  [`build/decisions/`](build/decisions/) and spec frictions in
+  [`build/spec-feedback.md`](build/spec-feedback.md). The build authors `design/`, `src/`, `test/`;
+  it does **not** silently rewrite `intent/`.
 
 ## Conventions
 
