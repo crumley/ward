@@ -159,3 +159,35 @@ the open items in [`spec-feedback.md`](spec-feedback.md).
 - **Next** — iteration 4: the privacy translation gate (real, the 4th invariant) + stub remote
   provider + PR tracking + gated merge (§7–§8), and the privacy-gate intent test. Then iteration 5:
   scope-boundary reflection (§9), cold-start recovery (§10), and the acceptance walkthrough script.
+
+---
+
+## Iteration 4 — privacy gate + remote/PR + gated actions (2026-06-23)
+
+- **Goal** — the local↔remote crossing (walkthrough §7–§8): a REAL privacy translation gate (the 4th
+  invariant), the remote-item link, PR status, and gated outward/irreversible actions (§18).
+- **Did** — `seams/privacy.ts`: `translate` (drop front matter; redact local paths; neutralize
+  persona names + role words; strip glyphs) + `assertClean` (independent, fail-closed verifier that
+  THROWS on any residual leak). `domain/remote.ts`: `attachRemote` (local link), `openPr` (gated;
+  body routed through the gate; sanitized body stored as a `pr-body` artifact; task → in-review),
+  `reviewPr` (incoming status, not gated), `mergePr` (gated + only when approved — never-merge-to-
+  main). CLI: `task attach-remote`, `pr open|review|merge` with `--authorize`. Design draft
+  [`remote-provider.md`](../design/remote-provider.md). Intent test
+  [`privacy-gate.test.ts`](../test/intent/privacy-gate.test.ts).
+- **Works now** (scripted) —
+  - `pr open` **without** `--authorize` → `error: gated action … requires explicit human authority`.
+  - `pr open … --authorize` with a body naming `Riley`/`Morgan`, the workspace path, `the resident`,
+    and `🚪` → sanitized to `the team … <redacted-path> … the team`;
+    `stripped: local-path,
+    persona:Riley, persona:Morgan, role, glyph`; the stored
+    `artifacts/pr-42.md` body is clean.
+  - `pr merge` before approval → refused (needs approved); `pr review approved` → approved;
+    `pr merge` without `--authorize` → gated refusal; with `--authorize` → merged.
+  - `npm test` → **17/17** — now ALL FOUR intent invariants pass (derived status; resume idempotent
+    / closed stays closed; **privacy gate**; no lost updates). `npx tsc --noEmit` clean.
+- **Decisions** — no new ADRs (forge kept a stub per v1-scope).
+- **Spec feedback** — reinforces [SF-001](spec-feedback.md) (`in-review` better derived from open-PR
+  than stored); noted in the remote design draft.
+- **Next** — iteration 5: scope-boundary reflection map-reduce (§9), cold-start recovery (§10,
+  consuming `pendingWakes` + `revalidateWorktree`), the acceptance walkthrough script
+  (`test/acceptance/walkthrough.sh`) from clean state, and the final summary LOG entry.

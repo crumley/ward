@@ -25,6 +25,8 @@ import {
   satisfyCondition,
   listMessages,
 } from "../seams/messaging.ts";
+import { attachRemote, openPr, reviewPr, mergePr } from "../domain/remote.ts";
+import type { RemoteStateT } from "../store/schemas.ts";
 
 const program = new Command();
 program
@@ -445,6 +447,95 @@ program
       ? msgs.map((m) => `  ${m.kind} ${m.from} → ${m.to}${m.ref ? ` (ref ${m.ref})` : ""}: ${m.body}`).join("\n")
       : "  (none)";
     emit(caller, `messages:\n${human}`, { ok: true, messages: msgs });
+  });
+
+// ---- remote / PR (local↔remote boundary; privacy gate + gated actions) -------------------------
+
+task
+  .command("attach-remote")
+  .description("link a task to a remote work item (an attribute, not its identity)")
+  .requiredOption("--floor <n>", "floor number")
+  .requiredOption("--task <slug>", "task slug")
+  .requiredOption("--provider <name>", "remote provider (e.g. github)")
+  .requiredOption("--id <id>", "remote work-item id")
+  .requiredOption("--url <url>", "remote work-item url")
+  .action(async (opts: { floor: string; task: string; provider: string; id: string; url: string }) => {
+    const caller = detectCaller(program.opts());
+    const root = rootOrFail(program);
+    try {
+      const t = await attachRemote(root, opts.floor, opts.task, {
+        provider: opts.provider,
+        id: opts.id,
+        url: opts.url,
+      });
+      emit(caller, `Linked task ${opts.task} → ${opts.provider}#${opts.id} [${t.remote?.state}]`, {
+        ok: true,
+        remote: t.remote,
+      });
+    } catch (e) {
+      fail(caller, (e as Error).message);
+    }
+  });
+
+const pr = program.command("pr").description("pull requests (the local↔remote crossing)");
+pr
+  .command("open")
+  .description("open a PR — GATED (outward); body is privacy-translated")
+  .requiredOption("--floor <n>", "floor number")
+  .requiredOption("--task <slug>", "task slug")
+  .requiredOption("--title <title>", "PR title")
+  .option("--body <text>", "PR body (will be re-authored for the remote audience)", "")
+  .option("--authorize", "grant explicit human authority for this gated action", false)
+  .action(
+    async (opts: { floor: string; task: string; title: string; body: string; authorize: boolean }) => {
+      const caller = detectCaller(program.opts());
+      const root = rootOrFail(program);
+      try {
+        const r = await openPr(root, opts.floor, opts.task, {
+          title: opts.title,
+          body: opts.body,
+          authorized: opts.authorize,
+        });
+        emit(
+          caller,
+          `Opened PR for ${opts.task} [in-review]; stripped: ${r.stripped.join(", ") || "(nothing)"}\n--- sanitized body ---\n${r.sanitized}`,
+          { ok: true, ...r },
+        );
+      } catch (e) {
+        fail(caller, (e as Error).message);
+      }
+    },
+  );
+pr
+  .command("review <state>")
+  .description("record incoming PR review state (open|changes-requested|approved|merged)")
+  .requiredOption("--floor <n>", "floor number")
+  .requiredOption("--task <slug>", "task slug")
+  .action(async (state: string, opts: { floor: string; task: string }) => {
+    const caller = detectCaller(program.opts());
+    const root = rootOrFail(program);
+    try {
+      const t = await reviewPr(root, opts.floor, opts.task, state as RemoteStateT);
+      emit(caller, `PR for ${opts.task} → ${t.remote?.state}`, { ok: true, remote: t.remote });
+    } catch (e) {
+      fail(caller, (e as Error).message);
+    }
+  });
+pr
+  .command("merge")
+  .description("merge the PR — GATED (irreversible, never-merge-to-main); requires approval")
+  .requiredOption("--floor <n>", "floor number")
+  .requiredOption("--task <slug>", "task slug")
+  .option("--authorize", "grant explicit human authority for this gated action", false)
+  .action(async (opts: { floor: string; task: string; authorize: boolean }) => {
+    const caller = detectCaller(program.opts());
+    const root = rootOrFail(program);
+    try {
+      const t = await mergePr(root, opts.floor, opts.task, { authorized: opts.authorize });
+      emit(caller, `Merged PR for ${opts.task} [${t.remote?.state}]`, { ok: true, remote: t.remote });
+    } catch (e) {
+      fail(caller, (e as Error).message);
+    }
   });
 
 program.parseAsync(process.argv).catch((e) => {

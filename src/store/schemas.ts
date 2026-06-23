@@ -34,6 +34,7 @@ export const RoomState = z.enum(["open", "closed"]);
 export const SessionVerb = z.enum(["open", "resume", "close"]);
 export const WakeVerb = z.enum(["arm", "satisfy"]);
 export const RemoteState = z.enum(["open", "changes-requested", "approved", "merged"]);
+export type RemoteStateT = z.infer<typeof RemoteState>;
 
 // ---- document types ---------------------------------------------------------------------------
 
