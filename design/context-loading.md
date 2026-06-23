@@ -1,6 +1,6 @@
 # Design: Context Loading
 
-> **Layer:** design — implementation plan. The *how*; may change. **Status:** draft.
+> **Layer:** design — implementation plan. The _how_; may change. **Status:** draft.
 
 The build behind context assembly — the ordering algorithm and field conventions the intent
 deliberately left open.
@@ -16,7 +16,7 @@ deliberately left open.
 - **`AGENTS.md` field conventions** — the manifest fields each level declares (artifacts, skills,
   records to load) and how skills are referenced and resolved.
 - **The deterministic ordering algorithm** for the cacheable prefix, and **where the mutable tail
-  begins**. *Bound:* identical prefix for sessions at the same scope, to share token caches; the
+  begins**. _Bound:_ identical prefix for sessions at the same scope, to share token caches; the
   evolving/rewritable tail is kept off the cacheable prefix (the open append-vs-rewrite tension).
-- **Per-harness handle formats and history locations**, and any caching configuration. *Bound:*
-  the handle stays recorded and resolvable back to the underlying run.
+- **Per-harness handle formats and history locations**, and any caching configuration. _Bound:_ the
+  handle stays recorded and resolvable back to the underlying run.

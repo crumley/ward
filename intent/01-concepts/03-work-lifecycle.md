@@ -1,108 +1,107 @@
 # Work Lifecycle
 
-> **Layer:** intent · concept. The what & why; the *how* is planned in [`../../design/`](../../design/). **Status:** living.
+> **Layer:** intent · concept. The what & why; the _how_ is planned in
+> [`../../design/`](../../design/). **Status:** living.
 
-This file describes the life of a **task** — from creation, through execution across
-worktrees, to completion via merged pull requests and cleanup. It also covers the
-**local↔remote boundary**, the **recurring maintenance toil Ward takes off the human's hands**,
-the **setup/teardown hooks** that customize lifecycle transitions, and the **workflow policy**
-that governs how work is committed and merged. Several rules here are *opinions* Ward ships with;
-the policy section explains how those opinions are made evolvable rather than baked in.
+This file describes the life of a **task** — from creation, through execution across worktrees, to
+completion via merged pull requests and cleanup. It also covers the **local↔remote boundary**, the
+**recurring maintenance toil Ward takes off the human's hands**, the **setup/teardown hooks** that
+customize lifecycle transitions, and the **workflow policy** that governs how work is committed and
+merged. Several rules here are _opinions_ Ward ships with; the policy section explains how those
+opinions are made evolvable rather than baked in.
 
 ## The task as the unit of trackable work
 
-A task is the level at which work is started, paused, resumed, and closed
-(`00-domain-model.md`). It carries enough recorded intent that an agent arriving cold
-understands what it is for and what "done" means: its scope, dependencies, and success
-criteria. A task can span **multiple worktrees across multiple repositories**, and may be
-ad hoc and lightweight or durable and long-running.
+A task is the level at which work is started, paused, resumed, and closed (`00-domain-model.md`). It
+carries enough recorded intent that an agent arriving cold understands what it is for and what
+"done" means: its scope, dependencies, and success criteria. A task can span **multiple worktrees
+across multiple repositories**, and may be ad hoc and lightweight or durable and long-running.
 
 ### Who is involved — the task's cast
 
 Tracking a task means more than its success criteria: at any moment Ward can answer **who is (or
-was) involved** — which resident is working it, which charge nurse is responsible for knowing
-about it, which rooms and sessions it spawned. This is **discoverable, and mostly derived rather
-than separately stored** (`00-domain-model.md`, status; `../00-foundation/01-principles.md` §17):
+was) involved** — which resident is working it, which charge nurse is responsible for knowing about
+it, which rooms and sessions it spawned. This is **discoverable, and mostly derived rather than
+separately stored** (`00-domain-model.md`, status; `../00-foundation/01-principles.md` §17):
 
 - **The resident** that owns the task is the **persona configured at the task scope**
   (`01-scopes-and-personas.md`); its work appears in the task's own **session log**, where each
   entry records its persona and harness handle (`02-sessions-and-lifecycle.md`).
 - **The rooms and their sessions** beneath the task (the medical students doing the work) are its
   sub-scopes, nested in its record.
-- **The charge nurse and attending** responsible for knowing about it are **derived by
-  containment** — they are the owning and status personas of the task's **project**
-  (`01-scopes-and-personas.md`), not re-recorded on the task.
+- **The charge nurse and attending** responsible for knowing about it are **derived by containment**
+  — they are the owning and status personas of the task's **project** (`01-scopes-and-personas.md`),
+  not re-recorded on the task.
 
-**Why derive, not duplicate:** a separately stored roster of "who's on this task" would go stale
-the moment a session opens or closes; reading it from the session logs and the containment chain
-keeps the answer always correct — the same reason status is derived (§17).
+**Why derive, not duplicate:** a separately stored roster of "who's on this task" would go stale the
+moment a session opens or closes; reading it from the session logs and the containment chain keeps
+the answer always correct — the same reason status is derived (§17).
 
 ## Local-only vs. remote-linked tasks
 
 A task may begin in either world:
 
-- **Local-only** — started in the workspace with no remote item. For exploration, personal
-  work, or anything not yet worth surfacing.
-- **Remote-linked** — associated with a remote work item shared with other humans and
-  agents.
+- **Local-only** — started in the workspace with no remote item. For exploration, personal work, or
+  anything not yet worth surfacing.
+- **Remote-linked** — associated with a remote work item shared with other humans and agents.
 
-A task can **move between these states**: a local-only task can later be **attached** to a
-remote item, and a task started from a remote item can be found to duplicate an existing
-local task and the two **merged**. Identity stays stable across these changes; the remote
-link is an attribute of the task, not its identity.
+A task can **move between these states**: a local-only task can later be **attached** to a remote
+item, and a task started from a remote item can be found to duplicate an existing local task and the
+two **merged**. Identity stays stable across these changes; the remote link is an attribute of the
+task, not its identity.
 
 ## The privacy boundary (restated, because it is load-bearing)
 
-The local task and the remote work item are two views with different audiences. The local
-view is personal — local paths, private notes, informal framing, and Ward's internal
-machinery (including **persona names and roles**). The remote view is shared.
+The local task and the remote work item are two views with different audiences. The local view is
+personal — local paths, private notes, informal framing, and Ward's internal machinery (including
+**persona names and roles**). The remote view is shared.
 
-> **Rule.** When Ward reflects progress outward to a remote item, it **translates**:
-> composes content for the remote audience and strips everything local, personal, or
-> internal. Nothing crosses by accident. The strict direction is **outward**: local
-> context must not leak out (`../00-foundation/01-principles.md` §4).
+> **Rule.** When Ward reflects progress outward to a remote item, it **translates**: composes
+> content for the remote audience and strips everything local, personal, or internal. Nothing
+> crosses by accident. The strict direction is **outward**: local context must not leak out
+> (`../00-foundation/01-principles.md` §4).
 
 ## The cardinal rule: never merge to main directly
 
-> **Work is never committed to a main line directly.** All work happens on a worktree (a
-> branch) and reaches the main line **only through a pull request**. The single exception
-> is **explicit human permission** — the human, or a senior scope to whom the human has
-> explicitly delegated that authority, may approve a direct merge. Absent that explicit
-> approval, the worktree-and-PR path is mandatory.
+> **Work is never committed to a main line directly.** All work happens on a worktree (a branch) and
+> reaches the main line **only through a pull request**. The single exception is **explicit human
+> permission** — the human, or a senior scope to whom the human has explicitly delegated that
+> authority, may approve a direct merge. Absent that explicit approval, the worktree-and-PR path is
+> mandatory.
 
-**Why so absolute:** everything downstream (review, refresh, cleanup) assumes it, and a
-single careless direct push to main is exactly the kind of irreversible, outward-facing
-mistake the system exists to prevent.
+**Why so absolute:** everything downstream (review, refresh, cleanup) assumes it, and a single
+careless direct push to main is exactly the kind of irreversible, outward-facing mistake the system
+exists to prevent.
 
 ## Lifecycle hooks: customizable, idempotent setup and teardown
 
-Lifecycle transitions have **setup and teardown hooks the user can customize** — how to set
-up a new worktree, how to set up a new task, how to tear them down. For example, creating a
-worktree might run a dev tool to initialize dependencies, or apply the worktree's visual
-theme; tearing one down might clean those up.
+Lifecycle transitions have **setup and teardown hooks the user can customize** — how to set up a new
+worktree, how to set up a new task, how to tear them down. For example, creating a worktree might
+run a dev tool to initialize dependencies, or apply the worktree's visual theme; tearing one down
+might clean those up.
 
-The defining constraint: **hooks must be idempotent.** On resume, each hook can be
-**validated as already-done-or-not** and become a **no-op** if already satisfied
-(`../00-foundation/01-principles.md` §6). **Why idempotent:** because work is paused and resumed constantly,
-a setup step may have half-run, fully run, or not run before an interruption; the only safe
-hook is one that checks state and converges to "done" no matter how many times it fires.
+The defining constraint: **hooks must be idempotent.** On resume, each hook can be **validated as
+already-done-or-not** and become a **no-op** if already satisfied
+(`../00-foundation/01-principles.md` §6). **Why idempotent:** because work is paused and resumed
+constantly, a setup step may have half-run, fully run, or not run before an interruption; the only
+safe hook is one that checks state and converges to "done" no matter how many times it fires.
 
-These hooks are **Ward-provided extension points, customized per workspace** and evolvable
-the same way the workflow policy is (see below; mechanism: `../../design/lifecycle-hooks.md`).
+These hooks are **Ward-provided extension points, customized per workspace** and evolvable the same
+way the workflow policy is (see below; mechanism: `../../design/lifecycle-hooks.md`).
 
 ## Execution
 
 Once underway, work happens in the task's worktrees, directed through the scope model
-(`01-scopes-and-personas.md`): a resident owns the task, briefs and directs rooms that do
-the deep work, evaluates results, and presents to the attending for approval. The task's
-recorded state tracks which worktrees exist, which rooms are active, and where each stands —
-so the task is resumable at any time.
+(`01-scopes-and-personas.md`): a resident owns the task, briefs and directs rooms that do the deep
+work, evaluates results, and presents to the attending for approval. The task's recorded state
+tracks which worktrees exist, which rooms are active, and where each stands — so the task is
+resumable at any time.
 
 ## Ward absorbs the recurring toil
 
-A pile of **recurring, tedious maintenance** surrounds live work, and Ward's intent is to **take
-it on so the human does not have to track or remember it** — spending the human's attention only
-where a real decision is needed (the prime directive, `../00-foundation/00-vision.md`). These are
+A pile of **recurring, tedious maintenance** surrounds live work, and Ward's intent is to **take it
+on so the human does not have to track or remember it** — spending the human's attention only where
+a real decision is needed (the prime directive, `../00-foundation/00-vision.md`). These are
 **examples, not an exhaustive list** — the specific operations will grow and change over time:
 
 - **Refresh** — pull the workspace's canonical main checkouts from origin on a cadence, so new
@@ -111,73 +110,72 @@ where a real decision is needed (the prime directive, `../00-foundation/00-visio
   current and merge surprises shrink — **including the sub-work that follows**, such as resolving
   (or, where it needs judgment, surfacing) rebase conflicts.
 - **Watch PR and CI status** — follow each PR's review state and its checks, and know what is
-  blocking a merge (driving the PR set to a merged close is *Completion*, below).
+  blocking a merge (driving the PR set to a merged close is _Completion_, below).
 - **…and more** as it emerges.
 
-**What is durable here is the intent, not the catalog.** Ward **owns the toil**: it performs what
-it safely can autonomously (local, reversible work — §18) and **surfaces only what needs a
-human** — what is behind, what is conflicted, what is blocked, what is ready. **Why:** which
-worktrees are behind, which are clean, which are blocked should be readable at a glance, not held
-in the human's head; and anything gated or outward (the merge itself) still requires authority
-(§18). The evolving set of operations is a *how* — `../../design/`.
+**What is durable here is the intent, not the catalog.** Ward **owns the toil**: it performs what it
+safely can autonomously (local, reversible work — §18) and **surfaces only what needs a human** —
+what is behind, what is conflicted, what is blocked, what is ready. **Why:** which worktrees are
+behind, which are clean, which are blocked should be readable at a glance, not held in the human's
+head; and anything gated or outward (the merge itself) still requires authority (§18). The evolving
+set of operations is a _how_ — `../../design/`.
 
 ## Completion: pull requests, merge, and cleanup
 
-A unit of work is delivered through one or more **pull requests** — potentially several,
-across the repositories a task touches. Ward treats the PR set as part of the task's state
-and drives it to done:
+A unit of work is delivered through one or more **pull requests** — potentially several, across the
+repositories a task touches. Ward treats the PR set as part of the task's state and drives it to
+done:
 
-1. **Track PRs.** For each: identity, status (open / changes requested / approved /
-   merged), and what remains before it can merge.
+1. **Track PRs.** For each: identity, status (open / changes requested / approved / merged), and
+   what remains before it can merge.
 2. **Guide to merge.** At any moment Ward answers "what is left to complete this task?"
-3. **Decide what artifacts to keep elsewhere.** Closing a task includes deciding whether any
-   of its **artifacts** should also be captured beyond the workspace — committed into the
-   worktree's files, posted to a remote issue, or promoted to a project-level artifact
-   (`00-domain-model.md`). Anything crossing outward is **re-authored for its destination,
-   not copied verbatim** — composed for that audience and stripped of local, personal, or
-   internal content (including provenance and persona). **Why at close:** this is the moment
-   the task's durable output is complete and its value to others (and to the remote record)
-   can be judged — and moved across the privacy boundary deliberately.
-4. **Close the task.** A task is complete only when **all its PRs are merged**. Then it is
-   closed (and, per the session lifecycle, closed stays closed).
-5. **Refresh and clean up.** After merge, the affected main checkouts are refreshed and
-   worktrees no longer needed are torn down (via the teardown hooks).
+3. **Decide what artifacts to keep elsewhere.** Closing a task includes deciding whether any of its
+   **artifacts** should also be captured beyond the workspace — committed into the worktree's files,
+   posted to a remote issue, or promoted to a project-level artifact (`00-domain-model.md`).
+   Anything crossing outward is **re-authored for its destination, not copied verbatim** — composed
+   for that audience and stripped of local, personal, or internal content (including provenance and
+   persona). **Why at close:** this is the moment the task's durable output is complete and its
+   value to others (and to the remote record) can be judged — and moved across the privacy boundary
+   deliberately.
+4. **Close the task.** A task is complete only when **all its PRs are merged**. Then it is closed
+   (and, per the session lifecycle, closed stays closed).
+5. **Refresh and clean up.** After merge, the affected main checkouts are refreshed and worktrees no
+   longer needed are torn down (via the teardown hooks).
 
-This whole sequence is something Ward **manages**, not something the human is left to
-remember.
+This whole sequence is something Ward **manages**, not something the human is left to remember.
 
 ## Workflow policy: opinionated but evolvable
 
-Much of the above — branch from main, commit granularity, when to amend, PR-before-merge,
-the never-merge-to-main rule — is **opinion**. Ward ships **specific, opinionated defaults**
-and **injects them into a workspace at creation**, so a new workspace is immediately
-productive with a sensible workflow.
+Much of the above — branch from main, commit granularity, when to amend, PR-before-merge, the
+never-merge-to-main rule — is **opinion**. Ward ships **specific, opinionated defaults** and
+**injects them into a workspace at creation**, so a new workspace is immediately productive with a
+sensible workflow.
 
-But workflows evolve with the human and the kind of work, so the policy must be **modifiable,
-not baked into the tooling**:
+But workflows evolve with the human and the kind of work, so the policy must be **modifiable, not
+baked into the tooling**:
 
-- The workflow policy lives in a **specific, encoded place inside the workspace** — the
-  current intent is a **skill** the workspace owns (mechanism: `../../design/workflow-policy.md`).
-- Ward installs the default at creation; thereafter the workspace's own agents and sessions
-  may **evolve** it.
+- The workflow policy lives in a **specific, encoded place inside the workspace** — the current
+  intent is a **skill** the workspace owns (mechanism: `../../design/workflow-policy.md`).
+- Ward installs the default at creation; thereafter the workspace's own agents and sessions may
+  **evolve** it.
 - On a Ward **update/migration** (`04-reflection-and-evolution.md`), Ward checks whether the
-  workspace still uses the default. If so, it updates directly. If the workspace has
-  **diverged**, Ward does not clobber it — it **flags the divergence and offers a
-  reconciliation process**: an agent that walks the human through whether and how the new
-  defaults should fold into their customized policy.
+  workspace still uses the default. If so, it updates directly. If the workspace has **diverged**,
+  Ward does not clobber it — it **flags the divergence and offers a reconciliation process**: an
+  agent that walks the human through whether and how the new defaults should fold into their
+  customized policy.
 
-**Why this shape:** it keeps the human in control of their own workflow while still offering
-Ward's improvements. This pattern — opinionated default, encoded in the workspace, evolvable
-by the workspace, reconciled on upgrade — is the **general shape for any opinion Ward ships**
-(workflow policy, lifecycle hooks, personas, scaffolding).
+**Why this shape:** it keeps the human in control of their own workflow while still offering Ward's
+improvements. This pattern — opinionated default, encoded in the workspace, evolvable by the
+workspace, reconciled on upgrade — is the **general shape for any opinion Ward ships** (workflow
+policy, lifecycle hooks, personas, scaffolding).
 
 ## Summary of task states (conceptual)
 
-The precise state machine is to be settled as we build (`../00-foundation/open-questions.md`), but the
-intent spans at least: *drafted* (intent captured), *active* (work underway), *in review*
-(PRs open), *blocked* (waiting), *paused* (set down, resumable), and *closed* (all PRs
-merged, artifacts dispositioned, cleaned up). Local↔remote linkage is an orthogonal
-attribute that can change in any non-closed state.
+The precise state machine is to be settled as we build (`../00-foundation/open-questions.md`), but
+the intent spans at least: _drafted_ (intent captured), _active_ (work underway), _in review_ (PRs
+open), _blocked_ (waiting), _paused_ (set down, resumable), and _closed_ (all PRs merged, artifacts
+dispositioned, cleaned up). Local↔remote linkage is an orthogonal attribute that can change in any
+non-closed state.
 
 ## Canonical home for
 
@@ -185,15 +183,14 @@ attribute that can change in any non-closed state.
   conceptual task states.
 - **The task's discoverable cast** — who is involved (resident, charge nurse, rooms, sessions),
   derived from its session logs and containment rather than stored.
-- **Local-only vs. remote-linked tasks** and the attach/merge transitions (identity stays
-  stable).
+- **Local-only vs. remote-linked tasks** and the attach/merge transitions (identity stays stable).
 - **The never-merge-to-main cardinal rule.**
 - **Ward absorbing the recurring maintenance toil** (refresh, rebase + conflict handling, PR/CI
   status-watching, …) and surfacing only what needs a human — the durable intent, not the catalog.
-- **Lifecycle hooks** — that they exist and must be **idempotent / validate-on-resume**
-  (build planned in [`../../design/lifecycle-hooks.md`](../../design/lifecycle-hooks.md)).
-- **Workflow policy** — opinionated-but-evolvable, and the **general pattern for any opinion
-  Ward ships** (default → workspace-owned artifact → reconciled on upgrade).
+- **Lifecycle hooks** — that they exist and must be **idempotent / validate-on-resume** (build
+  planned in [`../../design/lifecycle-hooks.md`](../../design/lifecycle-hooks.md)).
+- **Workflow policy** — opinionated-but-evolvable, and the **general pattern for any opinion Ward
+  ships** (default → workspace-owned artifact → reconciled on upgrade).
 
 The privacy boundary itself is owned by
 [`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §4 and the remote seam
@@ -203,8 +200,8 @@ applies it to task completion and links there.
 ## Open questions
 
 - **Task state machine.** The precise states, transitions, and which are recorded vs. derived.
-- **Delegated authority for gated actions** (§18) — how it is represented and bounded so it
-  cannot be silently assumed.
-- **Hook validation**, the **maintenance cadence** (and how conflicts/blocks are auto-resolved
-  vs. surfaced for a human), and the **policy encoding home** (skill vs. dedicated config) — each
+- **Delegated authority for gated actions** (§18) — how it is represented and bounded so it cannot
+  be silently assumed.
+- **Hook validation**, the **maintenance cadence** (and how conflicts/blocks are auto-resolved vs.
+  surfaced for a human), and the **policy encoding home** (skill vs. dedicated config) — each
   deferred to the matching design draft.
