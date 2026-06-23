@@ -1,50 +1,67 @@
 # Ward Intent
 
-The **design intent** of Ward: what it is for, why it exists, the concepts it models, the
-constraints it honors, the seams along which it may change, and the durable technology
-choices behind those seams.
+The **design intent**: what Ward is for, the concepts it models, and the constraints every build
+must honor — each with its *why*, at a level above any one implementation.
 
-This is a **living document** — the current best shared understanding, not a historical
-record and not an implementation plan.
+Intent is **durable**. It is the one leg of the four (see [`../README.md`](../README.md)) that
+does not move when a tool moves. It changes only when our understanding of Ward changes. It is
+organized for **understanding** — by concept and by seam.
 
-## Two layers: what + why, and how + why
+## What/why vs. how — the dividing line
 
-Intent has two symmetric layers, each in its own subdirectory, each carrying its reasoning:
+The boundary between this tree and [`../design/`](../design/):
 
-- **`what/`** — the purpose, the concepts (the nouns), and the invariants — *and why.* Never
-  names a tool.
-- **`how/`** — the durable, cross-cutting choices about *which kinds of technology* realize
-  the concepts — *and why.* Above an implementation plan: it sets guardrails, not sequence or
-  code.
+> **Intent is the *what* and the *why*. Design is the *how*.**
+> Intent says what must be true and why it matters; design says how we build it.
 
-```
-what + why   →   how + why   →   implementation plan   →   tests + code
-(what/)          (how/)           (../plan/)                (the system)
-```
+A useful heuristic: *if we changed how we build it, would this sentence still hold?* If yes, it
+belongs here; if it only makes sense given a particular build, it belongs in
+[`../design/`](../design/). This is a **guide, not vocabulary policing** — intent may name a
+concrete tool when it genuinely clarifies (an analogy, a fixed external dependency, a worked
+example, or a durable choice everyone treats as settled). What matters is that the substance is
+the what/why, not a build choice. A seam contract names what any design must satisfy; the design
+draft behind it names the tool.
 
-`what/07-subsystem-seams.md` is the hinge: it names each **seam** (swappable subsystem) as a
-contract in the *what*, and each seam points to the `how/` doc recording the choice behind it.
+## Three groupings
 
-> **The separation rule.** A statement belongs in `what/` only if it would survive swapping
-> every tool — multiplexer, store, harness, model. If swapping one would change it, it is a
-> *how* (the durable choice) or an implementation detail (exact libraries, paths, fields).
+| Group | Holds |
+| ----- | ----- |
+| [`00-foundation/`](00-foundation/) | **Global** intent — the [vision](00-foundation/00-vision.md) and [principles](00-foundation/01-principles.md), plus the [glossary](00-foundation/glossary.md) and cross-cutting [open questions](00-foundation/open-questions.md). |
+| [`01-concepts/`](01-concepts/) | The **domain**: the nouns and processes, with their why — hierarchy, roles, sessions, the work lifecycle, reflection, and context loading. |
+| [`02-subsystems/`](02-subsystems/) | The **swappable machinery** (the seams): the constraints any design of each must satisfy. |
 
-> **Why, always.** Every concept and every choice carries its reasoning. Reasoning is what
-> makes this a guide for judgment, not a list of rules to follow blindly.
+## The two governing rules
 
-## The intent ⇄ tests ⇄ code triangle
+1. **What/why vs. how.** Keep this tree to the durable what & why; the how lives in
+   [`../design/`](../design/). (Heuristic above.)
+2. **One home per idea.** Every concept has exactly one canonical slice; every other slice
+   **links** to it rather than restating it. Each file's *Canonical home for* section declares
+   what it owns. A genuinely two-sided contract states each side once, on its own side, and links.
 
-These three describe the system at different levels and move together — **but not always
-atomically.** Any one may change first: a test that derives intent, a call made in code, a
-revised concept. The discipline: **when one diverges from another, reconcile it in a following
-step.** Divergence is not failure — it means we learned something; the obligation is to bring
-the others back into agreement and to record whatever touches intent.
+Plus, always: **why on every statement**, and **two audiences** (readable prose for humans,
+stable headings/links for agents).
 
-## How to read this
+## Reading order
 
-- Start in **`what/`**: `README.md`, then `00`–`08`, with `glossary.md` for quick reference.
-- Then **`how/`**: `README.md` indexes the durable choices — one behind each seam, plus the
-  cross-cutting ones.
-- **`walkthrough.md`** threads one task end to end — the fastest way to see the pieces fit.
-- **`what/08-open-questions.md`** tracks unresolved tensions and is expected to be non-empty.
-- **`blanks-register.md`** is the bridge to implementation — read it last, before planning.
+Directories and files are **numbered in the order to read them**. Unnumbered files are
+*references*, read when needed.
+
+1. [`00-foundation/00-vision.md`](00-foundation/00-vision.md) — why Ward exists; the prime
+   directive (context management) and the hospital metaphor.
+2. [`00-foundation/01-principles.md`](00-foundation/01-principles.md) — the cross-cutting
+   invariants §1–§18 every slice honors.
+3. [`01-concepts/`](01-concepts/) — the domain, `00`→`05`: domain model, scopes & personas,
+   sessions & lifecycle, work lifecycle, reflection & evolution, context loading.
+4. [`02-subsystems/`](02-subsystems/) — the seams, `00`→`07`, each a contract: metadata store,
+   multiplexer, messaging, harness, model selection, theming, remote provider, human shell.
+5. [`03-walkthrough.md`](03-walkthrough.md) — one scenario threaded end-to-end (optional, the
+   fastest way to see the pieces fit).
+6. References: [`00-foundation/open-questions.md`](00-foundation/open-questions.md) (cross-cutting
+   tensions) and [`00-foundation/glossary.md`](00-foundation/glossary.md) (term → defining slice).
+
+## The intent ⇄ design+code ⇄ tests triangle
+
+These move together but **not always atomically**. Any one may change first — a test that derives
+intent, a discovery while coding, a revised concept. The discipline: when one diverges from
+another, **reconcile in a following step** and record whatever touches intent here. Divergence is
+not failure — it means we learned something.
