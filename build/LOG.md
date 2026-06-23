@@ -82,3 +82,50 @@ the open items in [`spec-feedback.md`](spec-feedback.md).
   open/close/resume` via the stub harness handle, deriving status up the hierarchy. Add
   the theming and harness seams. Then the lifecycle intent test (resume idempotent / closed stays
   closed).
+
+---
+
+## Iteration 2 — containment slice end-to-end + theming/harness/hooks (2026-06-23)
+
+- **Goal** — drive the walkthrough's containment spine (§1–§5) as real commands: project → task →
+  worktree (real `git worktree` + idempotent themed hooks) → room (+ brief) → session
+  (open/close/resume), with status rolling up; build the theming + harness seams; prove the
+  resume-idempotent / closed-stays-closed invariant.
+- **Did** —
+  - Seams: `theming` (FNV-1a deterministic accent, linear-probe collision-free, per-type glyph,
+    recorded+nameable) and `harness` (stub runtime exposing start/handle/resume/locate + native
+    history file — a real, resolvable handle).
+  - `domain/hooks` (idempotent worktree setup: deps marker + theme-by-value, validate-on-resume,
+    teardown). `domain/session` (lifecycle over the event log + harness). `domain/resolve` (floor /
+    task / room-code resolvers + sibling-accent collectors). `domain/{project,task,worktree,room}`
+    (scope ops; project/task auto-open a scope session; room hosts sessions separately).
+  - CLI verbs: `project open`, `task open`, `worktree create`, `room open|close`,
+    `session open|resume|close|list`.
+  - Design drafts: [`theming.md`](../design/theming.md),
+    [`agent-harness.md`](../design/agent-harness.md),
+    [`lifecycle-hooks.md`](../design/lifecycle-hooks.md) (each "Serves intent"; also clears their
+    lychee link errors).
+- **Works now** (one scripted run against a fresh temp workspace) —
+  - `project open "meal plan exports"` → 🏢 floor 1 (accent lime), attending session `avery-1` with
+    handle `stub:…`.
+  - `task open "csv export" --floor 1 --repo meal-planner --success …` → 🗂️ task [active], resident
+    session.
+  - `worktree create --floor 1 --task csv-export --repo meal-planner` → **real** worktree (confirmed
+    by `git -C repos/meal-planner worktree list` showing
+    `…/worktrees/meal-planner/csv-export
+    [csv-export]`); hooks applied (`.ward-setup-deps`,
+    `.ward-theme.json` present).
+  - `room open … --brief "write CSV endpoint"` → 🚪 room `1A1` (violet) + brief artifact.
+  - `session open --room 1A1` → student session `morgan-1` (handle, cwd = worktree path).
+  - `session resume … ×2` → idempotent (same handle, no error); `session close` then `resume` →
+    **`error: closed stays closed`**; second `close` → idempotent no-op.
+  - `status` → derived rollup `workspace [active] ← floor 1 [active] ← csv export [active]`.
+  - `npm test` → **11/11**, now incl. intent invariant **resume-idempotent / closed-stays-closed**
+    and theming determinism/collision-free; `npx tsc --noEmit` clean.
+- **Decisions** — no new ADRs (used the stack from iteration 1).
+- **Spec feedback** — [SF-003](spec-feedback.md) (walkthrough §4/§5 conflate opening a room with
+  opening its first session; resolved on the domain-model reading).
+- **Next** — iteration 3: messaging/dispatch/wake + report (walkthrough §4/§6), recorded-first and
+  idempotent. Then iteration 4: privacy translation gate + stub remote/PR + gated merge (§7–§8),
+  scope-boundary reflection (§9), cold-start recovery (§10), the privacy-gate intent test, and the
+  acceptance script running the whole walkthrough.

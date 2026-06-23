@@ -61,3 +61,24 @@ question, is allowed and should also be logged here.)
   beats all-done), and (b) a named status for the childless container (e.g. `empty`/`idle`), since
   "what does the supervisor show for a brand-new project?" is a real first-run question. Keep it as
   intent (it is a durable what, independent of how status is computed).
+
+## SF-003 — Walkthrough conflates "open a room" with "open the room's first session"
+
+- **Where** — `intent/03-walkthrough.md` §4 ("Brief and open a room") vs. §5 ("Deep work in the
+  room"); against `intent/01-concepts/00-domain-model.md` → Room ("a room is a scope that hosts
+  sessions, not a session itself … can be open with no session attached").
+- **Kind** — contradiction (minor) / ambiguity.
+- **What** — §4's "Records written" lists "a session log entry for the room's first session" as part
+  of **opening the room**, but §5 is where the medical-student session actually does the work, and
+  the domain model is explicit that a room is a scope that can be **open with no session attached**.
+  Building it forced a decision: does `room open` mint a session, or not? If it does, "open ≠
+  running" and "resume re-attaches a session to an open room" get muddy (the room would always have
+  a session). I had to pick the domain-model reading.
+- **Assumption** — `room open` writes only the room record + the brief artifact (no session);
+  `session open --room <code>` opens the session in §5. (Project- and task-scope `open`, by
+  contrast, **do** open a session, matching their walkthrough steps — the asymmetry is intentional
+  and matches "a room hosts sessions.")
+- **Proposed revision** — In walkthrough §4, move "a session log entry for the room's first session"
+  from §4's records to §5's, and note in the Room concept that opening a room does **not** by itself
+  open a session (it becomes _running_ only when a session is opened/resumed in it) — making the
+  open-vs-running distinction concrete at the room level.

@@ -13,6 +13,7 @@ const sv = () => z.number().default(SCHEMA_VERSION);
 
 export const Identity = z.object({ slug: z.string(), code: z.string() });
 export const Theme = z.object({ accent: z.string(), glyph: z.string() });
+export type ThemeVal = z.infer<typeof Theme>;
 export const Provenance = z.object({
   persona: z.string().optional(), // internal name — never crosses the privacy boundary (§4)
   cwd: z.string(),

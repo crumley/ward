@@ -10,6 +10,13 @@ import { findWorkspaceRoot } from "../store/paths.ts";
 import { initWorkspace, addRepo } from "../domain/workspace.ts";
 import { loadWorkspace } from "../store/workspace.ts";
 import { workspaceStatus } from "../domain/status.ts";
+import { openProject } from "../domain/project.ts";
+import { openTask } from "../domain/task.ts";
+import { createWorktree } from "../domain/worktree.ts";
+import { openRoom, closeRoom, roomWorkingDir } from "../domain/room.ts";
+import { findRoom } from "../domain/resolve.ts";
+import { openSession, closeSession, resumeSession, sessionStates } from "../domain/session.ts";
+import { defaultFor } from "../domain/personas.ts";
 
 const program = new Command();
 program
@@ -107,6 +114,226 @@ repo
       ? ws.repos.map((r) => `  ${r.name} → ${r.mainBranch} (${r.url})`).join("\n")
       : "  (none)";
     emit(caller, `repos:\n${human}`, { ok: true, repos: ws.repos });
+  });
+
+// ---- project -----------------------------------------------------------------------------------
+
+const project = program.command("project").description("projects (floors)");
+project
+  .command("open <title...>")
+  .description("open a project (allocates the next floor number)")
+  .action(async (titleParts: string[]) => {
+    const caller = detectCaller(program.opts());
+    const root = rootOrFail(program);
+    try {
+      const r = await openProject(root, titleParts.join(" "));
+      emit(
+        caller,
+        `Opened ${r.project.theme.glyph} floor ${r.floor} — ${r.project.title} (${r.project.theme.accent})\n  session ${r.session} · handle ${r.handle}`,
+        { ok: true, ...r },
+      );
+    } catch (e) {
+      fail(caller, (e as Error).message);
+    }
+  });
+
+// ---- task --------------------------------------------------------------------------------------
+
+const task = program.command("task").description("tasks (units of deliverable work)");
+task
+  .command("open <title...>")
+  .description("open a task under a floor")
+  .requiredOption("--floor <n>", "floor (project) number")
+  .option("--repo <name...>", "repositories the task touches")
+  .option("--success <criterion...>", "success criteria")
+  .action(async (titleParts: string[], opts: { floor: string; repo?: string[]; success?: string[] }) => {
+    const caller = detectCaller(program.opts());
+    const root = rootOrFail(program);
+    try {
+      const r = await openTask(root, opts.floor, titleParts.join(" "), {
+        repos: opts.repo,
+        successCriteria: opts.success,
+      });
+      emit(
+        caller,
+        `Opened ${r.task.theme.glyph} task ${r.task.identity.slug} [${r.task.state}] (resident ${r.task.resident})\n  session ${r.session}`,
+        { ok: true, ...r },
+      );
+    } catch (e) {
+      fail(caller, (e as Error).message);
+    }
+  });
+
+// ---- worktree ----------------------------------------------------------------------------------
+
+const worktree = program.command("worktree").description("git worktrees a task changes");
+worktree
+  .command("create")
+  .description("create a real git worktree off the repo's main and run setup hooks")
+  .requiredOption("--floor <n>", "floor number")
+  .requiredOption("--task <slug>", "task slug")
+  .requiredOption("--repo <name>", "repository")
+  .option("--branch <branch>", "branch name (default: task slug)")
+  .action(async (opts: { floor: string; task: string; repo: string; branch?: string }) => {
+    const caller = detectCaller(program.opts());
+    const root = rootOrFail(program);
+    try {
+      const r = await createWorktree(root, opts.floor, opts.task, opts.repo, opts.branch);
+      emit(
+        caller,
+        `Created ${r.worktree.theme.glyph} worktree ${r.worktree.repo}:${r.worktree.branch} (${r.worktree.theme.accent})\n  hooks applied: ${r.applied.join(", ") || "(all already satisfied)"}\n  at ${r.worktree.path}`,
+        { ok: true, ...r },
+      );
+    } catch (e) {
+      fail(caller, (e as Error).message);
+    }
+  });
+
+// ---- room --------------------------------------------------------------------------------------
+
+const room = program.command("room").description("rooms (deep-work scopes on a worktree)");
+room
+  .command("open")
+  .description("open a room on a worktree, with a brief")
+  .requiredOption("--floor <n>", "floor number")
+  .requiredOption("--task <slug>", "task slug")
+  .requiredOption("--repo <name>", "worktree repository")
+  .requiredOption("--branch <branch>", "worktree branch")
+  .requiredOption("--brief <title>", "brief title")
+  .option("--body <text>", "brief body", "")
+  .action(
+    async (opts: {
+      floor: string;
+      task: string;
+      repo: string;
+      branch: string;
+      brief: string;
+      body: string;
+    }) => {
+      const caller = detectCaller(program.opts());
+      const root = rootOrFail(program);
+      try {
+        const resident = defaultFor("resident").name;
+        const r = await openRoom(root, opts.floor, opts.task, {
+          worktree: `${opts.repo}:${opts.branch}`,
+          briefTitle: opts.brief,
+          briefBody: opts.body || `Brief: ${opts.brief}`,
+          residentPersona: resident,
+        });
+        emit(
+          caller,
+          `Opened ${r.room.theme.glyph} room ${r.code} (${r.room.theme.accent}) on ${r.room.worktree}\n  brief: ${r.brief}`,
+          { ok: true, ...r },
+        );
+      } catch (e) {
+        fail(caller, (e as Error).message);
+      }
+    },
+  );
+room
+  .command("close <code>")
+  .description("close a room (closed stays closed)")
+  .action(async (code: string) => {
+    const caller = detectCaller(program.opts());
+    const root = rootOrFail(program);
+    try {
+      const r = await closeRoom(root, code);
+      emit(caller, r.idempotent ? `room ${code} already closed` : `Closed room ${code}`, {
+        ok: true,
+        code,
+        ...r,
+      });
+    } catch (e) {
+      fail(caller, (e as Error).message);
+    }
+  });
+
+// ---- session -----------------------------------------------------------------------------------
+
+const session = program.command("session").description("agent sessions at a scope");
+session
+  .command("open")
+  .description("open a session in a room")
+  .requiredOption("--room <code>", "room code (e.g. 1A1)")
+  .option("--persona <name>", "persona (default: medical student)")
+  .action(async (opts: { room: string; persona?: string }) => {
+    const caller = detectCaller(program.opts());
+    const root = rootOrFail(program);
+    try {
+      const persona = opts.persona ?? defaultFor("medical-student").name;
+      const wd = await roomWorkingDir(root, opts.room);
+      const ws = await loadWorkspace(root);
+      const tier = defaultFor("medical-student").modelTier;
+      const r = await openSession(root, wd.rDir, {
+        scope: `room:${opts.room}`,
+        persona,
+        model: ws.modelDefaults[tier] ?? tier,
+        cwd: wd.worktreePath,
+      });
+      emit(caller, `Opened session ${r.session} in room ${opts.room}\n  handle ${r.handle} · cwd ${wd.worktreePath}`, {
+        ok: true,
+        room: opts.room,
+        ...r,
+      });
+    } catch (e) {
+      fail(caller, (e as Error).message);
+    }
+  });
+session
+  .command("resume")
+  .description("resume an open session (idempotent; closed stays closed)")
+  .requiredOption("--room <code>", "room code")
+  .requiredOption("--session <id>", "session id")
+  .action(async (opts: { room: string; session: string }) => {
+    const caller = detectCaller(program.opts());
+    const root = rootOrFail(program);
+    try {
+      const loc = await findRoom(root, opts.room);
+      if (!loc) throw new Error(`no room ${opts.room}`);
+      const r = await resumeSession(root, loc.rDir, opts.session);
+      emit(caller, `Resumed session ${opts.session} (handle ${r.handle})`, { ok: true, ...r });
+    } catch (e) {
+      fail(caller, (e as Error).message);
+    }
+  });
+session
+  .command("close")
+  .description("close a session (closed stays closed)")
+  .requiredOption("--room <code>", "room code")
+  .requiredOption("--session <id>", "session id")
+  .action(async (opts: { room: string; session: string }) => {
+    const caller = detectCaller(program.opts());
+    const root = rootOrFail(program);
+    try {
+      const loc = await findRoom(root, opts.room);
+      if (!loc) throw new Error(`no room ${opts.room}`);
+      const r = await closeSession(loc.rDir, opts.session);
+      emit(caller, r.idempotent ? `session ${opts.session} already closed` : `Closed session ${opts.session}`, {
+        ok: true,
+        ...r,
+      });
+    } catch (e) {
+      fail(caller, (e as Error).message);
+    }
+  });
+session
+  .command("list")
+  .description("list sessions at a room and their derived states")
+  .requiredOption("--room <code>", "room code")
+  .action(async (opts: { room: string }) => {
+    const caller = detectCaller(program.opts());
+    const root = rootOrFail(program);
+    try {
+      const loc = await findRoom(root, opts.room);
+      if (!loc) throw new Error(`no room ${opts.room}`);
+      const states = [...(await sessionStates(loc.rDir)).values()];
+      const human = states.length
+        ? states.map((s) => `  ${s.session} [${s.state}] persona=${s.persona ?? "?"} handle=${s.handle ?? "?"}`).join("\n")
+        : "  (none)";
+      emit(caller, `sessions in ${opts.room}:\n${human}`, { ok: true, room: opts.room, sessions: states });
+    } catch (e) {
+      fail(caller, (e as Error).message);
+    }
   });
 
 program.parseAsync(process.argv).catch((e) => {
