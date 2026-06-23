@@ -82,3 +82,40 @@ question, is allowed and should also be logged here.)
   from §4's records to §5's, and note in the Room concept that opening a room does **not** by itself
   open a session (it becomes _running_ only when a session is opened/resumed in it) — making the
   open-vs-running distinction concrete at the room level.
+
+## SF-004 — Session identity is scope-relative, so no operation can address a session by id alone
+
+- **Where** — `intent/01-concepts/00-domain-model.md` → Identity ("Session: slug + code,
+  scope-relative to its scope"); `intent/01-concepts/02-sessions-and-lifecycle.md` → recovery.
+- **Kind** — under-specification (a real consequence of a settled decision).
+- **What** — Because session ids are scope-relative, two different scopes legitimately both contain
+  a session `riley-1` (e.g. the resident's task-scope session in two different tasks). The build hit
+  this in recovery: the re-attach report had to carry **scope + id**, not id alone, to disambiguate;
+  a test that compared bare ids gave a false positive. Every operation that addresses a session
+  (resume, close, dispatch-to-session, recovery) therefore needs a **scope qualifier**, but the
+  intent describes session addressing only as "slug + code" without stating that the scope is part
+  of the address.
+- **Assumption** — All session operations take `(scopeRef, sessionId)`; recovery/messaging carry
+  scope alongside the id; the CLI session verbs require `--room <code> --session <id>`.
+- **Proposed revision** — In the Identity section, state explicitly that a session is addressed by
+  **(scope, scope-relative id)** — the scope is part of the address — and that a bare id is only
+  unambiguous _within_ a scope. This mirrors the room note ("addressed workspace-wide by floor+room
+  code") and prevents the false assumption that a session id is workspace-unique.
+
+## SF-005 — Recovery's hook re-validation must exclude torn-down worktrees of closed work
+
+- **Where** — `intent/01-concepts/02-sessions-and-lifecycle.md` → Recovery, step 5 ("re-validate the
+  worktree's setup hooks (no-ops if satisfied)").
+- **Kind** — gap.
+- **What** — Closing a task tears down its worktrees (real `git worktree remove`) but the worktree
+  **record** persists (durable history/provenance). The recovery step "re-validate worktree setup
+  hooks" then tried to re-apply hooks (e.g. write a deps marker) into a directory that no longer
+  exists — a hard error. Recovery is meant to restore "threads genuinely in flight, and nothing
+  else", and a torn-down worktree of a closed task is not in flight, but the spec's step 5 reads as
+  "re-validate _the_ worktree's hooks" without qualifying _which_ worktrees.
+- **Assumption** — Recovery re-validates hooks only for worktrees whose checkout still exists on
+  disk (`existsSync(doc.path)`); torn-down ones are skipped.
+- **Proposed revision** — Qualify recovery step 5: re-validate setup hooks only for **live**
+  worktrees (those still checked out / belonging to non-closed tasks); skip records whose checkout
+  is gone. Optionally note that a torn-down worktree's record is retained for history but is inert
+  for recovery.

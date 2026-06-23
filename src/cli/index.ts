@@ -11,7 +11,8 @@ import { initWorkspace, addRepo } from "../domain/workspace.ts";
 import { loadWorkspace } from "../store/workspace.ts";
 import { workspaceStatus } from "../domain/status.ts";
 import { openProject } from "../domain/project.ts";
-import { openTask } from "../domain/task.ts";
+import { openTask, closeTask } from "../domain/task.ts";
+import { recover } from "../domain/recovery.ts";
 import { createWorktree } from "../domain/worktree.ts";
 import { openRoom, closeRoom, roomWorkingDir } from "../domain/room.ts";
 import { findRoom } from "../domain/resolve.ts";
@@ -341,6 +342,48 @@ session
         ? states.map((s) => `  ${s.session} [${s.state}] persona=${s.persona ?? "?"} handle=${s.handle ?? "?"}`).join("\n")
         : "  (none)";
       emit(caller, `sessions in ${opts.room}:\n${human}`, { ok: true, room: opts.room, sessions: states });
+    } catch (e) {
+      fail(caller, (e as Error).message);
+    }
+  });
+
+task
+  .command("close <slug>")
+  .description("close a task: disposition, teardown, scope-boundary reflection (closed stays closed)")
+  .requiredOption("--floor <n>", "floor number")
+  .action(async (slug: string, opts: { floor: string }) => {
+    const caller = detectCaller(program.opts());
+    const root = rootOrFail(program);
+    try {
+      const r = await closeTask(root, opts.floor, slug);
+      const props = r.reflection.proposals.map((p) => `    - ${p.kind}: ${p.summary}`).join("\n");
+      emit(
+        caller,
+        `Closed task ${slug} [${r.task.state}]\n  rooms closed: ${r.roomsClosed.join(", ") || "(none)"}\n  worktrees torn down: ${r.worktreesToreDown.join(", ") || "(none)"}\n  reflection (cursor ${r.reflection.cursor}) proposed:\n${props || "    (none)"}`,
+        { ok: true, ...r },
+      );
+    } catch (e) {
+      fail(caller, (e as Error).message);
+    }
+  });
+
+// ---- recovery ----------------------------------------------------------------------------------
+
+program
+  .command("recover")
+  .description("cold-start recovery: re-attach open threads, re-arm wakes, re-validate hooks")
+  .action(async () => {
+    const caller = detectCaller(program.opts());
+    const root = rootOrFail(program);
+    try {
+      const r = await recover(root);
+      const human =
+        `Recovery:\n` +
+        `  re-attached ${r.reattached.length} open session(s): ${r.reattached.map((x) => x.session).join(", ") || "(none)"}\n` +
+        `  closed (left alone): ${r.closedSkipped}\n` +
+        `  wakes re-armed: ${r.wakesRearmed.map((w) => w.condition).join(", ") || "(none)"}\n` +
+        `  worktree hooks re-validated: ${r.hooksRevalidated.map((h) => `${h.worktree}[${h.applied.join(",") || "ok"}]`).join(", ") || "(none)"}`;
+      emit(caller, human, { ok: true, ...r });
     } catch (e) {
       fail(caller, (e as Error).message);
     }

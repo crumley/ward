@@ -2,15 +2,19 @@
 // (it is a status leaf; project/workspace derive from it) and opens a resident task-scope session
 // (walkthrough §2). Local-only by default; a remote link is an attribute added later.
 
-import { writeDoc, readDoc } from "../store/doc.ts";
-import { taskDir, taskDocPath } from "../store/paths.ts";
+import { writeDoc, readDoc, listDirs, listDocs } from "../store/doc.ts";
+import { taskDir, taskDocPath, roomsDir, worktreesMetaDir } from "../store/paths.ts";
+import { join } from "node:path";
 import { slugify } from "../store/ids.ts";
 import { nowIso, loadWorkspace } from "../store/workspace.ts";
 import { defaultFor } from "./personas.ts";
 import { themeFor } from "../seams/theming.ts";
 import { findProject } from "./resolve.ts";
 import { openSession } from "./session.ts";
-import type { TaskDoc } from "../store/schemas.ts";
+import { closeRoom } from "./room.ts";
+import { teardownWorktree } from "./worktree.ts";
+import { reflectOnTaskClose } from "./reflection.ts";
+import type { TaskDoc, ReflectionDoc } from "../store/schemas.ts";
 
 export async function openTask(
   root: string,
@@ -74,4 +78,44 @@ export async function setTaskState(
   const next: TaskDoc = { ...doc, state };
   await writeDoc(path, next, body);
   return next;
+}
+
+// Close a task (§9): a task is complete only when all its PRs are merged. Then close its rooms, tear
+// down its worktrees (idempotent teardown hooks), mark it closed (closed stays closed), and trigger
+// scope-boundary reflection over the task's arc.
+export async function closeTask(
+  root: string,
+  floor: string,
+  slug: string,
+): Promise<{ task: TaskDoc; roomsClosed: string[]; worktreesToreDown: string[]; reflection: ReflectionDoc }> {
+  const project = await findProject(root, floor);
+  if (!project) throw new Error(`no project on floor ${floor}`);
+  const tDir = taskDir(project.pDir, slug);
+  const { doc } = await readDoc(taskDocPath(tDir));
+  if (doc.type !== "task") throw new Error("not a task record");
+  if (doc.remote && doc.remote.state !== "merged") {
+    throw new Error(
+      `cannot close task ${slug}: its PR is '${doc.remote.state}', not merged (all PRs must merge first)`,
+    );
+  }
+
+  // Close rooms (closed stays closed) and tear down worktrees (idempotent).
+  const roomsClosed: string[] = [];
+  for (const code of await listDirs(roomsDir(tDir))) {
+    await closeRoom(root, code);
+    roomsClosed.push(code);
+  }
+  const worktreesToreDown: string[] = [];
+  for (const f of await listDocs(worktreesMetaDir(tDir))) {
+    const { doc: wt } = await readDoc(join(worktreesMetaDir(tDir), f));
+    if (wt.type !== "worktree") continue;
+    await teardownWorktree(root, floor, slug, wt.repo, wt.branch);
+    worktreesToreDown.push(`${wt.repo}:${wt.branch}`);
+  }
+
+  // Reflect BEFORE marking closed, so the closing session's arc is in scope; then close.
+  const reflection = await reflectOnTaskClose(root, floor, slug);
+  const task = await setTaskState(root, floor, slug, "closed");
+
+  return { task, roomsClosed, worktreesToreDown, reflection };
 }

@@ -191,3 +191,99 @@ the open items in [`spec-feedback.md`](spec-feedback.md).
 - **Next** — iteration 5: scope-boundary reflection map-reduce (§9), cold-start recovery (§10,
   consuming `pendingWakes` + `revalidateWorktree`), the acceptance walkthrough script
   (`test/acceptance/walkthrough.sh`) from clean state, and the final summary LOG entry.
+
+---
+
+## Iteration 5 — reflection, recovery, task-close, and v1 ACCEPTANCE (2026-06-23)
+
+- **Goal** — close the walkthrough: scope-boundary reflection (§9), cold-start recovery (§10), task
+  close (teardown + reflect), the full acceptance script, and the remaining design drafts.
+- **Did** — `domain/recovery.ts` (enumerate sessions across all scopes → re-attach open via handle →
+  re-arm pending wakes → re-validate live-worktree hooks → leave closed alone).
+  `domain/reflection.ts` (scope-boundary map-reduce: chunk per session → distill → roll-up
+  proposals + advancing cursor). `task.closeTask` (gate on merged PR → close rooms → teardown
+  worktrees → reflect → mark closed). CLI `recover`, `task close`. Tests `recovery.test.ts` + the
+  acceptance script [`test/acceptance/walkthrough.sh`](../test/acceptance/walkthrough.sh). Design
+  drafts: `reflection`, `cli-and-telemetry`, `model-selection`, `session-multiplexer`,
+  `context-loading`, `workflow-policy` (every implemented seam now has a plan; deferred seams have
+  honest deferral plans).
+- **Works now** —
+  - `bash test/acceptance/walkthrough.sh` → **ACCEPTANCE PASSED — 26 assertions across §0–§10**
+    (init→repo→project→task→worktree[real git worktree]→room→dispatch→wake→session→commit→report
+    [fires once]→recover[mid-flight]→attach-remote→pr open[gated+privacy-translated]→review→merge
+    [gated]→close[reflect+teardown]→recover[closed stays closed]).
+  - `npm test` → **18/18** (frontmatter, workspace-init, theming, messaging, + all four intent
+    invariants + recovery). `npx tsc --noEmit` clean. `make check` green.
+- **Decisions** — no new ADRs.
+- **Spec feedback** — [SF-004](spec-feedback.md) (session identity is scope-relative → address is
+  (scope, id); a bare id is ambiguous), [SF-005](spec-feedback.md) (recovery must skip torn-down
+  worktrees of closed work).
+
+---
+
+## FINAL SUMMARY — Ward v1 is working (2026-06-23)
+
+**What works (all proven by command).** A real, runnable CLI managing a real on-disk workspace,
+driving the entire intent walkthrough §0–§10 end-to-end:
+`ward init / repo add / status / project open / task open|close / worktree create / room open|close /
+session open|resume|close|list / dispatch / report / wake arm|list / messages / task attach-remote /
+pr open|review|merge / recover`.
+The metadata store is markdown + Zod-typed, runtime-validated, canonically-serialized front matter
+with directory nesting = scope containment. Proof: `bash test/acceptance/walkthrough.sh` (26
+assertions) and `npm test` (18/18, `tsc` clean, `make check` green).
+
+**The four load-bearing invariants are passing tests:**
+
+- derived status, never stored (`test/intent/derived-status.test.ts`);
+- resume idempotent + closed stays closed (`test/intent/lifecycle.test.ts`);
+- privacy gate strips local/persona/glyph and is fail-closed (`test/intent/privacy-gate.test.ts`);
+- append-only logs, no lost updates under concurrent writers
+  (`test/intent/no-lost-updates.test.ts`);
+- (bonus) cold-start recovery restores only in-flight threads (`test/intent/recovery.test.ts`).
+
+**Headline stack decisions + rationale (full ADRs in `build/decisions/`):**
+
+- **TypeScript on Node 26, native type-stripping, zero build step**
+  ([0001](decisions/0001-language-and-runtime.md)) — lives in the harness ecosystem Ward must
+  orchestrate; best runtime-validation story; fast iteration.
+- **`node:test` + native execution, no framework**
+  ([0002](decisions/0002-execution-and-test-runner.md)) — maximal context economy (nothing to
+  install before `node --test`), dogfooding the prime directive.
+- **Zod, a discriminated union on `type` = the document catalog**
+  ([0003](decisions/0003-zod-schemas.md)) — one definition is both the static type and the runtime
+  validator, so "typed" and "runtime-validated" cannot drift; the store's hardest requirement met
+  with least code.
+- **`yaml` wrapped for canonical serialization** ([0004](decisions/0004-frontmatter-determinism.md))
+  — byte-deterministic front matter is the concrete mechanism behind deterministic reads (§6) and
+  cacheable, append-biased context (§12).
+- **Commander, noun/verb** ([0005](decisions/0005-cli-framework-commander.md)) — matches the
+  human-shell seam's mandated shape with minimal surface; all logic stays in `domain/`.
+- **Shell out to `git`** ([0006](decisions/0006-git-integration-shell-out.md)) — the only option
+  that truly supports worktrees, the primitive the domain model is built on; orchestrate git, don't
+  reimplement it.
+
+**Deferred, and why (behind their seam contracts; see [`v1-scope.md`](v1-scope.md)):** real agent
+harness (stub exposes a real, resolvable handle); real tmux multiplexer (record proven
+authoritative, recovery rebuilds the cache); real forge/GitHub (the privacy gate — the high-stakes
+part — is real; the adapter is thin); interactive picker UX; cadence reflection + the evolvable
+reflection taxonomy; per-scope model overrides; `AGENTS.md` generation;
+workflow-policy-as-evolvable-artifact; exact-clone fork; Ward self-migration. Each has a design plan
+stating the realization.
+
+**Top spec learnings (full entries in [`spec-feedback.md`](spec-feedback.md)):**
+
+- **SF-001** task state machine is undefined but the store needs a concrete enum; recommend
+  normative states + which are stored vs. derived (`in-review` is better derived from open-PR).
+- **SF-002** derived-status rollup precedence and the empty-container case are unspecified; need a
+  "derivation rule" paragraph.
+- **SF-003** the walkthrough conflates opening a room with opening its first session; a room is a
+  scope that hosts sessions (open ≠ running at the room level).
+- **SF-004** session identity is scope-relative, so the address is (scope, id) — a bare id is
+  ambiguous across scopes; the intent should say so explicitly.
+- **SF-005** recovery's hook re-validation must exclude torn-down worktrees of closed work.
+
+**Status: v1 acceptance met — all DONE criteria hold. Stopping the loop.** A real Ward CLI runs the
+whole walkthrough from a clean state; the four invariants are passing tests; `design/` has a plan
+per implemented seam tracing to intent and `src/` mirrors it; `build/decisions/` covers every stack
+choice with its why; and `build/spec-feedback.md` carries five concrete, proposed spec revisions.
+Remaining merge to `main` is intentionally left to the human (Ward's own cardinal rule).

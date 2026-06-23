@@ -75,9 +75,10 @@ The smallest set of capabilities that makes Ward genuinely run the walkthrough e
 ## Acceptance scenario
 
 v1 is "working" when the [walkthrough](../intent/03-walkthrough.md) runs **for real**, reproducibly,
-from a clean state, via documented CLI commands. The acceptance harness is a single script
-(`test/acceptance/walkthrough.sh`, added with the e2e slice) that runs the commands below against a
-fresh temp workspace and asserts the recorded state at each step. Steps map to walkthrough sections:
+from a clean state, via documented CLI commands. **Status: PASSING** — the acceptance harness
+[`test/acceptance/walkthrough.sh`](../test/acceptance/walkthrough.sh) runs all of §0–§10 against a
+fresh temp workspace and asserts recorded state at each step (`bash test/acceptance/walkthrough.sh`
+→ "ACCEPTANCE PASSED — 26 assertions"). Steps map to walkthrough sections:
 
 | WT step          | Commands (shape)                                                                               | Proven by                                                                      |
 | ---------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
