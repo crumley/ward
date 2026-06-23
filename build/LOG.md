@@ -129,3 +129,33 @@ the open items in [`spec-feedback.md`](spec-feedback.md).
   idempotent. Then iteration 4: privacy translation gate + stub remote/PR + gated merge (§7–§8),
   scope-boundary reflection (§9), cold-start recovery (§10), the privacy-gate intent test, and the
   acceptance script running the whole walkthrough.
+
+---
+
+## Iteration 3 — messaging seam: dispatch / report / wake (2026-06-23)
+
+- **Goal** — realize the dispatch (down) / report (up) / wake (notify) flows, recorded-first in the
+  store, idempotent (a satisfied wake fires once), inspectable, and re-armable on recovery
+  (walkthrough §4 + §6).
+- **Did** — `seams/messaging.ts`: `dispatch`/`report` (write `message` docs addressed to an
+  identity), `armWake` (a `wake` doc + an append-only wake log; state **derived** by folding the
+  log), `satisfyCondition` (append `satisfy` to matching armed wakes — fires once), `pendingWakes`
+  (the still-armed set recovery re-arms), `listMessages`/`listWakes` (the inspection surface). CLI
+  verbs `dispatch`, `report <target> <status>`, `wake arm|list`, `messages`. Design draft
+  [`messaging-dispatch-wake.md`](../design/messaging-dispatch-wake.md). Test
+  [`messaging.test.ts`](../test/design/messaging.test.ts).
+- **Works now** (scripted against a fresh temp workspace, after the §1–§5 setup) —
+  - `dispatch --to 1A1 --ref write-csv-endpoint --body …` → `Dispatched Riley → 1A1 (ref …)`.
+  - `wake arm --on 1A1:done --armer Riley` → `[armed] 1A1:done → Riley`.
+  - `report 1A1 done` → `woke 1 (w-…)`; **second** `report 1A1 done` →
+    `already satisfied (fires
+    once)`; `wake list` → `[satisfied]`.
+  - `messages --to 1A1` lists the dispatch; on disk `.ward/messages/*.md` and
+    `.ward/wakes/<id>.log/{arm,satisfy}` confirm recorded-first.
+  - `npm test` → **13/13** (added wake-fires-once + recorded/inspectable); `npx tsc --noEmit` clean.
+- **Decisions** — no new ADRs.
+- **Spec feedback** — none new (routing-through-status-persona deferred, matching the seam's own
+  open question; noted in the design draft).
+- **Next** — iteration 4: the privacy translation gate (real, the 4th invariant) + stub remote
+  provider + PR tracking + gated merge (§7–§8), and the privacy-gate intent test. Then iteration 5:
+  scope-boundary reflection (§9), cold-start recovery (§10), and the acceptance walkthrough script.

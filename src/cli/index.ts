@@ -17,6 +17,14 @@ import { openRoom, closeRoom, roomWorkingDir } from "../domain/room.ts";
 import { findRoom } from "../domain/resolve.ts";
 import { openSession, closeSession, resumeSession, sessionStates } from "../domain/session.ts";
 import { defaultFor } from "../domain/personas.ts";
+import {
+  dispatch,
+  report,
+  armWake,
+  listWakes,
+  satisfyCondition,
+  listMessages,
+} from "../seams/messaging.ts";
 
 const program = new Command();
 program
@@ -334,6 +342,109 @@ session
     } catch (e) {
       fail(caller, (e as Error).message);
     }
+  });
+
+// ---- messaging: dispatch / report / wake -------------------------------------------------------
+
+program
+  .command("dispatch")
+  .description("dispatch work/context down to a target (recorded-first)")
+  .requiredOption("--to <target>", "target identity (e.g. room 1A1)")
+  .requiredOption("--body <text>", "what is dispatched")
+  .option("--ref <name>", "an artifact/brief referenced")
+  .option("--from <who>", "sender (default: resident)")
+  .action(async (opts: { to: string; body: string; ref?: string; from?: string }) => {
+    const caller = detectCaller(program.opts());
+    const root = rootOrFail(program);
+    try {
+      const from = opts.from ?? defaultFor("resident").name;
+      const m = await dispatch(root, { from, to: opts.to, ref: opts.ref, body: opts.body });
+      emit(caller, `Dispatched ${from} → ${opts.to}${opts.ref ? ` (ref ${opts.ref})` : ""} [${m.id}]`, {
+        ok: true,
+        message: m,
+      });
+    } catch (e) {
+      fail(caller, (e as Error).message);
+    }
+  });
+
+program
+  .command("report <target> <status>")
+  .description("report status upward; satisfies any wake on <target>:<status>")
+  .option("--to <who>", "container scope receiving the report (default: resident)")
+  .option("--body <text>", "report detail", "")
+  .action(async (target: string, status: string, opts: { to?: string; body?: string }) => {
+    const caller = detectCaller(program.opts());
+    const root = rootOrFail(program);
+    try {
+      const to = opts.to ?? defaultFor("resident").name;
+      const m = await report(root, {
+        from: target,
+        to,
+        body: opts.body || `${target} reports ${status}`,
+      });
+      // A report of "<status>" satisfies a wake armed on "<target>:<status>" (walkthrough §6).
+      const condition = `${target}:${status}`;
+      const w = await satisfyCondition(root, condition);
+      const note = w.fired.length
+        ? `woke ${w.fired.length} (${w.fired.join(", ")})`
+        : w.alreadySatisfied.length
+          ? `already satisfied (fires once)`
+          : `no wake armed on ${condition}`;
+      emit(caller, `Reported ${target} ${status} → ${to}; ${note}`, {
+        ok: true,
+        message: m,
+        condition,
+        ...w,
+      });
+    } catch (e) {
+      fail(caller, (e as Error).message);
+    }
+  });
+
+const wake = program.command("wake").description("wake/nudge conditions");
+wake
+  .command("arm")
+  .description("arm a wake: notify the armer when a condition is met")
+  .requiredOption("--on <condition>", "condition, e.g. 1A1:done")
+  .option("--armer <who>", "who to wake (default: resident)")
+  .action(async (opts: { on: string; armer?: string }) => {
+    const caller = detectCaller(program.opts());
+    const root = rootOrFail(program);
+    try {
+      const armer = opts.armer ?? defaultFor("resident").name;
+      const r = await armWake(root, { condition: opts.on, armer });
+      emit(caller, `Armed wake [${r.id}] for ${armer} on \`${opts.on}\``, { ok: true, ...r });
+    } catch (e) {
+      fail(caller, (e as Error).message);
+    }
+  });
+wake
+  .command("list")
+  .description("list wakes and their derived state (armed/satisfied)")
+  .action(async () => {
+    const caller = detectCaller(program.opts());
+    const root = rootOrFail(program);
+    const wakes = await listWakes(root);
+    const human = wakes.length
+      ? wakes.map((w) => `  [${w.state}] ${w.condition} → ${w.armer} (${w.id})`).join("\n")
+      : "  (none)";
+    emit(caller, `wakes:\n${human}`, { ok: true, wakes });
+  });
+
+program
+  .command("messages")
+  .description("inspect the recorded message flow (dispatch/report)")
+  .option("--to <target>", "filter by recipient")
+  .option("--from <who>", "filter by sender")
+  .action(async (opts: { to?: string; from?: string }) => {
+    const caller = detectCaller(program.opts());
+    const root = rootOrFail(program);
+    const msgs = await listMessages(root, opts);
+    const human = msgs.length
+      ? msgs.map((m) => `  ${m.kind} ${m.from} → ${m.to}${m.ref ? ` (ref ${m.ref})` : ""}: ${m.body}`).join("\n")
+      : "  (none)";
+    emit(caller, `messages:\n${human}`, { ok: true, messages: msgs });
   });
 
 program.parseAsync(process.argv).catch((e) => {
