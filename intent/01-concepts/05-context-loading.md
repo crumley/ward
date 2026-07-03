@@ -8,7 +8,7 @@ recoverable. This is the concrete face of several principles —
 [`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §3 (self-sufficiency), §5
 (harness-/model-agnostic), §9 (scope + working directory), and §12 (token economy). The constraints
 below are durable; the **build** (the exact ordering algorithm, field conventions, handle formats)
-is left to [`../../design/context-loading.md`](../../design/context-loading.md).
+is left to [`design/`](../../design/).
 
 ## Context loads from an `AGENTS.md` hierarchy keyed to the working directory
 
@@ -77,7 +77,7 @@ Other slices reference these; the _working directory_ axis itself is defined in
   ordering algorithm** for the cacheable prefix and where the mutable tail begins; the per-harness
   handle formats and history locations; any caching configuration. Bound: the result must stay
   harness-neutral, deterministic for the cacheable prefix, and append-biased. Planned in
-  [`../../design/context-loading.md`](../../design/context-loading.md).
+  [`design/`](../../design/).
 
 ## Open questions
 

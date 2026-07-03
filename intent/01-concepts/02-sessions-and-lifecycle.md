@@ -109,10 +109,19 @@ After a cold start, Ward reconstructs the working state from the record. Recover
 4. **Re-arm pending wakes.** A "wake me when X" condition recorded before the reboot is re-armed
    from the record, so detached waiters are still notified
    (`../02-subsystems/02-messaging-coordination.md`).
-5. **Validate idempotent setup.** Where a thread depends on setup that may have half-run, the
-   lifecycle hooks are re-validated and converge to done-or-not without repeating work
-   (`03-work-lifecycle.md`, `../../design/lifecycle-hooks.md`).
+5. **Validate idempotent setup — live worktrees only.** Where a thread depends on setup that may
+   have half-run, the lifecycle hooks are re-validated and converge to done-or-not without repeating
+   work (`03-work-lifecycle.md`, `design/`). Re-validation runs **only for worktrees whose checkout
+   still exists** (those belonging to non-closed work); a worktree that was **torn down** when its
+   task closed is **skipped**. **Why:** closing a task really removes its worktrees
+   (`03-work-lifecycle.md`), so re-applying a setup hook into a directory that no longer exists is a
+   hard error — and closed work is, by definition, not a thread in flight. The worktree's **record**
+   is retained for history but is inert for recovery.
 6. Leave closed sessions alone.
+
+Because session ids are **unique among open sessions workspace-wide** (`00-domain-model.md`,
+Identity), recovery addresses each session by its **bare id** — no scope qualifier is needed to tell
+two threads apart, even when sibling scopes reuse a slug.
 
 The result: a human returns from a reboot to a workspace that has restored the threads genuinely in
 flight — their sessions, their waits, and their setup — and nothing else.
@@ -123,7 +132,8 @@ flight — their sessions, their waits, and their setup — and nothing else.
 - **The lifecycle guarantees** — resume is idempotent, closed stays closed, the record (not the
   process) is authoritative, and the record is kept current.
 - **The per-scope session log** (append-only; "enough metadata" to recover).
-- **Recovery** — the cold-start orchestration that restores the in-flight threads.
+- **Recovery** — the cold-start orchestration that restores the in-flight threads (re-validating
+  setup for **live** worktrees only; addressing sessions by their workspace-unique bare id).
 
 The **harness handle** is defined here as a recorded _attribute_; the contract a harness must
 satisfy to expose and resolve it lives in

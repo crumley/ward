@@ -67,14 +67,20 @@ The scope in which **deep work happens** on a worktree. A room is where hands-on
 work under direction. It is the innermost scope and the one most jealously guarded for focused
 context.
 
-A room is a **scope that hosts sessions**, not a session itself: it is _opened_ on a worktree (with
-a brief), is _active_ while one or more sessions do work in it, and is _closed_ when its work is
-done to the resident's satisfaction — and, like a session, **closed stays closed**. **Open ≠
-running** applies to rooms too (`02-sessions-and-lifecycle.md`): a room can be open with no session
-attached, and resume re-attaches one. A worktree may host **sequential** rooms over its life, but
-**one active room per worktree at a time** — parallel deep work belongs on separate worktrees, where
-it cannot collide. **Why one at a time:** two rooms on one branch would generate the very conflicts
-the worktree boundary exists to prevent.
+A room is a **reusable resource that hosts sessions**, not a session itself — like a real ward room
+that is turned over and assigned to new work. Because opening a room only makes sense once you know
+what work it is for, **opening a room mints its first session**: the brief that conjures the room
+conjures the agent that will work in it (no "open room with nothing happening in it" state). A room
+is **occupied** while one or more sessions work in it, and becomes **free** again when its last
+session closes — at which point it can be **reassigned**, its code reused. The permanence rule lives
+on the **session**, not the room: **closed stays closed** is a _session_ guarantee
+(`02-sessions-and-lifecycle.md`); a room is a slot that empties and refills. A worktree may host
+**sequential** rooms over its life, but **one occupied room per worktree at a time** — parallel deep
+work belongs on separate worktrees, where it cannot collide. **Why one at a time:** two rooms on one
+branch would generate the very conflicts the worktree boundary exists to prevent. **Why a reusable
+slot, not a closed-forever scope:** rooms are addressed by a small, memorable code (`4A12`) sized to
+in-flight cardinality; permanently retiring a code on every close would burn the address space the
+human keeps in their head.
 
 ## Repositories and the main line
 
@@ -85,12 +91,12 @@ checkouts of its repositories, distinct from the per-task worktrees branched off
 
 ## Status: recorded at the leaves, derived above
 
-Each unit of work records **its own** state — a task is _active_, _blocked_, or _closed_
-(`03-work-lifecycle.md`); a room is open or closed; a session is open/running/closed
+Each unit of work records **its own** state — a task is _active_, _paused_, or _closed_
+(`03-work-lifecycle.md`); a room is occupied or free; a session is open/running/closed
 (`02-sessions-and-lifecycle.md`). The status of a **containing** scope is **derived** from its
 children, not stored as a separate field: a project's status is a _query_ over its tasks' states,
 the workspace's over its projects'. Only judgments that **cannot** be derived from children — a
-priority, a "blocked on an external decision" note, an attention flag — are recorded at the higher
+priority, a "waiting on an external decision" note, an attention flag — are recorded at the higher
 scope.
 
 **Why derive, not store.** A stored roll-up goes stale the instant a child changes, and would make
@@ -100,16 +106,42 @@ personas — charge nurse, house supervisor — can run a fast model: their work
 rolling up, not reasoning. (A _cached_ roll-up is allowed only as an explicit cache over the leaf
 truth, never a second source of truth, §16.)
 
+### The derivation rule
+
+Rolling child states up to a container follows one rule, **progress-biased**:
+
+- **Precedence (highest wins): `active` ▸ `paused` ▸ `closed`.** Any child that can still be moved
+  forward makes the container `active`; if none can but some are only set down, it is `paused`; only
+  when **every** child is `closed` is the container `closed`.
+- **An empty container is `active`.** A freshly-opened project with no tasks, or a new workspace
+  with no projects, starts `active` — there is nothing blocking it, and the human **pauses** it
+  explicitly if they don't want it on the active list. (No special "idle/empty" status to reason
+  about.)
+- **`in-review` is a derived overlay, not a rollup input.** A task in review (it has open PRs —
+  `03-work-lifecycle.md`) counts as `active` for its container; review is a flavor of "in flight,"
+  surfaced as a presentation detail, not a competing rollup state.
+
+**Why this precedence:** Ward's status is **just enough to route attention**, not a
+project-management state machine. The question the status personas answer is "where can I still make
+progress?", so any in-flight child wins — a project is not stuck just because one of its tasks is
+set down. **Why empty = active:** the alternative (a distinct empty/idle state) adds a state to
+reason about for no routing benefit; "active with nothing in it yet" is the honest reading of a
+brand-new scope.
+
 ## Sessions, agents, and personas
 
 These three are distinct and often confused:
 
 - **Agent** — a running AI instance doing work, within exactly one scope and working directory at a
   time.
-- **Persona** — a named role definition (a **name** plus a **role**, with a disposition) that shapes
-  how an agent behaves. Personas are tailored to scopes; the set is open and configurable. A
-  persona's name and role are **internal** and must never leak to remote artifacts
-  (`../00-foundation/01-principles.md` §4).
+- **Persona** — a **name** plus a **role** plus a disposition, shaping how an agent behaves. A
+  persona _has_ a **role**, and the two evolve differently: **roles are a fixed, closed vocabulary**
+  (the ward roles — house supervisor, attending, charge nurse, resident, medical student —
+  `01-scopes-and-personas.md`), while **personas are an open, evolvable cast** the workspace tailors
+  to its work. **Many personas may share one role** (a strict charge nurse and a relaxed one are two
+  personas, one role). A persona's name **and** its role are **internal** and must never leak to
+  remote artifacts (`../00-foundation/01-principles.md` §4) — and the _closed_ role vocabulary is
+  part of what makes that leak-guard enforceable (`../02-subsystems/06-remote-provider.md`).
 - **Session** — one bounded episode of an agent working at a scope: opened, possibly _running_, then
   closed, and possibly resumed or woken. A session is recorded so it survives a pause and a reboot,
   including its **harness handle** (the locator for its underlying harness run). (Lifecycle:
@@ -236,10 +268,18 @@ different lookups on purpose — addressing optimizes for memory, containment fo
 to accept is that room codes run as a simple per-floor sequence (opening order on the floor), not
 grouped by task.
 
-Where global uniqueness genuinely is needed, it can be composed (e.g. floor number + room code);
-where **scope-relative** identity suffices (a session within its scope), that is preferred.
-(Remaining edges — task codes, cross-workspace uniqueness, reuse after close:
-`../00-foundation/open-questions.md`.)
+Where global uniqueness genuinely is needed, it can be composed (e.g. floor number + room code). A
+**session** takes the middle path: its id is allocated **unique among the open sessions in the
+workspace** — if a name is taken, the next gets a discriminator (`riley-1`, then `riley-2`) — so a
+**bare session id is a sufficient address** for every operation that touches it (resume, close,
+dispatch, recovery), without dragging a scope qualifier through every call. **Why workspace-unique
+rather than scope-relative:** a scope-relative id is ambiguous the moment two scopes both hold a
+`riley-1`, which forces every session operation to carry `(scope, id)` — a sign the model, not the
+intent, was wrong; making the id as unique as a bare address needs (and no more) keeps the APIs
+single-keyed and the identity still memorable. Uniqueness is only among _open_ sessions and only
+workspace-wide, sized to in-flight cardinality; over history a reused id is disambiguated by time
+and context like every other code. (Remaining edges — task codes, cross-workspace uniqueness, reuse
+after close: `../00-foundation/open-questions.md`.)
 
 **What gets an identity** (current intent):
 
@@ -248,7 +288,7 @@ where **scope-relative** identity suffices (a session within its scope), that is
 | Project   | slug + code; the **code is a floor number** (`1`, `2`, `3…`)                                                                          |
 | Task      | slug + code (scope-relative to its project may suffice); when remote-linked, also **referenceable by its remote work-item id**        |
 | Room      | **floor number + room code** (`4A12`), by memorable convention; addresses the room workspace-wide without naming its task or worktree |
-| Session   | slug + code, scope-relative to its scope                                                                                              |
+| Session   | slug + code, **unique among open sessions workspace-wide** (a bare id addresses it)                                                   |
 | Worktree  | natural key (repository + branch)                                                                                                     |
 | Workspace | the root itself; identified by location                                                                                               |
 | Artifact  | addressed by scope + type + name                                                                                                      |
@@ -304,7 +344,8 @@ detours is the prime directive in miniature. (Mechanics and modes in `01-scopes-
 - **The Agent / Persona / Session distinction**, and _multiple personas per scope_.
 - **The two axes of a session** — scope and working directory (assembly in
   [`05-context-loading.md`](05-context-loading.md)).
-- **Status: recorded at the leaves, derived above.**
+- **Status: recorded at the leaves, derived above** — including the **derivation rule** (precedence
+  `active ▸ paused ▸ closed`, empty container is `active`, `in-review` is a derived overlay).
 - **Artifacts**, their **provenance/lineage**, the **brief** type, and cross-scope
   discoverability/ownership.
 - **Identity** — slug + short code, the floor/room convention, identity-need-not-mirror-containment.
@@ -324,7 +365,9 @@ Every other slice links here rather than redefining these nouns.
   appear to own it. **Cross-task mutation:** what "specific guidance to alter another task's
   artifact" looks like concretely.
 - **Identity edges.** Task codes (and whether project-relative); floor-number uniqueness within a
-  workspace; whether a closed floor number / room code is reused, retired, or retained for history.
+  workspace. _Resolved:_ session ids are **unique among open sessions workspace-wide** (Identity,
+  above), and a **room code is reused** when its room is freed (the reusable-resource Room model,
+  above). Whether a closed _floor_ number is reused, retired, or retained for history is still open.
   (Indexed in [`../00-foundation/open-questions.md`](../00-foundation/open-questions.md).)
 - **Dispatch routing.** _Settled:_ both paths hold — direct addressing when the sender knows the
   target, routing through the originating scope's status persona when it does not. The remaining

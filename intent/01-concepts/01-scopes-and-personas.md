@@ -7,17 +7,40 @@ This file describes the **role model**: who operates at each scope, what each is
 and how work, information, and learning flow between them. The personas are named after roles in a
 hospital ward.
 
-These roles are the **opinionated defaults Ward injects into a workspace at creation** — and from
-that point they are **living, evolving parts of the workspace**, not fixed in the CLI. The set is
-**open and configurable**: reflection (`04-reflection-and-evolution.md`) may **add, modify, retire,
-or recommend** personas to better fit the work the workspace actually does. This is the same
-opinionated-but-evolvable, reconciled-on-upgrade pattern Ward applies to everything it ships
-(`03-work-lifecycle.md`). What follows is the current default cast, with its reasoning — not a
-closed list.
+## Role vs. persona — what is fixed, what evolves
 
-The whole model serves the prime directive: **keep senior judgment free of detail by delegating
-detail downward and evaluating what returns** — and, because the ward is a teaching environment,
-**let learning flow back up.**
+A **role** is one of a small, **fixed vocabulary** Ward ships: house supervisor, attending
+physician, charge nurse, resident, medical student. A **persona** is a concrete cast member — a
+**name** + a **role** + a **disposition**. **Roles are closed; personas are open.** Reflection
+(`04-reflection-and-evolution.md`) may **add, modify, retire, or recommend personas**, and **many
+personas may share a role** (a hard-nosed charge nurse and an easygoing one are two personas, one
+role) — but the role vocabulary itself does not grow at a workspace's whim. The personas are the
+opinionated-but-evolvable defaults Ward injects at creation and reconciles on upgrade — the same
+pattern Ward applies to everything it ships (`03-work-lifecycle.md`); the roles are the stable frame
+they hang on.
+
+**Why roles are fixed — a principled choice, not a limitation.** Three principles pin the
+vocabulary:
+
+- **§4, privacy.** Role words are internal machinery that must never reach a remote artifact ("the
+  resident asked me to do this"). A **closed** role vocabulary is what lets the privacy gate
+  (`../02-subsystems/06-remote-provider.md`) redact them **exhaustively**; a user-extensible role
+  set would be an open-ended redaction target that leaks at the first role someone forgot to
+  register.
+- **§2 + §1, specialization and the prime directive.** Roles map to fixed responsibilities and to
+  **model-tier routing** — status roles (supervisor, charge nurse) run a fast model; depth roles run
+  a deep one. A fixed set is what lets Ward route models and bound scope deterministically.
+- **Context management (the metaphor).** A stable role vocabulary, like floors and rooms, is
+  **memorable** — you hold "the resident on `4A12`" in your head with no lookup. Churning roles
+  would spend the very attention the system exists to save.
+
+If a workspace's work genuinely needs a role the ward set cannot express, that is a signal to evolve
+**Ward's** shipped vocabulary deliberately, with a principled reason — not to let any one workspace
+fork it. The same bar applies to every opinion Ward ships.
+
+What follows is the current default cast, with its reasoning. The whole model serves the prime
+directive: **keep senior judgment free of detail by delegating detail downward and evaluating what
+returns** — and, because the ward is a teaching environment, **let learning flow back up.**
 
 ## Scope and working directory: the two axes of a session
 
@@ -214,8 +237,11 @@ These are _what_ can vary per scope; the mechanism that applies them is a _how_
 
 - **The role model** — house supervisor, attending physician, charge nurse, resident, and
   room/medical students — what each owns and why seniors _delegate and evaluate_ rather than do.
-- **Personas as the workspace's opinionated, evolvable default cast** — injected at setup (names
-  from a static list), then living artifacts reflection can add/modify/retire/recommend.
+- **Roles vs. personas.** **Roles are a fixed, closed vocabulary** (the five ward roles); **personas
+  are the workspace's opinionated, evolvable cast** (name + role + disposition) — injected at setup
+  (names from a static list), then living artifacts reflection can add/modify/retire/recommend.
+  **Many personas may share one role.** The _why roles are fixed_ argument (§4 exhaustive redaction,
+  §2/§1 model-routing, memorability) lives here.
 - **Standards** — that the attending (and residents) **define and evolve** them, feeding reflection.
 - **Routing to a session** — the supervisor/charge-nurse job of resolving a human or agent to the
   right session (agent → dispatch; human → an attach/switch command).
@@ -234,8 +260,7 @@ rather than restating them.
 
 - **The static persona-name list**, and how **workspace setup** presents and applies the default
   cast (names + roles). _Bound:_ a stable, curated list, kept evolvable and reconciled on upgrade
-  like every other artifact Ward ships — the same machinery as
-  [`../../design/workflow-policy.md`](../../design/workflow-policy.md).
+  like every other artifact Ward ships — the same machinery as [`design/`](../../design/).
 
 ## Open questions
 

@@ -44,8 +44,7 @@ bookkeeping, deep where the job is hard — and keep that choice **model-agnosti
 
 - The exact configuration shape for defaults and overrides; the initial persona → tier mapping and
   the concrete ids behind "fast" and "deep"; how thinking depth is expressed; how an override at one
-  scope is recorded and resolved against broader defaults. Planned in
-  [`../../design/model-selection.md`](../../design/model-selection.md).
+  scope is recorded and resolved against broader defaults. Planned in [`design/`](../../design/).
 
 ## Open questions
 

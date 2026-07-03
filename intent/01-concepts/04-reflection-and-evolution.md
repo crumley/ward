@@ -125,7 +125,7 @@ healthy over long timescales.
   workspace has diverged.
 
 The build of each (default goals, chunk heuristics, cursor form) is planned in
-[`../../design/reflection.md`](../../design/reflection.md).
+[`design/`](../../design/).
 
 ## Open questions
 

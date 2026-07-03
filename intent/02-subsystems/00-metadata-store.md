@@ -62,8 +62,7 @@ the reflection cursors, the version stamp. It is the source of truth that surviv
   fields; the schema library and version; serialization details; the **concurrency primitive** for
   serialized shared writes (advisory lock, atomic rename, or compare-and-set); the `.gitignore`
   policy (tracked vs. regenerated); provenance depth and how a cross-task artifact reference is
-  recorded. Planned in [`../../design/metadata-store.md`](../../design/metadata-store.md) and
-  [`../../design/00-foundation.md`](../../design/00-foundation.md).
+  recorded. Planned in the [`design/`](../../design/) record.
 
 ## Open questions
 
