@@ -50,3 +50,45 @@ aesthetic and closing the CONTRIBUTING.md "opinionated on everything" mandate fo
 **Next.** Land the store spine (`frontmatter` → `schemas` → `doc` → `paths` → `ids` → `log`) with
 its first intent test (append-only / no-lost-updates), get `make check` green, then build the domain
 nouns and drive the walkthrough.
+
+## Iteration 2 — Domain nouns + derived status
+
+**Goal.** Build the domain layer over the store spine — workspace `init`, personas, project (floor),
+task (stored `active|paused|closed`), the session lifecycle (open/close/resume), and **derived
+status** — with two more intent invariants: derived-status and
+resume-idempotent/closed-stays-closed.
+
+**What I did.**
+
+- `src/store/workspace.ts` — workspace discovery (walk up from any cwd to `.ward/`), load/save, and
+  scope→dir resolution (workspace/project/task).
+- `src/seams/model.ts` (tier-follows-persona, narrower-overrides-broader) and `src/seams/harness.ts`
+  (stub harness: `start/handle/resume/locate`, deterministic run id, idempotent resume).
+- `src/domain/`: `personas` (closed roles / open cast, default cast from a static name list),
+  `workspace` (`initWorkspace`: version stamp, default cast, ignore policy; idempotent), `project`
+  (floors, NO stored status), `task` (state machine with legal transitions; closed terminal),
+  `session` (open/close/resume; leaf state `open|closed`; id reuse archives prior closed record),
+  `status` (the `rollup` rule + project/workspace status, derived).
+
+**What works now (with the command that proves it).**
+
+- `make check` green — `biome ci` (21 files) + `tsc` + **`node --test` 24 pass** + `dprint` +
+  `lychee` (322 links).
+- **Derived status** invariant: `make test` → `derived status — the roll-up rule …` +
+  `… resolved fresh from the record as children change` (empty→active, active wins,
+  all-paused→paused, all-closed→closed; in-review overlay; nothing stored).
+- **Session lifecycle** invariant: `session lifecycle guarantees` — resume idempotent (no second
+  session, handle stable, record unchanged), closed-stays-closed (resume rejects), close idempotent,
+  ids unique-among-open + reused-once-freed with history retained.
+
+**Decisions / spec-feedback.** Building surfaced two genuine intent frictions, both grounded in
+§16/§17 — recorded as **SF-001** (room occupancy: leaf-recorded _and_ derived — v2 derives it,
+dropped the stored field) and **SF-002** (session "running": presented as a stored state but it is a
+live/derived attribute — v2 stores `open|closed`, derives running). Building proceeds on the stated
+assumptions; `intent/` is untouched.
+
+**Next.** Iteration 3 — worktree + theming (deterministic accent/glyph) + idempotent lifecycle
+hooks + room (mints its first session; occupancy derived) + messaging (dispatch/report/wake,
+recorded-first)
+
+- cold-start recovery, with the recovery intent test (live worktrees only).

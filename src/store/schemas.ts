@@ -123,17 +123,22 @@ export const worktreeSchema = z.object({
   tornDown: z.boolean().default(false),
 });
 
+// A room is a container over its sessions; occupancy is DERIVED (occupied iff
+// ≥1 non-closed session), never stored — see plan/v2/spec-feedback SF-001 and
+// principle §17. The record is written once at open; freed-ness is a query.
 export const roomSchema = z.object({
   type: z.literal('room'),
   code: z.string(),
   floor: z.number().int().positive(),
   taskSlug: z.string(),
   worktree: worktreeRefSchema,
-  occupied: z.boolean(),
   accent: z.string(),
   glyph: z.string(),
 });
 
+// Stored session state is open|closed only. "running" (a process attached right
+// now) is a LIVE attribute derived from the multiplexer (§16: live state is a
+// cache over the record), not a durable one — see spec-feedback SF-002.
 export const sessionSchema = z.object({
   type: z.literal('session'),
   id: z.string(),
@@ -142,7 +147,7 @@ export const sessionSchema = z.object({
   workingDir: z.string(),
   harness: harnessHandleSchema,
   model: tierSchema,
-  state: z.enum(['open', 'running', 'closed']),
+  state: z.enum(['open', 'closed']),
   openedAt: z.string(),
   closedAt: z.string().optional(),
 });
