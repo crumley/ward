@@ -199,6 +199,21 @@ export const artifactSchema = z.object({
   summary: z.string().optional(),
 });
 
+// A tracked pull request — part of a task's completion state (work-lifecycle).
+// `in-review` derives from the set of these that are open; a task closes only
+// when all of them are merged.
+export const prSchema = z.object({
+  type: z.literal('pr'),
+  id: z.string(),
+  floor: z.number().int().positive(),
+  taskSlug: z.string(),
+  repo: z.string(),
+  provider: z.string(),
+  number: z.number().int().optional(),
+  state: z.enum(['open', 'changes-requested', 'approved', 'merged']),
+  url: z.string().optional(),
+});
+
 /** An append-only log event. Ordered by `seq`; `at` is recorded but not relied on for logic. */
 export const eventSchema = z.object({
   type: z.literal('event'),
@@ -221,6 +236,7 @@ export const documentSchema = z.discriminatedUnion('type', [
   messageSchema,
   reflectionSchema,
   artifactSchema,
+  prSchema,
   eventSchema,
 ]);
 
@@ -238,4 +254,6 @@ export type Wake = z.infer<typeof wakeSchema>;
 export type Message = z.infer<typeof messageSchema>;
 export type Reflection = z.infer<typeof reflectionSchema>;
 export type Artifact = z.infer<typeof artifactSchema>;
+export type Pr = z.infer<typeof prSchema>;
+export type RemotePrStateValue = Pr['state'];
 export type WardEvent = z.infer<typeof eventSchema>;

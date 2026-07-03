@@ -67,6 +67,13 @@ export function roomDoc(roomDirPath: string): string {
   return join(roomDirPath, 'room.md');
 }
 
+export function prsDir(taskDirPath: string): string {
+  return join(taskDirPath, 'prs');
+}
+export function prDoc(taskDirPath: string, id: string): string {
+  return join(prsDir(taskDirPath), `${id}.md`);
+}
+
 /** Append-only event log dir for ANY scope dir; artifacts dir for any scope dir. */
 export function logDir(scopeDirPath: string): string {
   return join(scopeDirPath, 'log');

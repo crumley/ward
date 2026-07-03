@@ -138,3 +138,45 @@ intent invariants pass; the privacy gate is next.
 **Next.** Iteration 4 — remote provider seam + the single upstream **privacy-translation gate**
 (fail-closed exhaustive redaction of the closed role vocabulary + persona names), PR tracking, gated
 outward actions — with the privacy-gate intent test.
+
+## Iteration 4 — Remote provider + the fail-closed privacy gate (5th invariant)
+
+**Goal.** Build the local↔remote boundary: the single upstream **privacy-translation gate**
+(fail-closed, exhaustive), the remote-provider seam, PR tracking, and the §18 authority gate —
+proving the last intent invariant. All five invariants now have passing tests.
+
+**What I did.**
+
+- `src/seams/privacy.ts` — THE gate, its own module (the "one upstream place"). `translateOutward`
+  re-authors local text for the remote audience: strips a provenance front-matter block, redacts
+  every prose form of the **closed** role vocabulary (exhaustive because ROLES can't grow), persona
+  names (supplied as data), and local/absolute paths; then **verifies** and throws (fail-closed) if
+  anything forbidden survives. Branded `Sanitized` type (only the gate produces it) + `Authority`
+  (§18).
+- `src/seams/remote.ts` — provider interface + in-memory stub whose every text arg is `Sanitized`
+  and every mutation demands `Authority`, so a raw string / unauthorized post won't compile.
+- `src/store/schemas.ts` — added the `pr` document type to the catalog; `src/store/paths.ts` PR
+  paths.
+- `src/domain/remote.ts` — link task↔remote (attribute, not identity), PR tracking (`trackPr`,
+  `advancePrState`, `listPrs`, `openPrCount`), and `completeTask` (closes only when all PRs merged).
+
+**What works now (with the command that proves it).**
+
+- `make check` green — `biome ci` (33 files) + `tsc` + **`node --test` 43 pass** + `dprint` +
+  `lychee`.
+- **Privacy gate** invariant: `make test` → `privacy gate — exhaustive outward redaction`,
+  `… CLOSED role vocabulary is caught in every prose form` (8 forms), `… fail-closed` (refuses on a
+  role word / persona name; own output always passes),
+  `… remote provider only receives sanitized,
+  authorized content`.
+- **All five intent invariants pass**: no-lost-updates, derived-status, resume/closed-stays-closed,
+  cold-start recovery, privacy-gate.
+
+**Decisions / spec-feedback.** No new frictions — the closed role vocabulary made exhaustive
+redaction clean, as the intent predicted. The branded-type enforcement realizes "receive only
+already-sanitized content" and "posting is gated" structurally, not by convention.
+
+**Next.** Iteration 5 — the human-shell CLI (Commander noun/verb; two-audience output + `--json`;
+workspace/scope discovery from any cwd; `doctor`; `@file`/`-` inputs; verbs read true incl.
+`attach`) and scope-boundary reflection (map-reduce + cursor). Then iteration 6 drives the
+walkthrough §0–§10 end to end and writes the per-seam `design/` plans.
