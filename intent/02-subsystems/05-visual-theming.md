@@ -73,7 +73,7 @@ identity.
   **glyph/emoji set and which concept types get one**; which surfaces are themed and how each is
   driven; the exact setup/teardown hook steps; how the accent **and glyph** are recorded so they
   stay stable across resumes **and so an agent can resolve a human's "the blue one" reference**.
-  Planned in [`../../design/theming.md`](../../design/theming.md).
+  Planned in [`design/`](../../design/).
 
 ## Open questions
 

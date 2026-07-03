@@ -44,6 +44,43 @@ principle (§8) and feeds the compounding loop
   and human-or-agent. It is **local and personal** (§4) and **never** surfaced to remote artifacts.
   _Why:_ over time it is analyzed (a natural reflection type) to decide what needs a new alias,
   which flows are clumsy, which tooling is missing — how the interaction layer compounds.
+- **Workspace- and scope-aware from any working directory.** Invoked anywhere **inside** an
+  initialized workspace — at the root or deep in a subdirectory — Ward **discovers the workspace
+  itself**, with no flag and no "which workspace?" prompt. It goes further: when the working
+  directory sits inside a known structure (a worktree → room → task → project), Ward **derives the
+  scope from the location** and does not make the human restate what the directory already implies.
+  _Why:_ the prime directive is to spend the human's attention only where a real decision is needed
+  ([`../00-foundation/00-vision.md`](../00-foundation/00-vision.md)); making someone name the
+  workspace or scope they are standing in is exactly the friction Ward exists to remove. _Asymmetry
+  (§8):_ this is a **human-audience** affordance — an **agent** caller may still be **required** to
+  pass scope explicitly, since it is cheap for an agent to be precise and explicitness keeps its
+  calls deterministic.
+- **Long free-text arguments accept a file, not only an inline string.** Any argument that can carry
+  substantial text — a brief's title or body the clearest case
+  ([`../01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md), Briefs) — must accept a
+  **file** as well as an inline value. _Why:_ long inline text is where **agents** struggle most
+  (shell escaping, newlines, quoting), and a malformed brief corrupts the handoff; a file argument
+  removes the failure mode, and helping the agent here helps the human downstream (§8).
+- **A self-diagnosis command.** Ward offers a **`doctor`-style** command that inspects the machine,
+  the current working directory, and the workspace, reports what is healthy, and **recommends
+  improvements** — including **optional external tools Ward can take advantage of when installed**.
+  _Why:_ a well-designed CLI guides the user to a good setup instead of failing cryptically when one
+  is missing, and surfacing optional capabilities is how Ward stays opinionated without being
+  brittle. (The exact verb — `doctor` or the prevailing convention — is a design choice; the
+  **capability** is the constraint.)
+- **Opinionated configuration, global and workspace-local.** Ward's configuration follows the
+  conventions of well-designed CLIs on **both** axes: **global** behavior that holds regardless of
+  working directory, and **workspace-local** behavior that takes effect once the working directory
+  is inside an initialized workspace. _Why:_ a delightful, predictable developer experience is a
+  stated **quality bar**, not a nicety — a tool people reach for configures itself the way the best
+  CLIs do, and a location-blind or surprising configuration model is friction the prime directive
+  rejects.
+- **Verbs read true to the operation.** A CLI verb matches what it does: the per-thread open→running
+  operation is **`resume`**; the workspace-wide cold start that re-attaches every in-flight thread
+  reads as **`attach`** (or "resume the workspace"), **not** `recover`
+  ([`../01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md),
+  Recovery). _Why:_ the verb is a primary discoverability surface; a name that mismatches the act
+  makes both audiences guess.
 
 ## What this is NOT
 
@@ -55,12 +92,18 @@ principle (§8) and feeds the compounding loop
   blocking prompt (§8). _Why:_ a hidden prompt would stall an autonomous agent and break
   determinism.
 - **Not telemetry that ever leaves the workspace** — it is local, like everything personal.
+- **Not location-blind.** Inside a workspace, Ward does not ask the human which workspace or scope
+  they are in when the working directory already determines it; "which workspace?" is never a
+  prompt.
 
 ## Canonical home for
 
 - The **human-shell contract** (thin CLI plumbing), the **noun/verb CLI shape**, **interactive
   resolution and autocomplete of missing/ambiguous arguments** (a delightful, human-audience
-  affordance), the **human-default caller identity** rule, and **local usage telemetry**.
+  affordance), **workspace/scope-awareness from any working directory**, **file inputs for long
+  free-text arguments**, the **`doctor` self-diagnosis** capability, **opinionated global +
+  workspace-local configuration**, **verbs that read true to the operation**, the **human-default
+  caller identity** rule, and **local usage telemetry**.
 
 ## Left to implementation
 
@@ -68,8 +111,11 @@ principle (§8) and feeds the compounding loop
   for a missing/ambiguous noun are sourced, scoped, and ranked, and how their visual cues (accent,
   glyph) are rendered in the prompt**; the specific environment-variable name and the set of context
   fields it carries (which required vs. inferred); the initial alias bindings; the telemetry storage
-  format, fields, and analysis tooling. Planned in
-  [`../../design/cli-and-telemetry.md`](../../design/cli-and-telemetry.md).
+  format, fields, and analysis tooling; **how the workspace root and the enclosing scope are
+  discovered from the working directory** (the marker file and walk-up mechanism); the **`doctor`
+  check set** and which optional external tools it knows about; and the **file-argument
+  conventions** (which arguments accept a file path, `-`/stdin, or an `@file` form). Planned in
+  [`design/`](../../design/).
 
 ## Open questions
 

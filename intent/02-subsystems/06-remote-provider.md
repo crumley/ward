@@ -25,7 +25,10 @@ context can escape.
   remote comment _and_ an artifact committed into a worktree's files (which reaches the remote on
   merge). Enforced in **one** upstream place so the provider cannot become a leak path. _Why
   single-point:_ a boundary enforced in many places leaks at the one place someone forgot; swapping
-  the forge must not reopen the hole.
+  the forge must not reopen the hole. _Why this is enforceable:_ the **role vocabulary is closed**
+  ([`../01-concepts/01-scopes-and-personas.md`](../01-concepts/01-scopes-and-personas.md)), so role
+  words can be redacted **exhaustively** rather than best-effort — an open-ended role set would be
+  an open-ended leak target; persona _names_ are the workspace's cast, supplied to the gate as data.
 - **Posting outward is a gated action** (§18) — creating/commenting on a remote item and merging a
   PR require the human or explicitly delegated authority, never an autonomous assumption. _Why:_
   these are outward-facing and effectively irreversible. Translation governs _what_ crosses; the
@@ -53,8 +56,7 @@ context can escape.
 - Which forge and the exact adapter API; how a task records its remote link and reconciles
   attach/merge; **what the translation concretely strips and rewrites, and the single upstream place
   it runs** (the highest-stakes blank — design it first); how PR status is polled or received; how
-  gated outward posts request authority. Planned in
-  [`../../design/remote-provider.md`](../../design/remote-provider.md).
+  gated outward posts request authority. Planned in [`design/`](../../design/).
 
 ## Open questions
 

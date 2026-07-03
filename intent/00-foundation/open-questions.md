@@ -30,16 +30,17 @@ relevant slice (and reflected in tests and code).
 ## Index of per-slice open questions
 
 - [`01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md) — when each level exists;
-  artifact taxonomy; provenance depth; cross-task mutation; identity edges (task codes, floor-number
-  uniqueness, reuse-after-close); the **dispatch-routing mechanism** (both paths now settled; the
-  resolution mechanism is owned by the messaging seam).
+  artifact taxonomy; provenance depth; cross-task mutation; identity edges (task codes; floor-number
+  uniqueness; whether a closed _floor_ number is reused — _session ids and room codes now settled_);
+  the **dispatch-routing mechanism** (both paths now settled; the resolution mechanism is owned by
+  the messaging seam).
 - [`01-concepts/01-scopes-and-personas.md`](../01-concepts/01-scopes-and-personas.md) —
   persona↔scope cardinality; which fork mode ships first.
 - [`01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md) —
   "enough metadata" to resume; wake across a reboot.
-- [`01-concepts/03-work-lifecycle.md`](../01-concepts/03-work-lifecycle.md) — task state machine;
-  delegated authority for gated actions; hook validation; refresh/rebase cadence; policy-encoding
-  home.
+- [`01-concepts/03-work-lifecycle.md`](../01-concepts/03-work-lifecycle.md) — delegated authority
+  for gated actions; hook validation; refresh/rebase cadence; policy-encoding home (_task states now
+  settled_).
 - [`01-concepts/04-reflection-and-evolution.md`](../01-concepts/04-reflection-and-evolution.md) —
   reflection-type taxonomy; cadence/boundary triggers; cross-chunk learnings; migration safety.
 - [`01-concepts/05-context-loading.md`](../01-concepts/05-context-loading.md) — the
@@ -68,3 +69,13 @@ relevant slice (and reflected in tests and code).
   target, and **routing through the originating scope's status persona** (charge nurse / supervisor)
   when it does not, because a session knows its neighbors but not the whole workspace. Only the
   resolution _mechanism_ remains open (owned by the messaging seam).
+- **Task states are settled** — stored `active | paused | closed`; `in-review` is **derived** from
+  the open-PR set; `blocked` and `drafted` dropped (status is an attention-router, not a tracker).
+  Container rollup: empty → active, mixed → active wins, precedence `active ▸ paused ▸ closed`.
+- **Session ids are workspace-unique among open sessions** — a **bare id** addresses a session
+  everywhere, so no operation threads a `(scope, id)` pair.
+- **A room is a reusable resource** — opening a room **mints its first session**; when its last
+  session closes the room is **freed** and its code reusable. `closed stays closed` is a _session_
+  guarantee, not a room one.
+- **Roles are a fixed vocabulary; personas evolve** — many personas may share one role; the closed
+  role set is what makes outward role-redaction **exhaustive** (§4).

@@ -49,7 +49,7 @@ resumed — by both humans and agents — and survive a human walking away. It i
 
 - The specific multiplexer; the exact grouping/window/pane layout and naming; how a recorded session
   maps to and from a live pane; how read-only observation is exposed; how the surface is themed.
-  Planned in [`../../design/session-multiplexer.md`](../../design/session-multiplexer.md).
+  Planned in [`design/`](../../design/).
 
 ## Open questions
 

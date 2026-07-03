@@ -87,7 +87,7 @@ constantly, a setup step may have half-run, fully run, or not run before an inte
 safe hook is one that checks state and converges to "done" no matter how many times it fires.
 
 These hooks are **Ward-provided extension points, customized per workspace** and evolvable the same
-way the workflow policy is (see below; mechanism: `../../design/lifecycle-hooks.md`).
+way the workflow policy is (see below; mechanism: `design/`).
 
 ## Execution
 
@@ -155,7 +155,7 @@ But workflows evolve with the human and the kind of work, so the policy must be 
 baked into the tooling**:
 
 - The workflow policy lives in a **specific, encoded place inside the workspace** — the current
-  intent is a **skill** the workspace owns (mechanism: `../../design/workflow-policy.md`).
+  intent is a **skill** the workspace owns (mechanism: `design/`).
 - Ward installs the default at creation; thereafter the workspace's own agents and sessions may
   **evolve** it.
 - On a Ward **update/migration** (`04-reflection-and-evolution.md`), Ward checks whether the
@@ -169,18 +169,45 @@ improvements. This pattern — opinionated default, encoded in the workspace, ev
 workspace, reconciled on upgrade — is the **general shape for any opinion Ward ships** (workflow
 policy, lifecycle hooks, personas, scaffolding).
 
-## Summary of task states (conceptual)
+## Task states
 
-The precise state machine is to be settled as we build (`../00-foundation/open-questions.md`), but
-the intent spans at least: _drafted_ (intent captured), _active_ (work underway), _in review_ (PRs
-open), _blocked_ (waiting), _paused_ (set down, resumable), and _closed_ (all PRs merged, artifacts
-dispositioned, cleaned up). Local↔remote linkage is an orthogonal attribute that can change in any
-non-closed state.
+Ward's task status is **just enough to route attention**, not a full project-management state
+machine (`00-domain-model.md`, status) — so the set is deliberately small. A task carries one
+**stored** state; one further state is **derived**, never stored.
+
+**Stored on the task — one of three:**
+
+| Stored state | Meaning                                                                              |
+| ------------ | ------------------------------------------------------------------------------------ |
+| `active`     | Work underway. Opening a task makes it active (no separate "drafted").               |
+| `paused`     | Deliberately set down, resumable, removed from the active list.                      |
+| `closed`     | All PRs merged, artifacts dispositioned, cleaned up. Terminal — closed stays closed. |
+
+The only transitions are `active ⇄ paused` and `active → closed`; `active → closed` is allowed only
+when completion holds (all PRs merged, below), and `closed` is terminal
+(`02-sessions-and-lifecycle.md`: closed stays closed).
+
+**Derived, not stored — `in-review`:** a task is _in review_ exactly when it has **≥1 open PR** and
+is not closed. It is computed from the PR set (Completion, above), not written on the task. **Why
+derived:** the PR set is already the source of truth for review state; storing `in-review` as well
+would be a second source that goes stale the instant a PR opens or merges
+(`../00-foundation/01-principles.md` §17). It surfaces as a presentation overlay on an
+otherwise-`active` task — and rolls up to a container as `active` (`00-domain-model.md`, derivation
+rule).
+
+**Why no `blocked` (and no `drafted`):** an attention-router asks "where can I make progress?", and
+"blocked" is better carried as the higher scope's recorded attention flag (`00-domain-model.md`,
+status) or as `paused` with a note — a stored `blocked` leaf state earns its complexity only in the
+tracker Ward is explicitly _not_ trying to be. `drafted` collapses into `active` for the same reason
+(open = active).
+
+Local↔remote linkage is an **orthogonal attribute** that can change in any non-closed state.
 
 ## Canonical home for
 
 - **The task lifecycle** — creation → execution → PR-set → merge → close → cleanup — and the
-  conceptual task states.
+  **normative task states** (stored `active | paused | closed`; `in-review` derived from the open-PR
+  set).
 - **The task's discoverable cast** — who is involved (resident, charge nurse, rooms, sessions),
   derived from its session logs and containment rather than stored.
 - **Local-only vs. remote-linked tasks** and the attach/merge transitions (identity stays stable).
@@ -188,7 +215,7 @@ non-closed state.
 - **Ward absorbing the recurring maintenance toil** (refresh, rebase + conflict handling, PR/CI
   status-watching, …) and surfacing only what needs a human — the durable intent, not the catalog.
 - **Lifecycle hooks** — that they exist and must be **idempotent / validate-on-resume** (build
-  planned in [`../../design/lifecycle-hooks.md`](../../design/lifecycle-hooks.md)).
+  planned in [`design/`](../../design/)).
 - **Workflow policy** — opinionated-but-evolvable, and the **general pattern for any opinion Ward
   ships** (default → workspace-owned artifact → reconciled on upgrade).
 
@@ -199,7 +226,6 @@ applies it to task completion and links there.
 
 ## Open questions
 
-- **Task state machine.** The precise states, transitions, and which are recorded vs. derived.
 - **Delegated authority for gated actions** (§18) — how it is represented and bounded so it cannot
   be silently assumed.
 - **Hook validation**, the **maintenance cadence** (and how conflicts/blocks are auto-resolved vs.

@@ -16,11 +16,18 @@ The repo stands on four parallel trees; **`intent` governs the other three** (se
   the swappable seams (each stated as a **contract**). Three groupings:
   [`00-foundation/`](intent/00-foundation/), [`01-concepts/`](intent/01-concepts/),
   [`02-subsystems/`](intent/02-subsystems/). Start at [`intent/README.md`](intent/README.md).
-- [`design/`](design/) — the **how**: implementation plans (currently drafts), organized for
-  building, **not** a mirror of intent. Start at [`design/README.md`](design/README.md).
+- [`design/`](design/) — the **how**, as a **chronological record**: implementation plans and design
+  decisions in the order they were made, **superseded, not overwritten**. Organized for building,
+  **not** a mirror of intent. Start at [`design/README.md`](design/README.md).
 - [`src/`](src/) — the code (greenfield). [`test/`](test/) — the tests.
 
 `design` + `src` + `test` move together; `intent` sits above them.
+
+Plus, **meta to the four legs**, [`plan/`](plan/) — the **act of building** Ward: per-exercise
+**scope**, an append-only **journal**, the **spec-feedback** loop that records where building
+reveals an intent problem (without silently rewriting `intent/`), and the stack **ADRs** in
+[`plan/decisions/`](plan/decisions/). The four legs hold Ward; `plan/` holds _building_ Ward and
+what that teaches. Start at [`plan/README.md`](plan/README.md).
 
 ## The discipline (every change here honors it)
 
@@ -45,8 +52,14 @@ The repo stands on four parallel trees; **`intent` governs the other three** (se
 - **Capture a requirement** → write the durable what & why into the relevant `intent/` slice; if it
   defers a decision to the build, note it inline (_Left to implementation_) and carry the residue
   into the matching `design/` draft.
-- **Plan or do the build** → work in [`design/`](design/), spine first, each plan pointing back to
-  the intent it serves. Trace every plan to a contract.
+- **Plan or do the build** → record the per-area _how_ in [`design/`](design/), each plan pointing
+  back to the intent it serves and superseding (not overwriting) any earlier plan it replaces. Trace
+  every plan to a contract.
+- **Build Ward (make it run)** → the build is journaled in [`plan/`](plan/): start at
+  [`plan/README.md`](plan/README.md), set the exercise's `scope.md`, keep its `log.md`, record stack
+  choices as ADRs in [`plan/decisions/`](plan/decisions/), and log intent frictions in the
+  exercise's `spec-feedback.md`. The build authors `design/`, `src/`, `test/`; it does **not**
+  silently rewrite `intent/` — friction goes to spec-feedback for human review.
 
 ## Conventions
 
@@ -57,3 +70,6 @@ The repo stands on four parallel trees; **`intent` governs the other three** (se
 - Cross-reference by relative path; keep links live.
 - Never name a tool in an `intent/` concept where a constraint would do; never strand a durable
   constraint down in `design/` where it would be lost when the tool is swapped.
+- **How we build here** — opinionated formatting/linting on every artifact, fast test feedback, and
+  high assertion density — is in [`CONTRIBUTING.md`](CONTRIBUTING.md). Run `make format` as you
+  write and `make check` before you push.

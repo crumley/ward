@@ -77,8 +77,7 @@ would leak live, unrecoverable state.
   store for running vs. not-running; the concrete **re-arm-on-recovery** mechanism; **how a status
   persona resolves an intent-addressed message to a target** (CLI resolving identity→session handle,
   or an agent dispatch); and the **inspection surface** — how the recorded flow is exposed to a
-  human and an agent (a CLI view, a log). Planned in
-  [`../../design/messaging-dispatch-wake.md`](../../design/messaging-dispatch-wake.md).
+  human and an agent (a CLI view, a log). Planned in [`design/`](../../design/).
 
 ## Open questions
 

@@ -52,8 +52,7 @@ binding the concepts to any one of them_ (§5).
 
 - The exact adapter interface; the per-harness handle format and history location; how start/resume
   are invoked per harness; how the optional fork is detected and exercised; the default harness and
-  the per-scope override mechanism. Planned in
-  [`../../design/agent-harness.md`](../../design/agent-harness.md).
+  the per-scope override mechanism. Planned in [`design/`](../../design/).
 
 ## Open questions
 
