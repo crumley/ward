@@ -1,30 +1,50 @@
-# Ward documentation tooling.
+# Ward tooling — one entry point for humans, editors, and CI, kept in lockstep.
 #
-# Two single-binary Rust tools, installed via `make install`:
-#   - dprint  deterministic markdown formatting   (config: dprint.json)
-#   - lychee  offline broken-link checking         (config: lychee.toml)
+# Every check reads its config from a committed file, so your editor, the CLI,
+# and CI agree. Day to day you want `make format`; CI wants `make check`.
 #
-# All rules read their config from those files, so your editor, the CLI, and
-# CI stay in lockstep. Day to day you want `make format`; CI wants `make check`.
+# Single-binary, opinionated tools (CONTRIBUTING.md — "opinionated on everything"):
+#   - dprint  deterministic Markdown formatting        (config: dprint.json)
+#   - lychee  offline broken-link checking             (config: lychee.toml)
+#   - biome   TypeScript/JS formatting + linting        (config: biome.json)
+#   - tsc     strict type checking                      (config: tsconfig.json)
+#   - node    the test runner (node:test, no framework) (package.json)
+#
+# Markdown was covered from day one; v2 wired code into the same gate — `make
+# check` now fails on an unformatted file, a lint violation, a type error, or a
+# failing test, for Markdown *and* code alike.
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install format format-check links check
+BIOME := node_modules/.bin/biome
+
+.PHONY: help install format format-check lint typecheck test links check
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) \
 		| awk 'BEGIN{FS=":.*## "}{printf "  \033[36m%-13s\033[0m %s\n", $$1, $$2}'
 
-install: ## Install the toolchain (dprint, lychee) via Homebrew
+install: ## Install the toolchain (dprint, lychee via Homebrew; npm deps + biome)
 	brew install dprint lychee
+	npm install
 
-format: ## Format all markdown in place
+format: ## Format everything in place (Markdown + code) and apply safe fixes
 	dprint fmt
+	$(BIOME) check --write .
 
-format-check: ## Check formatting without writing changes
+format-check: ## Check Markdown formatting without writing (CI)
 	dprint check
 
-links: ## Check markdown links offline
+lint: ## Check code formatting + lint + import order without writing (CI)
+	$(BIOME) ci .
+
+typecheck: ## Strict type check, no emit
+	npm run --silent typecheck
+
+test: ## Run the test suite (node:test)
+	npm test --silent
+
+links: ## Check Markdown links offline
 	lychee .
 
-check: format-check links ## Run all checks without modifying files (CI gate)
+check: format-check lint typecheck test links ## Full CI gate — no writes; covers Markdown AND code

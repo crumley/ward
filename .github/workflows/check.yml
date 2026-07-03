@@ -1,0 +1,35 @@
+# CI runs the same gate a developer runs locally: `make check`.
+#
+# The toolchain is installed here the way CI installs things (prebuilt
+# binaries), not via Homebrew (the `make install` path is for local macOS dev);
+# once the tools are on PATH, the single source of truth for "is this green?" is
+# `make check` — identical to what runs on a laptop. See Makefile / CONTRIBUTING.md.
+name: check
+
+on:
+  push:
+    branches: [main, "build/**"]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      # Prebuilt Markdown tooling (dprint, lychee) — the same single-binary
+      # tools `make install` fetches via Homebrew locally.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: dprint,lychee
+
+      - name: Install npm dependencies (biome, typescript)
+        run: npm ci
+
+      - name: make check
+        run: make check
