@@ -33,6 +33,7 @@ intent left open, it records the choice and its _why_ here, and the intent slice
 implementation_ note points down to it. When a later plan **supersedes** an earlier one, it says so
 explicitly and links back — the record keeps both.
 
-> **Status: this leg is authored as a build proceeds.** Until a build runs, it holds only this
-> README. Intent points at the **`design/` leg** (not at specific files); the per-area plans that
-> realize each seam are authored here, with their dated history, as the build reaches them.
+> **Status: this leg is authored as a build proceeds.** The v2 build exercise
+> ([`../plan/v2/`](../plan/v2/)) authored the foundation plus a per-area plan for each implemented
+> seam ([`00-foundation`](00-foundation.md) → [`09-reflection`](09-reflection.md)). Intent points at
+> the **`design/` leg** (not at specific files); each plan opens with the intent it _Serves_.

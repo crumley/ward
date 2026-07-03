@@ -66,3 +66,27 @@ pass).
   paralleling `in-review`. Keep "resume turns open into running" but frame _running_ as the live
   attachment resume establishes, not a persisted field.
 - **Status:** proposed
+
+### SF-003 — "Wake when a scope finishes" — is _finishing_ a milestone report, or scope closure?
+
+- **Slice / section:** [`03-walkthrough.md`](../../intent/03-walkthrough.md) §4/§6 ("notify me when
+  `1A1` reports done" / "The room reports **done** … This **satisfies the wake**") vs.
+  [`02-messaging-coordination.md`](../../intent/02-subsystems/02-messaging-coordination.md) ("wait
+  on a condition (e.g. another scope **finishing**)").
+- **Kind:** ambiguous.
+- **Friction:** the walkthrough (illustrative) fires the wake on a **report-done milestone** while
+  the room is still open (the resident is nudged to evaluate, then iterates in the _same_ room). The
+  messaging seam (normative) describes waiting on a scope **finishing**. These differ: a room can
+  "report done" many times across evaluate→revise cycles before it is truly finished (freed).
+  Building a single `room-done` condition forces a choice between "a report arrived" and "the room
+  is free".
+- **Assumption (to keep moving):** v2's `room-done` condition is met when the room is **free** (its
+  last session closed) — the normative "scope finishing" reading. The evaluate→iterate loop is
+  carried by **report**/**dispatch** messages (recorded, inspectable); the wake nudges the resident
+  when the room genuinely completes. A `ward wake check` verb (and `attach`) evaluate conditions and
+  fire once.
+- **Proposed revision:** In the messaging seam, distinguish two wake flavors: a **milestone** wake
+  (fires on a matching report from the target, re-armable for the next cycle) and a **completion**
+  wake (fires when the scope closes). Have the walkthrough name which it uses in §4/§6 so the
+  illustrative and normative layers agree.
+- **Status:** proposed

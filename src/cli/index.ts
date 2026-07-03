@@ -6,8 +6,9 @@
 
 import { Command } from 'commander';
 import { writeArtifact } from '../domain/artifact.ts';
+import { listPersonas } from '../domain/personas.ts';
 import { openProject } from '../domain/project.ts';
-import { attachWorkspace } from '../domain/recovery.ts';
+import { attachWorkspace, checkWakes } from '../domain/recovery.ts';
 import { reflectOnScope } from '../domain/reflection.ts';
 import {
   advancePrState,
@@ -22,8 +23,10 @@ import { closeSession, listSessions, resumeSession } from '../domain/session.ts'
 import { projectStatus, workspaceStatus } from '../domain/status.ts';
 import { listTasks, loadTask, openTask, pauseTask, unpauseTask } from '../domain/task.ts';
 import { initWorkspace } from '../domain/workspace.ts';
-import { createWorktree, listWorktrees } from '../domain/worktree.ts';
+import { createWorktree, listWorktrees, teardownWorktree } from '../domain/worktree.ts';
 import { armWake, dispatch, listMessages, listWakes, report } from '../seams/messaging.ts';
+import { humanAuthority, translateOutward } from '../seams/privacy.ts';
+import { makeStubRemote } from '../seams/remote.ts';
 import type { RemotePrStateValue } from '../store/schemas.ts';
 import { listProjects, requireWorkspaceRoot } from '../store/workspace.ts';
 import { WARD_VERSION } from '../version.ts';
@@ -264,6 +267,23 @@ worktree.command('list').action(() =>
     );
   }),
 );
+worktree
+  .command('teardown')
+  .requiredOption('--floor <n>', '', Number)
+  .requiredOption('--task <slug>')
+  .requiredOption('--repo <name>')
+  .requiredOption('--branch <name>')
+  .action((opts: { floor: number; task: string; repo: string; branch: string }) =>
+    guard(async () => {
+      const w = await teardownWorktree(await root(), {
+        floor: opts.floor,
+        taskSlug: opts.task,
+        repo: opts.repo,
+        branch: opts.branch,
+      });
+      out(`torn down ${w.repo}/${w.branch} (record retained)`, w);
+    }),
+  );
 
 // ── room ──────────────────────────────────────────────────────────────────────
 
@@ -429,6 +449,15 @@ wake.command('list').action(() =>
     );
   }),
 );
+wake
+  .command('check')
+  .description('Evaluate armed wakes; fire those whose condition now holds')
+  .action(() =>
+    guard(async () => {
+      const result = await checkWakes(await root());
+      out(`fired ${result.fired.length}, still armed ${result.reArmed.length}`, result);
+    }),
+  );
 
 // ── pr + remote ───────────────────────────────────────────────────────────────
 
@@ -504,6 +533,27 @@ remote
         ...(opts.url === undefined ? {} : { url: opts.url }),
       });
       out(`linked ${t.floor}/${t.slug} → ${opts.provider}:${opts.id}`, t);
+    }),
+  );
+remote
+  .command('comment')
+  .description('Post an outward comment — re-authored through the privacy gate, gated by authority')
+  .requiredOption('--body <text>', 'inline, @file, or -')
+  .action((opts: { body: string }) =>
+    guard(async () => {
+      const r = await root();
+      const names = (await listPersonas(r)).map((p) => p.name);
+      const { clean, redactions } = translateOutward(await readTextArg(opts.body), {
+        personaNames: names,
+        localPaths: [r],
+      });
+      // The provider structurally cannot receive a raw string or run unauthorized.
+      await makeStubRemote().comment(
+        { provider: 'stub', id: '0', url: 'stub://0' },
+        clean,
+        humanAuthority(),
+      );
+      out(`posted (${redactions.length} redaction(s)):\n${clean}`, { clean, redactions });
     }),
   );
 

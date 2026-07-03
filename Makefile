@@ -18,7 +18,7 @@
 
 BIOME := node_modules/.bin/biome
 
-.PHONY: help install format format-check lint typecheck test links check
+.PHONY: help install format format-check lint typecheck test walkthrough links check
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) \
@@ -44,7 +44,11 @@ typecheck: ## Strict type check, no emit
 test: ## Run the test suite (node:test)
 	npm test --silent
 
+walkthrough: ## Drive the intent walkthrough §0–§10 end-to-end (acceptance test)
+	bash test/acceptance/walkthrough.sh
+
 links: ## Check Markdown links offline
 	lychee .
 
-check: format-check lint typecheck test links ## Full CI gate — no writes; covers Markdown AND code
+check: format-check lint typecheck test walkthrough links ## Full CI gate — no writes; covers Markdown AND code
+

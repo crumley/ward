@@ -218,3 +218,41 @@ plus the cwd-derived scope and `@file` inputs realize the human-shell DX bar.
 from a clean state (asserting records + the reboot test), the per-seam `design/` plans (each _Serves
 intent_), a couple of extra tests (reflection cursor, completion guard), and final polish.
 `make check` stays green.
+
+## Iteration 6 — Acceptance walkthrough, per-seam design plans, polish (build complete)
+
+**Goal.** Drive the walkthrough §0–§10 end-to-end as a reproducible acceptance test, author the
+per-seam `design/` plans, and reach the "done looks like" state with `make check` green.
+
+**What I did.**
+
+- Extracted `checkWakes` from recovery (reusable outside `attach`) + a `ward wake check` verb; added
+  `ward worktree teardown` and `ward remote comment` (drives text through the privacy gate
+  end-to-end).
+- Wrote `test/acceptance/walkthrough.sh` — drives §0–§10 as real `ward` commands against a real git
+  worktree from a clean temp workspace, asserting the records at each step, the **reboot test** (as
+  if rebooted at §6), the **privacy redactions** (§7), the **completion guard** (§8), room-freeing +
+  worktree teardown + reflection (§9), and closed-stays-closed idempotent recovery (§10).
+- Wired `make walkthrough` into `make check` (and CI runs `make check`).
+- Authored per-seam `design/` plans `01`–`09` (metadata-store, sessions/recovery, messaging,
+  theming, remote+privacy, harness+model, lifecycle-hooks, human-shell, reflection), each opening
+  with _Serves intent_; added `test/intent/reflection` (cursor incrementality).
+- Recorded **SF-003** (wake "finishing": milestone report vs. scope completion; v2 chose
+  completion).
+
+**What works now (with the command that proves it).**
+
+- **`make check` green end to end**: `biome ci` (40 files) + `tsc` + **`node --test` 46 pass** +
+  **`bash test/acceptance/walkthrough.sh` 44/44** + `lychee` (365 links).
+- The acceptance walkthrough is the exit test and it passes: `make walkthrough` → §0–§10, 44
+  assertions.
+
+**Done looks like — met.** Walkthrough §0–§10 runs for real from a clean state via documented
+commands; the five intent invariants (+ reflection) are passing tests; `design/` has a plan per
+implemented seam tracing to intent and `src/` mirrors it; `plan/v2/` carries scope, this journal,
+spec-feedback (SF-001..003), and the stack ADRs `0001`–`0007`; `make check` is green.
+
+**Handoff.** Stopping at a green, working build on `build/v2` — per Ward's own cardinal rule, the
+merge to `main` is the human's call. Suggested review entry points: `plan/v2/scope.md`,
+`plan/v2/spec-feedback.md` (the three SF-entries are the intent-tightening deliverable), and
+`test/acceptance/walkthrough.sh`.

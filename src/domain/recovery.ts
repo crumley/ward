@@ -57,17 +57,9 @@ export async function attachWorkspace(
     report.resumed.push(session.id);
   }
 
-  for (const wake of await listWakes(root)) {
-    if (wake.state === 'satisfied') {
-      continue;
-    }
-    if (await conditionMet(root, wake.condition)) {
-      await satisfyWake(root, wake.id);
-      report.firedWakes.push(wake.id);
-    } else {
-      report.reArmedWakes.push(wake.id);
-    }
-  }
+  const wakes = await checkWakes(root);
+  report.firedWakes = wakes.fired;
+  report.reArmedWakes = wakes.reArmed;
 
   for (const worktree of await listWorktrees(root)) {
     const checkout = worktreeCheckout(root, worktree.repo, worktree.branch);
@@ -81,6 +73,28 @@ export async function attachWorkspace(
   }
 
   return report;
+}
+
+/**
+ * Evaluate every armed wake and fire the ones whose condition is met (idempotent:
+ * a satisfied wake never re-fires). Reusable outside recovery — e.g. after a room
+ * frees — so a detached waiter is nudged the moment its condition holds.
+ */
+export async function checkWakes(root: string): Promise<{ fired: string[]; reArmed: string[] }> {
+  const fired: string[] = [];
+  const reArmed: string[] = [];
+  for (const wake of await listWakes(root)) {
+    if (wake.state === 'satisfied') {
+      continue;
+    }
+    if (await conditionMet(root, wake.condition)) {
+      await satisfyWake(root, wake.id);
+      fired.push(wake.id);
+    } else {
+      reArmed.push(wake.id);
+    }
+  }
+  return { fired, reArmed };
 }
 
 async function conditionMet(root: string, condition: Wake['condition']): Promise<boolean> {
