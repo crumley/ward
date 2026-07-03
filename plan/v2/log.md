@@ -92,3 +92,49 @@ hooks + room (mints its first session; occupancy derived) + messaging (dispatch/
 recorded-first)
 
 - cold-start recovery, with the recovery intent test (live worktrees only).
+
+## Iteration 3 — Worktrees, theming, hooks, rooms, messaging, recovery
+
+**Goal.** Build the coordination layer and prove the cold-start recovery invariant: worktree
+creation with deterministic theming + idempotent hooks, rooms (minting their first session;
+occupancy derived), messaging (dispatch/report/wake recorded-first), and `attach` recovery — live
+worktrees only.
+
+**What I did.**
+
+- `src/seams/theming.ts` — deterministic accent (stable hash, collision-free among the visible
+  set) + per-type glyph, both recorded as **nameable** attributes (`accentByName` resolves "the blue
+  one").
+- `src/seams/git.ts` — thin real git wrapper (init / worktree add+remove / current branch),
+  injectable.
+- `src/seams/messaging.ts` — dispatch/report + wake arm/satisfy, **recorded-first**, idempotent
+  (satisfied fires once), inspectable (`listMessages`/`listWakes`).
+- `src/domain/hooks.ts` — idempotent worktree setup/teardown hooks (deps, theme) as checkable
+  markers; `applySetupHooks` / `revalidateSetupHooks` (re-apply only what vanished) /
+  `removeTeardownHooks`.
+- `src/domain/worktree.ts` — create (accent + glyph + hooks + record), teardown (record retained,
+  `tornDown:true`), `listWorktrees`, `revalidateWorktree`.
+- `src/domain/room.ts` — `openRoom` mints the first session; occupancy **derived**
+  (`isRoomOccupied`); `closeRoom` frees it; room-code allocation reuses freed codes.
+- `src/domain/recovery.ts` — `attachWorkspace`: enumerate → keep open → resume (idempotent) → re-arm
+  wakes (fire a met one once) → re-validate **live** worktrees only (skip torn-down) → leave closed.
+- `src/store/workspace.ts` — room-scope resolution (`findRoomDir`, bare code addresses a room).
+
+**What works now (with the command that proves it).**
+
+- `make check` green — `biome ci` (29 files) + `tsc` + **`node --test` 26 pass** + `dprint` +
+  `lychee`.
+- **Cold-start recovery** invariant: `make test` →
+  `cold-start recovery — restore in-flight threads,
+  live worktrees only` — open session
+  re-attached, closed left alone, the live worktree's vanished setup hook re-validated (re-applied),
+  the torn-down worktree **skipped not errored**, the room-done wake re-armed while occupied then
+  **fired exactly once** when the room freed.
+
+**Decisions / spec-feedback.** No new intent frictions this iteration; SF-001 (room occupancy
+derived) is now realized in code (rooms carry no stored occupancy; it derives from sessions). 4 of 5
+intent invariants pass; the privacy gate is next.
+
+**Next.** Iteration 4 — remote provider seam + the single upstream **privacy-translation gate**
+(fail-closed exhaustive redaction of the closed role vocabulary + persona names), PR tracking, gated
+outward actions — with the privacy-gate intent test.

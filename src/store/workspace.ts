@@ -6,7 +6,16 @@
 import { readdir, stat } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { readAs, writeDocument } from './doc.ts';
-import { projectDir, projectDoc, projectsDir, taskDir, ward, workspaceDoc } from './paths.ts';
+import {
+  projectDir,
+  projectDoc,
+  projectsDir,
+  roomDir,
+  taskDir,
+  tasksDir,
+  ward,
+  workspaceDoc,
+} from './paths.ts';
 import {
   type Project,
   projectSchema,
@@ -101,6 +110,21 @@ export async function resolveScopeDir(root: string, scope: ScopeRef): Promise<st
       return taskDir(await resolveProjectDir(root, Number(floor)), String(slug));
     }
     case 'room':
-      throw new Error('room scope resolution not yet implemented');
+      return findRoomDir(root, scope.ref);
   }
+}
+
+/** Find a room's on-disk directory by its workspace-wide code (a bare code addresses it). */
+export async function findRoomDir(root: string, code: string): Promise<string> {
+  for (const name of await projectDirNames(root)) {
+    const projectDirPath = resolveDirName(root, name);
+    const taskNames = await readdir(tasksDir(projectDirPath)).catch(() => [] as string[]);
+    for (const taskName of taskNames) {
+      const candidate = roomDir(taskDir(projectDirPath, taskName), code);
+      if (await exists(candidate)) {
+        return candidate;
+      }
+    }
+  }
+  throw new Error(`no room ${code} found`);
 }
