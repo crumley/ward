@@ -180,3 +180,41 @@ already-sanitized content" and "posting is gated" structurally, not by conventio
 workspace/scope discovery from any cwd; `doctor`; `@file`/`-` inputs; verbs read true incl.
 `attach`) and scope-boundary reflection (map-reduce + cursor). Then iteration 6 drives the
 walkthrough §0–§10 end to end and writes the per-seam `design/` plans.
+
+## Iteration 5 — The human-shell CLI + reflection
+
+**Goal.** Build the CLI that ties the core together so the walkthrough runs as real commands, plus
+scope-boundary reflection (map-reduce + cursor).
+
+**What I did.**
+
+- `src/cli/output.ts` (two-audience: human text vs `--json`), `src/cli/context.ts` (caller identity
+  via the ambient agent signal; workspace + cwd-scope discovery; `@file`/`-`/inline text args),
+  `src/cli/doctor.ts` (node/git/workspace checks), `src/cli/index.ts` (Commander noun→verb tree:
+  init, doctor, status, attach, reflect;
+  project/task/worktree/room/session/pr/remote/wake/dispatch).
+- `src/domain/reflection.ts` — scope-boundary reflection: chunk → distill → roll-up → proposals,
+  with a per-(scope, goal) cursor so re-runs are incremental. `src/domain/artifact.ts` —
+  briefs/artifacts with provenance.
+- Verbs read true: per-thread `session resume`, workspace-wide `attach` (not `recover`).
+
+**What works now (with the command that proves it).**
+
+- `make check` green — `biome ci` (39 files) + `tsc` + `node --test` (43 pass) + `dprint` +
+  `lychee`.
+- **The CLI runs Ward end-to-end against a real workspace + real git worktree.** Proven by driving,
+  in a temp workspace: `ward init` → `ward doctor` (all ✓) → `project open` (floor 1; attending
+  avery, charge nurse casey) → `task open` (resident riley) → `worktree create` (real
+  `git worktree`, hooks `deps`+`theme` on disk) → `room open --brief …` (mints session `quinn`,
+  dispatches `brief-1A1`) → `wake arm` → `report` → `pr track`/`advance` (open→approved→merged;
+  `task list` shows `active (in-review)`) → `room close`/`session close`/`task close` (completion
+  guard) → `reflect` (2 proposals, cursor 6) → `attach` (wake fired once, worktree revalidated) →
+  `--json status` (`workspace: closed`).
+
+**Decisions / spec-feedback.** No new intent frictions. The branded `Sanitized`/`Authority` types
+plus the cwd-derived scope and `@file` inputs realize the human-shell DX bar.
+
+**Next.** Iteration 6 — an automated `test/acceptance/walkthrough.sh` driving §0–§10 reproducibly
+from a clean state (asserting records + the reboot test), the per-seam `design/` plans (each _Serves
+intent_), a couple of extra tests (reflection cursor, completion guard), and final polish.
+`make check` stays green.
