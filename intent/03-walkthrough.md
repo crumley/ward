@@ -148,8 +148,11 @@ Suppose the machine had rebooted at step 6 (room mid-revision, resident detached
 recovery (`01-concepts/02-sessions-and-lifecycle.md`) enumerates sessions, keeps the **open, not
 closed** ones, re-attaches each via its **harness handle**, **re-arms the resident's wake** so it is
 still notified when `1A1` finishes, and **re-validates** the setup hooks of **live** worktrees
-(no-ops if satisfied; a torn-down worktree of closed work is skipped). The human returns to exactly
-the threads in flight — `1A1` and its waiting resident — and nothing that was already closed.
+(no-ops if satisfied; a torn-down worktree of closed work is skipped). Recovery then ends with
+**rounds**: the house supervisor takes stock and nudges the charge nurse, who confirms `1A1` and its
+waiting resident are genuinely back in good order — judgment on top of the mechanical re-arm
+(`01-concepts/02-sessions-and-lifecycle.md`). The human returns to exactly the threads in flight —
+`1A1` and its waiting resident — told where they stand, and nothing that was already closed.
 
 ---
 

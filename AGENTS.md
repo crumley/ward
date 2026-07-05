@@ -48,7 +48,8 @@ The repo stands on four parallel trees; **`intent` governs the other three** (se
   [`intent/03-walkthrough.md`](intent/03-walkthrough.md).
 - **Capture a requirement** → write the durable what & why into the relevant `intent/` slice; if it
   defers a decision to the build, note it inline (_Left to implementation_) and carry the residue
-  into the matching `design/` draft.
+  into the matching `design/` draft. Deferral is deliberate room to build **more than one
+  technique** behind the same contract and converge through use (principle §19; design rule 4).
 - **Plan or do the build** → start at [`design/README.md`](design/README.md) and open a **design
   entry** (`design/NNNN-<slug>/`, from the [template](design/0000-template/README.md)): name the
   intent it serves, set its scope, record the _how_, journal the build in its log, and record stack

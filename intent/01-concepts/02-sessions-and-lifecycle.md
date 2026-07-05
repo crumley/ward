@@ -114,7 +114,7 @@ it. (Store is a _how_ — `../02-subsystems/00-metadata-store.md`.)
 ## Recovery: bringing a workspace back to life
 
 After a cold start, Ward reconstructs the working state from the record. Recovery is an
-**orchestration of the per-seam mechanisms**, in order:
+**orchestration of the per-seam mechanisms**, in order — mechanics first, judgment last:
 
 1. Enumerate sessions across all scopes.
 2. Filter to those that are **open and not closed** — the live threads.
@@ -131,13 +131,29 @@ After a cold start, Ward reconstructs the working state from the record. Recover
    hard error — and closed work is, by definition, not a thread in flight. The worktree's **record**
    is retained for history but is inert for recovery.
 6. Leave closed sessions alone.
+7. **Make recovery rounds — judgment on top of mechanics.** Steps 1–6 restore everything the record
+   can decide **deterministically**; they cannot decide what the world did while the lights were out
+   — a report that landed just before the crash, a wake whose condition is now moot, a thread whose
+   next step has changed. So recovery ends with **rounds**: top-down, one level at a time, the
+   **status personas take stock of their own spans**. The house supervisor rounds over the projects
+   and nudges each project's charge nurse; each charge nurse reviews its project's re-attached
+   threads, outstanding waits, and pending dispatches, drives each back into a good state, and
+   reports upward. **Why top-down, span-by-span:** routing knowledge already lives with the status
+   personas by design (`01-scopes-and-personas.md`), and no single scope should need whole-workspace
+   detail to recover — the same context discipline that governs normal operation governs recovery.
+   **Why judgment at all:** the returning human may not know what state anything is in; rounds mean
+   they do not have to — the workspace takes stock of itself and presents a coherent picture instead
+   of merely rewiring sessions and hoping. (How a nudge is issued and a condition evaluated is a
+   _how_ — `../02-subsystems/02-messaging-coordination.md`, `design/`.)
 
 Because session ids are **unique among open sessions workspace-wide** (`00-domain-model.md`,
 Identity), recovery addresses each session by its **bare id** — no scope qualifier is needed to tell
 two threads apart, even when sibling scopes reuse a slug.
 
 The result: a human returns from a reboot to a workspace that has restored the threads genuinely in
-flight — their sessions, their waits, and their setup — and nothing else.
+flight — their sessions, their waits, and their setup — and nothing else, and that has **already
+taken stock of itself**: rounds mean the human is told where everything stands rather than having to
+remember it.
 
 ## Canonical home for
 
@@ -148,6 +164,9 @@ flight — their sessions, their waits, and their setup — and nothing else.
 - **The per-scope session log** (append-only; "enough metadata" to recover).
 - **Recovery** — the cold-start orchestration that restores the in-flight threads (re-validating
   setup for **live** worktrees only; addressing sessions by their workspace-unique bare id).
+- **Recovery rounds** — the judgment pass that ends recovery: the status personas, top-down
+  (supervisor → charge nurses), each taking stock of its own span and driving it back into good
+  order. Mechanical re-arm restores what the record can decide; rounds decide the rest.
 
 The **harness handle** is defined here as a recorded _attribute_; the contract a harness must
 satisfy to expose and resolve it lives in
@@ -157,6 +176,3 @@ satisfy to expose and resolve it lives in
 
 - **"Enough metadata" to resume.** This file lists a minimum; validate it against a real
   reboot-recovery scenario before treating it as settled.
-- **Wake across a reboot.** How a "wake me when X" request survives a reboot and is re-armed during
-  recovery (mechanism in
-  [`../02-subsystems/02-messaging-coordination.md`](../02-subsystems/02-messaging-coordination.md)).

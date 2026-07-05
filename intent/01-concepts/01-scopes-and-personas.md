@@ -83,8 +83,10 @@ human's to set (`../00-foundation/00-vision.md`: the workspace is personal to on
 supervisor is the human's counterpart for _awareness and routing_ — pointing work and questions to
 the right project, surfacing where things stand across all of them, and **directing a human or agent
 to the right session** (see _Flow of work_, below). It is the charge nurse's function raised one
-level, from a project to the workspace. **Why a fast model:** like the charge nurse, the job is
-status and routing, not deep reasoning. (Call it "house supervisor," or just "supervisor.")
+level, from a project to the workspace. After a cold start it anchors the **recovery rounds** —
+taking stock of every project and nudging each charge nurse to do the same for its span
+(`02-sessions-and-lifecycle.md`). **Why a fast model:** like the charge nurse, the job is status and
+routing, not deep reasoning. (Call it "house supervisor," or just "supervisor.")
 
 ### Attending physician — project scope, teacher
 
@@ -101,9 +103,11 @@ Holds the **status of everything** within a project without doing the work. Pure
 routing: knows which agents are involved in each task, what state each is in, and where to point a
 human or agent who needs detail. **Dispatches** work to the right place and **redirects** queries to
 where the detail lives — resolving them to the **right session** (see _Flow of work_, below) — but
-never descends into detail. **Why a fast model:** the job is status and routing, not deep reasoning,
-so it should be fast and cheap rather than deep. Commonly works shoulder-to-shoulder with the
-attending and residents (see "multiple personas per scope").
+never descends into detail. During **recovery rounds** it takes stock of its project's re-attached
+threads and pending waits and drives them back into good order (`02-sessions-and-lifecycle.md`).
+**Why a fast model:** the job is status and routing, not deep reasoning, so it should be fast and
+cheap rather than deep. Commonly works shoulder-to-shoulder with the attending and residents (see
+"multiple personas per scope").
 
 ### Resident — task scope, teacher
 

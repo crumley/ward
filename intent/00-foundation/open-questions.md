@@ -37,7 +37,7 @@ relevant slice (and reflected in tests and code).
 - [`01-concepts/01-scopes-and-personas.md`](../01-concepts/01-scopes-and-personas.md) —
   persona↔scope cardinality; which fork mode ships first.
 - [`01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md) —
-  "enough metadata" to resume; wake across a reboot.
+  "enough metadata" to resume (_wake across a reboot now settled_).
 - [`01-concepts/03-work-lifecycle.md`](../01-concepts/03-work-lifecycle.md) — delegated authority
   for gated actions; hook validation; refresh/rebase cadence; policy-encoding home (_task states now
   settled_).
@@ -49,8 +49,9 @@ relevant slice (and reflected in tests and code).
   the concurrency primitive.
 - [`02-subsystems/01-session-multiplexer.md`](../02-subsystems/01-session-multiplexer.md) and
   [`02-subsystems/02-messaging-coordination.md`](../02-subsystems/02-messaging-coordination.md) —
-  the messaging-vs-multiplexer split; wake re-arm on recovery; the dispatch-routing **mechanism**
-  (the path — direct vs. via status persona — is settled; the resolution mechanism is open).
+  the messaging-vs-multiplexer split; the dispatch-routing **mechanism** (the path — direct vs. via
+  status persona — is settled; the resolution mechanism is open; _wake re-arm on recovery now
+  settled_).
 - [`02-subsystems/03-agent-harness.md`](../02-subsystems/03-agent-harness.md) — fork mode first.
 - [`02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md) — caller-identity
   enforcement; whether the telemetry analysis loop is a reflection type.
@@ -79,3 +80,9 @@ relevant slice (and reflected in tests and code).
   guarantee, not a room one.
 - **Roles are a fixed vocabulary; personas evolve** — many personas may share one role; the closed
   role set is what makes outward role-redaction **exhaustive** (§4).
+- **Wake across a reboot — recovery ends with rounds.** Survival was never open (wake conditions are
+  recorded-first); what was open — how the workspace gets back into a genuinely _good_ state — is
+  settled: after the mechanical layer (re-attach, re-arm, fire-once), the **status personas make
+  recovery rounds**, top-down (supervisor → charge nurses), each taking stock of only its own span.
+  Only the nudge/evaluation mechanics remain, left to `design/`
+  ([`../01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md)).
