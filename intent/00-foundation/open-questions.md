@@ -10,13 +10,6 @@ relevant slice (and reflected in tests and code).
 
 ## Cross-cutting tensions
 
-- **Append vs. rewrite, against evolving context.** Principle §12 wants an append-only,
-  deterministically ordered prefix so sessions share token caches; reflection and the teaching loop
-  want context to _evolve_. Where evolving, rewritable context lives relative to the stable
-  cacheable prefix is unresolved. Touches
-  [`../01-concepts/05-context-loading.md`](../01-concepts/05-context-loading.md),
-  [`../01-concepts/04-reflection-and-evolution.md`](../01-concepts/04-reflection-and-evolution.md),
-  and [`../02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md).
 - **What/why-vs-how boundary drift.** As [`../../design/`](../../design/) fills in, watch both
   directions: tool names creeping into `intent/`, and durable constraints stranded in `design/` that
   should be lifted up. Revisit at every scope boundary.
@@ -29,11 +22,10 @@ relevant slice (and reflected in tests and code).
 
 ## Index of per-slice open questions
 
-- [`01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md) — when each level exists;
-  anchor vocabulary ("anchor"/"workdir" are working names); artifact taxonomy; provenance depth;
-  cross-task mutation; identity edges (task codes; floor-number uniqueness; whether a closed _floor_
-  number is reused — _session ids and room codes now settled_); the **dispatch-routing mechanism**
-  (both paths now settled; the resolution mechanism is owned by the messaging seam).
+- [`01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md) — provenance depth;
+  cross-task mutation; the **dispatch-routing mechanism** (both paths now settled; the resolution
+  mechanism is owned by the messaging seam). (_Level-existence tests, anchor vocabulary, artifact
+  taxonomy, task codes, and floor-number reuse now settled — below._)
 - [`01-concepts/01-scopes-and-personas.md`](../01-concepts/01-scopes-and-personas.md) —
   persona↔scope cardinality; which fork mode ships first.
 - [`01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md) —
@@ -44,10 +36,11 @@ relevant slice (and reflected in tests and code).
 - [`01-concepts/04-reflection-and-evolution.md`](../01-concepts/04-reflection-and-evolution.md) —
   reflection-type taxonomy; cadence/boundary triggers (_recovery completion now settled as an event
   trigger_); cross-chunk learnings; migration safety.
-- [`01-concepts/05-context-loading.md`](../01-concepts/05-context-loading.md) — the
-  append-vs-rewrite line (cross-cutting, above).
-- [`02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md) — artifact taxonomy;
-  the concurrency primitive.
+- [`01-concepts/05-context-loading.md`](../01-concepts/05-context-loading.md) — none open (_the
+  append-vs-rewrite line now settled as the two-zone model — below_).
+- [`02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md) — none open (_the
+  artifact taxonomy now settled as two tiers — below; the concurrency primitive is a bounded
+  technique choice under §19, constrained by the store contract, chosen in `design/`_).
 - [`02-subsystems/01-session-multiplexer.md`](../02-subsystems/01-session-multiplexer.md) and
   [`02-subsystems/02-messaging-coordination.md`](../02-subsystems/02-messaging-coordination.md) —
   the messaging-vs-multiplexer split; the dispatch-routing **mechanism** (the path — direct vs. via
@@ -95,3 +88,33 @@ relevant slice (and reflected in tests and code).
   one occupant** at a time (a room, or an elided session acting directly); an **occupied anchor is
   written only through its occupant** — reads stay free, and the maintenance toil yields to
   occupancy ([`../01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md)).
+- **Each level has an existence test; elision changes ceremony, never semantics.** The **task is the
+  universal quantum** (the cheapest one-off: a bare task under the workspace, one elided session); a
+  **project** exists when success is more than "are the tasks done," an **anchor** when work needs a
+  place on disk, a **room** when directing and doing are separated. The tests apply at any time —
+  grown work gains a level without remodeling — and the same rules apply present or elided
+  ([`../01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md)).
+- **"Anchor" and "workdir" are the settled names** — deliberately plain; the metaphor's memorability
+  is spent on addresses (floors, rooms), not on every noun.
+- **The artifact taxonomy is two-tier.** **Records** (session logs, recovery records, reflection
+  proposals/cursors, the version stamp) are Ward-owned, closed, and versioned with the CLI;
+  **artifact types** are an open set — seeded with **brief**, **decision**, **note** — registered
+  with runtime-validated schemas, the catalog itself a validated document
+  ([`../02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md)).
+- **Identity edges closed.** **Task codes** are workspace-unique among _open_ tasks — a bare code
+  addresses every lifecycle operation, mirroring the session rule. **Floor numbers are monotonic and
+  never reused** — the floor is the root of room addresses recorded in provenance, so reuse would
+  poison the historical record
+  ([`../01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md)).
+- **The append-vs-rewrite tension resolved as the two-zone model.** Context assembles as a stable,
+  append-only, cache-shared **prefix** followed by a **mutable tail** where rewrites are legal;
+  documents **graduate** forward when they stabilize, and the prefix itself is rewritten only at
+  **adoption boundaries** — the deliberate act of adopting reflection proposals
+  ([`../01-concepts/05-context-loading.md`](../01-concepts/05-context-loading.md),
+  [`../01-concepts/04-reflection-and-evolution.md`](../01-concepts/04-reflection-and-evolution.md)).
+- **The concurrency primitive is deliberately not chosen in intent.** The store contract now carries
+  the selection pressures — readers never see a partial document; serialization survives a cold
+  start with no resident process; contention is legible in the workspace and fails safe; the
+  primitive is sized to few, brief writes — and the technique is a bounded, possibly plural, design
+  choice (§19) recorded in [`design/`](../../design/)
+  ([`../02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md)).

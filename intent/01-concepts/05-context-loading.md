@@ -43,10 +43,28 @@ ordering or churn in early context defeats the cache and wastes tokens, money, a
 **appending** new stable artifacts over **rewriting** existing ones, unless a rewrite is genuinely
 necessary. Append preserves the cacheable prefix; rewrite invalidates it.
 
-> **Tension to manage (open).** Reflection and the teaching loop _want_ context to evolve, while
-> caching wants it stable. Where evolving, rewritable context lives relative to the stable cacheable
-> prefix is unresolved (see Open questions). The durable commitment is the _bias_: append by
-> default, rewrite only when warranted.
+## Evolving context lives in a mutable tail behind the stable prefix
+
+Caching wants context stable; reflection and the teaching loop want it to evolve
+([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)). The resolution: context is
+assembled in **two zones, ordered by expected rate of change**.
+
+- The **stable prefix** — identity and scope records, principles, settled skills, closed decisions —
+  is append-only and deterministically ordered. This is the zone sessions share token caches on.
+- The **mutable tail** — evolving standards, skills under revision, current status — loads **after**
+  the stable prefix. Rewrites are legal only here.
+
+**Why this works:** cache invalidation propagates only forward from the first changed position, so
+volatile content loaded last leaves the prefix's cache intact. A document **graduates** into the
+stable prefix when it stops changing — and graduation is itself an append-shaped change.
+
+**The stable prefix changes only at adoption boundaries.** Rewriting the prefix is not forbidden —
+it is **batched**. Reflection produces proposals asynchronously
+([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)); **adopting** them is the
+deliberate, rare moment the prefix may be rewritten and the cache knowingly re-primed. **Why:** a
+cache bust is a real cost worth paying for a genuine improvement; what the token economy cannot
+absorb is _continuous_ churn. Batching rewrites at adoption boundaries turns churn into a
+deliberate, priced act.
 
 ## Every session records a harness handle
 
@@ -65,7 +83,8 @@ not span a mix of harnesses, and recovery would depend on a human remembering wh
 ## Canonical home for
 
 - **Context assembly** — the `AGENTS.md`-hierarchy-by-working-directory model, the
-  deterministic/append-oriented bias for cache sharing, and the harness-handle-per-session rule.
+  deterministic/append-oriented bias for cache sharing, the **two-zone model** (stable prefix +
+  mutable tail, graduation, adoption boundaries), and the harness-handle-per-session rule.
 
 Other slices reference these; the _working directory_ axis itself is defined in
 [`00-domain-model.md`](00-domain-model.md), and the economy principle in
@@ -74,14 +93,13 @@ Other slices reference these; the _working directory_ axis itself is defined in
 ## Left to implementation
 
 - The precise `AGENTS.md` field conventions and how skills are referenced/resolved; the **exact
-  ordering algorithm** for the cacheable prefix and where the mutable tail begins; the per-harness
-  handle formats and history locations; any caching configuration. Bound: the result must stay
-  harness-neutral, deterministic for the cacheable prefix, and append-biased. Planned in
-  [`design/`](../../design/).
+  ordering algorithm** within each zone and which document types classify into prefix vs. tail; the
+  **graduation mechanics** (who decides a document has stabilized, and how); the per-harness handle
+  formats and history locations; any caching configuration. Bound: the result must stay
+  harness-neutral, deterministic for the cacheable prefix, and append-biased — with prefix rewrites
+  confined to adoption boundaries. Planned in [`design/`](../../design/).
 
 ## Open questions
 
-- **Append vs. rewrite line.** §12 wants an append-only, deterministically ordered prefix for cache
-  sharing; reflection and teaching want context to _evolve_. Where does evolving, rewritable context
-  live relative to the stable cacheable prefix? (Cross-cutting — indexed in
-  [`../00-foundation/open-questions.md`](../00-foundation/open-questions.md).)
+- None currently. The append-vs-rewrite line is settled as the **two-zone model with adoption
+  boundaries** (above).

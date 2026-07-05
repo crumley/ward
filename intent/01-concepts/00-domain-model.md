@@ -20,14 +20,30 @@ Workspace
             └── Room (a scope where deep work happens on an anchor)
 ```
 
-Not every level is always present. **Levels are elided, not faked:** lightweight work lives as a
-task directly under the workspace (no project is invented to hold it), and a quick task need not
-stand up a separate room or the full persona cast — a single agent may both direct and do the work.
-You add a level only when it earns its keep; you never create an empty container for ceremony's
-sake. The hierarchy describes containment and scope, not mandatory ceremony — **why:** it must scale
-down to one-off work as gracefully as it scales up, or the ceremony would defeat the prime directive
-for small jobs. (Exactly when each level is warranted is being settled in
-`../00-foundation/open-questions.md`.)
+Not every level is always present. **Levels are elided, not faked:** you add a level only when it
+earns its keep; you never create an empty container for ceremony's sake. "Earns its keep" is a
+**checkable test per level**, applied at any time — not only at creation:
+
+- The **task is the universal quantum.** Every unit of work is a task, however small — the cheapest
+  one-off is a bare task directly under the workspace with one elided session. A task record is one
+  document, cheap enough to always exist; artifact ownership, status rollup, and recovery
+  enumeration all key off it.
+- A **project** exists when success is more than "are the tasks done" — when the work has its own
+  definition of adding up to something.
+- An **anchor** exists when the work needs a place on disk — code to change, data to wrangle. A task
+  that only reads and converses needs none.
+- A **room** exists when directing and doing are separated — one agent briefing and evaluating while
+  another does the hands-on work. A single agent doing both is an elided session acting directly
+  (occupancy, below).
+
+**Elision changes ceremony, never semantics.** The same lifecycle, status derivation, artifact
+ownership, and occupancy rules apply whether a level is present or elided — an elided session
+occupies an anchor exactly as a room would. And because the tests apply at any time, ad hoc work
+that grows can gain a project or a room later, when its question gains an answer, without remodeling
+what already exists. **Why:** the hierarchy must scale down to one-off work as gracefully as it
+scales up, or the ceremony would defeat the prime directive for small jobs — and one rule set,
+uniformly applied, is what keeps the system predictable and lets knowledge compound across
+heavyweight work and one-offs instead of splitting them into regimes.
 
 > **On "mission."** A higher-than-project grouping ("mission") is intentionally _not_ a containment
 > level. If missions prove useful, the current intent is that a mission is an **attribute of a
@@ -89,8 +105,10 @@ anchors. An anchor is one of two kinds:
 from, and a place where in-progress mess is permitted — whether or not the work touches code. Naming
 the common shape keeps one rule set (occupancy, turnover, teardown, recovery) instead of a special
 case per kind, and is what lets deep non-code work have a real room (`4A12`, a brief, a resident
-directing from outside) instead of an unaddressable ad-hoc session. ("Anchor" and "workdir" are
-working names — see Open questions.)
+directing from outside) instead of an unaddressable ad-hoc session. ("Anchor" and "workdir" are the
+settled names — deliberately plain, since no hospital-metaphor word fits without strain. The
+metaphor's memorability is spent where it pays: on addresses — floors and rooms — not on every
+noun.)
 
 ### Room
 
@@ -246,6 +264,13 @@ session resume it. (Where artifacts live and in what format is a _how_ —
 `../02-subsystems/00-metadata-store.md`.) **Why a first-class noun:** durable shared output is the
 connective tissue between sessions and scopes; without naming it, it scatters and is lost.
 
+The artifact **type set is open and workspace-evolvable.** Ward seeds a few first-class types — the
+**brief** (below), the **decision**, the **note** — and a workspace extends the set as it learns
+what it produces (a reflection may propose a new type,
+[`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)). The catalog contract — Ward's
+own closed records versus the open artifact tier, each type with a runtime-validated schema — is the
+store's ([`../02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md)).
+
 ### Artifacts carry provenance (lineage)
 
 Beyond its **type**, every artifact records **how and why it came to exist**: which persona created
@@ -335,21 +360,36 @@ rather than scope-relative:** a scope-relative id is ambiguous the moment two sc
 intent, was wrong; making the id as unique as a bare address needs (and no more) keeps the APIs
 single-keyed and the identity still memorable. Uniqueness is only among _open_ sessions and only
 workspace-wide, sized to in-flight cardinality; over history a reused id is disambiguated by time
-and context like every other code. (Remaining edges — task codes, cross-workspace uniqueness, reuse
-after close: `../00-foundation/open-questions.md`.)
+and context like every other code.
+
+A **task follows the same rule, for the same reason**: its code is allocated **unique among the open
+tasks in the workspace**, so a bare task code is a sufficient address for every lifecycle operation
+— start, pause, resume, close, dispatch — without a floor qualifier. Tasks are the primary lifecycle
+unit and are _operated on_ constantly; threading a `(floor, task)` pair through every call is the
+same model smell the session rule closed. Rooms compose their address (`4A12`) because in-flight
+room cardinality is high and per-floor sequences keep the codes tiny; a task trades a slightly
+longer code for a bare address, because it is addressed far more often than it is browsed.
+
+**Floor numbers are monotonic and never reused.** A closed project's floor number is retired —
+retained for history — and the next project takes the next number. **Why:** the floor number is the
+_root_ of room addresses (`4A12`) recorded in briefs, logs, and provenance; reusing floor `4` would
+make every historical `4A12` ambiguous at the address root, exactly where the record must stay
+trustworthy (§11). Rooms reuse codes because in-flight room cardinality demands it; a workspace's
+lifetime project count is dozens, so monotonic floor numbers stay short and cost nothing to
+remember.
 
 **What gets an identity** (current intent):
 
-| Thing     | Identity                                                                                                                            |
-| --------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Project   | slug + code; the **code is a floor number** (`1`, `2`, `3…`)                                                                        |
-| Task      | slug + code (scope-relative to its project may suffice); when remote-linked, also **referenceable by its remote work-item id**      |
-| Room      | **floor number + room code** (`4A12`), by memorable convention; addresses the room workspace-wide without naming its task or anchor |
-| Session   | slug + code, **unique among open sessions workspace-wide** (a bare id addresses it)                                                 |
-| Worktree  | natural key (repository + branch); its **disposition** is an attribute, not identity                                                |
-| Workdir   | natural key (task + name); scope-relative is enough                                                                                 |
-| Workspace | the root itself; identified by location                                                                                             |
-| Artifact  | addressed by scope + type + name                                                                                                    |
+| Thing     | Identity                                                                                                                                                  |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Project   | slug + code; the **code is a floor number** (`1`, `2`, `3…`) — **monotonic, never reused**                                                                |
+| Task      | slug + code, **unique among open tasks workspace-wide** (a bare code addresses it); when remote-linked, also **referenceable by its remote work-item id** |
+| Room      | **floor number + room code** (`4A12`), by memorable convention; addresses the room workspace-wide without naming its task or anchor                       |
+| Session   | slug + code, **unique among open sessions workspace-wide** (a bare id addresses it)                                                                       |
+| Worktree  | natural key (repository + branch); its **disposition** is an attribute, not identity                                                                      |
+| Workdir   | natural key (task + name); scope-relative is enough                                                                                                       |
+| Workspace | the root itself; identified by location                                                                                                                   |
+| Artifact  | addressed by scope + type + name                                                                                                                          |
 
 A session also stores a **harness handle** — the locator for its underlying harness run — but that
 is a recorded _attribute_, not a second identity (like a task's remote-work-item link;
@@ -399,7 +439,8 @@ detours is the prime directive in miniature. (Mechanics and modes in `01-scopes-
 ## Canonical home for
 
 - **The containment hierarchy** — Workspace → Project → Task → Anchor → Room — and the
-  _levels-are-elided-not-faked_ rule.
+  _levels-are-elided-not-faked_ rule with its **per-level existence tests** (task as the universal
+  quantum; elision changes ceremony, never semantics).
 - **Anchors** — the scratch-medium/governed-record symmetry; the worktree (with its
   `deliverable | sandbox` **disposition**, fixed at creation — a sandbox never opens a PR) and the
   workdir; the **one-anchor-per-room** rule; **occupancy on the anchor** (at most one occupant — a
@@ -410,9 +451,11 @@ detours is the prime directive in miniature. (Mechanics and modes in `01-scopes-
 - **Status: recorded at the leaves, derived above** — including the **derivation rule** (precedence
   `active ▸ paused ▸ closed`, empty container is `active`, `in-review` is a derived overlay) and
   **room occupancy derived from its sessions** (a room stores no occupancy of its own).
-- **Artifacts**, their **provenance/lineage**, the **brief** type, and cross-scope
-  discoverability/ownership.
-- **Identity** — slug + short code, the floor/room convention, identity-need-not-mirror-containment.
+- **Artifacts**, their **provenance/lineage**, the seeded types (**brief**, **decision**, **note**)
+  within the open, workspace-evolvable type set, and cross-scope discoverability/ownership.
+- **Identity** — slug + short code, the floor/room convention (floor numbers monotonic, never
+  reused), bare workspace-unique codes for open sessions **and open tasks**,
+  identity-need-not-mirror-containment.
 - **The dispatch / report / wake flows** and **forking** as concepts (mechanisms in
   [`../02-subsystems/02-messaging-coordination.md`](../02-subsystems/02-messaging-coordination.md)
   and [`01-scopes-and-personas.md`](01-scopes-and-personas.md)).
@@ -421,22 +464,16 @@ Every other slice links here rather than redefining these nouns.
 
 ## Open questions
 
-- **When does each level exist?** Rules for a task directly under the workspace vs. inside a
-  project; when a project is warranted vs. an ad hoc task; the cheapest possible one-off.
-- **Anchor vocabulary.** "Anchor" and "workdir" are working names; no hospital-metaphor word has
-  been found that fits without strain. The concepts (one anchor per room, occupancy on the anchor,
-  worktree disposition) are settled — the vocabulary is not.
-- **Artifact taxonomy.** Beyond _brief_, which other types are first-class, and where exactly they
-  live relative to scope.
 - **Provenance depth**, and how a cross-task artifact reference is recorded so the borrower doesn't
   appear to own it. **Cross-task mutation:** what "specific guidance to alter another task's
   artifact" looks like concretely.
-- **Identity edges.** Task codes (and whether project-relative); floor-number uniqueness within a
-  workspace. _Resolved:_ session ids are **unique among open sessions workspace-wide** (Identity,
-  above), and a **room code is reused** when its room is freed (the reusable-resource Room model,
-  above). Whether a closed _floor_ number is reused, retired, or retained for history is still open.
-  (Indexed in [`../00-foundation/open-questions.md`](../00-foundation/open-questions.md).)
 - **Dispatch routing.** _Settled:_ both paths hold — direct addressing when the sender knows the
   target, routing through the originating scope's status persona when it does not. The remaining
   **mechanism** is owned by
   [`../02-subsystems/02-messaging-coordination.md`](../02-subsystems/02-messaging-coordination.md).
+
+_Recently settled here:_ the **per-level existence tests** (the hierarchy, above); **anchor** and
+**workdir** as settled names (Anchor, above); the **two-tier artifact taxonomy** (Artifacts, above,
+with the store); **task codes** workspace-unique among open tasks and **floor numbers** monotonic
+(Identity, above). Indexed in
+[`../00-foundation/open-questions.md`](../00-foundation/open-questions.md).
