@@ -21,11 +21,11 @@
 ## Scope
 
 - **In:** the pinned toolchain and task runner (mise: bun, dprint, lychee — with `fmt`, `lint`,
-  `typecheck`, `test`, `links`, `check` tasks); Bun + strict TypeScript with no build step; Biome
-  for code format/lint beside the existing dprint/lychee for Markdown; a minimal CLI
-  (`ward --version` / `ward -v` / bare `ward`) parsing with optique, version read from
-  `package.json`, rendered with picocolors; one `bun test` proving it; CI running **the same**
-  `mise run check`; direnv as optional environment sugar.
+  `typecheck`, `test`, `links`, `check` tasks, plus `ward`/`link`/`unlink` conveniences for running
+  the CLI); Bun + strict TypeScript with no build step; Biome for code format/lint beside the
+  existing dprint/lychee for Markdown; a minimal CLI (`ward --version` / `ward -v` / bare `ward`)
+  parsing with optique, version read from `package.json`, rendered with picocolors; one `bun test`
+  proving it; CI running **the same** `mise run check`; direnv as optional environment sugar.
 - **Deferred:** **all Ward behavior** — every noun and verb, the metadata store, the seams, and the
   domain module layout (`src/` beyond `cli/` stays empty; deciding its shape belongs to the first
   entry that builds domain behavior). _Why safe:_ the human-shell contract already requires the CLI
@@ -113,6 +113,23 @@ this is exactly the local-vs-CI drift the foundation exists to surface, and the 
 
 **Decisions.** Test processes pin their color environment explicitly; human-facing color behavior
 stays env-sensitive by design (`NO_COLOR`/TTY/`CI`). **Next.** unchanged.
+
+### 2026-07-05 — Convenience tasks for running and linking the CLI
+
+**Goal.** Make "how do I run it?" a one-liner. **What was done.** Added three mise tasks: `ward`
+(runs the CLI, forwarding args), `link` (registers `ward` on PATH via `bun link`), `unlink` (undoes
+it).
+
+**What works now — with the commands that prove it.**
+
+- `mise run ward -- --version` → `ward 0.1.0` (args also forward without `--`); bare `mise run ward`
+  → the version + help pointer.
+- `mise run link` → `which ward` resolves (`~/.bun/bin/ward`), `ward -v` → `ward 0.1.0`;
+  `mise run unlink` removes it.
+- `mise run check` → still green (the new tasks are additive; the gate is unchanged).
+
+**Decisions.** Task named `ward`, not `run`, so the invocation reads as the tool
+(`mise run ward -- …`) rather than the awkward `mise run run`. **Next.** unchanged.
 
 ## Spec-feedback
 

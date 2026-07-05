@@ -18,6 +18,20 @@ lychee = "0.24.2"
 description = "Install JS dependencies exactly as locked (bun.lock)"
 run = "bun install --frozen-lockfile"
 
+[tasks.ward]
+description = "Run the ward CLI (pass args after --, e.g. `mise run ward -- --version`)"
+depends = ["deps"]
+run = "bun src/cli/index.ts"
+
+[tasks.link]
+description = "Register `ward` on PATH (bun link); undo with `mise run unlink`"
+depends = ["deps"]
+run = "bun link"
+
+[tasks.unlink]
+description = "Remove the global `ward` registration"
+run = "bun unlink"
+
 [tasks.fmt]
 description = "Format + fix in place: code (Biome) and Markdown (dprint)"
 depends = ["deps"]
