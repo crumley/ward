@@ -16,8 +16,8 @@ Work is organized as a hierarchy of nested scopes. Each level contains the level
 Workspace
 └── Project          (a coherent body of work; may be heavyweight or ad hoc)
     └── Task         (one unit of deliverable work)
-        └── Worktree (a branch of a repository being changed)
-            └── Room (a scope where deep work happens on a worktree)
+        └── Anchor   (a task-owned scratch medium: a worktree, or a workdir for non-code work)
+            └── Room (a scope where deep work happens on an anchor)
 ```
 
 Not every level is always present. **Levels are elided, not faked:** lightweight work lives as a
@@ -55,17 +55,56 @@ local identity or its remote identity** (the work-item id) — both routes resol
 task can span **multiple worktrees across multiple repositories** — the change it represents is not
 always confined to one repo. Tasks, too, may be ad hoc and lightweight.
 
-### Worktree
+### Anchor
 
-A branch of a single repository, checked out so it can be changed independently of the repository's
-main line. Worktrees are where code actually changes. A task owns one or more worktrees; each
-belongs to one repository and one branch.
+The task-owned **scratch medium a room occupies**: a place where work-in-progress is allowed to be
+messy, from which durable output is deliberately cut into a governed record. A task owns one or more
+anchors. An anchor is one of two kinds:
+
+- **Worktree** — a branch of a single repository, checked out so it can be changed independently of
+  the repository's main line. Worktrees are where code actually changes; the governed record they
+  feed is **git commits, delivered through pull requests** (`03-work-lifecycle.md`). Each worktree
+  belongs to one repository and one branch, and carries a **disposition**, fixed at creation:
+  - **`deliverable`** — carries changes destined for the main line. The default, and the kind the
+    maintenance toil serves (`03-work-lifecycle.md`).
+  - **`sandbox`** — a checkout for work that reads, runs, or instruments code without ever
+    delivering it: research, experiments, instrumented investigation. **A sandbox never opens a PR**
+    — that single testable promise is what exempts it from the delivery machinery (no rebase
+    cadence, no PR/CI watching, no bearing on task completion). Its base is **pinned**: refreshed
+    only by deliberate request, never on cadence — shifting the code mid-study corrupts the study.
+    **Why fixed at creation, not flippable:** a sandbox is by construction a bad PR base — a stale
+    bottom, instrumentation noise throughout. Work worth delivering is **carried into a fresh
+    `deliverable` worktree** off current main — a deliberate re-authoring for the destination, the
+    same shape as capturing an artifact elsewhere (below) — never a flag flip.
+- **Workdir** — a task-owned working directory for **deep work that changes no repository**:
+  research, analysis, data wrangling. It holds the scratch — datasets, notebooks, half-run
+  experiments — and the governed record it feeds is **artifacts with provenance** in the store
+  (Artifacts, below). **Why a workdir and not the task's artifact store itself:** the store's
+  contract is typed, validated, provenanced documents only
+  (`../02-subsystems/00-metadata-store.md`); an agent standing _inside_ the record would strew
+  exactly the untyped scratch that contract forbids. Work-in-progress needs a home outside the
+  record; the workdir is that home.
+
+**Why one noun for both:** every room needs somewhere to stand — a working directory to load context
+from, and a place where in-progress mess is permitted — whether or not the work touches code. Naming
+the common shape keeps one rule set (occupancy, turnover, teardown, recovery) instead of a special
+case per kind, and is what lets deep non-code work have a real room (`4A12`, a brief, a resident
+directing from outside) instead of an unaddressable ad-hoc session. ("Anchor" and "workdir" are
+working names — see Open questions.)
 
 ### Room
 
-The scope in which **deep work happens** on a worktree. A room is where hands-on agents do detailed
+The scope in which **deep work happens** on an anchor. A room is where hands-on agents do detailed
 work under direction. It is the innermost scope and the one most jealously guarded for focused
 context.
+
+A room **occupies exactly one anchor**. Two independent reasons converge on this rule, which is
+usually the sign a rule is right: **(1) context economy** — a room's context assembles
+deterministically from its single working directory (`05-context-loading.md`), so sequential rooms
+on one anchor share token caches; a room spanning two anchors would assemble from two hierarchies
+with no principled ordering. **(2) the lease** — one anchor means one exclusive claim; a room
+holding several would turn occupancy into a cross-room lock table, with the deadlocks that implies.
+(And a room is one physical place; the metaphor's memorability is load-bearing — _Identity_, below.)
 
 A room is a **reusable resource that hosts sessions**, not a session itself — like a real ward room
 that is turned over and assigned to new work. Because opening a room only makes sense once you know
@@ -75,13 +114,27 @@ is **occupied** while one or more sessions work in it, and becomes **free** agai
 session closes — occupancy is **derived from the room's sessions, never stored on the room** (see
 _Status_, below) — at which point it can be **reassigned**, its code reused. The permanence rule
 lives on the **session**, not the room: **closed stays closed** is a _session_ guarantee
-(`02-sessions-and-lifecycle.md`); a room is a slot that empties and refills. A worktree may host
-**sequential** rooms over its life, but **one occupied room per worktree at a time** — parallel deep
-work belongs on separate worktrees, where it cannot collide. **Why one at a time:** two rooms on one
-branch would generate the very conflicts the worktree boundary exists to prevent. **Why a reusable
-slot, not a closed-forever scope:** rooms are addressed by a small, memorable code (`4A12`) sized to
+(`02-sessions-and-lifecycle.md`); a room is a slot that empties and refills. **Why a reusable slot,
+not a closed-forever scope:** rooms are addressed by a small, memorable code (`4A12`) sized to
 in-flight cardinality; permanently retiring a code on every close would burn the address space the
 human keeps in their head.
+
+**Occupancy is a property of the anchor.** An anchor may host **sequential** rooms over its life,
+but has **at most one occupant at a time** — and the occupant is a **room or, when levels are
+elided, a session acting directly** (the elided single agent stands in for the room it didn't stand
+up). Parallel deep work belongs on separate anchors, where it cannot collide; _coordinated_
+parallelism on one anchor is already served by one room hosting several sessions. **Why one
+occupant:** two writers on one branch generate the very conflicts the anchor boundary exists to
+prevent — and stating the rule on the anchor (rather than "one room per worktree") closes the gap
+where an elided session edits a worktree out from under an occupied room.
+
+**An occupied anchor is written only through its occupant.** Anyone may _read_ it — brief references
+into a sibling worktree's dataset stay allowed and encouraged (_Working directory_, below) — but a
+write from outside routes as a request to the occupant, and Ward's own maintenance toil defers the
+same way (`03-work-lifecycle.md`). **Why:** this is the no-lost-updates discipline — _one owner per
+mutable record, others read or request_ (`../02-subsystems/00-metadata-store.md`,
+`../00-foundation/01-principles.md` §17) — applied to anchors; a rebase landing under a working
+agent is a lost update by Ward's own machinery.
 
 ## Repositories and the main line
 
@@ -162,8 +215,8 @@ and from which it loads context):
 
 - Broad scopes often start at or near the **workspace root**, to load workspace-wide context and
   skills.
-- Narrow scopes start in the **specific directory** of the thing they work on — a repository or a
-  worktree — to load _that_ directory's context and skills and stay specialized.
+- Narrow scopes start in the **specific directory** of the thing they work on — a repository or an
+  anchor — to load _that_ directory's context and skills and stay specialized.
 
 The mechanism (e.g. `AGENTS.md` files through the hierarchy) is a _how_ — `05-context-loading.md`.
 The _what_ is that scope and working directory are independently chosen when a session starts. **Why
@@ -265,12 +318,12 @@ in their head, say it, and type it**, and an agent can **infer what is meant giv
   is not. **Why:** anchoring to a moment (or to any surrounding context) is usually enough, so
   identity can stay short instead of buying global uniqueness with entropy.
 
-**Identity need not mirror containment.** A room is _contained_ under a task and a worktree, but it
-is _addressed_ by its floor number + room code alone (`4A12`); the task and worktree it belongs to
-are **attributes discoverable from the room's record**, not parts of its address. The two are
-different lookups on purpose — addressing optimizes for memory, containment for structure. The cost
-to accept is that room codes run as a simple per-floor sequence (opening order on the floor), not
-grouped by task.
+**Identity need not mirror containment.** A room is _contained_ under a task and an anchor, but it
+is _addressed_ by its floor number + room code alone (`4A12`); the task and anchor it belongs to are
+**attributes discoverable from the room's record**, not parts of its address. The two are different
+lookups on purpose — addressing optimizes for memory, containment for structure. The cost to accept
+is that room codes run as a simple per-floor sequence (opening order on the floor), not grouped by
+task.
 
 Where global uniqueness genuinely is needed, it can be composed (e.g. floor number + room code). A
 **session** takes the middle path: its id is allocated **unique among the open sessions in the
@@ -287,15 +340,16 @@ after close: `../00-foundation/open-questions.md`.)
 
 **What gets an identity** (current intent):
 
-| Thing     | Identity                                                                                                                              |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Project   | slug + code; the **code is a floor number** (`1`, `2`, `3…`)                                                                          |
-| Task      | slug + code (scope-relative to its project may suffice); when remote-linked, also **referenceable by its remote work-item id**        |
-| Room      | **floor number + room code** (`4A12`), by memorable convention; addresses the room workspace-wide without naming its task or worktree |
-| Session   | slug + code, **unique among open sessions workspace-wide** (a bare id addresses it)                                                   |
-| Worktree  | natural key (repository + branch)                                                                                                     |
-| Workspace | the root itself; identified by location                                                                                               |
-| Artifact  | addressed by scope + type + name                                                                                                      |
+| Thing     | Identity                                                                                                                            |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Project   | slug + code; the **code is a floor number** (`1`, `2`, `3…`)                                                                        |
+| Task      | slug + code (scope-relative to its project may suffice); when remote-linked, also **referenceable by its remote work-item id**      |
+| Room      | **floor number + room code** (`4A12`), by memorable convention; addresses the room workspace-wide without naming its task or anchor |
+| Session   | slug + code, **unique among open sessions workspace-wide** (a bare id addresses it)                                                 |
+| Worktree  | natural key (repository + branch); its **disposition** is an attribute, not identity                                                |
+| Workdir   | natural key (task + name); scope-relative is enough                                                                                 |
+| Workspace | the root itself; identified by location                                                                                             |
+| Artifact  | addressed by scope + type + name                                                                                                    |
 
 A session also stores a **harness handle** — the locator for its underlying harness run — but that
 is a recorded _attribute_, not a second identity (like a task's remote-work-item link;
@@ -344,8 +398,12 @@ detours is the prime directive in miniature. (Mechanics and modes in `01-scopes-
 
 ## Canonical home for
 
-- **The containment hierarchy** — Workspace → Project → Task → Worktree → Room — and the
+- **The containment hierarchy** — Workspace → Project → Task → Anchor → Room — and the
   _levels-are-elided-not-faked_ rule.
+- **Anchors** — the scratch-medium/governed-record symmetry; the worktree (with its
+  `deliverable | sandbox` **disposition**, fixed at creation — a sandbox never opens a PR) and the
+  workdir; the **one-anchor-per-room** rule; **occupancy on the anchor** (at most one occupant — a
+  room or an elided session; an occupied anchor is written only through its occupant).
 - **The Agent / Persona / Session distinction**, and _multiple personas per scope_.
 - **The two axes of a session** — scope and working directory (assembly in
   [`05-context-loading.md`](05-context-loading.md)).
@@ -365,6 +423,9 @@ Every other slice links here rather than redefining these nouns.
 
 - **When does each level exist?** Rules for a task directly under the workspace vs. inside a
   project; when a project is warranted vs. an ad hoc task; the cheapest possible one-off.
+- **Anchor vocabulary.** "Anchor" and "workdir" are working names; no hospital-metaphor word has
+  been found that fits without strain. The concepts (one anchor per room, occupancy on the anchor,
+  worktree disposition) are settled — the vocabulary is not.
 - **Artifact taxonomy.** Beyond _brief_, which other types are first-class, and where exactly they
   live relative to scope.
 - **Provenance depth**, and how a cross-task artifact reference is recorded so the borrower doesn't

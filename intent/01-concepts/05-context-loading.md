@@ -18,7 +18,7 @@ the filesystem hierarchy**, loaded relative to the session's **working directory
 
 - A broad-scope session started near the **workspace root** loads the workspace-level `AGENTS.md`
   and the top-level skills it points to.
-- A narrow-scope session started in a **repository or worktree directory** loads _that_ directory's
+- A narrow-scope session started in a **repository or anchor directory** loads _that_ directory's
   `AGENTS.md` and _its_ skills, staying specialized.
 
 Each `AGENTS.md` is the **manifest for its level**: it names the artifacts, skills, and records to
@@ -28,7 +28,7 @@ load for that scope, rather than relying on the agent to discover them.
 operates the session must find the right context, and harnesses must be mixable. Standardizing on
 `AGENTS.md` keeps the workspace portable. **Why keyed to working directory.** It makes "scope +
 working directory" operational: where you start determines what you load, so a room is specialized
-to its worktree while the attending sees the project.
+to its anchor while the attending sees the project.
 
 ## Context is built from stable artifacts in a deterministic order
 

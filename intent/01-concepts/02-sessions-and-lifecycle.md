@@ -134,14 +134,14 @@ After a cold start, Ward reconstructs the working state from the record. Recover
 4. **Re-arm pending wakes.** A "wake me when X" condition recorded before the reboot is re-armed
    from the record, so detached waiters are still notified
    (`../02-subsystems/02-messaging-coordination.md`).
-5. **Validate idempotent setup — live worktrees only.** Where a thread depends on setup that may
-   have half-run, the lifecycle hooks are re-validated and converge to done-or-not without repeating
-   work (`03-work-lifecycle.md`, `design/`). Re-validation runs **only for worktrees whose checkout
-   still exists** (those belonging to non-closed work); a worktree that was **torn down** when its
-   task closed is **skipped**. **Why:** closing a task really removes its worktrees
-   (`03-work-lifecycle.md`), so re-applying a setup hook into a directory that no longer exists is a
-   hard error — and closed work is, by definition, not a thread in flight. The worktree's **record**
-   is retained for history but is inert for recovery.
+5. **Validate idempotent setup — live anchors only.** Where a thread depends on setup that may have
+   half-run, the lifecycle hooks are re-validated and converge to done-or-not without repeating work
+   (`03-work-lifecycle.md`, `design/`). Re-validation runs **only for anchors whose directory still
+   exists** (those belonging to non-closed work); an anchor — worktree or workdir
+   (`00-domain-model.md`) — that was **torn down** when its task closed is **skipped**. **Why:**
+   closing a task really removes its anchors (`03-work-lifecycle.md`), so re-applying a setup hook
+   into a directory that no longer exists is a hard error — and closed work is, by definition, not a
+   thread in flight. The anchor's **record** is retained for history but is inert for recovery.
 6. Leave closed sessions alone.
 7. **Make recovery rounds — judgment on top of mechanics.** Steps 1–6 restore everything the record
    can decide **deterministically**; they cannot decide what the world did while the lights were out
@@ -190,8 +190,8 @@ remember it.
   **purpose**; **lifecycle events** — opened / resumed / resume-failed with cause / closed — so
   failure is a recorded fact, never a silent retry).
 - **Recovery** — the cold-start orchestration that restores the in-flight threads (re-validating
-  setup for **live** worktrees only; addressing sessions by their workspace-unique bare id) — itself
-  a **recorded episode** (per-thread outcomes, wakes re-armed/fired, the rounds' conclusions).
+  setup for **live** anchors only; addressing sessions by their workspace-unique bare id) — itself a
+  **recorded episode** (per-thread outcomes, wakes re-armed/fired, the rounds' conclusions).
 - **Recovery rounds** — the judgment pass that ends recovery: the status personas, top-down
   (supervisor → charge nurses), each taking stock of its own span and driving it back into good
   order. Mechanical re-arm restores what the record can decide; rounds decide the rest. Rounds run

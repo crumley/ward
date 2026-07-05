@@ -91,11 +91,11 @@ way the workflow policy is (see below; mechanism: `design/`).
 
 ## Execution
 
-Once underway, work happens in the task's worktrees, directed through the scope model
-(`01-scopes-and-personas.md`): a resident owns the task, briefs and directs rooms that do the deep
-work, evaluates results, and presents to the attending for approval. The task's recorded state
-tracks which worktrees exist, which rooms are active, and where each stands — so the task is
-resumable at any time.
+Once underway, work happens in the task's anchors — its worktrees and workdirs
+(`00-domain-model.md`) — directed through the scope model (`01-scopes-and-personas.md`): a resident
+owns the task, briefs and directs rooms that do the deep work, evaluates results, and presents to
+the attending for approval. The task's recorded state tracks which anchors exist, which rooms are
+active, and where each stands — so the task is resumable at any time.
 
 ## Ward absorbs the recurring toil
 
@@ -112,6 +112,15 @@ a real decision is needed (the prime directive, `../00-foundation/00-vision.md`)
 - **Watch PR and CI status** — follow each PR's review state and its checks, and know what is
   blocking a merge (driving the PR set to a merged close is _Completion_, below).
 - **…and more** as it emerges.
+
+**The toil yields to occupancy, and the delivery toil serves `deliverable` worktrees only.** Refresh
+and rebase operate on **free** anchors; an **occupied** anchor is never mutated underneath its
+occupant — Ward waits for it to free, or dispatches the request to the occupant to apply at a safe
+point (`00-domain-model.md`: _an occupied anchor is written only through its occupant_). A `sandbox`
+worktree is exempt altogether: its base is pinned and it opens no PRs, so there is nothing for the
+delivery toil to serve (`00-domain-model.md`, Anchor). **Why:** a rebase landing under a working
+agent is a lost update by Ward's own machinery (§17) — the ground shifting beneath the very work the
+room boundary exists to protect.
 
 **What is durable here is the intent, not the catalog.** Ward **owns the toil**: it performs what it
 safely can autonomously (local, reversible work — §18) and **surfaces only what needs a human** —
@@ -137,10 +146,12 @@ done:
    persona). **Why at close:** this is the moment the task's durable output is complete and its
    value to others (and to the remote record) can be judged — and moved across the privacy boundary
    deliberately.
-4. **Close the task.** A task is complete only when **all its PRs are merged**. Then it is closed
-   (and, per the session lifecycle, closed stays closed).
-5. **Refresh and clean up.** After merge, the affected main checkouts are refreshed and worktrees no
-   longer needed are torn down (via the teardown hooks).
+4. **Close the task.** A task is complete only when **all its PRs are merged** (a `sandbox` worktree
+   opens none, so it never gates completion). Then it is closed (and, per the session lifecycle,
+   closed stays closed).
+5. **Refresh and clean up.** After merge, the affected main checkouts are refreshed and anchors no
+   longer needed — worktrees of either disposition, and workdirs — are torn down (via the teardown
+   hooks).
 
 This whole sequence is something Ward **manages**, not something the human is left to remember.
 
@@ -213,7 +224,9 @@ Local↔remote linkage is an **orthogonal attribute** that can change in any non
 - **Local-only vs. remote-linked tasks** and the attach/merge transitions (identity stays stable).
 - **The never-merge-to-main cardinal rule.**
 - **Ward absorbing the recurring maintenance toil** (refresh, rebase + conflict handling, PR/CI
-  status-watching, …) and surfacing only what needs a human — the durable intent, not the catalog.
+  status-watching, …) and surfacing only what needs a human — the durable intent, not the catalog —
+  including that the **toil yields to occupancy** and the delivery toil serves `deliverable`
+  worktrees only.
 - **Lifecycle hooks** — that they exist and must be **idempotent / validate-on-resume** (build
   planned in [`design/`](../../design/)).
 - **Workflow policy** — opinionated-but-evolvable, and the **general pattern for any opinion Ward
@@ -231,3 +244,5 @@ applies it to task completion and links there.
 - **Hook validation**, the **maintenance cadence** (and how conflicts/blocks are auto-resolved vs.
   surfaced for a human), and the **policy encoding home** (skill vs. dedicated config) — each
   deferred to the matching design draft.
+- **Workdir hooks.** Whether workdirs need their own setup/teardown hook set or are a degenerate
+  case of the worktree hooks (no dependency install, no theme — possibly just create/remove).
