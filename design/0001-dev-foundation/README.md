@@ -64,7 +64,7 @@
 
 ## Build log
 
-### 2026-07-05 — Foundation stood up (this entry's only iteration)
+### 2026-07-05 — Foundation stood up
 
 **Goal.** Restructure done (plan/ folded into design/ — see the repo history), then: pick the stack,
 wire the pinned toolchain + gate, and prove a trivial CLI end to end. **What was done.** Wrote ADRs
@@ -96,6 +96,23 @@ worth recording: the `deps` task installs with `--frozen-lockfile` so the no-wri
 
 **Next.** First Ward-behavior entry: decide the domain module layout (deliberately not fixed here)
 and grow the first real noun/verb into the CLI substrate.
+
+### 2026-07-05 — CI's first run caught a color-environment dependence
+
+**Goal.** Confirm the PR's CI run is green. **What was done.** It was not: all 4 tests failed in
+Actions only — picocolors enables ANSI wherever `CI=true` is set, so the spawned CLI printed color
+codes in CI but plain text locally (piped, no `CI` var). Fixed by pinning `NO_COLOR=1` in the test's
+spawn env, making the assertion hermetic in any environment. A good first catch for the shared gate:
+this is exactly the local-vs-CI drift the foundation exists to surface, and the fix keeps the
+"agents get deterministic output" asymmetry testable.
+
+**What works now — with the commands that prove it.**
+
+- `CI=true bun test` → `4 pass, 0 fail` (reproduces the Actions environment locally).
+- `mise run check` → green; the PR's CI re-run on the same commit is the cross-machine proof.
+
+**Decisions.** Test processes pin their color environment explicitly; human-facing color behavior
+stays env-sensitive by design (`NO_COLOR`/TTY/`CI`). **Next.** unchanged.
 
 ## Spec-feedback
 

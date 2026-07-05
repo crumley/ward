@@ -27,6 +27,12 @@ test('the version printed is exactly package.json version', () => {
 const repoRoot = new URL('../..', import.meta.url).pathname;
 
 function runWard(argv: string[]): { exitCode: number; stdout: string } {
-  const result = Bun.spawnSync(['bun', 'src/cli/index.ts', ...argv], { cwd: repoRoot });
+  // NO_COLOR pins the output to plain text: picocolors would otherwise enable
+  // ANSI codes wherever CI=true is set (e.g. GitHub Actions), making the same
+  // assertion pass locally and fail in CI.
+  const result = Bun.spawnSync(['bun', 'src/cli/index.ts', ...argv], {
+    cwd: repoRoot,
+    env: { ...process.env, NO_COLOR: '1' },
+  });
   return { exitCode: result.exitCode, stdout: result.stdout.toString() };
 }
