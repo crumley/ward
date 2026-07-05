@@ -20,7 +20,13 @@ binding the concepts to any one of them_ (§5).
   can use different harnesses, and two can be mixed in one workspace.
 - **Make the run's history locatable from the recorded handle** — for resume after a reboot and for
   reflection later — whatever its format. _Why:_ each harness stores history in its own
-  format/location; the handle is the only reliable way to find that run again.
+  format/location; the handle is the only reliable way to find that run again. **Locate
+  distinguishes found from gone:** a harness may have discarded a run's history (retention is the
+  harness's, not Ward's), and a handle that no longer resolves is reported as a **distinct outcome**
+  — never an error lost in a retry — so Ward records the resolution failure on the session
+  (`../01-concepts/02-sessions-and-lifecycle.md`, lifecycle events). _Why:_ reflection must know
+  what it **cannot** read; a silently unresolvable handle masquerades as a history nobody happened
+  to open.
 - **Integrate behind a thin adapter** exposing a small fixed surface — _start / handle / resume /
   locate_ — with everything Ward-specific staying in Ward. _Why:_ a narrow adapter is what lets a
   new harness be added without touching the role model, the session model, or the store.
@@ -52,7 +58,9 @@ binding the concepts to any one of them_ (§5).
 
 - The exact adapter interface; the per-harness handle format and history location; how start/resume
   are invoked per harness; how the optional fork is detected and exercised; the default harness and
-  the per-scope override mechanism. Planned in [`design/`](../../design/).
+  the per-scope override mechanism; whether Ward defensively **snapshots or distills** a run's
+  history before a harness can discard it, and on what cadence. Planned in
+  [`design/`](../../design/).
 
 ## Open questions
 

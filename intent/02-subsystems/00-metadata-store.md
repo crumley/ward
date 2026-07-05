@@ -6,9 +6,10 @@
 ## Responsibility
 
 Persist and serve the **recorded state of the workspace** — the hierarchy of scopes, the tasks and
-their lifecycle, the sessions and their logs, the artifacts and their provenance, the identities,
-the reflection cursors, the version stamp. It is the source of truth that survives reboots
-([`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §16).
+their lifecycle, the sessions and their logs, the recovery records, the artifacts and their
+provenance, the identities, the reflection cursors, the version stamp. It is the source of truth
+that survives reboots ([`../00-foundation/01-principles.md`](../00-foundation/01-principles.md)
+§16).
 
 ## Constraints any design must honor
 
