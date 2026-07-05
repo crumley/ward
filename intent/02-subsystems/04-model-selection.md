@@ -24,6 +24,14 @@ bookkeeping, deep where the job is hard — and keep that choice **model-agnosti
   and the **fast-vs-deep intent**; _which_ model is fast or deep this month is a value, not a design
   commitment. _Why:_ models change faster than anything else; a concept that named one would be
   stale within months.
+- **Tuning reads recorded evidence.** The persona → tier defaults are a starting point; revising
+  them is a reflection outcome
+  ([`../01-concepts/04-reflection-and-evolution.md`](../01-concepts/04-reflection-and-evolution.md))
+  grounded in the **usage the sessions actually recorded** — tokens and cost, where the harness
+  exposes them
+  ([`../01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md)) —
+  not in taste. _Why:_ §12 makes token spend a managed cost, and a cost is managed only where it is
+  measured; without recorded usage, fast-vs-deep routing is tuned on guesswork.
 
 ## What this is NOT
 
@@ -38,7 +46,8 @@ bookkeeping, deep where the job is hard — and keep that choice **model-agnosti
 ## Canonical home for
 
 - The **model-selection contract**: a per-scope override hierarchy whose defaults follow the
-  persona's job, with concrete model ids living in workspace configuration.
+  persona's job, with concrete model ids living in workspace configuration — and the **evidence
+  loop**: tuning the defaults is grounded in recorded usage, not taste.
 
 ## Left to implementation
 

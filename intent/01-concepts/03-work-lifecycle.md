@@ -122,6 +122,14 @@ delivery toil to serve (`00-domain-model.md`, Anchor). **Why:** a rebase landing
 agent is a lost update by Ward's own machinery (§17) — the ground shifting beneath the very work the
 room boundary exists to protect.
 
+**And the toil yields to evidence of unrecorded work.** Occupancy is the recorded claim, but the
+record can lag reality — a human editing in their editor, an agent run outside Ward. So before
+mutating any anchor, the toil independently checks the anchor itself and treats **uncommitted
+changes as occupancy**: a dirty tree is never rebased or refreshed, whatever the record says.
+**Why:** §16 prefers recorded state, but a fail-safe read of reality is what keeps "prefer the
+record" from becoming "trust the record over the work in front of you" — a lost update is silent
+corruption (§17) whether or not the writer announced itself.
+
 **What is durable here is the intent, not the catalog.** Ward **owns the toil**: it performs what it
 safely can autonomously (local, reversible work — §18) and **surfaces only what needs a human** —
 what is behind, what is conflicted, what is blocked, what is ready. **Why:** which worktrees are
@@ -146,12 +154,16 @@ done:
    persona). **Why at close:** this is the moment the task's durable output is complete and its
    value to others (and to the remote record) can be judged — and moved across the privacy boundary
    deliberately.
-4. **Close the task.** A task is complete only when **all its PRs are merged** (a `sandbox` worktree
-   opens none, so it never gates completion). Then it is closed (and, per the session lifecycle,
-   closed stays closed).
-5. **Refresh and clean up.** After merge, the affected main checkouts are refreshed and anchors no
-   longer needed — worktrees of either disposition, and workdirs — are torn down (via the teardown
-   hooks).
+4. **Close the task.** A task is complete only when its **PR set is resolved**: every PR **merged**
+   — the **delivered** close — or, when the work is deliberately set aside, **closed unmerged** —
+   the **abandoned** close (Task states, below). A `sandbox` worktree opens no PRs, so it never
+   gates completion. Then the task is closed (and, per the session lifecycle, closed stays closed).
+5. **Refresh and clean up.** After the close, the affected main checkouts are refreshed and anchors
+   no longer needed — worktrees of either disposition, and workdirs — are torn down (via the
+   teardown hooks). Neither teardown is gated on a delivered close: a merged `deliverable` worktree
+   holds nothing unmerged, and a `sandbox`'s scratch was declared disposable at creation
+   (`00-domain-model.md`, Anchor). Tearing down a worktree that still holds unmerged _deliverable_
+   work — the abandoned close — is the §18 case and takes explicit authority (Task states, below).
 
 This whole sequence is something Ward **manages**, not something the human is left to remember.
 
@@ -188,15 +200,31 @@ machine (`00-domain-model.md`, status) — so the set is deliberately small. A t
 
 **Stored on the task — one of three:**
 
-| Stored state | Meaning                                                                              |
-| ------------ | ------------------------------------------------------------------------------------ |
-| `active`     | Work underway. Opening a task makes it active (no separate "drafted").               |
-| `paused`     | Deliberately set down, resumable, removed from the active list.                      |
-| `closed`     | All PRs merged, artifacts dispositioned, cleaned up. Terminal — closed stays closed. |
+| Stored state | Meaning                                                                                                                                          |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `active`     | Work underway. Opening a task makes it active (no separate "drafted").                                                                           |
+| `paused`     | Deliberately set down, resumable, removed from the active list.                                                                                  |
+| `closed`     | Work concluded — **delivered or abandoned** (the recorded outcome, below) — artifacts dispositioned, cleaned up. Terminal — closed stays closed. |
 
 The only transitions are `active ⇄ paused` and `active → closed`; `active → closed` is allowed only
-when completion holds (all PRs merged, below), and `closed` is terminal
-(`02-sessions-and-lifecycle.md`: closed stays closed).
+when completion holds — the PR set **resolved**: every PR merged, or deliberately closed unmerged
+(Completion, above) — and `closed` is terminal (`02-sessions-and-lifecycle.md`: closed stays
+closed).
+
+**The close records an outcome — `delivered | abandoned` — not a fourth state.** Not all work
+deserves delivery: a task can be superseded, disproven, or simply not worth finishing, and the
+lifecycle must let it **close** rather than sit `paused` forever, polluting the very attention
+router status exists to be. Closing such a task is an **abandoned** close: its open PRs are closed
+unmerged, its artifacts are dispositioned exactly as in a delivered close (an abandoned arc often
+yields the most valuable notes), and the scope-boundary reflection fires either way
+(`04-reflection-and-evolution.md`) — a task that failed is concentrated evidence, not an
+embarrassment to bury. The outcome is an **attribute recorded at close**, not a stored state: to
+every rollup, `closed` is `closed`, and "did it land?" is answered from the record rather than by a
+second terminal state every derivation rule would have to learn. **Abandoning is gated where it
+destroys work:** tearing down a worktree that still holds unmerged **deliverable** work is exactly
+the §18 case, so an abandoned close takes the human's (or explicitly delegated) authority; a
+`sandbox`'s scratch was declared disposable at creation and gates nothing (`00-domain-model.md`,
+Anchor).
 
 **Derived, not stored — `in-review`:** a task is _in review_ exactly when it has **≥1 open PR** and
 is not closed. It is computed from the PR set (Completion, above), not written on the task. **Why
@@ -218,14 +246,16 @@ Local↔remote linkage is an **orthogonal attribute** that can change in any non
 
 - **The task lifecycle** — creation → execution → PR-set → merge → close → cleanup — and the
   **normative task states** (stored `active | paused | closed`; `in-review` derived from the open-PR
-  set).
+  set; the close **outcome** `delivered | abandoned`, an attribute recorded at close, not a fourth
+  state).
 - **The task's discoverable cast** — who is involved (resident, charge nurse, rooms, sessions),
   derived from its session logs and containment rather than stored.
 - **Local-only vs. remote-linked tasks** and the attach/merge transitions (identity stays stable).
 - **The never-merge-to-main cardinal rule.**
 - **Ward absorbing the recurring maintenance toil** (refresh, rebase + conflict handling, PR/CI
   status-watching, …) and surfacing only what needs a human — the durable intent, not the catalog —
-  including that the **toil yields to occupancy** and the delivery toil serves `deliverable`
+  including that the **toil yields to occupancy** and to **evidence of unrecorded work** (a dirty
+  tree is treated as occupied, whatever the record says), and the delivery toil serves `deliverable`
   worktrees only.
 - **Lifecycle hooks** — that they exist and must be **idempotent / validate-on-resume** (build
   planned in [`design/`](../../design/)).

@@ -17,7 +17,8 @@ operate over different **scopes and intervals**, and Ward pursues several kinds:
 - **Scope-boundary reflection** — when a scope reaches a natural close, reflect over _that scope's
   arc_. When a **project finishes**, reflect at the project level: what went well, what didn't, what
   to improve, what to create, what to debate, what to introduce, what to do differently next time.
-  Likewise when a **task closes**, reflect on that task.
+  Likewise when a **task closes**, reflect on that task — whatever its outcome; an **abandoned**
+  close is often the richest arc to read (`03-work-lifecycle.md`, task states).
 - **Recovery reflection** — when a cold-start recovery completes, reflect over the **recovery
   episode**: its recorded per-thread outcomes and the rounds' conclusions
   (`02-sessions-and-lifecycle.md`), plus the harness histories of the threads involved. A recovery

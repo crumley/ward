@@ -30,6 +30,16 @@ would leak live, unrecoverable state.
   workspace-wide awareness of who-is-where would defeat the context discipline the whole model
   exists for.
 - Let a scope **report status upward** to its container.
+- **The human is an addressable participant.** A request for gated authority
+  ([`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §18), a surfaced toil
+  state that needs a decision, a wake the human asked for — these are **messages to the human**,
+  honoring the same discipline as every other flow: recorded first, inspectable, idempotent (a
+  re-surfaced request does not duplicate), and presented through the human shell's surface
+  ([`07-human-shell.md`](07-human-shell.md)). _Why:_ the flows this seam realizes terminate at the
+  human more often than anywhere else — the merge, the authority grant, the conflict only a human
+  can call — and a request that lives only in one session's transcript is invisible at exactly the
+  moment it needs attention (the human's place:
+  [`../01-concepts/01-scopes-and-personas.md`](../01-concepts/01-scopes-and-personas.md)).
 - Let a scope **wait on a condition** or **detach and be woken** when it is met — addressed by
   identity so it survives pause/resume. "Another scope finishing" comes in **two distinct flavors**,
   and a wake names which it means: a **milestone wake** fires when a **matching report** arrives
@@ -78,6 +88,10 @@ would leak live, unrecoverable state.
 - **Routing through the originating scope's status persona** when the sender does not know the
   target (the _capability_; the resolution-to-a-session concept it leans on lives in
   [`../01-concepts/01-scopes-and-personas.md`](../01-concepts/01-scopes-and-personas.md)).
+- **The human as an addressable message target** — requests to the human are recorded-first and
+  inspectable like every other flow (the human's place in the model is
+  [`../01-concepts/01-scopes-and-personas.md`](../01-concepts/01-scopes-and-personas.md); the
+  presentation surface is [`07-human-shell.md`](07-human-shell.md)).
 - **Observability of the message flow** — that the whole of dispatch/report/wake is inspectable by
   human and agent at any time (built on recorded-first; the principle is
   [`../00-foundation/01-principles.md`](../00-foundation/01-principles.md)).
