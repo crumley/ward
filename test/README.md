@@ -3,7 +3,9 @@
 The **tests** leg. Holds the code in [`../src/`](../src/) to both the realization in
 [`../design/`](../design/) and the constraints in [`../intent/`](../intent/).
 
-> **Status:** placeholder until the first implementation pass.
+> **Status:** design tests only so far — [`cli/version.test.ts`](cli/version.test.ts) holds the CLI
+> foundation to [`design/0001-dev-foundation/`](../design/0001-dev-foundation/README.md). Intent
+> tests arrive with the first Ward behavior.
 
 Two kinds of test are expected, and the distinction matters because of the four-leg model:
 

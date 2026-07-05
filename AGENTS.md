@@ -66,5 +66,5 @@ The repo stands on four parallel trees; **`intent` governs the other three** (se
 - Never name a tool in an `intent/` concept where a constraint would do; never strand a durable
   constraint down in `design/` where it would be lost when the tool is swapped.
 - **How we build here** — opinionated formatting/linting on every artifact, fast test feedback, and
-  high assertion density — is in [`CONTRIBUTING.md`](CONTRIBUTING.md). Run `make format` as you
-  write and `make check` before you push.
+  high assertion density — is in [`CONTRIBUTING.md`](CONTRIBUTING.md). Run `mise run fmt` as you
+  write and `mise run check` before you push.

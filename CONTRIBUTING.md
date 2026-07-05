@@ -11,15 +11,21 @@ The more fast, automated checks tell a contributor (human or agent) that an arti
 form, the faster artifacts _reach_ the right form and stay aligned, consistent, and high-quality
 over time. So Ward is **deliberately opinionated** and pushes every check into tooling:
 
-- **Markdown** is formatted by **dprint** and link-checked by **lychee** ([`Makefile`](Makefile),
-  [`dprint.json`](dprint.json), [`lychee.toml`](lychee.toml)). Run `make format` as you write and
-  `make check` before you push (the CI gate).
-- **Code** must be held to the same bar. Languages that do not enforce formatting out of the box
-  (e.g. TypeScript — unlike Go's `gofmt`) get an **opinionated formatter and a strong linter** wired
-  into `make format` / `make check` and CI. **This is a deliberate gap today:** only markdown is
-  covered, because no code exists yet. The **first build exercise that introduces code must wire its
-  formatter + linter into the Makefile and CI as part of its design foundation** — before writing
-  significant code.
+- **Markdown** is formatted by **dprint** and link-checked by **lychee**
+  ([`dprint.json`](dprint.json), [`lychee.toml`](lychee.toml)).
+- **Code** is held to the same bar: TypeScript is formatted **and** linted by **Biome**
+  ([`biome.json`](biome.json)) and strictly typed (`tsc`, [`tsconfig.json`](tsconfig.json)). This
+  closes the gap this file used to record ("only markdown is covered, because no code exists yet") —
+  wired in by [`design/0001-dev-foundation/`](design/0001-dev-foundation/README.md), before
+  significant code, exactly as mandated.
+- **One command each way** ([`mise.toml`](mise.toml)): run `mise run fmt` as you write (fixes code
+  and markdown in place) and `mise run check` before you push — the no-writes gate covering code
+  **and** markdown (Biome + dprint + `tsc` + `bun test` + lychee). CI runs the **same**
+  `mise run check`, nothing else.
+- **The toolchain is pinned.** `mise.toml` pins the tools (bun, dprint, lychee); `bun.lock` pins the
+  JS dependencies (Biome, TypeScript among them). `mise install` provisions everything, identically
+  on a laptop and in CI. Optional sugar: with **direnv**, [`.envrc`](.envrc) puts the pinned
+  toolchain on PATH the moment you enter the directory (`direnv allow` once).
 
 **Why so strict:** an automated check is feedback an agent gets in seconds, on every iteration; a
 convention enforced only by review is feedback it gets late, inconsistently, or never. Strong

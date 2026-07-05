@@ -1,9 +1,10 @@
 # lychee — broken-link checker for Ward docs.
 #
-# Every link in this repo is an internal relative path today, so we run in
+# Links that matter in this repo are internal relative paths, so we run in
 # offline mode: lychee verifies that each linked file exists on disk and makes
-# no network requests (fast, deterministic, CI-safe). If external URLs are
-# added later, drop `offline` for a scheduled run — see the Makefile.
+# no network requests (fast, deterministic, CI-safe). External URLs (e.g. in
+# ADRs) are skipped by design; drop `offline` for a scheduled run if that ever
+# matters — see mise.toml (`mise run links`).
 
 # Only check the local filesystem; never hit the network.
 offline = true
@@ -11,5 +12,5 @@ offline = true
 # Validate `#heading` anchor fragments against the target document's headings.
 include_fragments = "anchor-only"
 
-# Don't descend into VCS internals.
-exclude_path = ['\.git/']
+# Don't descend into VCS internals or installed dependencies.
+exclude_path = ['\.git/', 'node_modules/']
