@@ -41,6 +41,15 @@ none running; resume is what turns open-but-not-running back into running. **Why
 recovery reasons about what is _open_ from the record, not about what happens to be _running_ in
 some terminal — so the lights going out never loses a thread.
 
+It follows that only **open** and **closed** are ever **stored** on the session record. _Running_ is
+a **derived live overlay** — a fact about a process attached right now, read from the live layer —
+the same shape as `in-review` on a task (`00-domain-model.md`, a derived overlay, not a stored
+state). **Why running is never stored:** a persisted "running" is stale the instant the machine
+reboots — the record would claim _running_ while no process exists, violating
+recorded-state-is-truth (`../00-foundation/01-principles.md` §16) — and recovery filters on **open
+and not closed**, never on "running," so a stored running would be a field nothing could trust and
+nothing needs.
+
 ## The lifecycle operations
 
 ### Open
@@ -58,14 +67,17 @@ is precisely what prevents Ward from waking finished work and wasting tokens on 
 ### Resume
 
 Return to a thread that is open but not closed, and continue it. Resume reads the recorded harness
-handle and re-attaches to the underlying run where it left off. Resume turns _open_ into _running_.
+handle and re-attaches to the underlying run where it left off. Resume turns _open_ into _running_
+by **(re-)establishing the live attachment** — it does not change the durable record's state, which
+stays _open_ until close (running is derived, never stored; _Open vs. running_, above).
 
 ### Wake / nudge
 
 Bring attention back to a scope when a condition is met — e.g. a resident asks to be woken when its
-room finishes, instead of sitting blocked. **Why:** it realizes the asynchronous,
-delegate-and-return pattern (`01-scopes-and-personas.md`) without senior scopes wasting context on
-busy-waiting (mechanism: `../02-subsystems/02-messaging-coordination.md`).
+room **reports done** (a _milestone_ wake) or when it **completes** (a _completion_ wake; the two
+flavors are the messaging seam's contract, `../02-subsystems/02-messaging-coordination.md`) —
+instead of sitting blocked. **Why:** it realizes the asynchronous, delegate-and-return pattern
+(`01-scopes-and-personas.md`) without senior scopes wasting context on busy-waiting.
 
 ## Guarantees
 
@@ -77,7 +89,8 @@ clean it looked.
   resuming it again is harmless.
 - **Closed stays closed.** No reboot or sweep ever revives a closed session.
 - **Open ≠ running.** A session can be open without a process attached; resume is what
-  (re-)attaches. The record, not the process, is authoritative.
+  (re-)attaches. Stored state is `open` or `closed` only — _running_ is derived from the live
+  attachment, never persisted. The record, not the process, is authoritative.
 - **The record is kept current.** When a session's state changes — opened, closed, resumed — the
   record updates promptly, so recovery reflects reality and not a stale snapshot.
 
@@ -86,9 +99,9 @@ clean it looked.
 Each scope keeps a **session log**: an append-only record of the sessions that have run at that
 scope, with enough metadata per entry to support recovery, resumption, and reflection. At minimum an
 entry captures: the identity, the persona (name + role), the working directory, the **harness
-handle**, the model, when it opened/closed, and its current state. Sub-scopes nest within their
-parents, so reading a scope's record also reveals the threads beneath it. (Store is a _how_ —
-`../02-subsystems/00-metadata-store.md`.)
+handle**, the model, when it opened/closed, and its current stored state (`open` or `closed`).
+Sub-scopes nest within their parents, so reading a scope's record also reveals the threads beneath
+it. (Store is a _how_ — `../02-subsystems/00-metadata-store.md`.)
 
 ## Dispatch and waiting, as session operations
 
@@ -128,7 +141,8 @@ flight — their sessions, their waits, and their setup — and nothing else.
 
 ## Canonical home for
 
-- **The session lifecycle** — open / close / resume / wake — and the **open ≠ running** distinction.
+- **The session lifecycle** — open / close / resume / wake — and the **open ≠ running** distinction
+  (stored state is `open | closed`; _running_ is a derived live overlay, never persisted).
 - **The lifecycle guarantees** — resume is idempotent, closed stays closed, the record (not the
   process) is authoritative, and the record is kept current.
 - **The per-scope session log** (append-only; "enough metadata" to recover).
