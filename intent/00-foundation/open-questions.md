@@ -42,7 +42,8 @@ relevant slice (and reflected in tests and code).
   for gated actions; hook validation; refresh/rebase cadence; policy-encoding home (_task states now
   settled_).
 - [`01-concepts/04-reflection-and-evolution.md`](../01-concepts/04-reflection-and-evolution.md) —
-  reflection-type taxonomy; cadence/boundary triggers; cross-chunk learnings; migration safety.
+  reflection-type taxonomy; cadence/boundary triggers (_recovery completion now settled as an event
+  trigger_); cross-chunk learnings; migration safety.
 - [`01-concepts/05-context-loading.md`](../01-concepts/05-context-loading.md) — the
   append-vs-rewrite line (cross-cutting, above).
 - [`02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md) — artifact taxonomy;

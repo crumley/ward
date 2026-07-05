@@ -99,9 +99,21 @@ clean it looked.
 Each scope keeps a **session log**: an append-only record of the sessions that have run at that
 scope, with enough metadata per entry to support recovery, resumption, and reflection. At minimum an
 entry captures: the identity, the persona (name + role), the working directory, the **harness
-handle**, the model, when it opened/closed, and its current stored state (`open` or `closed`).
+handle**, the model, when it opened/closed, its current stored state (`open` or `closed`), and its
+**purpose** — a link to the brief or dispatch that opened it, or a one-line goal when neither
+exists. **Why purpose is part of the minimum:** "what was this thread trying to do" must be
+answerable from the record alone — the harness history says it at length, but the record must not
+depend on a transcript that may no longer resolve (`../02-subsystems/03-agent-harness.md`).
 Sub-scopes nest within their parents, so reading a scope's record also reveals the threads beneath
 it. (Store is a _how_ — `../02-subsystems/00-metadata-store.md`.)
+
+The log records **lifecycle events, not just sessions**: per session, append-only entries for
+opened, resumed, **resume-failed (with its cause)**, and closed. Events are not states — the stored
+state stays `open | closed` — but they make failure a **recorded fact**: without a resume-failed
+event, a session whose re-attach keeps failing is indistinguishable from one that is open and
+healthy, and neither recovery rounds nor reflection can tell the two apart. **Why append-only
+events:** appends don't collide (`../00-foundation/01-principles.md` §17), and the trail of attempts
+is exactly what a later reflection reads to see where recovery struggled.
 
 ## Dispatch and waiting, as session operations
 
@@ -143,8 +155,21 @@ After a cold start, Ward reconstructs the working state from the record. Recover
    detail to recover — the same context discipline that governs normal operation governs recovery.
    **Why judgment at all:** the returning human may not know what state anything is in; rounds mean
    they do not have to — the workspace takes stock of itself and presents a coherent picture instead
-   of merely rewiring sessions and hoping. (How a nudge is issued and a condition evaluated is a
-   _how_ — `../02-subsystems/02-messaging-coordination.md`, `design/`.)
+   of merely rewiring sessions and hoping. Rounds run as **ordinary sessions** — recorded in the
+   session log, harness handles and all — and their conclusions are **reports**, recorded like any
+   other message. **Why:** the judgment that put the workspace back together must be as reflectable
+   as the work itself. (How a nudge is issued and a condition evaluated is a _how_ —
+   `../02-subsystems/02-messaging-coordination.md`, `design/`.)
+
+Recovery is itself a **recorded episode**, not an invisible pass. Every recovery writes its own
+durable record as it runs: when it started, what it enumerated, the outcome per thread —
+re-attached, **failed with its cause** (a stale handle, a missing worktree, a harness error), or
+skipped as closed — the wakes re-armed and fired, and the conclusions the rounds reported. **Why:**
+recorded-state-is-truth (`../00-foundation/01-principles.md` §16) applies to Ward's own actions too
+— a recovery that struggles and leaves no trace can neither be debugged by the human nor improved by
+reflection, and a struggling recovery is concentrated evidence of exactly the frictions reflection
+exists to find (`04-reflection-and-evolution.md`, which treats a completed recovery as a trigger).
+(The record's form is a _how_ — `../02-subsystems/00-metadata-store.md`.)
 
 Because session ids are **unique among open sessions workspace-wide** (`00-domain-model.md`,
 Identity), recovery addresses each session by its **bare id** — no scope qualifier is needed to tell
@@ -161,12 +186,16 @@ remember it.
   (stored state is `open | closed`; _running_ is a derived live overlay, never persisted).
 - **The lifecycle guarantees** — resume is idempotent, closed stays closed, the record (not the
   process) is authoritative, and the record is kept current.
-- **The per-scope session log** (append-only; "enough metadata" to recover).
+- **The per-scope session log** (append-only; "enough metadata" to recover, including each session's
+  **purpose**; **lifecycle events** — opened / resumed / resume-failed with cause / closed — so
+  failure is a recorded fact, never a silent retry).
 - **Recovery** — the cold-start orchestration that restores the in-flight threads (re-validating
-  setup for **live** worktrees only; addressing sessions by their workspace-unique bare id).
+  setup for **live** worktrees only; addressing sessions by their workspace-unique bare id) — itself
+  a **recorded episode** (per-thread outcomes, wakes re-armed/fired, the rounds' conclusions).
 - **Recovery rounds** — the judgment pass that ends recovery: the status personas, top-down
   (supervisor → charge nurses), each taking stock of its own span and driving it back into good
-  order. Mechanical re-arm restores what the record can decide; rounds decide the rest.
+  order. Mechanical re-arm restores what the record can decide; rounds decide the rest. Rounds run
+  as ordinary, recorded sessions.
 
 The **harness handle** is defined here as a recorded _attribute_; the contract a harness must
 satisfy to expose and resolve it lives in

@@ -151,8 +151,12 @@ still notified when `1A1` finishes, and **re-validates** the setup hooks of **li
 (no-ops if satisfied; a torn-down worktree of closed work is skipped). Recovery then ends with
 **rounds**: the house supervisor takes stock and nudges the charge nurse, who confirms `1A1` and its
 waiting resident are genuinely back in good order — judgment on top of the mechanical re-arm
-(`01-concepts/02-sessions-and-lifecycle.md`). The human returns to exactly the threads in flight —
-`1A1` and its waiting resident — told where they stand, and nothing that was already closed.
+(`01-concepts/02-sessions-and-lifecycle.md`). The recovery itself is **recorded** — per-thread
+outcomes, the re-armed wake, the rounds' conclusions — and queues a **recovery reflection** over
+that episode (`01-concepts/04-reflection-and-evolution.md`), so even a recovery that struggled
+leaves reflection everything it needs to find the friction. The human returns to exactly the threads
+in flight — `1A1` and its waiting resident — told where they stand, and nothing that was already
+closed.
 
 ---
 

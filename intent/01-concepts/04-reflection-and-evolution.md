@@ -18,6 +18,14 @@ operate over different **scopes and intervals**, and Ward pursues several kinds:
   arc_. When a **project finishes**, reflect at the project level: what went well, what didn't, what
   to improve, what to create, what to debate, what to introduce, what to do differently next time.
   Likewise when a **task closes**, reflect on that task.
+- **Recovery reflection** — when a cold-start recovery completes, reflect over the **recovery
+  episode**: its recorded per-thread outcomes and the rounds' conclusions
+  (`02-sessions-and-lifecycle.md`), plus the harness histories of the threads involved. A recovery
+  that struggled — failed re-attaches, unresolvable handles, wakes that misfired — is concentrated
+  evidence of recording gaps and brittle mechanisms; a clean one confirms the record was sufficient.
+  **Why an event trigger:** the moment recovery ends is when the evidence is freshest and the
+  human's pain most recent; waiting for a cadence pass would dilute exactly the focused, actionable
+  signal reflection is scoped to catch.
 
 > **Why scope the reflection?** This is the prime directive applied to reflection itself. A
 > reflection that ranges over **all scopes at all times** yields **generalized**, weakly actionable
@@ -116,8 +124,8 @@ healthy over long timescales.
 
 ## Canonical home for
 
-- **Reflection as a family of goal-directed routines** — cadence vs. scope-boundary — and _why_ it
-  is scoped rather than "look at everything."
+- **Reflection as a family of goal-directed routines** — cadence, scope-boundary, and recovery — and
+  _why_ it is scoped rather than "look at everything."
 - **The map-reduce shape** (chunk → distill → roll up) and the **reflection cursor** that keeps it
   incremental.
 - **That reflection is asynchronous and produces proposals**, not silent edits.
@@ -131,7 +139,8 @@ The build of each (default goals, chunk heuristics, cursor form) is planned in
 
 - **Reflection-type taxonomy.** Which goal-directed reflections ship by default, and how a new type
   is added.
-- **Cadence/boundary triggers** — time-based, event-based, human-initiated, or a mix.
+- **Cadence/boundary triggers** — time-based, event-based, human-initiated, or a mix (_recovery
+  completion is now settled as an event trigger, above_).
 - **Cross-chunk learnings.** How insights that emerge only in aggregate survive the roll-up.
 - **Migration safety.** Whether migration is always idempotent, re-runnable, and reversible via the
   workspace's own version history.
