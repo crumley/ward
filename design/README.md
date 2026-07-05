@@ -52,6 +52,13 @@ Every entry's `README.md` (see the [template](0000-template/README.md)) carries 
    Spec-feedback section and proceeds on a stated assumption — the spec change is left for human
    review. (One exception: appending to a slice's own _Open questions_, or noting the build
    _resolved_ one, is allowed and logged.)
+4. **Plural techniques converge through use.** When an entry realizes a mechanism the intent left
+   open (principle §19), it may build **more than one technique behind the same contract** — a
+   universal baseline plus environment-specific alternates (e.g. polling plus a harness's native
+   hooks). The entry names the candidates and the baseline, states how they will be compared in real
+   use, and records the convergence — one technique kept, or an explicit technique→situation rule —
+   with its _why_, in this entry or the one that supersedes it. An abandoned technique is
+   superseded, not erased.
 
 **Why a ledger, not a mirror:** intent is organized for _understanding_ and always states the
 current tip; design is organized for _building over time_. Keeping every entry — its scope, journal,

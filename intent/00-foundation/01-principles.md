@@ -160,9 +160,26 @@ irreversible, outward-facing mistakes the system exists to prevent (the never-me
 local↔remote boundary or destroying work is "ask," not "assume." The rule of thumb: **local +
 reversible = autonomous; outward or irreversible = gated.**
 
+## 19. An open mechanism is room to try several techniques
+
+When a slice deliberately leaves a mechanism to implementation (its _Left to implementation_ note),
+the openness is strategy, not indecision: the **contract is the fixed thing; the technique is free**
+— including free to be **plural**. The build may realize one contract with several techniques side
+by side (e.g. detecting a wake condition by polling _and_ by a harness's native hooks where a
+harness offers them), run them in real use, and let evidence decide: converge on one, keep several
+with an explicit rule for which situation gets which, or keep a **universal baseline** with
+environment-specific techniques as optimizations — the pattern the fork modes already follow
+(distilled-brief universal, exact-clone where the harness supports it,
+`../02-subsystems/03-agent-harness.md`). **Why:** harnesses and environments differ and change fast
+(§5), so choosing a technique on paper is weak evidence — running candidates against reality is the
+cheapest honest comparison — and a contract that has held two live techniques at once is a seam
+proven to be a seam (§7). What this does **not** license is skipping the record: which techniques
+were tried, what was observed, and why one won (or several stayed) is design history
+([`../../design/`](../../design/)).
+
 ## Canonical home for
 
-- **The cross-cutting invariants §1–§18.** Every concept and seam honors these; a slice cites a
+- **The cross-cutting invariants §1–§19.** Every concept and seam honors these; a slice cites a
   principle by number (e.g. "§17, no lost updates") rather than restating it. The _why_ on each is
   what lets a reader apply it to a case it does not literally name.
 

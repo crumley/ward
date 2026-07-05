@@ -55,7 +55,11 @@ would leak live, unrecoverable state.
 - **Wake conditions are re-armed during recovery.** After a cold start, a still-unmet condition is
   re-armed and one satisfied while the machine was down fires once. _Why this is the crux:_ the
   whole system exists for the reboot-with-threads-in-flight scenario; a wake that lived only in a
-  running process would silently vanish.
+  running process would silently vanish. Re-arm is the **mechanical layer** of recovery; what the
+  record alone cannot decide — whether a condition was effectively met while the machine was down,
+  whether a wake is now moot — falls to the **recovery rounds**, the status personas' top-down pass
+  (canonical:
+  [`../01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md)).
 
 ## What this is NOT
 
@@ -81,18 +85,19 @@ would leak live, unrecoverable state.
 ## Left to implementation
 
 - The message/dispatch record format and where it sits relative to the session log; how a wake
-  **condition** is expressed and evaluated; the split of responsibility between multiplexer and
-  store for running vs. not-running; the concrete **re-arm-on-recovery** mechanism; **how a status
-  persona resolves an intent-addressed message to a target** (CLI resolving identity→session handle,
-  or an agent dispatch); and the **inspection surface** — how the recorded flow is exposed to a
-  human and an agent (a CLI view, a log). Planned in [`design/`](../../design/).
+  **condition** is expressed and evaluated — the detection technique may be **plural** (e.g. polling
+  alongside a harness's native hooks where a harness offers them), converging through use
+  ([`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §19); the split of
+  responsibility between multiplexer and store for running vs. not-running; the concrete
+  **re-arm-on-recovery** mechanism and how the recovery rounds' **nudges** are issued; **how a
+  status persona resolves an intent-addressed message to a target** (CLI resolving identity→session
+  handle, or an agent dispatch); and the **inspection surface** — how the recorded flow is exposed
+  to a human and an agent (a CLI view, a log). Planned in [`design/`](../../design/).
 
 ## Open questions
 
 - **Multiplexer-vs-store split** — drawn provisionally; revisit with real usage (with
   [`01-session-multiplexer.md`](01-session-multiplexer.md)).
-- **Wake across a reboot** — the exact re-arm path (with
-  [`../01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md)).
 - **Routing-path mechanics.** _Settled:_ **both** paths hold — **direct** identity-addressing when
   the sender knows the target, and **routing through the originating scope's status persona**
   (charge nurse / supervisor) when it does not (a constraint, above). _Open:_ the **mechanism** —

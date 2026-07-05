@@ -49,7 +49,7 @@ read when needed.
 1. [`00-foundation/00-vision.md`](00-foundation/00-vision.md) — why Ward exists; the prime directive
    (context management) and the hospital metaphor.
 2. [`00-foundation/01-principles.md`](00-foundation/01-principles.md) — the cross-cutting invariants
-   §1–§18 every slice honors.
+   §1–§19 every slice honors.
 3. [`01-concepts/`](01-concepts/) — the domain, `00`→`05`: domain model, scopes & personas, sessions
    & lifecycle, work lifecycle, reflection & evolution, context loading.
 4. [`02-subsystems/`](02-subsystems/) — the seams, `00`→`07`, each a contract: metadata store,
