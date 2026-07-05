@@ -117,10 +117,11 @@ should do, briefs it, and evaluates whether the output meets the bar. If not, te
 change it — and stays at its scope while the room revises. When the task is done to the resident's
 satisfaction, presents it to the attending for final approval.
 
-### Room and medical students — worktree scope, learners
+### Room and medical students — anchor scope, learners
 
-A **room** is scoped to a worktree and is where **deep work happens**. Within it, hands-on agents
-(medical students) do the detailed work under the resident's direction, in the worktree's own
+A **room** is scoped to its anchor — most commonly a worktree; a workdir for deep work that changes
+no repository (`00-domain-model.md`) — and is where **deep work happens**. Within it, hands-on
+agents (medical students) do the detailed work under the resident's direction, in the anchor's own
 working directory with its own specialized context. **Why guarded:** the room is the scope most
 protected for focused context; the resident guides it from outside so the room can spend its whole
 context on the work.

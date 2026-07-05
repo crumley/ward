@@ -30,17 +30,17 @@ relevant slice (and reflected in tests and code).
 ## Index of per-slice open questions
 
 - [`01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md) — when each level exists;
-  artifact taxonomy; provenance depth; cross-task mutation; identity edges (task codes; floor-number
-  uniqueness; whether a closed _floor_ number is reused — _session ids and room codes now settled_);
-  the **dispatch-routing mechanism** (both paths now settled; the resolution mechanism is owned by
-  the messaging seam).
+  anchor vocabulary ("anchor"/"workdir" are working names); artifact taxonomy; provenance depth;
+  cross-task mutation; identity edges (task codes; floor-number uniqueness; whether a closed _floor_
+  number is reused — _session ids and room codes now settled_); the **dispatch-routing mechanism**
+  (both paths now settled; the resolution mechanism is owned by the messaging seam).
 - [`01-concepts/01-scopes-and-personas.md`](../01-concepts/01-scopes-and-personas.md) —
   persona↔scope cardinality; which fork mode ships first.
 - [`01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md) —
   "enough metadata" to resume (_wake across a reboot now settled_).
 - [`01-concepts/03-work-lifecycle.md`](../01-concepts/03-work-lifecycle.md) — delegated authority
-  for gated actions; hook validation; refresh/rebase cadence; policy-encoding home (_task states now
-  settled_).
+  for gated actions; hook validation; refresh/rebase cadence; workdir hooks (own set or a degenerate
+  case of the worktree hooks); policy-encoding home (_task states now settled_).
 - [`01-concepts/04-reflection-and-evolution.md`](../01-concepts/04-reflection-and-evolution.md) —
   reflection-type taxonomy; cadence/boundary triggers (_recovery completion now settled as an event
   trigger_); cross-chunk learnings; migration safety.
@@ -87,3 +87,11 @@ relevant slice (and reflected in tests and code).
   recovery rounds**, top-down (supervisor → charge nurses), each taking stock of only its own span.
   Only the nudge/evaluation mechanics remain, left to `design/`
   ([`../01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md)).
+- **Rooms occupy anchors; deep work needs no repository.** The level between task and room is the
+  **anchor** — a task-owned scratch medium from which durable output is cut into a governed record:
+  a **worktree** (code → commits/PRs; disposition `deliverable | sandbox`, fixed at creation — a
+  sandbox never opens a PR and is exempt from the delivery toil) or a **workdir** (non-code deep
+  work → artifacts with provenance). A room occupies **exactly one** anchor; an anchor has **at most
+  one occupant** at a time (a room, or an elided session acting directly); an **occupied anchor is
+  written only through its occupant** — reads stay free, and the maintenance toil yields to
+  occupancy ([`../01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md)).
