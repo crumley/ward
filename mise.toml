@@ -1,0 +1,61 @@
+# Ward toolchain + tasks (mise). One file pins the tool versions AND defines the
+# tasks, so local dev and CI provision the same versions and run the same commands.
+#
+#   mise install     # provision the pinned toolchain (bun, dprint, lychee)
+#   mise run fmt     # format/fix everything in place as you write
+#   mise run check   # the full no-writes gate — exactly what CI runs
+#
+# JS dependencies (optique, picocolors) and JS dev tools (Biome, TypeScript) are
+# pinned in package.json + bun.lock and installed by the `deps` task; every task
+# that needs them depends on it, so `mise run check` is self-provisioning.
+
+[tools]
+bun = "1.3.14"
+dprint = "0.54.0"
+lychee = "0.24.2"
+
+[tasks.deps]
+description = "Install JS dependencies exactly as locked (bun.lock)"
+run = "bun install --frozen-lockfile"
+
+[tasks.ward]
+description = "Run the ward CLI (pass args after --, e.g. `mise run ward -- --version`)"
+depends = ["deps"]
+run = "bun src/cli/index.ts"
+
+[tasks.link]
+description = "Register `ward` on PATH (bun link); undo with `mise run unlink`"
+depends = ["deps"]
+run = "bun link"
+
+[tasks.unlink]
+description = "Remove the global `ward` registration"
+run = "bun unlink"
+
+[tasks.fmt]
+description = "Format + fix in place: code (Biome) and Markdown (dprint)"
+depends = ["deps"]
+run = ["bun x biome check --write .", "dprint fmt"]
+
+[tasks.lint]
+description = "Code format + lint (Biome) and Markdown format (dprint), no writes"
+depends = ["deps"]
+run = ["bun x biome ci .", "dprint check"]
+
+[tasks.typecheck]
+description = "TypeScript strict type check (tsc --noEmit)"
+depends = ["deps"]
+run = "bun x tsc --noEmit"
+
+[tasks.test]
+description = "Run the test suite (bun test)"
+depends = ["deps"]
+run = "bun test"
+
+[tasks.links]
+description = "Check Markdown links offline (lychee)"
+run = "lychee ."
+
+[tasks.check]
+description = "The full gate, no writes: lint + typecheck + test + links (CI runs exactly this)"
+depends = ["lint", "typecheck", "test", "links"]
