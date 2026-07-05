@@ -51,7 +51,11 @@ Whatever its goal, a reflection proposes improvements to how the workspace works
 - **Ward itself** — surface improvements that belong upstream in the Ward CLI.
 
 Reflection is **asynchronous and non-blocking**: it runs on its cadence or at a boundary and
-produces proposals without interrupting active work.
+produces proposals without interrupting active work. **Adopting** a proposal is a deliberate act
+with a second meaning: it is the sanctioned moment the stable context prefix may be rewritten — the
+**adoption boundary** of [`05-context-loading.md`](05-context-loading.md) — so improvement lands as
+a batched, priced cache re-prime rather than continuous churn
+([`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §12).
 
 ## Reflection must scale by chunking and rolling up
 

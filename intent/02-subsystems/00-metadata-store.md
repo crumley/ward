@@ -29,6 +29,21 @@ that survives reboots ([`../00-foundation/01-principles.md`](../00-foundation/01
   _append over rewrite_ → _one owner per mutable record_ (others read or request a change) →
   _serialize the few unavoidable shared writes_ (atomic, loss-free). _Why structural first, locks
   last:_ each layer removes a class of contention so the next has less to do.
+- **Readers never observe a partial document.** Any observer — human, agent, git — sees a record
+  whole: as it was before a write or as it is after, never mid-write. _Why:_ deterministic reads
+  (§6, §8) must hold at concurrent moments too; a torn read is a wrong answer with no error
+  attached.
+- **Serialization must not depend on a resident process.** The store accepts safe writes from a cold
+  start, when nothing else is running. _Why:_ recovery writes before anything else is alive (§3,
+  §16); a store that needs a broker cannot record the recovery that would restart the broker.
+- **Contention is legible and fails safe.** If a record is held for writing, an inspecting human or
+  agent can see that — and by whom — in the workspace itself; a crashed writer never wedges a record
+  permanently, and taking over from one is principled and safe to repeat (§6). _Why:_ two audiences
+  (§8) and transparency (§15) apply to the mechanism, not just the data — and partial failure is
+  normal, so recovering from it cannot require archaeology.
+- **The serialization primitive is sized to its real load.** The unavoidable shared writes are few
+  and brief — identity allocation, not database workloads. _Why:_ the structural discipline above
+  removes most contention first; what remains does not justify heavyweight machinery.
 - **Transparent and legible to both audiences** — the working realization is a **filesystem of
   markdown files with typed front matter**, directory nesting expressing scope containment, so a
   human or agent can read the state directly and git can version it (§15). _Why:_ a transparent
@@ -36,6 +51,15 @@ that survives reboots ([`../00-foundation/01-principles.md`](../00-foundation/01
 - **Documents have explicit types, and types have runtime-validated schemas;** provenance is stored
   as first-class front matter, not reconstructed from logs. _Why:_ types make the store
   self-describing and validatable, and schemas are what migration reasons about
+  ([`../01-concepts/04-reflection-and-evolution.md`](../01-concepts/04-reflection-and-evolution.md)).
+- **Document types come in two tiers.** **Records** are Ward-owned and closed — the session logs,
+  recovery records, reflection proposals and cursors, the version stamp — versioned with the CLI and
+  changed only through its update/migration path. **Artifact types** are an open set: seeded by Ward
+  (**brief**, **decision**, **note**), extendable by the workspace itself, each registered with a
+  runtime-validated schema — and the catalog of registered types is itself a validated document, so
+  the store stays self-describing as it grows. _Why:_ the machinery must be able to rely on its own
+  records absolutely, while the workspace's output vocabulary must be free to evolve (§13, §14) — a
+  reflection can propose a new artifact type without waiting on a CLI release
   ([`../01-concepts/04-reflection-and-evolution.md`](../01-concepts/04-reflection-and-evolution.md)).
 
 ## What this is NOT
@@ -59,14 +83,19 @@ that survives reboots ([`../00-foundation/01-principles.md`](../00-foundation/01
 
 ## Left to implementation
 
-- Exact directory paths and naming; the full **document-type catalog** and per-type front-matter
-  fields; the schema library and version; serialization details; the **concurrency primitive** for
-  serialized shared writes (advisory lock, atomic rename, or compare-and-set); the `.gitignore`
+- Exact directory paths and naming — bounded: an identity must resolve from the layout and the
+  documents themselves, without a maintained index that can drift from them (a derived index is a
+  cache over the record, never a second truth, §16). The per-type front-matter fields and the
+  **registration mechanics** for workspace-added artifact types; the schema library and version;
+  serialization details; the **concurrency primitive** for serialized shared writes — bounded by the
+  contention constraints above (no partial reads, no resident process, legible, fail-safe, sized to
+  few brief writes), and per §19 free to be plural while the evidence accumulates; the `.gitignore`
   policy (tracked vs. regenerated); provenance depth and how a cross-task artifact reference is
   recorded. Planned in the [`design/`](../../design/) record.
 
 ## Open questions
 
-- **Artifact taxonomy** — which document types are first-class and where each lives relative to
-  scope (with [`../01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md)).
-- **The concurrency primitive** for the unavoidable shared writes.
+- None currently. The artifact taxonomy is settled as the two-tier constraint (above); the
+  concurrency primitive is not an open _question_ but a bounded technique choice (§19) — the
+  contention constraints above are the contract any candidate must satisfy, and the choice itself is
+  design history ([`design/`](../../design/)).
