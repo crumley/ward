@@ -72,8 +72,9 @@ that is turned over and assigned to new work. Because opening a room only makes 
 what work it is for, **opening a room mints its first session**: the brief that conjures the room
 conjures the agent that will work in it (no "open room with nothing happening in it" state). A room
 is **occupied** while one or more sessions work in it, and becomes **free** again when its last
-session closes — at which point it can be **reassigned**, its code reused. The permanence rule lives
-on the **session**, not the room: **closed stays closed** is a _session_ guarantee
+session closes — occupancy is **derived from the room's sessions, never stored on the room** (see
+_Status_, below) — at which point it can be **reassigned**, its code reused. The permanence rule
+lives on the **session**, not the room: **closed stays closed** is a _session_ guarantee
 (`02-sessions-and-lifecycle.md`); a room is a slot that empties and refills. A worktree may host
 **sequential** rooms over its life, but **one occupied room per worktree at a time** — parallel deep
 work belongs on separate worktrees, where it cannot collide. **Why one at a time:** two rooms on one
@@ -91,13 +92,16 @@ checkouts of its repositories, distinct from the per-task worktrees branched off
 
 ## Status: recorded at the leaves, derived above
 
-Each unit of work records **its own** state — a task is _active_, _paused_, or _closed_
-(`03-work-lifecycle.md`); a room is occupied or free; a session is open/running/closed
-(`02-sessions-and-lifecycle.md`). The status of a **containing** scope is **derived** from its
-children, not stored as a separate field: a project's status is a _query_ over its tasks' states,
-the workspace's over its projects'. Only judgments that **cannot** be derived from children — a
-priority, a "waiting on an external decision" note, an attention flag — are recorded at the higher
-scope.
+Each **leaf** unit of work records **its own** state — a task is _active_, _paused_, or _closed_
+(`03-work-lifecycle.md`); a session is _open_ or _closed_ (`02-sessions-and-lifecycle.md`; _running_
+is a **derived live overlay** — a process attached right now — never a stored state). These are the
+only genuinely leaf-recorded states. The status of a **containing** scope is **derived** from its
+children, not stored as a separate field — and that includes the **room**: a room is the innermost
+_container_ and its sessions are its leaves, so **room occupancy is derived from its sessions** — a
+room is _occupied_ iff it holds at least one non-closed session, _free_ otherwise. Likewise a
+project's status is a _query_ over its tasks' states, the workspace's over its projects'. Only
+judgments that **cannot** be derived from children — a priority, a "waiting on an external decision"
+note, an attention flag — are recorded at the higher scope.
 
 **Why derive, not store.** A stored roll-up goes stale the instant a child changes, and would make
 every child transition write its parent — a lost-update hazard (`../00-foundation/01-principles.md`
@@ -305,8 +309,9 @@ The hierarchy is also a communication structure:
   can see where it landed.
 - **Report** — a scope reports status _upward_ to the scope that contains it.
 - **Wake / nudge** — a scope can ask to be notified, or be notified by another scope, when a
-  condition is met (e.g. a room finishing). A waiting scope can block on a result, or detach and ask
-  to be woken later.
+  condition is met — e.g. a room **reporting a milestone**, or a room **completing** (the two wake
+  flavors; `../02-subsystems/02-messaging-coordination.md`). A waiting scope can block on a result,
+  or detach and ask to be woken later.
 
 These are important concepts, and Ward is **opinionated about how they work** — _how_ a message is
 delivered, _how_ dispatch routes, _how_ a wait is satisfied — because they overlap heavily with the
@@ -345,7 +350,8 @@ detours is the prime directive in miniature. (Mechanics and modes in `01-scopes-
 - **The two axes of a session** — scope and working directory (assembly in
   [`05-context-loading.md`](05-context-loading.md)).
 - **Status: recorded at the leaves, derived above** — including the **derivation rule** (precedence
-  `active ▸ paused ▸ closed`, empty container is `active`, `in-review` is a derived overlay).
+  `active ▸ paused ▸ closed`, empty container is `active`, `in-review` is a derived overlay) and
+  **room occupancy derived from its sessions** (a room stores no occupancy of its own).
 - **Artifacts**, their **provenance/lineage**, the **brief** type, and cross-scope
   discoverability/ownership.
 - **Identity** — slug + short code, the floor/room convention, identity-need-not-mirror-containment.

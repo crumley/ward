@@ -30,8 +30,14 @@ would leak live, unrecoverable state.
   workspace-wide awareness of who-is-where would defeat the context discipline the whole model
   exists for.
 - Let a scope **report status upward** to its container.
-- Let a scope **wait on a condition** (e.g. another scope finishing) or **detach and be woken** when
-  it is met — addressed by identity so it survives pause/resume.
+- Let a scope **wait on a condition** or **detach and be woken** when it is met — addressed by
+  identity so it survives pause/resume. "Another scope finishing" comes in **two distinct flavors**,
+  and a wake names which it means: a **milestone wake** fires when a **matching report** arrives
+  from the target — the target may still be open (a room reporting _done_ mid evaluate-and-iterate
+  cycle) and the wake is **re-armable** for the next cycle — while a **completion wake** fires when
+  the target scope **completes** (e.g. a room freed by its last session closing). _Why two flavors:_
+  a scope can report done many times across evaluate → revise cycles before it is truly finished;
+  collapsing both into one "done" condition forces every design to guess which the waiter meant.
 - **Recorded-first.** The act of sending, and every wake condition, is **recorded in the store**,
   not held only in a live process (§16). Live multiplexer delivery is an _optimization_ for the
   running case; a not-running target is served entirely from the record. _Why:_ a held, blocked
@@ -63,6 +69,8 @@ would leak live, unrecoverable state.
 
 - The **dispatch / report / wake contract**, and its defining discipline: identity-addressed,
   recorded-first, idempotent, re-armed-on-recovery.
+- The **two wake flavors** — **milestone** (fires on a matching report from the target; re-armable)
+  vs. **completion** (fires when the target scope completes).
 - **Routing through the originating scope's status persona** when the sender does not know the
   target (the _capability_; the resolution-to-a-session concept it leans on lives in
   [`../01-concepts/01-scopes-and-personas.md`](../01-concepts/01-scopes-and-personas.md)).

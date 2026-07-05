@@ -65,13 +65,16 @@ empty (`01-concepts/00-domain-model.md`, room) — and **dispatches** the brief 
 (`01-concepts/01-scopes-and-personas.md`) — a **direct** dispatch, since the resident knows its own
 room; a sender that does _not_ know its target routes instead through the scope's status persona —
 the charge nurse, or the house supervisor across the workspace
-(`02-subsystems/02-messaging-coordination.md`). The resident then **detaches** and arms a **wake**:
-"notify me when `1A1` reports done" (`02-subsystems/02-messaging-coordination.md`) — it does not sit
-blocked.
+(`02-subsystems/02-messaging-coordination.md`). The resident then **detaches** and arms a
+**milestone wake**: "notify me when `1A1` **reports** done" — the flavor that fires on a matching
+report and re-arms for the next cycle, chosen because the resident expects to evaluate and iterate
+while the room stays open; the other flavor, a **completion wake**, would fire only when the room
+frees (`02-subsystems/02-messaging-coordination.md`). It does not sit blocked.
 
 **Records written:** a _brief artifact_ with provenance (which persona, working dir, session, why);
 the _room record_ `1A1` (occupied, on the worktree); the _dispatch record_; the _wake condition_
-against `1A1`'s identity; a _session log_ entry for the room's first session (minted by the open).
+(milestone flavor) against `1A1`'s identity; a _session log_ entry for the room's first session
+(minted by the open).
 
 ## 5. Deep work in the room
 
@@ -87,14 +90,15 @@ store).
 
 ## 6. Report up, evaluate, iterate
 
-The room reports **done** upward. This **satisfies the wake**, so the detached resident is nudged
-back (`02-subsystems/02-messaging-coordination.md`). The resident evaluates the result against the
-bar; suppose it asks for clearer error handling. It dispatches the revision back into `1A1` (still
-the same room, `01-concepts/01-scopes-and-personas.md`) and detaches again. The room revises and
-reports done; the resident is satisfied.
+The room reports **done** upward. This **satisfies the milestone wake** — it fires on the report,
+while the room is still open — so the detached resident is nudged back
+(`02-subsystems/02-messaging-coordination.md`). The resident evaluates the result against the bar;
+suppose it asks for clearer error handling. It dispatches the revision back into `1A1` (still the
+same room, `01-concepts/01-scopes-and-personas.md`) and detaches again — the milestone wake
+**re-arms** for the next report. The room revises and reports done; the resident is satisfied.
 
-**Records written:** _report_ and updated _session log_; a re-armed _wake_; on acceptance, `1A1`'s
-record moves toward closed.
+**Records written:** _report_ and updated _session log_; a re-armed _milestone wake_; on acceptance,
+`1A1`'s record moves toward closed.
 
 ## 7. Present to the attending; open the PR
 
