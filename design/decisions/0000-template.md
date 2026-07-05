@@ -4,7 +4,7 @@
 
 Copy this file to `NNNN-short-title.md` (next number in sequence) for each critical decision. The
 toolchain, each framework, and each significant library get their own ADR — rationale is a primary
-output of this build.
+output of this repo. Design entries ([`../README.md`](../README.md)) link the ADRs they rest on.
 
 ## Context
 
