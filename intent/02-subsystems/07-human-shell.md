@@ -34,6 +34,16 @@ principle (§8) and feeds the compounding loop
   is the difference between a tool people fight and one they reach for. _Asymmetry (§8):_ this is a
   **human-audience** affordance; an **agent** caller (which declares itself, below) passes explicit
   context and gets **deterministic** handling — never a blocking interactive prompt.
+- **"What needs me?" is a first-class query.** The requests addressed to the human — gated actions
+  awaiting authority (§18), toil the machinery surfaced (what is blocked, conflicted, ready —
+  [`../01-concepts/03-work-lifecycle.md`](../01-concepts/03-work-lifecycle.md)), wakes the human
+  asked for — are recorded by the messaging seam
+  ([`02-messaging-coordination.md`](02-messaging-coordination.md)); this layer's job is to present
+  them as **one glanceable, deduplicated answer**, and to make acting on each — grant, decline, jump
+  to the session — one step. _Why:_ the human's attention is the scarcest context in the system
+  ([`../01-concepts/01-scopes-and-personas.md`](../01-concepts/01-scopes-and-personas.md), the
+  human); a workspace that can restore a dozen threads but cannot say which one is waiting on its
+  human has managed everyone's context but theirs.
 - **The human is the default caller; agents identify themselves.** A human typing in their own shell
   declares nothing. An agent caller carries its context — persona, scope, working directory — via an
   **ambient signal Ward sets when it starts an agent** (an environment variable and fields
@@ -100,10 +110,11 @@ principle (§8) and feeds the compounding loop
 
 - The **human-shell contract** (thin CLI plumbing), the **noun/verb CLI shape**, **interactive
   resolution and autocomplete of missing/ambiguous arguments** (a delightful, human-audience
-  affordance), **workspace/scope-awareness from any working directory**, **file inputs for long
-  free-text arguments**, the **`doctor` self-diagnosis** capability, **opinionated global +
-  workspace-local configuration**, **verbs that read true to the operation**, the **human-default
-  caller identity** rule, and **local usage telemetry**.
+  affordance), the **"what needs me?" attention surface** (one glanceable, deduplicated answer over
+  the recorded requests to the human), **workspace/scope-awareness from any working directory**,
+  **file inputs for long free-text arguments**, the **`doctor` self-diagnosis** capability,
+  **opinionated global + workspace-local configuration**, **verbs that read true to the operation**,
+  the **human-default caller identity** rule, and **local usage telemetry**.
 
 ## Left to implementation
 

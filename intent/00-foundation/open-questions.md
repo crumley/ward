@@ -47,39 +47,16 @@ relevant slice (and reflected in tests and code).
   status persona — is settled; the resolution mechanism is open; _wake re-arm on recovery now
   settled_).
 - [`02-subsystems/03-agent-harness.md`](../02-subsystems/03-agent-harness.md) — fork mode first.
+- [`02-subsystems/05-visual-theming.md`](../02-subsystems/05-visual-theming.md) — resolving an
+  ambiguous visual reference ("the blue one" across the whole workspace, beyond the collision-free
+  visible set).
 - [`02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md) — caller-identity
-  enforcement; whether the telemetry analysis loop is a reflection type.
+  enforcement; candidate scoping and ranking for interactive resolution (pairs with the theming
+  question above); whether the telemetry analysis loop is a reflection type.
 
 ## Recently resolved (kept briefly for context)
 
 - **"Mission" is not a containment level** — if it returns, it is an _attribute of a project_.
-- **Identity need not be globally unique** — prefer memorable codes sized to real cardinality, with
-  time and context as further ambiguity-breakers; a project's code is a **floor number**, a room's
-  is **floor number + room code** (`4A12`).
-- **Workspace-wide coordinator** — a **house supervisor** persona holds workspace status; the human
-  owns workspace direction; the charge nurse is per-project.
-- **A session has one identity** — the harness's native run id is a recorded **handle**, not a
-  second identity.
-- **Dispatch routing has two paths** — **direct** identity-addressing when the sender knows the
-  target, and **routing through the originating scope's status persona** (charge nurse / supervisor)
-  when it does not, because a session knows its neighbors but not the whole workspace. Only the
-  resolution _mechanism_ remains open (owned by the messaging seam).
-- **Task states are settled** — stored `active | paused | closed`; `in-review` is **derived** from
-  the open-PR set; `blocked` and `drafted` dropped (status is an attention-router, not a tracker).
-  Container rollup: empty → active, mixed → active wins, precedence `active ▸ paused ▸ closed`.
-- **Session ids are workspace-unique among open sessions** — a **bare id** addresses a session
-  everywhere, so no operation threads a `(scope, id)` pair.
-- **A room is a reusable resource** — opening a room **mints its first session**; when its last
-  session closes the room is **freed** and its code reusable. `closed stays closed` is a _session_
-  guarantee, not a room one.
-- **Roles are a fixed vocabulary; personas evolve** — many personas may share one role; the closed
-  role set is what makes outward role-redaction **exhaustive** (§4).
-- **Wake across a reboot — recovery ends with rounds.** Survival was never open (wake conditions are
-  recorded-first); what was open — how the workspace gets back into a genuinely _good_ state — is
-  settled: after the mechanical layer (re-attach, re-arm, fire-once), the **status personas make
-  recovery rounds**, top-down (supervisor → charge nurses), each taking stock of only its own span.
-  Only the nudge/evaluation mechanics remain, left to `design/`
-  ([`../01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md)).
 - **Rooms occupy anchors; deep work needs no repository.** The level between task and room is the
   **anchor** — a task-owned scratch medium from which durable output is cut into a governed record:
   a **worktree** (code → commits/PRs; disposition `deliverable | sandbox`, fixed at creation — a
@@ -118,3 +95,28 @@ relevant slice (and reflected in tests and code).
   primitive is sized to few, brief writes — and the technique is a bounded, possibly plural, design
   choice (§19) recorded in [`design/`](../../design/)
   ([`../02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md)).
+- **Session scopes are workspace / project / task / room.** An **anchor is not a scope** — it is a
+  resource a room occupies; responsibility for what happens on it lies with its occupant
+  ([`../01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md)).
+- **Sandbox scratch is disposable by declaration.** The disposition fixed at creation is itself the
+  explicit authority to discard; §18 gates deleting unmerged **deliverable** work
+  ([`01-principles.md`](01-principles.md),
+  [`../01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md)).
+- **Abandonment closes through the same terminal state.** A close records an **outcome** —
+  `delivered | abandoned` — as an attribute, not a fourth state; completion requires the PR set
+  **resolved** (merged, or deliberately closed unmerged), and an abandoned close that destroys
+  unmerged deliverable work is gated (§18)
+  ([`../01-concepts/03-work-lifecycle.md`](../01-concepts/03-work-lifecycle.md)).
+- **The human is a first-class participant.** The most senior member, not a persona: owns direction,
+  holds gated authority, and is **addressable** — requests to the human are recorded-first like
+  every flow, and "what needs me?" is answerable from the record
+  ([`../01-concepts/01-scopes-and-personas.md`](../01-concepts/01-scopes-and-personas.md),
+  [`../02-subsystems/02-messaging-coordination.md`](../02-subsystems/02-messaging-coordination.md),
+  [`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md)).
+- **The toil fails safe on unrecorded work.** Before mutating any anchor it checks the anchor
+  itself: **uncommitted changes are treated as occupancy**, whatever the record says — covering the
+  human's editor and agents run outside Ward
+  ([`../01-concepts/03-work-lifecycle.md`](../01-concepts/03-work-lifecycle.md)).
+- **Theming is stable-by-record, not a pure function.** The accent is **recorded at creation**,
+  picked collision-free among what is visible — the record, not a hash of identity, is what survives
+  reboots ([`../02-subsystems/05-visual-theming.md`](../02-subsystems/05-visual-theming.md)).

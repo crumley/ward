@@ -34,7 +34,9 @@ earns its keep; you never create an empty container for ceremony's sake. "Earns 
   that only reads and converses needs none.
 - A **room** exists when directing and doing are separated — one agent briefing and evaluating while
   another does the hands-on work. A single agent doing both is an elided session acting directly
-  (occupancy, below).
+  (occupancy, below). Directed work that touches no repository still occupies a **workdir** — every
+  room needs somewhere to stand (Anchor, below) — so passing the room test implies passing the
+  anchor test.
 
 **Elision changes ceremony, never semantics.** The same lifecycle, status derivation, artifact
 ownership, and occupancy rules apply whether a level is present or elided — an elided session
@@ -91,7 +93,13 @@ anchors. An anchor is one of two kinds:
     **Why fixed at creation, not flippable:** a sandbox is by construction a bad PR base — a stale
     bottom, instrumentation noise throughout. Work worth delivering is **carried into a fresh
     `deliverable` worktree** off current main — a deliberate re-authoring for the destination, the
-    same shape as capturing an artifact elsewhere (below) — never a flag flip.
+    same shape as capturing an artifact elsewhere (below) — never a flag flip. **And its scratch is
+    disposable by that same declaration:** the fixed disposition is itself the explicit statement
+    that nothing in the sandbox is destined to be kept — value leaves it only by being cut into the
+    governed record (an artifact, or a fresh `deliverable` worktree). So tearing a sandbox down is a
+    local, autonomous act, not the gated deletion of unmerged work
+    (`../00-foundation/01-principles.md` §18): the authority was granted when the sandbox was
+    created.
 - **Workdir** — a task-owned working directory for **deep work that changes no repository**:
   research, analysis, data wrangling. It holds the scratch — datasets, notebooks, half-run
   experiments — and the governed record it feeds is **artifacts with provenance** in the store
@@ -229,7 +237,10 @@ work). The mapping of personas to scopes is the role model in `01-scopes-and-per
 ## Working directory: the second axis of a session
 
 A session has a **scope** (what it is responsible for) _and_ a **working directory** (where it runs
-and from which it loads context):
+and from which it loads context). A session's scope is one of **workspace / project / task / room**
+— the levels at which someone is _responsible_. An **anchor is not a scope**: it is a resource a
+room occupies (Anchor, above); responsibility for what happens on an anchor lies with the room (or
+elided session) occupying it.
 
 - Broad scopes often start at or near the **workspace root**, to load workspace-wide context and
   skills.
@@ -447,7 +458,8 @@ detours is the prime directive in miniature. (Mechanics and modes in `01-scopes-
   room or an elided session; an occupied anchor is written only through its occupant).
 - **The Agent / Persona / Session distinction**, and _multiple personas per scope_.
 - **The two axes of a session** — scope and working directory (assembly in
-  [`05-context-loading.md`](05-context-loading.md)).
+  [`05-context-loading.md`](05-context-loading.md)) — and the **scope vocabulary**: a session's
+  scope is workspace / project / task / room; an anchor is a resource, not a scope.
 - **Status: recorded at the leaves, derived above** — including the **derivation rule** (precedence
   `active ▸ paused ▸ closed`, empty container is `active`, `in-review` is a derived overlay) and
   **room occupancy derived from its sessions** (a room stores no occupancy of its own).

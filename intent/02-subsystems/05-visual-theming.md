@@ -14,15 +14,18 @@ identity.
 
 ## Constraints any design must honor
 
-- **Assign a stable, distinguishable visual identity** (working assumption: an **accent color**)
-  **deterministically** from the work's identity
-  ([`../01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md)), and **without
-  collisions** among the things a human sees at once. _Why deterministic:_ the same work should
-  always look the same across reboots and machines, so the human builds muscle memory ("the blue one
-  is `4A12`"); a random or session-order assignment would re-color on every restart. _Why
-  collision-free:_ the identity exists to **distinguish** — two concurrent rooms sharing a color is
-  the one failure that makes it useless; collisions need only be avoided among what is visible
-  together.
+- **Assign a stable, distinguishable visual identity** (working assumption: an **accent color**),
+  **recorded on the work at creation**
+  ([`../01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md)) and **without
+  collisions** among the things a human sees at once. _Why stable-by-record rather than a pure
+  function of identity:_ the durable need is that the same work always looks the same across reboots
+  and machines, so the human builds muscle memory ("the blue one is `4A12`") — a recorded assignment
+  guarantees that, while letting the assigner pick an accent **free among what is currently
+  visible**, which no collision-free pure function of identity alone can promise with a palette
+  small enough to distinguish at a glance. A random or session-order assignment would re-color on
+  every restart; the record is what prevents that. _Why collision-free:_ the identity exists to
+  **distinguish** — two concurrent rooms sharing a color is the one failure that makes it useless;
+  collisions need only be avoided among what is visible together.
 - **Mark the _kind_ of thing with a typed glyph** (working assumption: an **emoji**). Beyond the
   per-instance accent, assign a **stable icon by concept type** — a project, a task, the **grouping
   of sessions** around a task, a room/session
@@ -63,17 +66,17 @@ identity.
 ## Canonical home for
 
 - The **theming contract**: a per-work visual identity carrying a **per-instance accent**
-  (deterministic, collision-free) _and_ a **per-type glyph**, **recorded as a nameable attribute**
-  (legible to human _and_ agent, §8), applied and torn down through idempotent hooks, coordinated
-  across every surface.
+  (stable-by-record, collision-free) _and_ a **per-type glyph**, **recorded as a nameable
+  attribute** (legible to human _and_ agent, §8), applied and torn down through idempotent hooks,
+  coordinated across every surface.
 
 ## Left to implementation
 
-- The palette and the deterministic assignment function (and its collision-avoidance scope); the
-  **glyph/emoji set and which concept types get one**; which surfaces are themed and how each is
-  driven; the exact setup/teardown hook steps; how the accent **and glyph** are recorded so they
-  stay stable across resumes **and so an agent can resolve a human's "the blue one" reference**.
-  Planned in [`design/`](../../design/).
+- The palette and the assignment function (and its collision-avoidance scope); the **glyph/emoji set
+  and which concept types get one**; which surfaces are themed and how each is driven; the exact
+  setup/teardown hook steps; how the accent **and glyph** are recorded so they stay stable across
+  resumes **and so an agent can resolve a human's "the blue one" reference**. Planned in
+  [`design/`](../../design/).
 
 ## Open questions
 

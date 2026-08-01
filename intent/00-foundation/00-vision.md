@@ -88,16 +88,18 @@ The metaphor also pays off in the **everyday vocabulary**: rooms and floors map 
 identity that humans can keep in their heads (`../01-concepts/00-domain-model.md`), which is itself
 a context-management win.
 
-## A workspace that compounds — on a cadence _and_ at scope boundaries
+## A workspace that compounds
 
 A workspace should get **better the longer it is used**. As humans and agents work in it, patterns
-emerge: tools that help, skills that recur, friction that repeats. Compounding happens two ways, and
-Ward pursues both:
+emerge: tools that help, skills that recur, friction that repeats. Compounding happens several ways,
+and Ward pursues all of them:
 
 - **On a cadence** — regular reflection over the interval since the last reflection.
 - **At scope boundaries** — when a scope reaches a natural close (a project finishes, a task
   closes), reflect over _that scope's_ arc specifically: what went well, what didn't, what to
   improve, change, create, or do differently next time.
+- **On events** — when something concentrates evidence (a recovery completes), reflect over that
+  episode while it is fresh.
 
 These are different _kinds_ of reflection with different goals, and that difference is itself an
 application of the prime directive: a reflection focused on a specific scope and interest yields

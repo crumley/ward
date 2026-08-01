@@ -27,9 +27,10 @@ number, `01-concepts/00-domain-model.md`). An **attending** persona owns its out
 nurse** tracks its status (`01-concepts/01-scopes-and-personas.md`).
 
 **Records written:** a _project record_ on floor `1` (type from the document catalog,
-`02-subsystems/00-metadata-store.md`); a _session log_ entry as the human opens a project-scope
-session (`01-concepts/02-sessions-and-lifecycle.md`), capturing persona, working directory (the
-workspace root, for breadth), model, and **harness handle**.
+`02-subsystems/00-metadata-store.md`); a _session log_ entry as the human opens the attending's
+project-scope session — sessions are agent episodes the human opens and attaches to
+(`01-concepts/02-sessions-and-lifecycle.md`) — capturing persona, working directory (the workspace
+root, for breadth), model, and **harness handle**.
 
 > _Lightweight variant:_ for a one-off, the human could skip the project and open the task directly
 > under the workspace — levels are elided, not faked (`01-concepts/00-domain-model.md`).
@@ -72,9 +73,10 @@ while the room stays open; the other flavor, a **completion wake**, would fire o
 frees (`02-subsystems/02-messaging-coordination.md`). It does not sit blocked.
 
 **Records written:** a _brief artifact_ with provenance (which persona, working dir, session, why);
-the _room record_ `1A1` (occupied, on the worktree); the _dispatch record_; the _wake condition_
-(milestone flavor) against `1A1`'s identity; a _session log_ entry for the room's first session
-(minted by the open).
+the _room record_ `1A1` on the worktree — occupied by derivation from its freshly-minted session,
+never as a stored flag (`01-concepts/00-domain-model.md`, status); the _dispatch record_; the _wake
+condition_ (milestone flavor) against `1A1`'s identity; a _session log_ entry for the room's first
+session (minted by the open).
 
 ## 5. Deep work in the room
 
@@ -98,7 +100,8 @@ same room, `01-concepts/01-scopes-and-personas.md`) and detaches again — the m
 **re-arms** for the next report. The room revises and reports done; the resident is satisfied.
 
 **Records written:** _report_ and updated _session log_; a re-armed _milestone wake_; on acceptance,
-`1A1`'s record moves toward closed.
+the room's session moves toward close — which will free `1A1` for reuse
+(`01-concepts/00-domain-model.md`, room).
 
 ## 7. Present to the attending; open the PR
 
@@ -139,8 +142,10 @@ With the PR merged, the resident closes the task (`01-concepts/03-work-lifecycle
    skill, a sharper brief template) — asynchronously, without blocking. Its **reflection cursor**
    advances so the next run starts where this one stopped.
 
-**Records written:** artifact disposition decisions; the task and room records marked closed;
-teardown-satisfied markers; a _reflection output_ (proposals) and an advanced _reflection cursor_.
+**Records written:** artifact disposition decisions; the task record marked closed (outcome:
+**delivered** — `01-concepts/03-work-lifecycle.md`, task states); `1A1`'s last session closed and
+the room freed; teardown-satisfied markers; a _reflection output_ (proposals) and an advanced
+_reflection cursor_.
 
 ## 10. Reboot test — does it all come back?
 

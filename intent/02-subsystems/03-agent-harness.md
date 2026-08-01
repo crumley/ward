@@ -37,6 +37,13 @@ binding the concepts to any one of them_ (§5).
 - **Accept an externally-chosen model and thinking depth**
   ([`04-model-selection.md`](04-model-selection.md)) and pass them through; this seam does not
   decide which model runs, only honors the decision.
+- **Optionally report resource usage.** Where the harness exposes what a run consumed (tokens,
+  cost), surface it so Ward can record it on the session
+  ([`../01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md));
+  where it does not, the session simply records no usage — nothing may depend on its presence.
+  _Why:_ recorded usage is the evidence the token economy (§12) and model-selection tuning
+  ([`04-model-selection.md`](04-model-selection.md)) read; optional, like fork, because harnesses
+  differ and the baseline must not.
 
 ## What this is NOT
 
@@ -57,10 +64,10 @@ binding the concepts to any one of them_ (§5).
 ## Left to implementation
 
 - The exact adapter interface; the per-harness handle format and history location; how start/resume
-  are invoked per harness; how the optional fork is detected and exercised; the default harness and
-  the per-scope override mechanism; whether Ward defensively **snapshots or distills** a run's
-  history before a harness can discard it, and on what cadence. Planned in
-  [`design/`](../../design/).
+  are invoked per harness; how the optional fork is detected and exercised; **how usage is read per
+  harness** (and in what units); the default harness and the per-scope override mechanism; whether
+  Ward defensively **snapshots or distills** a run's history before a harness can discard it, and on
+  what cadence. Planned in [`design/`](../../design/).
 
 ## Open questions
 

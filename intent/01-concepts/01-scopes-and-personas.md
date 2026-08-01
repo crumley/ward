@@ -46,8 +46,8 @@ returns** — and, because the ward is a teaching environment, **let learning fl
 
 A session is bound on two independent axes (`00-domain-model.md`):
 
-- **Scope** — the level in the hierarchy it is responsible for (project / task / room). _What_ it is
-  responsible for.
+- **Scope** — the level in the hierarchy it is responsible for (workspace / project / task / room —
+  the vocabulary is `00-domain-model.md`'s). _What_ it is responsible for.
 - **Working directory** — where it stands and loads its context from. _Where_ it operates.
 
 The two are chosen independently when a session starts, and together they bound what an agent
@@ -72,6 +72,26 @@ human picks (or accepts) the cast when the workspace is created, and can adjust 
 evolvable, above). **Why a curated list:** a stable, memorable set of names is easier to hold in the
 head than ad-hoc or generated ones, and keeps addressing ("the resident on `4A12`") consistent
 across sessions.
+
+## The human — the most senior member, not a persona
+
+The model has a most senior member who is no agent and holds no persona: the **human** whose
+workspace this is. Their place is defined by three facts:
+
+- **They own direction.** The workspace is personal (`../00-foundation/00-vision.md`); what it is
+  all _for_ is the human's call. The house supervisor (below) holds status and routing for them —
+  never direction.
+- **They hold gated authority.** The actions that are outward-facing or hard to undo flow to the
+  human by default (`../00-foundation/01-principles.md` §18); delegating that authority is an
+  explicit act, never an assumption.
+- **They are addressable — and their attention is routed like everyone else's.** Requests for gated
+  authority, surfaced toil (what is blocked, conflicted, ready — `03-work-lifecycle.md`), and wakes
+  the human asked for are **messages to the human**: recorded first and inspectable like any other
+  flow (`../02-subsystems/02-messaging-coordination.md`), surfaced so that "what needs me?" is
+  answerable from the record at any moment (`../02-subsystems/07-human-shell.md`). **Why:** the
+  human's attention is the scarcest context in the system (§1); a gated action waiting invisibly in
+  one session's transcript is a lost update against it. The human is never expected to poll a dozen
+  sessions to discover what is waiting on them.
 
 ## The roles
 
@@ -117,14 +137,14 @@ should do, briefs it, and evaluates whether the output meets the bar. If not, te
 change it — and stays at its scope while the room revises. When the task is done to the resident's
 satisfaction, presents it to the attending for final approval.
 
-### Room and medical students — anchor scope, learners
+### Room and medical students — room scope, learners
 
-A **room** is scoped to its anchor — most commonly a worktree; a workdir for deep work that changes
-no repository (`00-domain-model.md`) — and is where **deep work happens**. Within it, hands-on
-agents (medical students) do the detailed work under the resident's direction, in the anchor's own
-working directory with its own specialized context. **Why guarded:** the room is the scope most
-protected for focused context; the resident guides it from outside so the room can spend its whole
-context on the work.
+A **room** is the innermost scope, standing on its anchor — most commonly a worktree; a workdir for
+deep work that changes no repository (`00-domain-model.md`) — and is where **deep work happens**.
+Within it, hands-on agents (medical students) do the detailed work under the resident's direction,
+in the anchor's own working directory with its own specialized context. **Why guarded:** the room is
+the scope most protected for focused context; the resident guides it from outside so the room can
+spend its whole context on the work.
 
 > The roles above are the current model. The workspace-wide coordinator (house supervisor) and the
 > charge nurse's per-project span are now settled; the remaining soft spot — whether exactly one
@@ -240,6 +260,9 @@ These are _what_ can vary per scope; the mechanism that applies them is a _how_
 
 ## Canonical home for
 
+- **The human's place in the model** — the most senior member, not a persona: owns direction, holds
+  gated authority, and is **addressable** (their attention routed and recorded; "what needs me?"
+  answerable from the record).
 - **The role model** — house supervisor, attending physician, charge nurse, resident, and
   room/medical students — what each owns and why seniors _delegate and evaluate_ rather than do.
 - **Roles vs. personas.** **Roles are a fixed, closed vocabulary** (the five ward roles); **personas

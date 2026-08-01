@@ -110,10 +110,11 @@ and money; deterministic, append-oriented context is the concrete lever
 
 ## 13. The system compounds
 
-Ward improves through use. Reflection — on a cadence and at scope boundaries — turns accumulated
-experience and the teaching loop into better skills, tooling, personas, and improvements to Ward
-itself. **Why:** a tool used daily should pay back the investment of using it; a months-old
-workspace should be visibly better tooled than a fresh one.
+Ward improves through use. Reflection — on a cadence, at scope boundaries, and on events that
+concentrate evidence (a completed recovery) — turns accumulated experience and the teaching loop
+into better skills, tooling, personas, and improvements to Ward itself. **Why:** a tool used daily
+should pay back the investment of using it; a months-old workspace should be visibly better tooled
+than a fresh one.
 
 ## 14. Ward and the workspace evolve independently
 
@@ -153,12 +154,16 @@ kind, because nothing announces it — and the workspace is the source of truth 
 Local, reversible actions — create a worktree, open a room, write an artifact, commit to a task
 branch — agents take autonomously. A small, named set of **gated actions** that are **outward-facing
 or hard to undo** — merging a PR or pushing to a main line, creating or commenting on a remote work
-item, deleting a worktree or branch with unmerged work — requires the **human**, or a scope to whom
-the human has **explicitly** delegated that specific authority. **Why:** these are exactly the
-irreversible, outward-facing mistakes the system exists to prevent (the never-merge-to-main rule,
-`../01-concepts/03-work-lifecycle.md`, is the canonical case); the default for anything crossing the
-local↔remote boundary or destroying work is "ask," not "assume." The rule of thumb: **local +
-reversible = autonomous; outward or irreversible = gated.**
+item, deleting a worktree or branch with unmerged **deliverable** work — requires the **human**, or
+a scope to whom the human has **explicitly** delegated that specific authority. **Why:** these are
+exactly the irreversible, outward-facing mistakes the system exists to prevent (the
+never-merge-to-main rule, `../01-concepts/03-work-lifecycle.md`, is the canonical case); the default
+for anything crossing the local↔remote boundary or destroying work is "ask," not "assume." The rule
+of thumb: **local + reversible = autonomous; outward or irreversible = gated.** _Deliverable_ work,
+because a `sandbox` worktree's scratch is not gated work: its disposition, fixed at creation, **is**
+the explicit declaration that nothing in it is destined to be kept
+(`../01-concepts/00-domain-model.md`, Anchor) — the authority to discard it was granted when the
+sandbox was created.
 
 ## 19. An open mechanism is room to try several techniques
 
