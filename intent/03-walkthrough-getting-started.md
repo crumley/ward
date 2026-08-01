@@ -52,10 +52,19 @@ in place everything a cold reader needs (§3), and the workspace begins tracking
 
 **Records written:** the **metadata root** and the seeded **artifact-type catalog**
 (`02-subsystems/00-metadata-store.md`); the **version stamp** naming the Ward version that created
-it (`01-concepts/04-reflection-and-evolution.md`); Ward's opinionated defaults as **workspace-owned
-artifacts** — the **workflow policy** (`01-concepts/03-work-lifecycle.md`), the **lifecycle hooks**,
-and the root **`AGENTS.md`** that makes workspace-level context loadable
-(`01-concepts/05-context-loading.md`); the workspace's first git commit (§15).
+it (`01-concepts/06-workspace-lifecycle.md`); the **guidance an agent needs to work here** — the
+root **`AGENTS.md`** (`01-concepts/05-context-loading.md`) and Ward's **workspace skill**, so an
+agent started at the root knows how to operate rather than inferring it from the directory; Ward's
+opinionated defaults as **workspace-owned artifacts** — the **workflow policy**
+(`01-concepts/03-work-lifecycle.md`), the **lifecycle hooks**, and (next step) the persona cast; and
+the workspace's first git commit (§15).
+
+> _All of that is yours to change._ Everything installed here except Ward's own reconciliation
+> machinery is a **starting point** the human and their agents are expected to edit — a sharpened
+> `AGENTS.md`, skills of their own, a policy that fits their work
+> (`01-concepts/06-workspace-lifecycle.md`, the two tiers). Ward records what it installed precisely
+> so that a later upgrade can tell a deliberate change from an untouched default and **reconcile**
+> rather than clobber.
 
 > _Run it twice._ Asked to create a workspace where one already exists, Ward **converges** — it
 > validates what is there, adds what is missing, and leaves anything diverged alone — because that
@@ -122,9 +131,11 @@ credentials-are-not-workspace-state line, repository registration with adopt-or-
 record-versus-machine reading of self-sufficiency, doctor at both scopes (machine-only outside a
 workspace, machine plus integrity inside), and the empty-container-is-active rule at the root.
 
-Two things it deliberately does **not** reach, both later in the workspace's life: **version skew**
-and **migration** (there is only one version so far — `01-concepts/06-workspace-lifecycle.md`), and
-everything that needs work to exist (`04-walkthrough-delivering-work.md`).
+Two things it deliberately does **not** reach, both later in the workspace's life: the **upgrade
+arc** — version skew, migration, and the **reconciliation task** an upgrade opens when it finds an
+artifact the human has customized, whose `delivered` close is what advances the version stamp
+(`01-concepts/06-workspace-lifecycle.md`) — since there is only one version so far; and everything
+that needs work to exist (`04-walkthrough-delivering-work.md`).
 
 One friction it surfaces rather than resolves: once `ward` is the repository under work, the CLI
 operating the workspace and the code being changed are the same software. Which build a session runs

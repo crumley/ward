@@ -40,17 +40,23 @@ human or agent — needs for the workspace to be **self-sufficient** from its fi
   ([`../02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md)), including the
   registered artifact-type catalog Ward seeds. _Why:_ every later operation writes here; nothing is
   discoverable until the record has a home.
-- **The version stamp** — which version of Ward created it
-  ([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)). _Why:_ a workspace created
-  without a stamp is one no future CLI can safely reason about (_Version skew_, below).
+- **The version stamp** — which version of Ward created it (_How a workspace evolves_, below).
+  _Why:_ a workspace created without a stamp is one no future CLI can safely reason about (_Version
+  skew_, below).
+- **The guidance an agent needs to work here** — the root `AGENTS.md`
+  ([`05-context-loading.md`](05-context-loading.md)) and a Ward-provided **skill for working in a
+  Ward workspace**: how the hierarchy is addressed, how work is started and closed, which actions
+  are gated. _Why:_ §3 asks that an agent arriving cold can understand and resume the work from what
+  is recorded — and the record alone cannot deliver that, because it states what is _true_, not how
+  to _act_ on it. An agent left to infer Ward's operating rules from the shape of the directory
+  infers them differently every time, which is determinism (§6) and the agent audience (§8) both
+  lost. Shipping the instructions alongside the record is what makes "start an agent at the root and
+  it knows how to work here" true rather than hoped for. Both are **harness-neutral** (§5).
 - **Ward's opinionated defaults, as workspace-owned artifacts** — the workflow policy
-  ([`03-work-lifecycle.md`](03-work-lifecycle.md)), the lifecycle hooks, the persona cast the human
-  picks or accepts ([`01-scopes-and-personas.md`](01-scopes-and-personas.md)), and the root
-  `AGENTS.md` that makes context loadable at the workspace level
-  ([`05-context-loading.md`](05-context-loading.md)). _Why:_ these are the "opinionated default →
-  workspace-owned artifact → reconciled on upgrade" pattern
-  ([`03-work-lifecycle.md`](03-work-lifecycle.md)) at its first step; a workspace is productive
-  immediately and free to diverge afterwards.
+  ([`03-work-lifecycle.md`](03-work-lifecycle.md)), the lifecycle hooks, and the persona cast the
+  human picks or accepts ([`01-scopes-and-personas.md`](01-scopes-and-personas.md)). _Why:_ a
+  workspace is productive immediately and free to diverge afterwards (_How a workspace evolves_,
+  below).
 - **Version control over itself** — the workspace is tracked as a git repository
   ([`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §15) from creation, with
   the ignore policy in place. _Why:_ the first thing worth rolling back is a bad migration (_Version
@@ -143,12 +149,103 @@ everything:** several drifts are ambiguous in the direction that matters — an 
 either garbage or the human's unrecorded work, and §17 makes guessing wrong a silent loss. Reporting
 is always safe; repairing is not.
 
+## How a workspace evolves: what Ward installs, and how it survives your changes
+
+Ward ships on its own timeline; a workspace is created by some version and then persists
+([`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §14). Everything Ward
+installed at creation therefore has a second life: it must move forward as Ward moves, **without
+undoing what the workspace has become**. This section owns that arc — what is installed, who owns
+it, how divergence is found, and what "upgraded" is allowed to mean.
+
+### Installed artifacts come in two tiers
+
+- **Yours** — nearly everything: the root `AGENTS.md`, the workspace's skills, the workflow policy,
+  the lifecycle hooks, the persona cast. Ward installs these as a **starting point**, and the human
+  and their agents are **expected to change them** — to edit the `AGENTS.md`, to add skills of their
+  own, to sharpen a policy that does not fit. _Why:_ the workspace is supposed to compound (§13),
+  and it compounds by being shaped to the work it actually does; an artifact the human may not touch
+  cannot absorb what the workspace learns, and reflection's proposals
+  ([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)) would have nowhere to land.
+- **Ward's** — a small, named set the CLI owns outright and replaces wholesale on update: chiefly
+  the **reconciliation machinery** itself (below). _Why the exception:_ it is the mechanism that
+  protects every customization, so it cannot itself be one — a broken edit to it would disable the
+  only thing able to repair the rest. Machinery that repairs must not depend on what it repairs.
+  _Why keep the tier small:_ each item in it is a promise of customization withdrawn, so membership
+  is earned, not assumed.
+
+This mirrors the store's split between Ward-owned **records** and the open, workspace-evolvable
+**artifact types**
+([`../02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md)) — the same
+principle applied to what Ward installs rather than what it records: the machinery relies absolutely
+on its own, and everything else is free to evolve.
+
+### Divergence must be detectable, so Ward records what it installed
+
+For every artifact it installs, Ward records **which version it installed and enough to recognize
+later whether the artifact still matches it**. **Why:** without a record of what was originally put
+there, an upgrade has only two moves — clobber the file or never touch it — and both fail the
+workspace (§14). Recognizing divergence is also not enough on its own: folding a new default into a
+customized file needs the **version the customization departed from**, so that a deliberate change
+can be told from an untouched default. (How that baseline is recorded and compared is a _how_ —
+[`design/`](../../design/).)
+
+### Update vs. migrate
+
+- **Update** — bring a workspace's installed artifacts (skills, scaffolding, generated config,
+  `AGENTS.md`) in line with the current CLI.
+- **Migrate** — transform the workspace's **structure or schema** forward when the shape itself
+  changed between versions.
+
+You can update without migrating; migration is the heavier path reserved for structural change.
+**Why distinguish them:** most upgrades are routine updates, and reserving "migration" for
+structural change keeps the risky path rare and explicit — but the distinction earns its keep most
+sharply below, where it is what stops the upgrade machinery from deadlocking on itself.
+
+### Reconciliation is a task, and completing it is what advances the version
+
+When an update finds an artifact the workspace has diverged from, Ward **neither overwrites it nor
+silently skips it**. It **opens a task** ([`03-work-lifecycle.md`](03-work-lifecycle.md)) — an
+ordinary one, recorded, addressable, pausable, resumable, owned by a resident — whose work is to
+fold the new default into the human's version, with the human deciding the calls that are theirs to
+make. The **Ward-owned reconciliation skill** is what that task runs.
+
+**The workspace's version stamp advances only when that task closes `delivered`.** An **abandoned**
+close leaves the workspace on its previous version — honestly skewed, still working, still surfaced
+(_Version skew_, below) — rather than claiming an upgrade that did not happen.
+
+**Why a task, and not a flag, a prompt, or a silent merge:** three reasons converge, which is
+usually the sign a rule is right.
+
+1. **It may not finish now.** Reconciliation needs judgment and often a conversation with the human;
+   work that spans human attention is exactly what the task lifecycle exists to hold. A modal prompt
+   at upgrade time demands the decision at the worst possible moment — mid-command, with no context
+   loaded.
+2. **It is work like any other.** As a task it is recorded, survives a reboot, appears in "what
+   needs me?" ([`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md)), and gets
+   a scope-boundary reflection when it closes
+   ([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)) — so upgrade friction
+   becomes evidence Ward can learn from instead of a papercut nobody records.
+3. **It makes "upgraded" mean something.** Tying the stamp to a completed reconciliation is what
+   keeps the version from being a claim about files nobody checked.
+
+**What the stamp therefore means.** After reconciliation the workspace's artifacts are **not** byte
+copies of Ward's defaults — and that is the intended outcome. The stamp records that this version's
+defaults have been **considered and folded in**, not that the workspace conforms to them. **Why:**
+conformance and customization cannot both be the goal, and choosing conformance would make every
+upgrade a silent rollback of the fit the workspace has accumulated — precisely what §14 exists to
+prevent. **After first install, Ward's defaults are proposals.**
+
+**And this is why update and migrate are separate paths.** Artifact reconciliation runs **as
+ordinary work in a fully functioning workspace**: the record's shape is unchanged, so nothing is
+blocked while the task is open. Structural **migration** is the path that gates writes (_Version
+skew_, below). **Why the line matters here:** if reconciliation blocked the workspace the way
+migration does, the workspace could not run the very task that unblocks it — the upgrade machinery
+would deadlock on itself.
+
 ## Version skew: what a mismatched CLI may do
 
-The **version stamp**, and **update vs. migrate** with its reconciliation path, belong to
-[`04-reflection-and-evolution.md`](04-reflection-and-evolution.md). What this slice owns is
-**behavior on mismatch** — what Ward does when the CLI in hand and the workspace in front of it are
-not the same generation:
+What this slice owns beyond the stamp and the update/migrate paths above is **behavior on mismatch**
+— what Ward does when the CLI in hand and the workspace in front of it are not the same generation:
 
 - **Newer CLI, older workspace.** Reads proceed, with the skew **surfaced**; **structural writes do
   not proceed** until the workspace is updated or migrated. _Why:_ a CLI writing records in a shape
@@ -164,9 +261,8 @@ not the same generation:
 - **Migration is gated, and rides version control.** Transforming the structure of the record is
   outward of nothing but irreversible in practice, so it takes the human's explicit authority (§18),
   and it lands as its own commit in the workspace's own history (§15) so it can be rolled back.
-  _Why:_ "the risky path is rare and explicit"
-  ([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)) means little unless the rare
-  path is also recoverable.
+  _Why:_ keeping the risky path rare and explicit (above) means little unless the rare path is also
+  recoverable.
 
 ## Putting a workspace right: three operations, one map
 
@@ -177,7 +273,7 @@ division of labor is stated here once:
 | ----------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | **Attach** (cold start) | "Which threads were in flight, and are they back?"                                | Re-establishing live work from the record ([`02-sessions-and-lifecycle.md`](02-sessions-and-lifecycle.md), Recovery). |
 | **Doctor**              | "Can this machine run this workspace, and does the record still match the world?" | Preconditions and integrity (above).                                                                                  |
-| **Update / migrate**    | "Is this workspace the generation this CLI expects?"                              | Aligning the workspace with a new Ward ([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)).          |
+| **Update / migrate**    | "Is this workspace the generation this CLI expects?"                              | Aligning the workspace with a new Ward, reconciling what diverged (above).                                            |
 
 **Why three and not one:** they run at different moments, on different evidence, with different
 risk. Attach runs after every reboot and touches live state; doctor is safe to run at any time and
@@ -200,9 +296,10 @@ here closes, so silence would read as an omission rather than a decision.
 ## Canonical home for
 
 - **Workspace creation** — that it is a deliberate, located act; **what creation establishes** (the
-  metadata root, the version stamp, Ward's defaults as workspace-owned artifacts, version control
-  over itself, the repository set); that re-running it **converges** rather than clobbers; and that
-  **credentials are never workspace state**.
+  metadata root, the version stamp, the **guidance an agent needs to work here** — the root
+  `AGENTS.md` and Ward's workspace skill — Ward's defaults as workspace-owned artifacts, version
+  control over itself, the repository set); that re-running it **converges** rather than clobbers;
+  and that **credentials are never workspace state**.
 - **The repository set's lifecycle** — deliberate registration recording remote, main line, and
   canonical checkout; the main line read from the repository rather than assumed; adopt-or-clone;
   registration as a local, autonomous act.
@@ -211,10 +308,17 @@ here closes, so silence would read as an omission rather than a decision.
   (preferences only; nothing resumption depends on).
 - **Workspace integrity** — the classes of drift between record and world, and the **repair
   posture** (report all, repair only the local and reversible, gate the rest).
+- **How a workspace evolves** — the **version stamp**; **update vs. migrate**; the **two tiers of
+  installed artifact** (yours, expected to be changed; Ward's small owned set, chiefly the
+  reconciliation machinery, which cannot be a customization because it repairs them); that Ward
+  **records what it installed** so divergence is detectable and reconcilable against its baseline;
+  **reconciliation as a task whose `delivered` close is what advances the stamp**; and that the
+  stamp therefore records **defaults considered and folded in, not conformance** — after first
+  install, Ward's defaults are proposals.
 - **Version-skew behavior** — newer-CLI/older-workspace, older-CLI/newer-workspace, skew as a "what
-  needs me?" item rather than a nag, and migration as a gated act that rides version control. (The
-  stamp itself, and update vs. migrate, remain
-  [`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)'s.)
+  needs me?" item rather than a nag, and migration as a gated act that rides version control —
+  including that **artifact reconciliation does not block the workspace** the way structural
+  migration does, or the upgrade machinery would deadlock on itself.
 - **The attach / doctor / update map** — what each owns and how they compose.
 - **That a workspace has no terminal state.**
 
@@ -224,8 +328,10 @@ here closes, so silence would read as an omission rather than a decision.
   ([`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md) owns the noun/verb
   shape); the on-disk layout a creation produces; the concrete precondition and integrity check sets
   and how each is probed; how the canonical checkout's location is chosen; the form of the global
-  configuration; how a structural write is recognized in order to be blocked under skew. Planned in
-  [`design/`](../../design/).
+  configuration; how a structural write is recognized in order to be blocked under skew; **how the
+  installed baseline is recorded and compared** to detect divergence (a fingerprint, a retained
+  pristine copy, or a merge base); the contents of the workspace skill and the root `AGENTS.md`; and
+  the reconciliation skill's own procedure. Planned in [`design/`](../../design/).
 
 ## Open questions
 
@@ -242,10 +348,16 @@ here closes, so silence would read as an omission rather than a decision.
   invocation. It bears on this slice because "what is running while I am away?" is a
   workspace-scoped question, and on the store's no-resident-process constraint
   ([`../02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md)).
-- **Where versioning belongs.** The stamp and update/migrate currently live with reflection
-  ([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)) while skew behavior lives
-  here; whether they should re-home together is an instance of the tracked intent-file-granularity
-  question ([`../00-foundation/open-questions.md`](../00-foundation/open-questions.md)).
+- **The shape of an upgrade's reconciliation.** Whether one task covers everything an upgrade found
+  diverged or one task is opened per artifact — and how a partially-reconciled upgrade (some
+  artifacts folded in, one task still open) is reported.
+- **Declining a default permanently.** Whether a human can record "this artifact is mine now, stop
+  proposing" — and if so, what that means for the stamp, which otherwise advances only on a
+  `delivered` reconciliation.
+- **Membership of the Ward-owned tier.** Beyond the reconciliation machinery, what else (if
+  anything) Ward must own outright, and the test for admitting an artifact to that tier.
+- **Migration safety.** Whether migration is always idempotent, re-runnable, and reversible via the
+  workspace's own version history (§15).
 - **Improvements bound for Ward itself.** Reflection may propose improvements that belong upstream
   in the Ward CLI ([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)); carrying one
   out of the workspace is a crossing of the local↔remote boundary (§4) that nothing currently

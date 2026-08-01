@@ -42,14 +42,18 @@ relevant slice (and reflected in tests and code).
   case of the worktree hooks); policy-encoding home (_task states now settled_).
 - [`01-concepts/04-reflection-and-evolution.md`](../01-concepts/04-reflection-and-evolution.md) —
   reflection-type taxonomy; cadence/boundary triggers (_recovery completion now settled as an event
-  trigger_); cross-chunk learnings; migration safety.
+  trigger_); cross-chunk learnings. (_Versioning, migration, and reconciliation — with migration
+  safety — moved to
+  [`01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)._)
 - [`01-concepts/05-context-loading.md`](../01-concepts/05-context-loading.md) — none open (_the
   append-vs-rewrite line now settled as the two-zone model — below_).
 - [`01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md) — repository
   removal/rename/remote-moves; more than one workspace on a machine (and whether a machine-level
-  registry may exist); **what runs the cadence** (also cross-cutting, above); where versioning
-  belongs (an instance of intent-file granularity, above); how improvements bound for Ward itself
-  cross the local↔remote boundary.
+  registry may exist); **what runs the cadence** (also cross-cutting, above); the shape of an
+  upgrade's reconciliation (one task or one per artifact); declining a default permanently;
+  membership of the Ward-owned artifact tier; migration safety; how improvements bound for Ward
+  itself cross the local↔remote boundary. (_Where versioning belongs is now settled — it lives here;
+  see below._)
 - [`02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md) — none open (_the
   artifact taxonomy now settled as two tiers — below; the concurrency primitive is a bounded
   technique choice under §19, constrained by the store contract, chosen in `design/`_).
@@ -68,6 +72,20 @@ relevant slice (and reflected in tests and code).
 
 ## Recently resolved (kept briefly for context)
 
+- **The workspace has a lifecycle of its own.** Creation as a deliberate located act and what it
+  establishes (including the root `AGENTS.md` and Ward's workspace skill — the guidance an agent
+  needs to work there); repository registration; preconditions (§3 is about the **record**, not the
+  machine — which is what gives `doctor` a subject); integrity as classes of drift with a repair
+  posture; version skew in both directions; no terminal state. **Versioning, update/migrate, and
+  reconciliation re-homed here** from reflection, which keeps the inward axis only
+  ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)).
+- **Ward's defaults are proposals after first install.** Installed artifacts come in two tiers — the
+  human's (nearly everything, expected to be changed) and Ward's small owned set (chiefly the
+  reconciliation machinery, which cannot be a customization because it repairs them). Ward records
+  what it installed so divergence is detectable, and an upgrade that finds divergence **opens a
+  task**; the version stamp advances only when that task closes `delivered`, so the stamp records
+  defaults **considered and folded in**, never conformance
+  ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)).
 - **"Mission" is not a containment level** — if it returns, it is an _attribute of a project_.
 - **Rooms occupy anchors; deep work needs no repository.** The level between task and room is the
   **anchor** — a task-owned scratch medium from which durable output is cut into a governed record:

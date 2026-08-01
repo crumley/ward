@@ -181,16 +181,14 @@ baked into the tooling**:
   intent is a **skill** the workspace owns (mechanism: `design/`).
 - Ward installs the default at creation; thereafter the workspace's own agents and sessions may
   **evolve** it.
-- On a Ward **update/migration** (`04-reflection-and-evolution.md`), Ward checks whether the
-  workspace still uses the default. If so, it updates directly. If the workspace has **diverged**,
-  Ward does not clobber it — it **flags the divergence and offers a reconciliation process**: an
-  agent that walks the human through whether and how the new defaults should fold into their
-  customized policy.
+- On a Ward **update**, a policy the workspace has diverged from is **reconciled, never clobbered**
+  — the general mechanism, including that reconciliation runs as a **task** whose completion is what
+  advances the workspace's version, is `06-workspace-lifecycle.md`'s.
 
 **Why this shape:** it keeps the human in control of their own workflow while still offering Ward's
-improvements. This pattern — opinionated default, encoded in the workspace, evolvable by the
-workspace, reconciled on upgrade — is the **general shape for any opinion Ward ships** (workflow
-policy, lifecycle hooks, personas, scaffolding).
+improvements. Workflow policy is one instance of the **general shape for any opinion Ward ships** —
+opinionated default, installed as a workspace-owned artifact, evolvable by the workspace, reconciled
+on upgrade — which is stated once in `06-workspace-lifecycle.md` and applied here.
 
 ## Task states
 
@@ -259,8 +257,9 @@ Local↔remote linkage is an **orthogonal attribute** that can change in any non
   worktrees only.
 - **Lifecycle hooks** — that they exist and must be **idempotent / validate-on-resume** (build
   planned in [`design/`](../../design/)).
-- **Workflow policy** — opinionated-but-evolvable, and the **general pattern for any opinion Ward
-  ships** (default → workspace-owned artifact → reconciled on upgrade).
+- **Workflow policy** — opinionated-but-evolvable, as the worked instance of the general default →
+  workspace-owned artifact → reconciled-on-upgrade pattern, which is
+  [`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s.
 
 The privacy boundary itself is owned by
 [`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §4 and the remote seam
