@@ -27,7 +27,7 @@ behind it names the tool.
 | Group                              | Holds                                                                                                                                                                                                                              |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`00-foundation/`](00-foundation/) | **Global** intent — the [vision](00-foundation/00-vision.md) and [principles](00-foundation/01-principles.md), plus the [glossary](00-foundation/glossary.md) and cross-cutting [open questions](00-foundation/open-questions.md). |
-| [`01-concepts/`](01-concepts/)     | The **domain**: the nouns and processes, with their why — hierarchy, roles, sessions, the work lifecycle, reflection, and context loading.                                                                                         |
+| [`01-concepts/`](01-concepts/)     | The **domain**: the nouns and processes, with their why — hierarchy, roles, sessions, the work lifecycle, reflection, context loading, and the workspace's own lifecycle.                                                          |
 | [`02-subsystems/`](02-subsystems/) | The **swappable machinery** (the seams): the constraints any design of each must satisfy.                                                                                                                                          |
 
 ## The two governing rules
@@ -50,12 +50,15 @@ read when needed.
    (context management) and the hospital metaphor.
 2. [`00-foundation/01-principles.md`](00-foundation/01-principles.md) — the cross-cutting invariants
    §1–§19 every slice honors.
-3. [`01-concepts/`](01-concepts/) — the domain, `00`→`05`: domain model, scopes & personas, sessions
-   & lifecycle, work lifecycle, reflection & evolution, context loading.
+3. [`01-concepts/`](01-concepts/) — the domain, `00`→`06`: domain model, scopes & personas, sessions
+   & lifecycle, work lifecycle, reflection & evolution, context loading, workspace lifecycle.
 4. [`02-subsystems/`](02-subsystems/) — the seams, `00`→`07`, each a contract: metadata store,
    multiplexer, messaging, harness, model selection, theming, remote provider, human shell.
-5. [`03-walkthrough.md`](03-walkthrough.md) — one scenario threaded end-to-end (optional, the
-   fastest way to see the pieces fit).
+5. The two **walkthroughs** (optional, the fastest way to see the pieces fit) — read in order:
+   [`03-walkthrough-getting-started.md`](03-walkthrough-getting-started.md), from installing Ward to
+   a workspace with its first repository, and
+   [`04-walkthrough-delivering-work.md`](04-walkthrough-delivering-work.md), the minimum spine that
+   delivers a unit of work in it.
 6. References: [`00-foundation/open-questions.md`](00-foundation/open-questions.md) (cross-cutting
    tensions) and [`00-foundation/glossary.md`](00-foundation/glossary.md) (term → defining slice).
 

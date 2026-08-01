@@ -19,6 +19,13 @@ relevant slice (and reflected in tests and code).
   emerge only in aggregate preserved? (Owned by
   [`../01-concepts/04-reflection-and-evolution.md`](../01-concepts/04-reflection-and-evolution.md);
   listed here because it recurs.)
+- **What runs the cadence.** Refresh, rebase, and cadence reflection are specified as recurring
+  ([`../01-concepts/03-work-lifecycle.md`](../01-concepts/03-work-lifecycle.md),
+  [`../01-concepts/04-reflection-and-evolution.md`](../01-concepts/04-reflection-and-evolution.md))
+  but nothing states what fires them when no session is attached — a resident background process, or
+  opportunistic work on CLI invocation. It spans the toil, reflection, the store's
+  no-resident-process constraint, and the workspace's own lifecycle. (Owned by
+  [`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md).)
 
 ## Index of per-slice open questions
 
@@ -38,6 +45,11 @@ relevant slice (and reflected in tests and code).
   trigger_); cross-chunk learnings; migration safety.
 - [`01-concepts/05-context-loading.md`](../01-concepts/05-context-loading.md) — none open (_the
   append-vs-rewrite line now settled as the two-zone model — below_).
+- [`01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md) — repository
+  removal/rename/remote-moves; more than one workspace on a machine (and whether a machine-level
+  registry may exist); **what runs the cadence** (also cross-cutting, above); where versioning
+  belongs (an instance of intent-file granularity, above); how improvements bound for Ward itself
+  cross the local↔remote boundary.
 - [`02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md) — none open (_the
   artifact taxonomy now settled as two tiers — below; the concurrency primitive is a bounded
   technique choice under §19, constrained by the store contract, chosen in `design/`_).

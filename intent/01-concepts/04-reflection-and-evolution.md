@@ -101,6 +101,11 @@ You can update without migrating; migration is the heavier path reserved for str
 **Why distinguish them:** most upgrades are routine updates; reserving "migration" for structural
 change keeps the risky path rare and explicit.
 
+What a CLI may do when it meets a workspace of a **different generation** — in either direction —
+before any update or migration has run, is
+[`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s (version skew), as is the constraint that
+migration is gated and lands as its own commit so it can be rolled back.
+
 ### Reconciliation when a workspace has diverged
 
 A workspace is meant to be customized — its agents evolve its skills, policies, and hooks. So

@@ -77,7 +77,19 @@ principle (§8) and feeds the compounding loop
   _Why:_ a well-designed CLI guides the user to a good setup instead of failing cryptically when one
   is missing, and surfacing optional capabilities is how Ward stays opinionated without being
   brittle. (The exact verb — `doctor` or the prevailing convention — is a design choice; the
-  **capability** is the constraint.)
+  **capability** is the constraint.) _What it checks_ — the machine **preconditions** and the
+  **integrity** of the record against the world, plus the repair posture that decides what it may
+  fix versus report — is
+  [`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)'s; this
+  layer owns only the surface. It must also work **outside** a workspace, where only the machine can
+  be checked. _Why:_ the first run happens before any workspace exists.
+- **Version skew is surfaced, not nagged.** When the CLI and the workspace are different generations
+  ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)), that
+  fact reaches the human through the **"what needs me?"** surface above, and reaches a declared
+  **agent** caller as a deterministic result it can act on — never as prose in output the agent must
+  parse around (§8). _Why:_ a condition that blocks structural writes is exactly a request for the
+  human's attention, and repeating it as chatter on every invocation trains both audiences to ignore
+  it.
 - **Opinionated configuration, global and workspace-local.** Ward's configuration follows the
   conventions of well-designed CLIs on **both** axes: **global** behavior that holds regardless of
   working directory, and **workspace-local** behavior that takes effect once the working directory
@@ -112,7 +124,10 @@ principle (§8) and feeds the compounding loop
   resolution and autocomplete of missing/ambiguous arguments** (a delightful, human-audience
   affordance), the **"what needs me?" attention surface** (one glanceable, deduplicated answer over
   the recorded requests to the human), **workspace/scope-awareness from any working directory**,
-  **file inputs for long free-text arguments**, the **`doctor` self-diagnosis** capability,
+  **file inputs for long free-text arguments**, the **`doctor` self-diagnosis** capability (its
+  _surface_ — what it checks is
+  [`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)'s),
+  **surfacing version skew through the attention surface rather than as output chatter**,
   **opinionated global + workspace-local configuration**, **verbs that read true to the operation**,
   the **human-default caller identity** rule, and **local usage telemetry**.
 

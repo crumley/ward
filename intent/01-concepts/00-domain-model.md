@@ -56,7 +56,9 @@ heavyweight work and one-offs instead of splitting them into regimes.
 
 The root. Local and personal to one human and their agents. Self-sufficient: holds all metadata,
 tooling, and skills needed to understand and resume the work within it. A workspace is configured
-with a set of **repositories** it knows how to work in.
+with a set of **repositories** it knows how to work in. Its own arc — how one is created, what it
+holds when new, how repositories are registered, what "healthy" means for it, and how it moves
+forward as Ward changes — is [`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s.
 
 ### Project
 
