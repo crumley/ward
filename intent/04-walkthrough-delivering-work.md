@@ -25,9 +25,9 @@ are **elided, not faked** (`01-concepts/00-domain-model.md`).
 ## 0. Where we are
 
 A healthy workspace, tracked in git (`00-foundation/01-principles.md` §15), carrying its version
-stamp (`01-concepts/04-reflection-and-evolution.md`) and knowing one repository, `ward`, whose
-canonical main checkout is kept current on a cadence (`01-concepts/03-work-lifecycle.md`, refresh).
-Nothing is in flight.
+stamp (`01-concepts/06-workspace-lifecycle.md`) and knowing one repository, `ward`, whose canonical
+main checkout is kept current on a cadence (`01-concepts/03-work-lifecycle.md`, refresh). Nothing is
+in flight.
 
 ## 1. Open a project — floor 1
 
@@ -142,11 +142,12 @@ _reflection cursor_.
 ## 8. Reboot test — does it all come back?
 
 Suppose the machine had rebooted at step 6, with the PR open and the worktree behind main. On cold
-start, **attach** (`01-concepts/02-sessions-and-lifecycle.md`, Recovery) enumerates sessions, keeps
-the **open, not closed** ones, re-attaches each via its **harness handle** — addressing it by its
-bare, workspace-unique id — and **re-validates** the setup hooks of **live** anchors only. It then
-ends with **rounds**: the status personas take stock of their spans; in this minimal cast that is
-the house supervisor alone, reporting to the human where things stand. The recovery is itself
+start, **recovery** — the `attach` verb (`02-subsystems/07-human-shell.md`) over
+`01-concepts/02-sessions-and-lifecycle.md`'s Recovery — enumerates sessions, keeps the **open, not
+closed** ones, re-attaches each via its **harness handle** — addressing it by its bare,
+workspace-unique id — and **re-validates** the setup hooks of **live** anchors only. It then ends
+with **rounds**: the status personas take stock of their spans; in this minimal cast that is the
+house supervisor alone, reporting to the human where things stand. The recovery is itself
 **recorded** — per-thread outcomes, including any **resume-failed with its cause** — and queues a
 **recovery reflection** over the episode (`01-concepts/04-reflection-and-evolution.md`).
 
@@ -184,8 +185,8 @@ worktree disposition and idempotent setup hooks, recorded theming, elided-room o
 anchor, working-directory-keyed context loading, harness handles with session purpose and usage,
 gated outward actions, privacy translation at the single upstream gate, derived `in-review`, the
 toil yielding to occupancy and to a dirty tree, the delivered close with artifact disposition,
-teardown, scope-boundary reflection with a cursor, and cold-start attach with rounds and a recorded
-episode.
+teardown, scope-boundary reflection with a cursor, and cold-start recovery with rounds and a
+recorded episode.
 
 **Deliberately not exercised — the watch-list.** The spine leaves these unchecked by any
 walkthrough, so a change to intent that breaks one will not be caught here: **briefs and dispatch

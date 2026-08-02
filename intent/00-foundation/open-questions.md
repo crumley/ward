@@ -81,9 +81,11 @@ relevant slice (and reflected in tests and code).
   ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)).
 - **Ward's defaults are proposals after first install.** Installed artifacts come in two tiers — the
   human's (nearly everything, expected to be changed) and Ward's small owned set, replaced without
-  adjudication but never silently. The membership test: **Ward owns an artifact iff declining its
-  update would make the version claim false.** Ward records what it installed so divergence is
-  detectable, comparing **current against current default** rather than any version delta
+  adjudication but never silently. The membership test: **Ward owns an artifact iff its content is
+  what makes the record mean what it says** — everything else is preference and local convention;
+  not being offered for adjudication is a _consequence_ of that, not its definition. Ward records
+  what it installed so divergence is detectable, comparing **current against current default**
+  rather than any version delta
   ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)).
 - **An upgrade is one task, and its close asserts adjudication.** Ward presents each changed default
   and what it implies; **declining a change completes the upgrade exactly as folding it in does**,

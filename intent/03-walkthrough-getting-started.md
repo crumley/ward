@@ -50,28 +50,35 @@ running a command somewhere that lacks one (`01-concepts/06-workspace-lifecycle.
 in place everything a cold reader needs (§3), and the workspace begins tracking **itself** in git
 (§15).
 
-**Records written:** the **metadata root** and the seeded **artifact-type catalog**
+**Established:** the **metadata root** and the seeded **artifact-type catalog**
 (`02-subsystems/00-metadata-store.md`); the **version stamp** naming the Ward version that created
-it (`01-concepts/06-workspace-lifecycle.md`); the **guidance an agent needs to work here** — the
-root **`AGENTS.md`** (`01-concepts/05-context-loading.md`) and Ward's **workspace skill**, so an
-agent started at the root knows how to operate rather than inferring it from the directory; Ward's
-opinionated defaults as **workspace-owned artifacts** — the **workflow policy**
+it (`01-concepts/06-workspace-lifecycle.md`) — both _records_; the **guidance an agent needs to work
+here** — the root **`AGENTS.md`** (`01-concepts/05-context-loading.md`) and Ward's **workspace
+skill**, so an agent started at the root knows how to operate rather than inferring it from the
+directory; Ward's opinionated defaults as **installed artifacts** — the **workflow policy**
 (`01-concepts/03-work-lifecycle.md`), the **lifecycle hooks**, and (next step) the persona cast; and
 the workspace's first git commit (§15).
 
-> _All of that is yours to change._ Everything installed here except Ward's own reconciliation
-> machinery is a **starting point** the human and their agents are expected to edit — a sharpened
-> `AGENTS.md`, skills of their own, a policy that fits their work
-> (`01-concepts/06-workspace-lifecycle.md`, the two tiers). Where an artifact can be **composed**,
-> Ward's part and the human's stay separately addressable, Ward's ordered first — so a later upgrade
-> replaces Ward's part without touching theirs, and most divergence never arises at all. Where it
-> cannot, Ward records what it installed so an upgrade can tell a deliberate change from an
-> untouched default and **reconcile** rather than clobber.
+> _Three kinds of thing, deliberately not one._ **Records** are the data Ward writes, **installed
+> artifacts** are the instructional and executable content Ward ships, and the commit is version
+> control over both (`01-concepts/06-workspace-lifecycle.md`; `02-subsystems/00-metadata-store.md`).
+> Later steps say "Records written" only where actual records are written.
+
+> _All of that is yours to change._ Everything installed here except Ward's small owned tier is a
+> **starting point** the human and their agents are expected to edit — a sharpened `AGENTS.md`,
+> skills of their own, a policy that fits their work (`01-concepts/06-workspace-lifecycle.md`, the
+> two tiers). Where an artifact can be **composed**, Ward's part and the human's stay separately
+> addressable, Ward's ordered first — so a later upgrade replaces Ward's part without touching
+> theirs, and most divergence never arises at all. Where it cannot, Ward records what it installed
+> so an upgrade can tell a deliberate change from an untouched default and **reconcile** rather than
+> clobber.
 
 > _Run it twice._ Asked to create a workspace where one already exists, Ward **converges** — it
-> validates what is there, adds what is missing, and leaves anything diverged alone — because that
-> is the update path, not a second mechanism (`01-concepts/06-workspace-lifecycle.md`;
-> `00-foundation/01-principles.md` §6).
+> validates what is there, adds what is missing, and leaves customized artifacts alone — because
+> that is the update path, not a second mechanism (`01-concepts/06-workspace-lifecycle.md`;
+> `00-foundation/01-principles.md` §6). Nothing is adjudicated: at the same version no default has
+> moved, so the only differences are the human's own, and reconciliation triggers on **a default
+> that moved**, never on a file that merely differs.
 
 ## 3. Accept the cast
 
@@ -83,7 +90,7 @@ Two constraints meet here: names and roles are **internal** and must never reach
 (`00-foundation/01-principles.md` §4), and the role vocabulary's closedness is what makes that
 leak-guard **exhaustively enforceable** at the crossing (`02-subsystems/06-remote-provider.md`).
 
-**Records written:** the workspace's persona cast, as a workspace-owned artifact.
+**Established:** the workspace's persona cast, as an installed artifact the workspace owns.
 
 ## 4. Register the first repository — `ward` itself
 

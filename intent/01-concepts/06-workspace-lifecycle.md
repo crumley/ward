@@ -68,8 +68,12 @@ human or agent — needs for the workspace to be **self-sufficient** from its fi
 lifecycle operation and inherits idempotency
 ([`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §6): asked to create a
 workspace where one already exists, Ward validates what is present, adds what is missing, and leaves
-diverged artifacts alone — which is precisely the update path (_How a workspace evolves_, below),
-not a second mechanism. **Why:** "did I already init this?" must never be a dangerous question.
+customized artifacts alone — it is the update path (_How a workspace evolves_, below), not a second
+mechanism. **Why:** "did I already init this?" must never be a dangerous question.
+
+Nothing is adjudicated in that case, and the reason is the trigger rule below: re-creating at the
+**same version** means no default has moved, so the only differences are the human's own edits, and
+asking them to adjudicate those would be the nagging this slice forbids everywhere else.
 
 ### What a workspace never holds
 
@@ -204,12 +208,22 @@ technique converging through use.)
   ceremony would cost more than it protects. This is not a lock: a human who edits it anyway has
   stepped outside the path Ward is built for, and Ward will overwrite it and say so.
 
-**The test for membership:** an artifact belongs to Ward's tier **iff declining its update would
-make the version claim false** (_Reconciliation_, below). Equivalently, and from the other
-direction: **Ward's layer carries the semantics that make the record mean what it says; the human's
-layer carries preference and local convention.** _Why a test rather than a list:_ every item
-admitted is a promise of customization withdrawn, so admission must be argued from the upgrade's own
-semantics rather than adopted for convenience mid-build.
+**The test for membership:** an artifact belongs to Ward's tier **iff its content is what makes the
+record mean what it says** — such that a workspace operating on an altered version of it would
+produce records Ward could not trust. Everything else is preference and local convention, and is the
+human's.
+
+Applied: the **reconciliation machinery** passes, because it is what makes a version stamp mean
+anything — a stamp advanced by machinery that presented the changes wrongly is a claim about an
+adjudication that did not really happen. The **workflow policy**, the **lifecycle hooks**, the
+**persona cast**, and the root **`AGENTS.md`** all fail: a workspace that merges on a different
+policy or names its personas differently still produces records that mean exactly what they say.
+
+**Not offered for adjudication — a consequence of the test, not its definition.** Because these
+carry meaning rather than preference, there is no coherent "decline" to offer for them, which is why
+Ward's tier is replaced wholesale rather than presented to the human (_Reconciliation_, below). _Why
+a test rather than a list:_ every item admitted is a promise of customization withdrawn, so
+admission must be argued from what the record has to mean, never adopted for convenience mid-build.
 
 This is the same ownership rule the store applies to documents — Ward-owned **records** versus the
 open, workspace-evolvable **artifact types**
@@ -249,12 +263,26 @@ sharply below, where it is what stops the upgrade machinery from deadlocking on 
 
 ### Reconciliation is one task, and its close asserts adjudication
 
-When an update finds artifacts the workspace has diverged from, Ward **neither overwrites them nor
-silently skips them**. It opens **one task for the upgrade**
-([`03-work-lifecycle.md`](03-work-lifecycle.md)) — an ordinary one, recorded, addressable, pausable,
-resumable, owned by a resident — covering every artifact that needs a decision. The **Ward-owned
-reconciliation skill** is what that task runs, and its job is to **present each change and what it
-implies** so the human can decide.
+**What triggers adjudication is a default that moved, not a file that differs.** An artifact needs
+the human only where **Ward's default changed between the stamped version and the CLI in hand**
+_and_ the workspace's copy no longer matches the default it was installed with. Where the default
+moved and the copy was untouched, the new default simply applies — there is no decision to make.
+Where the copy was customized but the default stood still, there is nothing new to say about it, and
+raising it would be asking the human to adjudicate their own edits. **Why this precise trigger:**
+"differs from what Ward ships" is true of every customized workspace permanently, so triggering on
+it would turn every upgrade — and every re-run of creation — into a re-litigation of choices already
+made.
+
+(This does not reintroduce version deltas into what the human sees. Whether a default moved is a
+question about **Ward's own shipped versions**, answerable on Ward's side alone; what gets
+**presented** is still the artifact as it stands against the default as it now ships, and a
+difference already covered by a recorded decline is shown as chosen rather than raised as news.)
+
+When an upgrade finds artifacts that meet that trigger, Ward **neither overwrites them nor silently
+skips them**. It opens **one task for the upgrade** ([`03-work-lifecycle.md`](03-work-lifecycle.md))
+— an ordinary one, recorded, addressable, pausable, resumable, owned by a resident — covering every
+artifact that needs a decision. The **Ward-owned reconciliation skill** is what that task runs, and
+its job is to **present each change and what it implies** so the human can decide.
 
 **What a `delivered` close asserts is adjudication, not conformance:** that this version's changes
 were presented, their ramifications explained, and **decided**. Folding a change in is one outcome
@@ -353,13 +381,21 @@ stops meaning what its records say. Ward's answer to that is the layering above,
 What this slice owns beyond the stamp and the update/migrate paths above is **behavior on mismatch**
 — what Ward does when the CLI in hand and the workspace in front of it are not the same generation:
 
-- **Newer CLI, older workspace.** Reads proceed, with the skew **surfaced**; **structural writes do
-  not proceed** until the workspace is updated or migrated. _Why:_ a CLI writing records in a shape
-  the workspace's schema does not describe is silent corruption of the source of truth (§16, §17) —
-  and inspection is exactly what a human needs in order to decide about the upgrade.
-- **Older CLI, newer workspace.** Structural writes are **refused**. _Why:_ an older CLI can neither
-  write the newer shape correctly nor migrate forward out of the situation, and there is no version
-  of "try anyway" that fails loudly enough to be safe.
+- **What blocks is a _schema_ mismatch, not any version difference.** Where the versions differ but
+  the record's shape did not change between them — **artifact-only skew** — nothing is blocked: the
+  workspace runs normally and the skew is merely surfaced. _Why:_ the hazard below is writing a
+  shape the schema does not describe, and where no shape changed there is no hazard. This is also
+  what makes reconciliation possible at all: it runs as ordinary work in a fully functioning
+  workspace (_How a workspace evolves_, above), which it could not do if every generational
+  difference froze writes.
+- **Newer CLI, older workspace, schema changed.** Reads proceed, with the skew **surfaced**;
+  **structural writes do not proceed** until the workspace is **migrated**. _Why:_ a CLI writing
+  records in a shape the workspace's schema does not describe is silent corruption of the source of
+  truth (§16, §17) — and inspection is exactly what a human needs in order to decide about the
+  upgrade.
+- **Older CLI, newer workspace, schema changed.** Structural writes are **refused**. _Why:_ an older
+  CLI can neither write the newer shape correctly nor migrate forward out of the situation, and
+  there is no version of "try anyway" that fails loudly enough to be safe.
 - **Skew is surfaced, not nagged.** It is a recorded request for the human's attention — one item in
   "what needs me?" ([`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md)) —
   presented to a human caller and delivered to a declared **agent** caller as a deterministic result
@@ -375,17 +411,17 @@ What this slice owns beyond the stamp and the update/migrate paths above is **be
 Three operations converge a workspace toward good order. They overlap enough to be confused, so the
 division of labor is stated here once:
 
-| Operation               | Asks                                                                              | Owns                                                                                                                  |
-| ----------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| **Attach** (cold start) | "Which threads were in flight, and are they back?"                                | Re-establishing live work from the record ([`02-sessions-and-lifecycle.md`](02-sessions-and-lifecycle.md), Recovery). |
-| **Doctor**              | "Can this machine run this workspace, and does the record still match the world?" | Preconditions and integrity (above).                                                                                  |
-| **Update / migrate**    | "Is this workspace the generation this CLI expects?"                              | Aligning the workspace with a new Ward, reconciling what diverged (above).                                            |
+| Operation                 | Asks                                                                              | Owns                                                                                                                                                                                                                                                |
+| ------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Recovery** (cold start) | "Which threads were in flight, and are they back?"                                | Re-establishing live work from the record ([`02-sessions-and-lifecycle.md`](02-sessions-and-lifecycle.md), Recovery); its CLI verb reads as `attach` ([`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md), verbs read true). |
+| **Doctor**                | "Can this machine run this workspace, and does the record still match the world?" | Preconditions and integrity (above).                                                                                                                                                                                                                |
+| **Update / migrate**      | "Is this workspace the generation this CLI expects?"                              | Aligning the workspace with a new Ward, reconciling what diverged (above).                                                                                                                                                                          |
 
 **Why three and not one:** they run at different moments, on different evidence, with different
-risk. Attach runs after every reboot and touches live state; doctor is safe to run at any time and
+risk. Recovery runs after every reboot and touches live state; doctor is safe to run at any time and
 changes little; migration is rare and gated. Collapsing them would drag the riskiest into the most
-frequent. They compose in one direction: **doctor diagnoses and recommends the other two; attach
-assumes the environment is already sound.** An attach that fails on a missing tool has found a
+frequent. They compose in one direction: **doctor diagnoses and recommends the other two; recovery
+assumes the environment is already sound.** A recovery that fails on a missing tool has found a
 doctor's finding the hard way — which is itself the signal a recovery reflection reads
 ([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)).
 
@@ -417,23 +453,28 @@ here closes, so silence would read as an omission rather than a decision.
 - **How a workspace evolves** — the **version stamp**; **update vs. migrate**; **composition first**
   (Ward's contribution and the human's separately addressable, Ward's ordered first, so most
   divergence never occurs) and the residue composition cannot separate; the **two tiers of installed
-  artifact** with the **declinability test** for membership (Ward owns an artifact iff declining its
-  update would make the version claim false), Ward's tier replaced without adjudication but never
-  silently; that Ward **records what it installed** so divergence is detectable, with comparison
-  always **current-versus-current-default** rather than a version delta; **reconciliation as one
-  task per upgrade whose `delivered` close asserts adjudication** — declining a change **completes**
-  it, abandoning without deciding does not — with each artifact's decision **recorded as it is
-  made**; that a **recorded decline marks a difference chosen rather than drifted**; that
-  **structural migration is not declinable**; and that the stamp therefore records **changes
-  considered and decided, not conformance** — after first install, Ward's defaults are proposals.
+  artifact** and the **membership test** (Ward owns an artifact iff its content is what makes the
+  record mean what it says; not being offered for adjudication is a consequence, not the
+  definition), Ward's tier replaced without adjudication but never silently; that Ward **records
+  what it installed** so divergence is detectable, with what is **presented** always
+  current-versus-current-default rather than a version delta; that **adjudication is triggered by a
+  default that moved**, never by a file that merely differs; **reconciliation as one task per
+  upgrade whose `delivered` close asserts adjudication** — declining a change **completes** it,
+  abandoning without deciding does not — with each artifact's decision **recorded as it is made**;
+  that a **recorded decline marks a difference chosen rather than drifted**; that **structural
+  migration is not declinable**; and that the stamp therefore records **changes considered and
+  decided, not conformance** — after first install, Ward's defaults are proposals.
 - **That Ward does not defend its own presence** — no prevention and no recovery from a workspace
   the human has stripped, balanced by the obligation to **degrade legibly**, and the **drift versus
   deliberate departure** distinction that follows for integrity reporting.
-- **Version-skew behavior** — newer-CLI/older-workspace, older-CLI/newer-workspace, skew as a "what
-  needs me?" item rather than a nag, and migration as a gated act that rides version control —
-  including that **artifact reconciliation does not block the workspace** the way structural
-  migration does, or the upgrade machinery would deadlock on itself.
-- **The attach / doctor / update map** — what each owns and how they compose.
+- **Version-skew behavior** — that **blocking follows the schema, not the version number** (an
+  artifact-only mismatch blocks nothing), newer-CLI/older-workspace, older-CLI/newer-workspace, skew
+  as a "what needs me?" item rather than a nag, and migration as a gated act that rides version
+  control — including that **artifact reconciliation does not block the workspace** the way
+  structural migration does, or the upgrade machinery would deadlock on itself.
+- **The recovery / doctor / update map** — what each owns and how they compose. (Recovery itself is
+  [`02-sessions-and-lifecycle.md`](02-sessions-and-lifecycle.md)'s; its `attach` verb is
+  [`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md)'s.)
 - **That a workspace has no terminal state.**
 
 ## Left to implementation
