@@ -49,11 +49,11 @@ relevant slice (and reflected in tests and code).
   append-vs-rewrite line now settled as the two-zone model — below_).
 - [`01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md) — repository
   removal/rename/remote-moves; more than one workspace on a machine (and whether a machine-level
-  registry may exist); **what runs the cadence** (also cross-cutting, above); the shape of an
-  upgrade's reconciliation (one task or one per artifact); declining a default permanently;
-  membership of the Ward-owned artifact tier; migration safety; how improvements bound for Ward
-  itself cross the local↔remote boundary. (_Where versioning belongs is now settled — it lives here;
-  see below._)
+  registry may exist); **what runs the cadence** (also cross-cutting, above); precedence between
+  composed layers; deletion rather than shadowing; semantic drift across an upgrade; migration
+  safety; how improvements bound for Ward itself cross the local↔remote boundary. (_Where versioning
+  belongs, the shape of a reconciliation, declining a default, and the Ward-owned tier's membership
+  test are now settled — see below._)
 - [`02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md) — none open (_the
   artifact taxonomy now settled as two tiers — below; the concurrency primitive is a bounded
   technique choice under §19, constrained by the store contract, chosen in `design/`_).
@@ -80,11 +80,30 @@ relevant slice (and reflected in tests and code).
   reconciliation re-homed here** from reflection, which keeps the inward axis only
   ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)).
 - **Ward's defaults are proposals after first install.** Installed artifacts come in two tiers — the
-  human's (nearly everything, expected to be changed) and Ward's small owned set (chiefly the
-  reconciliation machinery, which cannot be a customization because it repairs them). Ward records
-  what it installed so divergence is detectable, and an upgrade that finds divergence **opens a
-  task**; the version stamp advances only when that task closes `delivered`, so the stamp records
-  defaults **considered and folded in**, never conformance
+  human's (nearly everything, expected to be changed) and Ward's small owned set, replaced without
+  adjudication but never silently. The membership test: **Ward owns an artifact iff declining its
+  update would make the version claim false.** Ward records what it installed so divergence is
+  detectable, comparing **current against current default** rather than any version delta
+  ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)).
+- **An upgrade is one task, and its close asserts adjudication.** Ward presents each changed default
+  and what it implies; **declining a change completes the upgrade exactly as folding it in does**,
+  because Ward's part is to inform and the human's is to decide — re-raising a settled decision
+  spends the scarcest context in the system (§1). Abandoning _without_ deciding does not advance the
+  stamp. Each artifact's decision is recorded as it is made (§16), and a recorded decline marks the
+  difference **chosen rather than drifted**, so integrity stops reporting it. **Structural migration
+  is the one thing not declinable**
+  ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)).
+- **Compose first; reconcile only the residue.** Ward's contribution to an artifact and the human's
+  are separately addressable and composed in a fixed order — Ward's first, justified twice over
+  (later content overrides; Ward's stable part caches, §12) — so an upgrade replaces Ward's part
+  without touching the human's and most divergence never happens. What composition cannot separate —
+  deletion, semantic drift, non-composable artifacts — is what reconciliation is for
+  ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md),
+  [`../01-concepts/05-context-loading.md`](../01-concepts/05-context-loading.md)).
+- **Ward does not defend its own presence.** A human may strip Ward from their workspace; Ward
+  neither prevents nor recovers from that, which is what keeps the upgrade machinery proportionate
+  (no tamper-evidence, no restore path). The obligation that remains is to **degrade legibly** — and
+  integrity distinguishes **drift** from **deliberate departure**, reporting the latter once
   ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)).
 - **"Mission" is not a containment level** — if it returns, it is an _attribute of a project_.
 - **Rooms occupy anchors; deep work needs no repository.** The level between task and room is the

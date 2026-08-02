@@ -62,9 +62,11 @@ the workspace's first git commit (§15).
 > _All of that is yours to change._ Everything installed here except Ward's own reconciliation
 > machinery is a **starting point** the human and their agents are expected to edit — a sharpened
 > `AGENTS.md`, skills of their own, a policy that fits their work
-> (`01-concepts/06-workspace-lifecycle.md`, the two tiers). Ward records what it installed precisely
-> so that a later upgrade can tell a deliberate change from an untouched default and **reconcile**
-> rather than clobber.
+> (`01-concepts/06-workspace-lifecycle.md`, the two tiers). Where an artifact can be **composed**,
+> Ward's part and the human's stay separately addressable, Ward's ordered first — so a later upgrade
+> replaces Ward's part without touching theirs, and most divergence never arises at all. Where it
+> cannot, Ward records what it installed so an upgrade can tell a deliberate change from an
+> untouched default and **reconcile** rather than clobber.
 
 > _Run it twice._ Asked to create a workspace where one already exists, Ward **converges** — it
 > validates what is there, adds what is missing, and leaves anything diverged alone — because that
@@ -132,10 +134,10 @@ record-versus-machine reading of self-sufficiency, doctor at both scopes (machin
 workspace, machine plus integrity inside), and the empty-container-is-active rule at the root.
 
 Two things it deliberately does **not** reach, both later in the workspace's life: the **upgrade
-arc** — version skew, migration, and the **reconciliation task** an upgrade opens when it finds an
-artifact the human has customized, whose `delivered` close is what advances the version stamp
-(`01-concepts/06-workspace-lifecycle.md`) — since there is only one version so far; and everything
-that needs work to exist (`04-walkthrough-delivering-work.md`).
+arc** — version skew, migration, and the **reconciliation task** an upgrade opens over the artifacts
+the human has customized, whose `delivered` close asserts that the changes were presented and
+decided, declined ones included (`01-concepts/06-workspace-lifecycle.md`) — since there is only one
+version so far; and everything that needs work to exist (`04-walkthrough-delivering-work.md`).
 
 One friction it surfaces rather than resolves: once `ward` is the repository under work, the CLI
 operating the workspace and the code being changed are the same software. Which build a session runs

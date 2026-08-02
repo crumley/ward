@@ -14,10 +14,10 @@ outside itself, what "healthy" means for it, and what happens to it as Ward chan
 **Why this needs its own slice:** the workspace's arc was previously stated only as subordinate
 clauses in slices about other topics — the workflow policy "injected at creation"
 ([`03-work-lifecycle.md`](03-work-lifecycle.md)), the persona cast "picked when the workspace is
-created" ([`01-scopes-and-personas.md`](01-scopes-and-personas.md)), the version stamp recorded by
-"whichever version created it" ([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)).
-Each is correct; together they are not a lifecycle, and nothing could link to one. An idea with no
-home is an idea nothing checks (`../README.md`, one home per idea).
+created" ([`01-scopes-and-personas.md`](01-scopes-and-personas.md)), versioning filed under
+reflection ([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md), which now keeps the
+inward axis only). Each was correct; together they were not a lifecycle, and nothing could link to
+one. An idea with no home is an idea nothing checks (`../README.md`, one home per idea).
 
 ## Creation is a deliberate act, never implicit
 
@@ -68,9 +68,8 @@ human or agent — needs for the workspace to be **self-sufficient** from its fi
 lifecycle operation and inherits idempotency
 ([`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §6): asked to create a
 workspace where one already exists, Ward validates what is present, adds what is missing, and leaves
-diverged artifacts alone — which is precisely the update path
-([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)), not a second mechanism.
-**Why:** "did I already init this?" must never be a dangerous question.
+diverged artifacts alone — which is precisely the update path (_How a workspace evolves_, below),
+not a second mechanism. **Why:** "did I already init this?" must never be a dangerous question.
 
 ### What a workspace never holds
 
@@ -157,37 +156,84 @@ installed at creation therefore has a second life: it must move forward as Ward 
 undoing what the workspace has become**. This section owns that arc — what is installed, who owns
 it, how divergence is found, and what "upgraded" is allowed to mean.
 
+### Compose first; reconcile only what composition cannot separate
+
+The cheapest conflict is the one that cannot occur. So wherever an installed artifact can be built
+from parts, **Ward's contribution and the human's are separately addressable and composed in a
+defined order — Ward's first, the human's after.** An upgrade then replaces Ward's part wholesale,
+because nothing of the human's is inside it: no divergence, no detection, no adjudication.
+
+Two independent reasons fix that order, which is usually the sign it is right. **Override:** later
+content wins, so the human can shadow anything Ward says without editing what Ward owns. **Token
+economy (§12):** Ward's part is identical across every workspace at that version, so it caches,
+while anything mutable placed ahead of it would invalidate the shared prefix — this is the two-zone
+model of [`05-context-loading.md`](05-context-loading.md) applied to _authorship_ rather than
+volatility.
+
+**Why this is the primary move, not an optimization:** a merge conflict Ward manufactured through
+its own file layout is not a real decision, and the prime directive says the human's attention is
+spent only where a real decision is needed
+([`../00-foundation/00-vision.md`](../00-foundation/00-vision.md)). Reconciling well is worse than
+not having to reconcile.
+
+Composition does not reach everything, and the residue is what reconciliation exists for:
+
+- **Deletion.** A human can shadow one of Ward's defaults by appending; they cannot _un-say_ it.
+- **Semantic drift.** When Ward's part renames or reframes something the human's part builds on,
+  their content is stale without ever having been touched.
+- **Artifacts that do not compose.** Hooks are executable, so composition means chaining with its
+  own ordering rules; a persona cast has the deletion problem acutely.
+- **Editing across the line anyway.** Nothing prevents it (_Ward does not defend its own presence_,
+  below).
+
+(_How_ the parts are composed — an include directive, a file Ward generates from parts, the
+`AGENTS.md` hierarchy — is left to [`design/`](../../design/), and §19 permits more than one
+technique converging through use.)
+
 ### Installed artifacts come in two tiers
 
 - **Yours** — nearly everything: the root `AGENTS.md`, the workspace's skills, the workflow policy,
   the lifecycle hooks, the persona cast. Ward installs these as a **starting point**, and the human
-  and their agents are **expected to change them** — to edit the `AGENTS.md`, to add skills of their
-  own, to sharpen a policy that does not fit. _Why:_ the workspace is supposed to compound (§13),
-  and it compounds by being shaped to the work it actually does; an artifact the human may not touch
-  cannot absorb what the workspace learns, and reflection's proposals
+  and their agents are **expected to change them**. _Why:_ the workspace is supposed to compound
+  (§13), and it compounds by being shaped to the work it actually does; an artifact the human may
+  not touch cannot absorb what the workspace learns, and reflection's proposals
   ([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)) would have nowhere to land.
-- **Ward's** — a small, named set the CLI owns outright and replaces wholesale on update: chiefly
-  the **reconciliation machinery** itself (below). _Why the exception:_ it is the mechanism that
-  protects every customization, so it cannot itself be one — a broken edit to it would disable the
-  only thing able to repair the rest. Machinery that repairs must not depend on what it repairs.
-  _Why keep the tier small:_ each item in it is a promise of customization withdrawn, so membership
-  is earned, not assumed.
+- **Ward's** — a small set the CLI owns and **replaces wholesale on update, without adjudication**,
+  chiefly the **reconciliation machinery** itself. The replacement is **reported, never silent**
+  (§15, §8). _Why not adjudicated:_ nobody wants to be asked to merge their own merge tool — the
+  ceremony would cost more than it protects. This is not a lock: a human who edits it anyway has
+  stepped outside the path Ward is built for, and Ward will overwrite it and say so.
 
-This mirrors the store's split between Ward-owned **records** and the open, workspace-evolvable
-**artifact types**
-([`../02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md)) — the same
-principle applied to what Ward installs rather than what it records: the machinery relies absolutely
-on its own, and everything else is free to evolve.
+**The test for membership:** an artifact belongs to Ward's tier **iff declining its update would
+make the version claim false** (_Reconciliation_, below). Equivalently, and from the other
+direction: **Ward's layer carries the semantics that make the record mean what it says; the human's
+layer carries preference and local convention.** _Why a test rather than a list:_ every item
+admitted is a promise of customization withdrawn, so admission must be argued from the upgrade's own
+semantics rather than adopted for convenience mid-build.
+
+This is the same ownership rule the store applies to documents — Ward-owned **records** versus the
+open, workspace-evolvable **artifact types**
+([`../02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md)) — but a different
+kind of thing: records are the data Ward **writes**, these are the instructional and executable
+content Ward **ships**.
 
 ### Divergence must be detectable, so Ward records what it installed
 
 For every artifact it installs, Ward records **which version it installed and enough to recognize
-later whether the artifact still matches it**. **Why:** without a record of what was originally put
-there, an upgrade has only two moves — clobber the file or never touch it — and both fail the
-workspace (§14). Recognizing divergence is also not enough on its own: folding a new default into a
-customized file needs the **version the customization departed from**, so that a deliberate change
-can be told from an untouched default. (How that baseline is recorded and compared is a _how_ —
-[`design/`](../../design/).)
+later whether the artifact still matches it**. **Why:** without that, an upgrade has only two moves
+— clobber the file or never touch it — and both fail the workspace (§14).
+
+Detection only has to answer **changed or not**, on a workspace still being used as a Ward
+workspace. It is not tamper-evidence and need not survive an adversarial or half-dismantled
+workspace (_Ward does not defend its own presence_, below). _Why say so:_ the store's own contract
+warns against machinery sized past its real load, and a cheap check is what this one is.
+
+**Comparison is always current-versus-current-default**, never a delta between two Ward versions. To
+recap what an upgrade would change, Ward compares the artifact **as it now stands** against **the
+default as it now ships**. _Why:_ it removes the merge base and all version-delta algebra from the
+model, and with them the incoherent case where a change is proposed on the assumption that an
+earlier, declined change had landed. The question is never "what changed between v3 and v4" but
+"here is yours, here is ours, here is what differs and why it matters."
 
 ### Update vs. migrate
 
@@ -201,39 +247,70 @@ You can update without migrating; migration is the heavier path reserved for str
 structural change keeps the risky path rare and explicit — but the distinction earns its keep most
 sharply below, where it is what stops the upgrade machinery from deadlocking on itself.
 
-### Reconciliation is a task, and completing it is what advances the version
+### Reconciliation is one task, and its close asserts adjudication
 
-When an update finds an artifact the workspace has diverged from, Ward **neither overwrites it nor
-silently skips it**. It **opens a task** ([`03-work-lifecycle.md`](03-work-lifecycle.md)) — an
-ordinary one, recorded, addressable, pausable, resumable, owned by a resident — whose work is to
-fold the new default into the human's version, with the human deciding the calls that are theirs to
-make. The **Ward-owned reconciliation skill** is what that task runs.
+When an update finds artifacts the workspace has diverged from, Ward **neither overwrites them nor
+silently skips them**. It opens **one task for the upgrade**
+([`03-work-lifecycle.md`](03-work-lifecycle.md)) — an ordinary one, recorded, addressable, pausable,
+resumable, owned by a resident — covering every artifact that needs a decision. The **Ward-owned
+reconciliation skill** is what that task runs, and its job is to **present each change and what it
+implies** so the human can decide.
 
-**The workspace's version stamp advances only when that task closes `delivered`.** An **abandoned**
-close leaves the workspace on its previous version — honestly skewed, still working, still surfaced
-(_Version skew_, below) — rather than claiming an upgrade that did not happen.
+**What a `delivered` close asserts is adjudication, not conformance:** that this version's changes
+were presented, their ramifications explained, and **decided**. Folding a change in is one outcome
+of deciding; **declining it is another, and both complete the task.** A workspace whose human read
+every proposed change and kept their own version of all of them **is** at the new version.
+
+**Why declining completes rather than blocks.** Ward's part is to surface what changed and why it
+matters; the human's part is to decide (§14 — they own their workflow). Once both have happened,
+raising the same change again spends the scarcest context in the system (§1) on a decision already
+made. An upgrade notice that keeps returning after the human has considered and refused it is not
+diligence, it is nagging — and "what needs me?"
+([`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md)) is worth reading only
+if everything in it still needs the human.
+
+**Declining a change is not the same as abandoning the adjudication.** A task the human sets aside
+without deciding closes **abandoned**, and the stamp stays where it was — honestly skewed, still
+working, still surfaced (_Version skew_, below) — because nothing was considered. The distinction is
+the whole point: Ward stops asking once it has been answered, not once it has been ignored.
+
+**The record advances artifact by artifact, inside the one task.** As each artifact is adjudicated —
+folded in or declined — that decision is **recorded then**, not accumulated in the session and
+written at the close. **Why:** §16 prefers recorded state over live state, and an upgrade
+interrupted at its fifth artifact must not, on resume, re-raise the four already settled. That would
+be the same nagging at a smaller scale, and the record is what prevents it.
+
+**Declining is recorded, and that record has a job.** A declined difference is marked as **chosen,
+not drifted** — which is what stops `doctor` reporting the artifact as divergence on every run
+(_Workspace integrity_, above), and what lets a later recap say "this differs because you decided it
+should" instead of raising it as news. The record retains **what** was declined, not merely that
+something was.
+
+**What is not declinable: structural migration.** A human may complete an upgrade having declined
+every artifact change; they may not complete one having skipped a required migration, because there
+the record's shape genuinely would not match the claim the stamp makes. Preference is theirs;
+structure is not a preference.
 
 **Why a task, and not a flag, a prompt, or a silent merge:** three reasons converge, which is
 usually the sign a rule is right.
 
-1. **It may not finish now.** Reconciliation needs judgment and often a conversation with the human;
-   work that spans human attention is exactly what the task lifecycle exists to hold. A modal prompt
-   at upgrade time demands the decision at the worst possible moment — mid-command, with no context
+1. **It may not finish now.** Reconciliation needs judgment and often a conversation; work that
+   spans human attention is exactly what the task lifecycle exists to hold. A modal prompt at
+   upgrade time demands the decision at the worst possible moment — mid-command, with no context
    loaded.
-2. **It is work like any other.** As a task it is recorded, survives a reboot, appears in "what
-   needs me?" ([`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md)), and gets
-   a scope-boundary reflection when it closes
+2. **It is work like any other.** Recorded, resumable across a reboot, visible in "what needs me?",
+   and reflected on when it closes
    ([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)) — so upgrade friction
-   becomes evidence Ward can learn from instead of a papercut nobody records.
-3. **It makes "upgraded" mean something.** Tying the stamp to a completed reconciliation is what
-   keeps the version from being a claim about files nobody checked.
+   becomes evidence Ward can learn from rather than a papercut nobody records.
+3. **It makes "upgraded" mean something.** Tying the stamp to a completed adjudication is what keeps
+   the version from being a claim about files nobody looked at.
 
 **What the stamp therefore means.** After reconciliation the workspace's artifacts are **not** byte
-copies of Ward's defaults — and that is the intended outcome. The stamp records that this version's
-defaults have been **considered and folded in**, not that the workspace conforms to them. **Why:**
-conformance and customization cannot both be the goal, and choosing conformance would make every
-upgrade a silent rollback of the fit the workspace has accumulated — precisely what §14 exists to
-prevent. **After first install, Ward's defaults are proposals.**
+copies of Ward's defaults — that is the intended outcome, not a shortfall. The stamp records that
+this version's changes were **considered and decided**, never that the workspace conforms to them.
+**Why:** conformance and customization cannot both be the goal, and choosing conformance would make
+every upgrade a silent rollback of the fit the workspace has accumulated — precisely what §14 exists
+to prevent. **After first install, Ward's defaults are proposals.**
 
 **And this is why update and migrate are separate paths.** Artifact reconciliation runs **as
 ordinary work in a fully functioning workspace**: the record's shape is unchanged, so nothing is
@@ -241,6 +318,35 @@ blocked while the task is open. Structural **migration** is the path that gates 
 skew_, below). **Why the line matters here:** if reconciliation blocked the workspace the way
 migration does, the workspace could not run the very task that unblocks it — the upgrade machinery
 would deadlock on itself.
+
+## Ward does not defend its own presence
+
+A human may take Ward's guidance out of their `AGENTS.md`, delete the workspace's skills, and keep
+working in the directory. That is a legitimate choice, and **Ward neither prevents it nor recovers
+from it.** There is no operation that restores a workspace to Ward's shape, and nothing in this
+slice should be read as protecting Ward's own artifacts against the human whose workspace it is.
+
+**Why state a non-goal:** it is what keeps the machinery proportionate. Everything above —
+detection, reconciliation, the owned tier — is designed for the path Ward is actually for: a human
+who wants to keep using Ward and is **augmenting** it, sharpening an `AGENTS.md`, adding skills,
+adjusting a policy that does not fit. Designed instead against a human dismantling it, the same
+machinery would need tamper-evidence, restore paths, and locks — heavyweight answers to a problem
+the workspace's owner is entitled to create.
+
+The line this does **not** cross: **not recovering is not the same as failing badly.** Ward still
+runs, and `doctor` still reports plainly what is missing and what follows from it — "agents started
+here no longer load Ward's operating rules; expect them to behave differently" — because guiding the
+user beats failing cryptically
+([`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md)). Integrity therefore
+distinguishes **drift** (the record and the world disagree — a finding) from **deliberate
+departure** (the human removed something — reported once, then left alone), the same posture a
+recorded decline earns an artifact (_Reconciliation_, above).
+
+There is a boundary worth naming inside the happy path, because it is the same line the tiers draw:
+**augmenting** Ward — adding skills, local conventions, sharper standards — is the point, while
+**contradicting the semantics the record depends on** (instructing agents that a room may span two
+anchors, or that merging to a main line directly is fine) is not prevented, but is how a workspace
+stops meaning what its records say. Ward's answer to that is the layering above, not enforcement.
 
 ## Version skew: what a mismatched CLI may do
 
@@ -308,13 +414,21 @@ here closes, so silence would read as an omission rather than a decision.
   (preferences only; nothing resumption depends on).
 - **Workspace integrity** — the classes of drift between record and world, and the **repair
   posture** (report all, repair only the local and reversible, gate the rest).
-- **How a workspace evolves** — the **version stamp**; **update vs. migrate**; the **two tiers of
-  installed artifact** (yours, expected to be changed; Ward's small owned set, chiefly the
-  reconciliation machinery, which cannot be a customization because it repairs them); that Ward
-  **records what it installed** so divergence is detectable and reconcilable against its baseline;
-  **reconciliation as a task whose `delivered` close is what advances the stamp**; and that the
-  stamp therefore records **defaults considered and folded in, not conformance** — after first
-  install, Ward's defaults are proposals.
+- **How a workspace evolves** — the **version stamp**; **update vs. migrate**; **composition first**
+  (Ward's contribution and the human's separately addressable, Ward's ordered first, so most
+  divergence never occurs) and the residue composition cannot separate; the **two tiers of installed
+  artifact** with the **declinability test** for membership (Ward owns an artifact iff declining its
+  update would make the version claim false), Ward's tier replaced without adjudication but never
+  silently; that Ward **records what it installed** so divergence is detectable, with comparison
+  always **current-versus-current-default** rather than a version delta; **reconciliation as one
+  task per upgrade whose `delivered` close asserts adjudication** — declining a change **completes**
+  it, abandoning without deciding does not — with each artifact's decision **recorded as it is
+  made**; that a **recorded decline marks a difference chosen rather than drifted**; that
+  **structural migration is not declinable**; and that the stamp therefore records **changes
+  considered and decided, not conformance** — after first install, Ward's defaults are proposals.
+- **That Ward does not defend its own presence** — no prevention and no recovery from a workspace
+  the human has stripped, balanced by the obligation to **degrade legibly**, and the **drift versus
+  deliberate departure** distinction that follows for integrity reporting.
 - **Version-skew behavior** — newer-CLI/older-workspace, older-CLI/newer-workspace, skew as a "what
   needs me?" item rather than a nag, and migration as a gated act that rides version control —
   including that **artifact reconciliation does not block the workspace** the way structural
@@ -348,14 +462,15 @@ here closes, so silence would read as an omission rather than a decision.
   invocation. It bears on this slice because "what is running while I am away?" is a
   workspace-scoped question, and on the store's no-resident-process constraint
   ([`../02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md)).
-- **The shape of an upgrade's reconciliation.** Whether one task covers everything an upgrade found
-  diverged or one task is opened per artifact — and how a partially-reconciled upgrade (some
-  artifacts folded in, one task still open) is reported.
-- **Declining a default permanently.** Whether a human can record "this artifact is mine now, stop
-  proposing" — and if so, what that means for the stamp, which otherwise advances only on a
-  `delivered` reconciliation.
-- **Membership of the Ward-owned tier.** Beyond the reconciliation machinery, what else (if
-  anything) Ward must own outright, and the test for admitting an artifact to that tier.
+- **Precedence between composed layers.** "Later wins" is well defined for configuration and fuzzy
+  for two conflicting instructions sitting in one context window. What an agent should do when the
+  human's layer contradicts Ward's, beyond ordering, is unsettled.
+- **Deletion, not just shadowing.** Composition lets a human override by appending but never
+  _un-say_ a default. Whether removing one of Ward's defaults outright is supported, and what an
+  upgrade then proposes about it.
+- **Semantic drift across an upgrade.** When Ward's layer renames or reframes something the human's
+  layer builds on, their content is stale without having been touched. Whether that is detectable at
+  all, or only surfaced as a recap for the human to judge.
 - **Migration safety.** Whether migration is always idempotent, re-runnable, and reversible via the
   workspace's own version history (§15).
 - **Improvements bound for Ward itself.** Reflection may propose improvements that belong upstream
