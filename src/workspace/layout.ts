@@ -6,8 +6,8 @@ import { dirname, join, resolve } from 'node:path';
 
 export const MARKER_DIR = '.ward';
 
-/** Directories reserved by the layout; 0003/0004 populate them. */
-export const SCOPE_DIRS = ['repos', 'repositories', 'worktrees', 'projects'] as const;
+/** Directories reserved by the layout. `tasks/` holds bare tasks — levels are elided, not faked. */
+export const SCOPE_DIRS = ['repos', 'repositories', 'worktrees', 'projects', 'tasks'] as const;
 
 /** Checkouts and scratch are the world the record describes, not the record. */
 export const IGNORE_LINES = ['/repos/', '/worktrees/', '/workdirs/', '/.ward/tmp/'] as const;
