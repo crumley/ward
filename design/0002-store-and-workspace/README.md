@@ -185,6 +185,27 @@ the optique noun/verb tree. Tests: `test/store/document.test.ts`, `test/workspac
 **Next.** Entry 0003: repository registration — adopt-or-clone converging on the contained canonical
 checkout under `repos/`, the repository record, and `repo refresh`.
 
+### 2026-08-02 — CI's first run caught a spawn-environment dependence
+
+**Goal.** Confirm the PR's CI run is green. **What was done.** It was not: the six in-process create
+tests failed in Actions only — `Bun.spawnSync` without an explicit `env` uses the process's
+**original** environment and silently ignores runtime `process.env` mutations, so the tests'
+hermetic git identity (`applyGitTestEnv`) never reached git. Locally the machine's real
+`~/.gitconfig` masked it; CI's bare runner exposed it. Fixed by passing `env: { ...process.env }`
+explicitly in the `git()` wrapper — production behavior is unchanged (the spread is the inherited
+environment plus any runtime changes), and the tests' pinning now takes effect. The same shape as
+0001's `NO_COLOR` catch: exactly the local-vs-CI drift the shared gate exists to surface.
+
+**What works now — with the commands that prove it.**
+
+- `bun test` → `22 pass, 0 fail`.
+- `env -i PATH="$PATH" TMPDIR="$TMPDIR" HOME=/tmp/no-such-home bun test test/workspace/create.test.ts`
+  → `7 pass, 0 fail` (reproduces the runner's bare environment — no global git config — locally).
+- The PR's CI re-run on the fixed commit is the cross-machine proof.
+
+**Decisions.** Subprocess environments are always passed explicitly at the spawn site; nothing may
+rely on `Bun.spawnSync` picking up `process.env` mutations. **Next.** unchanged.
+
 ## Spec-feedback
 
 None this entry. The surfaces intent deliberately leaves open — per-type front-matter fields, the

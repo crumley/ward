@@ -9,7 +9,10 @@ export interface GitResult {
 }
 
 export function git(cwd: string, ...args: string[]): GitResult {
-  const result = Bun.spawnSync(['git', ...args], { cwd });
+  // env is passed explicitly: without it, Bun.spawnSync uses the process's
+  // original environment and silently ignores runtime process.env changes —
+  // the tests' hermetic git identity depends on those being honored.
+  const result = Bun.spawnSync(['git', ...args], { cwd, env: { ...process.env } });
   return {
     exitCode: result.exitCode,
     stdout: result.stdout.toString(),
