@@ -4,7 +4,7 @@
 > validated front matter) and the first real verbs — `workspace create` and a lite `doctor` — so a
 > workspace can exist, converge, and report its own health.
 >
-> **Status:** proposed · **Started:** 2026-08-02
+> **Status:** accepted · **Started:** 2026-08-02
 
 This is the first of three entries that together reach the **bootstrap loop**: a workspace that
 contains the `ward` repository and in which the next Ward iteration is delivered as a Ward task —
@@ -94,11 +94,12 @@ delivering-work walkthrough runs on exactly this minimal cast.
 ## Design
 
 - **Decisions:**
-  - **ADR 0005 (to be written when this entry starts building): the store realization stack** — one
-    consolidated ADR per the repo's grouping preference: YAML front matter + markdown body; the
-    schema-validation library (candidate: zod); git operations by shelling out to the system `git`
-    (no library); atomic write via temp-file + rename. The ADR records the candidates considered and
-    why each choice fits the store contract's "sized to its real load" clause.
+  - **[ADR 0005 — the store realization stack](../decisions/0005-store-stack.md)** — one
+    consolidated ADR per the repo's grouping preference: YAML front matter + markdown body (parsed
+    and serialized by `Bun.YAML`); zod for runtime-validated schemas; git operations by shelling out
+    to the system `git` (no library); atomic write via staging in `.ward/tmp/` + rename. The ADR
+    records the candidates considered and why each choice fits the store contract's "sized to its
+    real load" clause.
   - **Entry-local — the on-disk layout** (the store contract's "left to implementation"):
 
     ```
@@ -139,10 +140,53 @@ delivering-work walkthrough runs on exactly this minimal cast.
 
 ## Build log
 
-No iterations yet — the log opens when this entry moves to in-progress.
+### 2026-08-02 — Store, workspace create, and doctor built end to end
+
+**Goal.** Build everything in Scope in one iteration: the store module, `workspace create` with
+convergence, doctor-lite, and discovery, proven by the three acceptance scenarios. **What was
+done.** Wrote [ADR 0005](../decisions/0005-store-stack.md) and added zod (the entry's one new
+dependency). Built `src/store/` (`frontmatter.ts` — fence split/join; `document.ts` —
+`DocumentType<T>`, read/validate/write with atomic rename; `types.ts` — the workspace record and
+seeded catalog schemas), `src/workspace/` (`layout.ts` — marker, reserved dirs, ignore lines,
+walk-up discovery; `create.ts` — nine check-then-do establishment steps; `doctor.ts` — machine +
+integrity findings; `git.ts` — thin system-git wrapper; `templates.ts` — installed content),
+`src/errors.ts` (`WardError`: the one error type the CLI presents), and grew `src/cli/index.ts` into
+the optique noun/verb tree. Tests: `test/store/document.test.ts`, `test/workspace/create.test.ts`,
+`test/cli/workspace.test.ts` (the acceptance arc through the spawned CLI), plus `test/helpers.ts`
+(hermetic git env: config pinned to `/dev/null`, identity from environment variables).
+
+**What works now — with the commands that prove it** (Bun 1.3.14, git 2.54.0, macOS):
+
+- `bun test` → `22 pass, 0 fail, 57 expect() calls` across 4 files — including the three acceptance
+  scenarios: fresh create (all nine steps `established`, records valid, one commit, clean tree),
+  convergent re-run (`0 established, 9 already satisfied`, no new commit, `git status --porcelain`
+  empty), and doctor outside (machine checks only), inside (healthy), and against a corrupted
+  `workspace.md` (exit 1, names the file).
+- `bun src/cli/index.ts workspace create <tmp>/ws` → nine `established` steps and `Workspace ready`;
+  re-run → nine `satisfied`; `ward doctor` inside → all `✓`, `healthy`.
+- `mise run check` → green end to end (Biome + dprint + `tsc --noEmit` + `bun test` + lychee).
+
+**Decisions** (entry-local, found while building):
+
+- **Bare `ward` short-circuits before optique.** An `or` containing `command` parsers rejects empty
+  argv ("no matching command"), so the 0001 behavior — version plus a help pointer — is preserved by
+  handling zero-argument invocation before `run()`. 0001 called that output a placeholder for the
+  noun/verb tree; the tree has now arrived around it.
+- **A convergence commit stages only the paths the run established**, so a human's own uncommitted
+  edits are never swept into Ward's commit. The initial commit on a fresh workspace is the one
+  `git add -A`, safe because the ignore policy is already in place and the directory was empty.
+- **Create refuses a populated directory that is not already a workspace** — the alternative is
+  `git add -A` sweeping a stranger's files into a workspace history. Convergence is for workspaces;
+  adoption of arbitrary directories is not a feature.
+- **Git identity is probed with `git var GIT_AUTHOR_IDENT`**, which honors both config and
+  environment — the same rule git itself applies at commit time, so doctor and create cannot
+  disagree with git about whether committing would work.
+
+**Next.** Entry 0003: repository registration — adopt-or-clone converging on the contained canonical
+checkout under `repos/`, the repository record, and `repo refresh`.
 
 ## Spec-feedback
 
-None this entry (scoping stage). Expected surface once building: the store contract's per-type
-front-matter fields and the workspace record's minimum field set, neither of which intent pins
-today.
+None this entry. The surfaces intent deliberately leaves open — per-type front-matter fields, the
+on-disk layout, the doctor check set — were decided here as design without rubbing against any
+intent statement.
