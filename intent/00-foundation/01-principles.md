@@ -122,7 +122,10 @@ Ward (the CLI) ships on its own timeline; a workspace is created by some version
 Ward must recognize which version created a workspace and **update/migrate** it forward — structure,
 skills, and other artifacts — with a reconciliation path when the workspace has diverged from the
 defaults. **Why:** workspaces are long-lived and customized; they must keep working as the platform
-moves without being clobbered (`../01-concepts/04-reflection-and-evolution.md`).
+moves without being clobbered. Almost everything Ward installs is **meant** to be changed by the
+human and their agents, so an upgrade **proposes** rather than overwrites: divergence is reconciled
+as its own recorded work, and the version advances when that reconciliation lands
+(`../01-concepts/06-workspace-lifecycle.md`).
 
 ## 15. The workspace is versionable and recoverable
 

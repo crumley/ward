@@ -19,6 +19,13 @@ relevant slice (and reflected in tests and code).
   emerge only in aggregate preserved? (Owned by
   [`../01-concepts/04-reflection-and-evolution.md`](../01-concepts/04-reflection-and-evolution.md);
   listed here because it recurs.)
+- **What runs the cadence.** Refresh, rebase, and cadence reflection are specified as recurring
+  ([`../01-concepts/03-work-lifecycle.md`](../01-concepts/03-work-lifecycle.md),
+  [`../01-concepts/04-reflection-and-evolution.md`](../01-concepts/04-reflection-and-evolution.md))
+  but nothing states what fires them when no session is attached — a resident background process, or
+  opportunistic work on CLI invocation. It spans the toil, reflection, the store's
+  no-resident-process constraint, and the workspace's own lifecycle. (Owned by
+  [`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md).)
 
 ## Index of per-slice open questions
 
@@ -35,9 +42,18 @@ relevant slice (and reflected in tests and code).
   case of the worktree hooks); policy-encoding home (_task states now settled_).
 - [`01-concepts/04-reflection-and-evolution.md`](../01-concepts/04-reflection-and-evolution.md) —
   reflection-type taxonomy; cadence/boundary triggers (_recovery completion now settled as an event
-  trigger_); cross-chunk learnings; migration safety.
+  trigger_); cross-chunk learnings. (_Versioning, migration, and reconciliation — with migration
+  safety — moved to
+  [`01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)._)
 - [`01-concepts/05-context-loading.md`](../01-concepts/05-context-loading.md) — none open (_the
   append-vs-rewrite line now settled as the two-zone model — below_).
+- [`01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md) — repository
+  removal/rename/remote-moves; more than one workspace on a machine (and whether a machine-level
+  registry may exist); **what runs the cadence** (also cross-cutting, above); precedence between
+  composed layers; deletion rather than shadowing; semantic drift across an upgrade; migration
+  safety; how improvements bound for Ward itself cross the local↔remote boundary. (_Where versioning
+  belongs, the shape of a reconciliation, declining a default, and the Ward-owned tier's membership
+  test are now settled — see below._)
 - [`02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md) — none open (_the
   artifact taxonomy now settled as two tiers — below; the concurrency primitive is a bounded
   technique choice under §19, constrained by the store contract, chosen in `design/`_).
@@ -56,6 +72,41 @@ relevant slice (and reflected in tests and code).
 
 ## Recently resolved (kept briefly for context)
 
+- **The workspace has a lifecycle of its own.** Creation as a deliberate located act and what it
+  establishes (including the root `AGENTS.md` and Ward's workspace skill — the guidance an agent
+  needs to work there); repository registration; preconditions (§3 is about the **record**, not the
+  machine — which is what gives `doctor` a subject); integrity as classes of drift with a repair
+  posture; version skew in both directions; no terminal state. **Versioning, update/migrate, and
+  reconciliation re-homed here** from reflection, which keeps the inward axis only
+  ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)).
+- **Ward's defaults are proposals after first install.** Installed artifacts come in two tiers — the
+  human's (nearly everything, expected to be changed) and Ward's small owned set, replaced without
+  adjudication but never silently. The membership test: **Ward owns an artifact iff its content is
+  what makes the record mean what it says** — everything else is preference and local convention;
+  not being offered for adjudication is a _consequence_ of that, not its definition. Ward records
+  what it installed so divergence is detectable, comparing **current against current default**
+  rather than any version delta
+  ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)).
+- **An upgrade is one task, and its close asserts adjudication.** Ward presents each changed default
+  and what it implies; **declining a change completes the upgrade exactly as folding it in does**,
+  because Ward's part is to inform and the human's is to decide — re-raising a settled decision
+  spends the scarcest context in the system (§1). Abandoning _without_ deciding does not advance the
+  stamp. Each artifact's decision is recorded as it is made (§16), and a recorded decline marks the
+  difference **chosen rather than drifted**, so integrity stops reporting it. **Structural migration
+  is the one thing not declinable**
+  ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)).
+- **Compose first; reconcile only the residue.** Ward's contribution to an artifact and the human's
+  are separately addressable and composed in a fixed order — Ward's first, justified twice over
+  (later content overrides; Ward's stable part caches, §12) — so an upgrade replaces Ward's part
+  without touching the human's and most divergence never happens. What composition cannot separate —
+  deletion, semantic drift, non-composable artifacts — is what reconciliation is for
+  ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md),
+  [`../01-concepts/05-context-loading.md`](../01-concepts/05-context-loading.md)).
+- **Ward does not defend its own presence.** A human may strip Ward from their workspace; Ward
+  neither prevents nor recovers from that, which is what keeps the upgrade machinery proportionate
+  (no tamper-evidence, no restore path). The obligation that remains is to **degrade legibly** — and
+  integrity distinguishes **drift** from **deliberate departure**, reporting the latter once
+  ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)).
 - **"Mission" is not a containment level** — if it returns, it is an _attribute of a project_.
 - **Rooms occupy anchors; deep work needs no repository.** The level between task and room is the
   **anchor** — a task-owned scratch medium from which durable output is cut into a governed record:

@@ -28,8 +28,9 @@ repo. **Read it first.**
 ## How to use it
 
 - **To understand Ward:** read [`AGENTS.md`](AGENTS.md), then follow the reading order in
-  [`intent/README.md`](intent/README.md) — foundation → concepts → subsystems, then the
-  [walkthrough](intent/03-walkthrough.md).
+  [`intent/README.md`](intent/README.md) — foundation → concepts → subsystems, then the two
+  walkthroughs: [getting started](intent/03-walkthrough-getting-started.md) and
+  [delivering work](intent/04-walkthrough-delivering-work.md).
 - **To build Ward:** read the intent, then [`design/README.md`](design/README.md) — open a design
   entry, set its scope, journal the build in its log, and trace every entry back to the intent it
   serves.

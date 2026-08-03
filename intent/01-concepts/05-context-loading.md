@@ -58,6 +58,13 @@ assembled in **two zones, ordered by expected rate of change**.
 volatile content loaded last leaves the prefix's cache intact. A document **graduates** into the
 stable prefix when it stops changing — and graduation is itself an append-shaped change.
 
+**The same ordering serves authorship.** Where an artifact is composed from a Ward-provided part and
+the human's own ([`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)), Ward's part loads
+**first**: it is identical across every workspace at that version, so it caches, while the human's
+part — the one that actually changes — belongs behind it. That the same order is independently
+required so the human's content can **override** Ward's is what makes it a rule rather than a
+convention.
+
 **The stable prefix changes only at adoption boundaries.** Rewriting the prefix is not forbidden —
 it is **batched**. Reflection produces proposals asynchronously
 ([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)); **adopting** them is the
@@ -84,7 +91,10 @@ not span a mix of harnesses, and recovery would depend on a human remembering wh
 
 - **Context assembly** — the `AGENTS.md`-hierarchy-by-working-directory model, the
   deterministic/append-oriented bias for cache sharing, the **two-zone model** (stable prefix +
-  mutable tail, graduation, adoption boundaries), and the harness-handle-per-session rule.
+  mutable tail, graduation, adoption boundaries) **and its ordering, which serves authorship as well
+  as volatility** (Ward's part first, the human's after —
+  [`06-workspace-lifecycle.md`](06-workspace-lifecycle.md) owns the ownership split), and the
+  harness-handle-per-session rule.
 
 Other slices reference these; the _working directory_ axis itself is defined in
 [`00-domain-model.md`](00-domain-model.md), and the economy principle in

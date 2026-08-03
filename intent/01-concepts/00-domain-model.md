@@ -56,7 +56,9 @@ heavyweight work and one-offs instead of splitting them into regimes.
 
 The root. Local and personal to one human and their agents. Self-sufficient: holds all metadata,
 tooling, and skills needed to understand and resume the work within it. A workspace is configured
-with a set of **repositories** it knows how to work in.
+with a set of **repositories** it knows how to work in. Its own arc — how one is created, what it
+holds when new, how repositories are registered, what "healthy" means for it, and how it moves
+forward as Ward changes — is [`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s.
 
 ### Project
 
@@ -164,10 +166,14 @@ agent is a lost update by Ward's own machinery.
 
 ## Repositories and the main line
 
-A workspace knows a set of repositories. Each is checked out at a well-known location and **tracks
-its main line** (its default branch), kept fresh on a cadence (`03-work-lifecycle.md`) so new
-worktrees branch from current code. The _what_ is: the workspace maintains current, canonical
-checkouts of its repositories, distinct from the per-task worktrees branched off them.
+A workspace knows a set of repositories. For each, the workspace **contains a canonical checkout**
+that **tracks its main line** (its default branch), kept fresh on a cadence (`03-work-lifecycle.md`)
+so new worktrees branch from current code. The checkout is independent of every worktree and never
+worked in directly — which is what lets any agent, including one standing in a worktree, read the
+current main line locally at any moment. The _what_ is: the workspace maintains current, canonical,
+contained checkouts of its repositories, distinct from the per-task worktrees branched off them; the
+rest of the arc — registration, adopt-or-clone, why containment — is
+[`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s.
 
 ## Status: recorded at the leaves, derived above
 

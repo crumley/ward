@@ -44,8 +44,9 @@ The repo stands on four parallel trees; **`intent` governs the other three** (se
 ## If you are here to…
 
 - **Understand Ward** → follow the reading order in [`intent/README.md`](intent/README.md):
-  `00-foundation/` → `01-concepts/` → `02-subsystems/`, then
-  [`intent/03-walkthrough.md`](intent/03-walkthrough.md).
+  `00-foundation/` → `01-concepts/` → `02-subsystems/`, then the two walkthroughs —
+  [`intent/03-walkthrough-getting-started.md`](intent/03-walkthrough-getting-started.md) and
+  [`intent/04-walkthrough-delivering-work.md`](intent/04-walkthrough-delivering-work.md).
 - **Capture a requirement** → write the durable what & why into the relevant `intent/` slice; if it
   defers a decision to the build, note it inline (_Left to implementation_) and carry the residue
   into the matching `design/` draft. Deferral is deliberate room to build **more than one

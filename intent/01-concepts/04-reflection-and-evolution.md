@@ -4,8 +4,10 @@
 > [`../../design/`](../../design/). **Status:** living.
 
 Ward is meant to **compound**: a workspace gets better the longer it is worked in, and Ward itself
-improves over time. This file covers two related forms of evolution — the **reflection loop** within
-a workspace, and the **versioning and migration** of workspaces as Ward changes underneath them.
+improves over time. This file covers the **reflection loop** within a workspace — the inward axis of
+that evolution. The outward axis, a workspace moving forward as Ward changes underneath it, is
+[`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s; the two are related but deliberately not
+conflated (_The relationship between reflection and migration_, below).
 
 ## Reflection is a family of goal-directed routines, not one routine
 
@@ -79,53 +81,22 @@ Reflection processes only what is new since it last ran for a given goal; the wo
 where each reflection last reached, so the next run knows its interval. (Whether the cursor is a
 timestamp or something else is a _how_.)
 
-## Versioning and migration
-
-Ward (the CLI) evolves on its own timeline; a workspace is created by some version and then
-persists. These two facts require update and migration.
-
-### The version stamp
-
-A workspace records **which version of Ward created and last updated it**, with whatever
-structure/schema version that implies. **Why:** the stamp is what lets a newer CLI recognize an
-older workspace and know what, if anything, must change.
-
-### Update vs. migrate
-
-- **Update** — bring a workspace's artifacts (skills, scaffolding, generated config) in line with
-  the current CLI when nothing structural blocks doing so directly.
-- **Migrate** — transform the workspace's **structure or schema** forward when the shape itself
-  changed between versions.
-
-You can update without migrating; migration is the heavier path reserved for structural change.
-**Why distinguish them:** most upgrades are routine updates; reserving "migration" for structural
-change keeps the risky path rare and explicit.
-
-### Reconciliation when a workspace has diverged
-
-A workspace is meant to be customized — its agents evolve its skills, policies, and hooks. So
-update/migration must **never blindly clobber** local changes:
-
-- If the workspace still matches Ward's defaults, update directly.
-- If it has **diverged**, **flag it** and offer a **reconciliation process**: an agent that asks the
-  human whether and how the new defaults should fold into their customized artifacts, and guides the
-  choices that produce the merged result.
-
-**Why:** the whole point of evolvable artifacts is defeated if an upgrade silently overwrites local
-changes. This is the same opinionated-but-evolvable pattern described for workflow policy
-(`03-work-lifecycle.md`), applied to everything Ward installs.
-
 ## The relationship between reflection and migration
 
-Two axes of evolution, not to be conflated:
+Two axes of evolution, not to be conflated — which is why they are described in different slices:
 
 - **Reflection** improves a _single workspace_ from _its own_ accumulated experience and teaching
-  loop. Driven by what happened inside it.
+  loop. Driven by what happened inside it. **This slice.**
 - **Migration/update** brings a workspace in line with a _new version of Ward_. Driven by changes to
-  the CLI, external to the workspace.
+  the CLI, external to the workspace. The version stamp, update vs. migrate, and the reconciliation
+  of artifacts the workspace has customized are
+  [`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s.
 
 One looks inward at experience; the other outward at the evolving platform. Both keep the workspace
-healthy over long timescales.
+healthy over long timescales, and they meet at the artifacts each is allowed to change: reflection
+**proposes** improvements to the workspace's own skills, personas, and standards, while an upgrade
+**proposes** Ward's new defaults for the same artifacts — and in both directions the workspace's
+customizations are folded in deliberately, never overwritten (§14).
 
 ## Canonical home for
 
@@ -134,8 +105,8 @@ healthy over long timescales.
 - **The map-reduce shape** (chunk → distill → roll up) and the **reflection cursor** that keeps it
   incremental.
 - **That reflection is asynchronous and produces proposals**, not silent edits.
-- **Versioning & migration** — the version stamp, update vs. migrate, and reconciliation when a
-  workspace has diverged.
+- **The two axes of evolution** and why they are not conflated — inward from experience (here),
+  outward from a new Ward ([`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)).
 
 The build of each (default goals, chunk heuristics, cursor form) is planned in
 [`design/`](../../design/).
@@ -147,5 +118,7 @@ The build of each (default goals, chunk heuristics, cursor form) is planned in
 - **Cadence/boundary triggers** — time-based, event-based, human-initiated, or a mix (_recovery
   completion is now settled as an event trigger, above_).
 - **Cross-chunk learnings.** How insights that emerge only in aggregate survive the roll-up.
-- **Migration safety.** Whether migration is always idempotent, re-runnable, and reversible via the
-  workspace's own version history.
+
+(_Versioning, migration, and reconciliation moved to
+[`06-workspace-lifecycle.md`](06-workspace-lifecycle.md), which carries their open questions —
+including migration safety._)
