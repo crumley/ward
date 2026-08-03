@@ -90,17 +90,37 @@ A workspace knows a set of repositories it works in ([`00-domain-model.md`](00-d
 Repositories). Populating that set is part of the workspace's arc, not a detail of task execution.
 
 - **A repository joins by a deliberate act, and the workspace records enough to resolve it** — its
-  identity within the workspace, its remote, the **name of its main line**, and the location of the
-  canonical checkout that tracks it. _Why:_ the toil branches new worktrees from that checkout and
-  refreshes it on a cadence ([`03-work-lifecycle.md`](03-work-lifecycle.md)); all of that is
-  unreachable if the record cannot say where the checkout is and what it tracks.
+  identity within the workspace, its remote, and the **name of its main line**. _Why:_ the toil
+  branches new worktrees from the canonical checkout and refreshes it on a cadence
+  ([`03-work-lifecycle.md`](03-work-lifecycle.md)); all of that is unreachable if the record cannot
+  say what the repository is and what its checkout tracks.
+- **The canonical checkout lives inside the workspace.** For every registered repository, the
+  workspace **contains** a checkout tracking that repository's main line — one per repository,
+  independent of every worktree, never worked in directly. _Why three jobs converge on containment:_
+  an agent standing in a worktree can always read the current main line **locally** — diff against
+  it, trace what landed — without leaving its own branch or touching the network; the refresh and
+  rebase toil ([`03-work-lifecycle.md`](03-work-lifecycle.md)) has one fixed, known target per
+  repository; and a cold reader finds every repository's main line in the same place in every
+  workspace, which is self-sufficiency (§3) extended from the record to the code the record is
+  about. **Contained is not tracked:** the workspace's own repository (§15) ignores the checkouts
+  and worktrees within it — they are the world the record describes, not the record.
 - **The main line is recorded from the repository, not assumed.** _Why:_ repositories disagree about
   their default branch, and every downstream rule — never merge to main, branch from current, rebase
   onto the refreshed line — names a branch the workspace must have gotten right.
-- **Both adoption and cloning must be possible.** A human with an existing checkout registers it; a
-  human without one has Ward clone it. _Why:_ the prime directive rejects make-work — forcing a
-  re-clone of a repository already on disk spends the human's time to satisfy the tool's convenience
-  ([`../00-foundation/00-vision.md`](../00-foundation/00-vision.md)).
+- **Both adoption and cloning must be possible, and both converge on the contained checkout.** A
+  human without a local checkout has Ward clone one into place; a human with one has Ward **adopt**
+  it — the existing checkout supplies the content (moved in, or used as a local source; the
+  mechanism is [`design/`](../../design/)'s), so nothing already on disk is fetched again. _Why the
+  destination is still Ward's:_ the make-work the prime directive rejects is the needless
+  re-download, not the placement ([`../00-foundation/00-vision.md`](../00-foundation/00-vision.md))
+  — containment buys the three benefits above and costs the human nothing they chose.
+- **No repository is required, and none is special.** The set may be empty (creation, above), and
+  nothing in it privileges Ward's own source: a workspace need never contain the `ward` repository,
+  and one that does — as the bootstrap workspace does
+  ([`../03-walkthrough-getting-started.md`](../03-walkthrough-getting-started.md)) — registered it
+  the way any workspace registers any repository: because its human works on it. _Why say so:_ the
+  bootstrap story is vivid enough to read as a rule, and a tool whose workspaces quietly required
+  its own source would have smuggled in a dependency no principle argues for.
 - **Registration is local and reversible, so it is autonomous** (§18). Fetching a repository reads
   from the remote; nothing crosses the boundary outward, so no authority is required.
 
@@ -442,9 +462,11 @@ here closes, so silence would read as an omission rather than a decision.
   `AGENTS.md` and Ward's workspace skill — Ward's defaults as workspace-owned artifacts, version
   control over itself, the repository set); that re-running it **converges** rather than clobbers;
   and that **credentials are never workspace state**.
-- **The repository set's lifecycle** — deliberate registration recording remote, main line, and
-  canonical checkout; the main line read from the repository rather than assumed; adopt-or-clone;
-  registration as a local, autonomous act.
+- **The repository set's lifecycle** — deliberate registration recording remote and main line; the
+  **contained canonical checkout** (inside the workspace, one per repository, independent of every
+  worktree, ignored by the workspace's own git); the main line read from the repository rather than
+  assumed; adopt-or-clone **converging on the contained checkout**; that **no repository is required
+  or special** — Ward's own source included; registration as a local, autonomous act.
 - **Preconditions** — that §3's self-sufficiency is about the **record, not the machine**; the
   required/optional split that gives `doctor` its subject; and the **global-state boundary**
   (preferences only; nothing resumption depends on).
@@ -481,8 +503,9 @@ here closes, so silence would read as an omission rather than a decision.
 
 - The command names and their surface
   ([`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md) owns the noun/verb
-  shape); the on-disk layout a creation produces; the concrete precondition and integrity check sets
-  and how each is probed; how the canonical checkout's location is chosen; the form of the global
+  shape); the on-disk layout a creation produces, including the path convention for the contained
+  canonical checkouts and worktrees and the ignore policy that keeps them untracked; the concrete
+  precondition and integrity check sets and how each is probed; the form of the global
   configuration; how a structural write is recognized in order to be blocked under skew; **how the
   installed baseline is recorded and compared** to detect divergence (a fingerprint, a retained
   pristine copy, or a merge base); the contents of the workspace skill and the root `AGENTS.md`; and

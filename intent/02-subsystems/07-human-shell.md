@@ -97,6 +97,23 @@ principle (§8) and feeds the compounding loop
   stated **quality bar**, not a nicety — a tool people reach for configures itself the way the best
   CLIs do, and a location-blind or surprising configuration model is friction the prime directive
   rejects.
+- **A guided setup, runnable at any time.** Ward offers a **guided, interactive setup** that walks
+  the human through inspecting and changing that configuration — the **global** axis always, the
+  **workspace-local** axis additionally when invoked inside a workspace — and the workspace choices
+  Ward installed as defaults (the persona cast the clearest case;
+  [`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)). It is
+  **not a first-run wizard**: it is re-runnable whenever something should change, presents current
+  values rather than blank prompts, and **converges** — a run changes only what the human chooses,
+  the same idempotency creation inherits (§6). _Why:_ configuration reachable only by knowing which
+  file or flag to edit makes discovery the human's job; a guided pass over what is configurable is
+  the interactive-resolution quality bar (above) applied to configuration. _Boundaries:_ it does
+  **not** create a workspace as a side effect — creation stays a deliberate, located act
+  ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)) — and
+  `doctor` stays the diagnoser: doctor **reports and recommends**, setup is where the human
+  **enacts** change, guided. _Asymmetry (§8):_ a human-audience affordance; an agent changes
+  configuration through the structured noun/verb surface and is never routed into a guided flow.
+  (The exact verb — `setup` or the prevailing convention — is a design choice; the capability is the
+  constraint.)
 - **Verbs read true to the operation.** A CLI verb matches what it does: the per-thread open→running
   operation is **`resume`**; the workspace-wide cold start that re-attaches every in-flight thread
   reads as **`attach`** (or "resume the workspace"), **not** `recover`
@@ -128,14 +145,17 @@ principle (§8) and feeds the compounding loop
   _surface_ — what it checks is
   [`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)'s),
   **surfacing version skew through the attention surface rather than as output chatter**,
-  **opinionated global + workspace-local configuration**, **verbs that read true to the operation**,
-  the **human-default caller identity** rule, and **local usage telemetry**.
+  **opinionated global + workspace-local configuration**, the **guided setup** capability (any-time,
+  convergent, current-values-first, human-audience; never a side-effect workspace creator), **verbs
+  that read true to the operation**, the **human-default caller identity** rule, and **local usage
+  telemetry**.
 
 ## Left to implementation
 
 - The exact command tree and naming; **the interactive picker and autocomplete UX — how candidates
   for a missing/ambiguous noun are sourced, scoped, and ranked, and how their visual cues (accent,
-  glyph) are rendered in the prompt**; the specific environment-variable name and the set of context
+  glyph) are rendered in the prompt**; the guided setup's step set and which configuration and
+  installed choices it walks through; the specific environment-variable name and the set of context
   fields it carries (which required vs. inferred); the initial alias bindings; the telemetry storage
   format, fields, and analysis tooling; **how the workspace root and the enclosing scope are
   discovered from the working directory** (the marker file and walk-up mechanism); the **`doctor`

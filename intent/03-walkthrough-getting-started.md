@@ -13,7 +13,9 @@ wins.
 > register is **Ward itself** — so that from the next walkthrough onward, Ward is used to build
 > Ward. Two names are in play throughout: **Ward the installed CLI** operating the workspace, and
 > **`ward` the repository** registered inside it. They are the same software at different moments in
-> its life.
+> its life. Nothing requires this pairing: no workspace is obliged to contain the `ward` repository
+> — no repository is special (`01-concepts/06-workspace-lifecycle.md`, the repository set) — and it
+> is first here only because this human's work happens to be building Ward.
 
 ## 0. Get Ward onto the machine
 
@@ -94,17 +96,20 @@ leak-guard **exhaustively enforceable** at the crossing (`02-subsystems/06-remot
 
 ## 4. Register the first repository — `ward` itself
 
-The human registers the repository the workspace will work in. Ward either **adopts** an existing
-checkout or **clones** one; the workspace records the repository's identity, its remote, the
-location of the **canonical checkout**, and the **name of its main line** — read from the
-repository, not assumed (`01-concepts/06-workspace-lifecycle.md`). That checkout is what the toil
-keeps fresh and what new worktrees branch from (`01-concepts/03-work-lifecycle.md`, refresh).
+The human registers the repository the workspace will work in. Ward either **adopts** the human's
+existing checkout — its content moved or locally cloned into place, nothing on disk fetched again —
+or **clones** afresh; either way the **canonical checkout lands inside the workspace**, contained
+but ignored by the workspace's own git (`01-concepts/06-workspace-lifecycle.md`). The workspace
+records the repository's identity, its remote, and the **name of its main line** — read from the
+repository, not assumed. That contained checkout is what the toil keeps fresh, what new worktrees
+branch from (`01-concepts/03-work-lifecycle.md`, refresh), and where an agent standing in any
+worktree reads the current main line without leaving its branch.
 
 Registration is **local and reversible**, so no authority is required (§18); fetching reads from the
 remote, and nothing crosses the boundary outward.
 
-**Records written:** a _repository record_ (identity, remote, main line, canonical checkout
-location).
+**Records written:** a _repository record_ (identity, remote, main line). **Established on disk:**
+the contained canonical checkout.
 
 ## 5. `doctor` again — now inside a workspace
 
@@ -136,7 +141,8 @@ The next walkthrough starts exactly here.
 ### What this exercises (and where it would catch a gap)
 
 The workspace's own arc: creation as a deliberate act, what creation establishes, the
-credentials-are-not-workspace-state line, repository registration with adopt-or-clone, the
+credentials-are-not-workspace-state line, repository registration with adopt-or-clone converging on
+the workspace-contained canonical checkout, the no-repository-is-special rule, the
 record-versus-machine reading of self-sufficiency, doctor at both scopes (machine-only outside a
 workspace, machine plus integrity inside), and the empty-container-is-active rule at the root.
 
