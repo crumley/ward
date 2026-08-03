@@ -13,6 +13,7 @@ operated with the \`ward\` CLI and tracked in git.
 - \`workspace.md\` — the workspace record: its identity and the Ward version that created it.
 - \`catalog.md\` — the artifact types this workspace can produce.
 - \`projects/\` — project and task records, as work comes to exist.
+- \`repositories/\` — the records of registered repositories (one document each).
 - \`repos/\` — canonical checkouts of registered repositories, kept fresh and never worked in
   directly.
 - \`worktrees/\` — per-task worktrees, where changes are actually made.

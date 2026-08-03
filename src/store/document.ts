@@ -3,7 +3,7 @@
 // write. Writes are atomic — staged in .ward/tmp/ and renamed into place — so
 // no reader ever observes a partial document (ADR 0005).
 import { mkdir, rename } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import type { z } from 'zod';
 import { WardError } from '../errors.ts';
 import { joinFrontMatter, splitFrontMatter } from './frontmatter.ts';
@@ -51,6 +51,7 @@ export async function writeDocument<T>(
   const data = type.schema.parse(document.data);
   const text = joinFrontMatter(Bun.YAML.stringify(data, null, 2), document.body);
   const file = join(root, type.relPath);
+  await mkdir(dirname(file), { recursive: true });
   const tmpDir = join(root, '.ward', 'tmp');
   await mkdir(tmpDir, { recursive: true });
   const tmp = join(tmpDir, `${basename(file)}.${process.pid}.${nextWrite++}`);

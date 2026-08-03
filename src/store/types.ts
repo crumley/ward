@@ -35,6 +35,20 @@ export const catalogType: DocumentType<Catalog> = {
   schema: catalogSchema,
 };
 
+export const repositorySchema = z.object({
+  type: z.literal('repository'),
+  name: z.string().min(1),
+  remote: z.string().min(1),
+  mainLine: z.string().min(1),
+  registeredAt: z.string().min(1),
+});
+export type RepositoryRecord = z.infer<typeof repositorySchema>;
+
+/** Repository records are one document per repository: repositories/<name>.md. */
+export function repositoryRecordType(name: string): DocumentType<RepositoryRecord> {
+  return { name: 'repository', relPath: `repositories/${name}.md`, schema: repositorySchema };
+}
+
 /** The artifact types Ward seeds at creation (intent/02-subsystems/00-metadata-store.md). */
 export const seededArtifactTypes: Catalog['artifactTypes'] = [
   {

@@ -7,9 +7,15 @@ import { join } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
 import { type DocumentType, readDocument } from '../store/document.ts';
-import { catalogType, workspaceRecordType } from '../store/types.ts';
+import {
+  catalogType,
+  type RepositoryRecord,
+  repositoryRecordType,
+  workspaceRecordType,
+} from '../store/types.ts';
 import { git, gitAvailable, gitIdentityConfigured, hasCommits } from './git.ts';
 import { discoverWorkspace, IGNORE_LINES } from './layout.ts';
+import { checkoutPath, listRepositoryNames } from './repos.ts';
 
 export type Severity = 'ok' | 'info' | 'warn' | 'error';
 
@@ -126,6 +132,55 @@ async function workspaceChecks(root: string): Promise<Finding[]> {
         },
   );
 
+  for (const name of listRepositoryNames(root)) {
+    findings.push(...(await repositoryChecks(root, name)));
+  }
+
+  return findings;
+}
+
+/** Record↔disk and record↔repository drift for one registered repository. */
+async function repositoryChecks(root: string, name: string): Promise<Finding[]> {
+  const check = `repository ${name}`;
+  const findings: Finding[] = [];
+  const record = await checkDocument<RepositoryRecord>(
+    findings,
+    root,
+    repositoryRecordType(name),
+    check,
+  );
+  if (record === null) return findings;
+  const checkout = checkoutPath(root, name);
+  if (!existsSync(checkout)) {
+    findings.push({
+      check,
+      severity: 'warn',
+      message: `canonical checkout repos/${name}/ is missing — run: ward repo add ${record.remote}`,
+    });
+    return findings;
+  }
+  const origin = git(checkout, 'remote', 'get-url', 'origin').stdout.trim();
+  if (origin !== record.remote) {
+    findings.push({
+      check,
+      severity: 'warn',
+      message: `checkout origin is ${origin || '(none)'} but the record says ${record.remote}`,
+    });
+    return findings;
+  }
+  if (git(checkout, 'rev-parse', '--verify', record.mainLine).exitCode !== 0) {
+    findings.push({
+      check,
+      severity: 'warn',
+      message: `main line '${record.mainLine}' does not exist in the checkout`,
+    });
+    return findings;
+  }
+  findings.push({
+    check,
+    severity: 'ok',
+    message: `checkout present, tracking ${record.mainLine}`,
+  });
   return findings;
 }
 
