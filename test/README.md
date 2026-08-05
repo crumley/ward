@@ -3,9 +3,14 @@
 The **tests** leg. Holds the code in [`../src/`](../src/) to both the realization in
 [`../design/`](../design/) and the constraints in [`../intent/`](../intent/).
 
-> **Status:** design tests only so far — [`cli/version.test.ts`](cli/version.test.ts) holds the CLI
-> foundation to [`design/0001-dev-foundation/`](../design/0001-dev-foundation/README.md). Intent
-> tests arrive with the first Ward behavior.
+> **Status:** design tests for the CLI foundation ([`cli/version.test.ts`](cli/version.test.ts) →
+> [`design/0001-dev-foundation/`](../design/0001-dev-foundation/README.md)) and the store +
+> workspace entry ([`store/`](store/), [`workspace/`](workspace/), and
+> [`cli/workspace.test.ts`](cli/workspace.test.ts) →
+> [`design/0002-store-and-workspace/`](../design/0002-store-and-workspace/README.md)). Among them
+> are the first intent-shaped guarantees: creation converges idempotently
+> ([principles §6](../intent/00-foundation/01-principles.md)) and a customized installed artifact is
+> never clobbered ([workspace lifecycle](../intent/01-concepts/06-workspace-lifecycle.md)).
 
 Two kinds of test are expected, and the distinction matters because of the four-leg model:
 
