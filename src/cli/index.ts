@@ -24,6 +24,7 @@ import {
   refreshRepositories,
 } from '../workspace/repos.ts';
 import { readTasks } from '../workspace/scan.ts';
+import { scopeFromCwd } from '../workspace/scope.ts';
 import { closeSession, openSession } from '../workspace/sessions.ts';
 import { deriveStatus, inReview, statusReport, type TaskStatus } from '../workspace/status.ts';
 import { addTaskPr, closeTask, openTask, setTaskState } from '../workspace/tasks.ts';
@@ -128,22 +129,37 @@ const task = command(
     }),
     command(
       'pause',
-      object({ action: constant('task-pause'), code: argument(string({ metavar: 'CODE' })) }),
-      { brief: message`Set a task down, resumable.` },
+      object({
+        action: constant('task-pause'),
+        code: optional(argument(string({ metavar: 'CODE' }))),
+      }),
+      { brief: message`Set a task down, resumable. CODE is inferred inside a task's worktree.` },
     ),
     command(
       'resume',
-      object({ action: constant('task-resume'), code: argument(string({ metavar: 'CODE' })) }),
-      { brief: message`Pick a paused task back up.` },
+      object({
+        action: constant('task-resume'),
+        code: optional(argument(string({ metavar: 'CODE' }))),
+      }),
+      { brief: message`Pick a paused task back up. CODE is inferred inside a task's worktree.` },
     ),
     command(
       'pr',
-      object({
-        action: constant('task-pr'),
-        code: argument(string({ metavar: 'CODE' })),
-        url: argument(string({ metavar: 'URL' })),
-      }),
-      { brief: message`Link a pull request to a task.` },
+      // Two arities, the one-argument form first: optique commits to the first
+      // alternative whose full parse succeeds, so `pr URL` binds URL and
+      // `pr CODE URL` falls through to the explicit form.
+      or(
+        object({
+          action: constant('task-pr'),
+          url: argument(string({ metavar: 'URL' })),
+        }),
+        object({
+          action: constant('task-pr'),
+          code: argument(string({ metavar: 'CODE' })),
+          url: argument(string({ metavar: 'URL' })),
+        }),
+      ),
+      { brief: message`Link a pull request to a task. CODE is inferred inside a task's worktree.` },
     ),
     command(
       'close',
@@ -168,7 +184,7 @@ const worktree = command(
       'create',
       object({
         action: constant('worktree-create'),
-        task: argument(string({ metavar: 'TASK' })),
+        task: optional(argument(string({ metavar: 'TASK' }))),
         repo: option('--repo', string({ metavar: 'NAME' })),
         branch: optional(option('--branch', string({ metavar: 'NAME' }))),
       }),
@@ -188,7 +204,7 @@ const session = command(
       'open',
       object({
         action: constant('session-open'),
-        task: argument(string({ metavar: 'TASK' })),
+        task: optional(argument(string({ metavar: 'TASK' }))),
         purpose: option('--purpose', string({ metavar: 'TEXT' })),
         handle: optional(option('--handle', string({ metavar: 'TEXT' }))),
         dir: optional(option('--dir', string({ metavar: 'PATH' }))),
@@ -283,21 +299,25 @@ try {
         await cmdTaskList(result.json);
         break;
       case 'task-pause': {
-        const paused = await setTaskState(requireWorkspace(), result.code, 'paused');
+        const target = await resolveTaskTarget(result.code, 'ward task pause CODE');
+        const paused = await setTaskState(target.root, target.code, 'paused');
         console.log(
           `${pc.yellow('paused')} ${pc.bold(paused.record.code)} — ${paused.record.slug}`,
         );
         break;
       }
       case 'task-resume': {
-        const resumed = await setTaskState(requireWorkspace(), result.code, 'active');
+        const target = await resolveTaskTarget(result.code, 'ward task resume CODE');
+        const resumed = await setTaskState(target.root, target.code, 'active');
         console.log(
           `${pc.green('resumed')} ${pc.bold(resumed.record.code)} — ${resumed.record.slug}`,
         );
         break;
       }
       case 'task-pr': {
-        const linked = await addTaskPr(requireWorkspace(), result.code, result.url);
+        const code = 'code' in result ? result.code : undefined;
+        const target = await resolveTaskTarget(code, 'ward task pr CODE URL');
+        const linked = await addTaskPr(target.root, target.code, result.url);
         console.log(
           `${pc.green('linked')} ${result.url} ${pc.dim(`(${linked.record.prs.length} in the set)`)}`,
         );
@@ -307,12 +327,11 @@ try {
         await cmdTaskClose(result.code, result.outcome);
         break;
       case 'worktree-create': {
-        const created = await createWorktree(
-          requireWorkspace(),
+        const target = await resolveTaskTarget(
           result.task,
-          result.repo,
-          result.branch,
+          'ward worktree create TASK --repo NAME',
         );
+        const created = await createWorktree(target.root, target.code, result.repo, result.branch);
         console.log(
           `${pc.green('created')} ${created.record.path} ` +
             pc.dim(`(${created.record.repo}, branch ${created.record.branch}, deliverable)`),
@@ -323,9 +342,16 @@ try {
         await cmdWorktreeList(result.json);
         break;
       case 'session-open': {
-        const opened = await openSession(requireWorkspace(), result.task, result.purpose, {
+        const target = await resolveTaskTarget(
+          result.task,
+          'ward session open TASK --purpose TEXT',
+        );
+        // An inferred task pins the working directory too: the caller stands
+        // in the very worktree the record should name (unless --dir overrides).
+        const dir = result.dir ?? target.worktreePath;
+        const opened = await openSession(target.root, target.code, result.purpose, {
           ...(result.handle === undefined ? {} : { handle: result.handle }),
-          ...(result.dir === undefined ? {} : { workingDirectory: result.dir }),
+          ...(dir === undefined ? {} : { workingDirectory: dir }),
         });
         console.log(
           `${pc.green('opened')} session ${pc.bold(opened.id)} ` +
@@ -396,6 +422,41 @@ function requireWorkspace(): string {
     );
   }
   return root;
+}
+
+interface TaskTarget {
+  readonly root: string;
+  readonly code: string;
+  /** The claiming worktree's path, only when the task was inferred from the cwd. */
+  readonly worktreePath?: string;
+}
+
+/**
+ * Resolve the task a verb addresses: an explicit code always wins; without
+ * one, a human standing inside a claimed worktree gets the task the location
+ * already implies (intent/02-subsystems/07-human-shell.md), echoed so the
+ * derivation is visible. A declared agent is refused the inference and a
+ * caller standing nowhere claimed gets a deterministic error naming the fix —
+ * never a prompt (design/0006-scope-from-cwd/).
+ */
+async function resolveTaskTarget(explicit: string | undefined, usage: string): Promise<TaskTarget> {
+  const root = requireWorkspace();
+  if (explicit !== undefined) return { root, code: explicit };
+  if (callerIsAgent()) {
+    throw new WardError(
+      `no task given — a declared agent passes scope explicitly: ${usage} ` +
+        '(see: ward task list --json)',
+    );
+  }
+  const scope = await scopeFromCwd(root, process.cwd());
+  if (scope === null) {
+    throw new WardError(
+      `no task given and no task worktree encloses this directory — name one: ${usage} ` +
+        '(see: ward task list)',
+    );
+  }
+  console.log(pc.dim(`task ${scope.task.record.code} — from the working directory`));
+  return { root, code: scope.task.record.code, worktreePath: scope.worktree.path };
 }
 
 async function cmdRepoAdd(source: string, name: string | undefined): Promise<void> {

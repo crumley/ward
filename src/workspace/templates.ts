@@ -27,6 +27,10 @@ operated with the \`ward\` CLI and tracked in git.
 
 - Run \`ward doctor\` to check machine preconditions and the record's integrity.
 - Records are markdown with typed front matter — read them directly; that is what they are for.
+- Standing inside a task's worktree, task-addressed verbs need no code — Ward derives the task
+  from the working directory (\`ward session open --purpose TEXT\`, \`ward task pr URL\`) and
+  echoes what it derived. An explicit code always works, and \`ward task close\` always takes
+  one.
 - Work is never committed to a repository's main line directly; changes travel through a worktree
   and a pull request.
 
@@ -47,6 +51,9 @@ You may be reading this from the workspace root or from inside a task worktree u
   binary, so they are always current for the \`ward\` you are running — no repo reading needed.
 - **Record your session.** \`ward session open TASK --purpose TEXT --handle HANDLE\` before you
   start work; put your harness's own run id in \`--handle\` so the run can be located again.
+- **Name the task explicitly.** Deriving the task from the working directory is a human
+  affordance; a declared agent is refused it and passes the task code on every task-addressed
+  verb (\`ward task list --json\` says what exists).
 - **Work in the task's worktree** under \`worktrees/\`, never in \`repos/\` — the canonical
   checkouts are reference copies of each repository's main line.
 - **Link your pull request.** \`ward task pr CODE URL\` records it on the task; review state is
