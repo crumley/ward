@@ -7,7 +7,13 @@ import { basename, join, resolve } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
-import { catalogType, seededArtifactTypes, workspaceRecordType } from '../store/types.ts';
+import {
+  baselinesType,
+  catalogType,
+  seededArtifactTypes,
+  workspaceRecordType,
+} from '../store/types.ts';
+import { sha256OfFile } from './baselines.ts';
 import { git, gitAvailable, gitOrThrow, hasCommits } from './git.ts';
 import { IGNORE_LINES, MARKER_DIR, SCOPE_DIRS } from './layout.ts';
 import {
@@ -34,6 +40,12 @@ interface CreateContext {
   readonly root: string;
   /** Workspace-relative paths this run established — the converge commit's set. */
   readonly establishedPaths: string[];
+  /**
+   * Installed artifacts this run wrote from shipped content — the set the
+   * baselines step fingerprints. Only what Ward itself wrote gets a baseline;
+   * a pre-existing artifact's provenance is unknown and stays unrecorded.
+   */
+  readonly installedArtifacts: string[];
 }
 
 export async function createWorkspace(path: string): Promise<CreateReport> {
@@ -41,7 +53,7 @@ export async function createWorkspace(path: string): Promise<CreateReport> {
     throw new WardError('git is required to create a workspace and was not found on PATH');
   }
   const root = resolve(path);
-  const ctx: CreateContext = { root, establishedPaths: [] };
+  const ctx: CreateContext = { root, establishedPaths: [], installedArtifacts: [] };
   const steps: StepReport[] = [];
   steps.push(await establishRoot(ctx));
   steps.push(await establishMarker(ctx));
@@ -50,6 +62,7 @@ export async function createWorkspace(path: string): Promise<CreateReport> {
   steps.push(await establishAgentsGuidance(ctx));
   steps.push(await establishIgnorePolicy(ctx));
   steps.push(await establishScopeDirs(ctx));
+  steps.push(await establishBaselines(ctx));
   steps.push(establishGitRepository(ctx));
   steps.push(establishCommit(ctx));
   return { root, steps };
@@ -84,6 +97,7 @@ async function establishMarker(ctx: CreateContext): Promise<StepReport> {
   if (existsSync(readme)) return { step, outcome: 'satisfied', detail: `${MARKER_DIR}/` };
   await Bun.write(readme, WARD_INTERNAL_README);
   ctx.establishedPaths.push(`${MARKER_DIR}/README.md`);
+  ctx.installedArtifacts.push(`${MARKER_DIR}/README.md`);
   return { step, outcome: 'established', detail: `${MARKER_DIR}/` };
 }
 
@@ -119,6 +133,7 @@ async function establishCatalog(ctx: CreateContext): Promise<StepReport> {
     body: CATALOG_BODY,
   });
   ctx.establishedPaths.push(relPath);
+  ctx.installedArtifacts.push(relPath);
   return { step, outcome: 'established', detail: relPath };
 }
 
@@ -128,6 +143,7 @@ async function establishAgentsGuidance(ctx: CreateContext): Promise<StepReport> 
   if (existsSync(file)) return { step, outcome: 'satisfied', detail: 'AGENTS.md' };
   await Bun.write(file, AGENTS_MD);
   ctx.establishedPaths.push('AGENTS.md');
+  ctx.installedArtifacts.push('AGENTS.md');
   return { step, outcome: 'established', detail: 'AGENTS.md' };
 }
 
@@ -157,6 +173,42 @@ async function establishScopeDirs(ctx: CreateContext): Promise<StepReport> {
     await mkdir(join(ctx.root, dir), { recursive: true });
   }
   return { step, outcome: missing.length > 0 ? 'established' : 'satisfied', detail };
+}
+
+/**
+ * Fingerprint what this run installed, so a future upgrade can tell
+ * customized from untouched (intent/01-concepts/06-workspace-lifecycle.md).
+ * An artifact that already existed gets no entry — its provenance is unknown,
+ * and an absent baseline is read conservatively as "customized" later.
+ * Re-installing an artifact (it went missing and came back) replaces its entry.
+ */
+async function establishBaselines(ctx: CreateContext): Promise<StepReport> {
+  const step = 'installed baselines';
+  const relPath = baselinesType.relPath;
+  const exists = existsSync(join(ctx.root, relPath));
+  const existing = exists ? (await readDocument(ctx.root, baselinesType)).data.artifacts : [];
+  if (exists && ctx.installedArtifacts.length === 0) {
+    return { step, outcome: 'satisfied', detail: relPath };
+  }
+  const kept = existing.filter((artifact) => !ctx.installedArtifacts.includes(artifact.path));
+  const added = [];
+  for (const path of ctx.installedArtifacts) {
+    added.push({
+      path,
+      sha256: await sha256OfFile(join(ctx.root, path)),
+      wardVersion: pkg.version,
+      installedAt: new Date().toISOString(),
+    });
+  }
+  await writeDocument(ctx.root, baselinesType, {
+    data: { type: 'baselines', artifacts: [...kept, ...added] },
+    body:
+      'What Ward installed here, fingerprinted at install time, so an upgrade can tell ' +
+      'customized from untouched. Written by `ward`; editing it by hand breaks what ' +
+      'divergence detection means.',
+  });
+  ctx.establishedPaths.push(relPath);
+  return { step, outcome: 'established', detail: relPath };
 }
 
 function establishGitRepository(ctx: CreateContext): StepReport {

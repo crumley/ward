@@ -12,8 +12,15 @@ import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
 
 test('a fresh create establishes every step and commits once', async () => {
   const report = await createWorkspace(root);
-  expect(report.steps.map((step) => step.outcome)).toEqual(Array(9).fill('established'));
-  for (const file of ['workspace.md', 'catalog.md', 'AGENTS.md', '.gitignore', '.ward/README.md']) {
+  expect(report.steps.map((step) => step.outcome)).toEqual(Array(10).fill('established'));
+  for (const file of [
+    'workspace.md',
+    'catalog.md',
+    'AGENTS.md',
+    '.gitignore',
+    '.ward/README.md',
+    '.ward/baselines.md',
+  ]) {
     expect(existsSync(join(root, file))).toBe(true);
   }
   expect(commitCount()).toBe(1);
@@ -23,12 +30,12 @@ test('a fresh create establishes every step and commits once', async () => {
 test('re-running create is satisfied throughout and changes nothing', async () => {
   await createWorkspace(root);
   const report = await createWorkspace(root);
-  expect(report.steps.map((step) => step.outcome)).toEqual(Array(9).fill('satisfied'));
+  expect(report.steps.map((step) => step.outcome)).toEqual(Array(10).fill('satisfied'));
   expect(commitCount()).toBe(1);
   expect(git(root, 'status', '--porcelain').stdout).toBe('');
 });
 
-test('a missing installed artifact is re-established; the converge commit holds only it', async () => {
+test('a missing artifact is re-established; the converge commit holds it and its baseline', async () => {
   await createWorkspace(root);
   rmSync(join(root, 'AGENTS.md'));
   git(root, 'commit', '-am', 'human removed guidance');
@@ -37,7 +44,23 @@ test('a missing installed artifact is re-established; the converge commit holds 
   expect(outcomes.get('agent guidance')).toBe('established');
   expect(outcomes.get('workspace record')).toBe('satisfied');
   const committed = git(root, 'show', '--name-only', '--format=', 'HEAD').stdout.trim();
-  expect(committed).toBe('AGENTS.md');
+  expect(committed.split('\n').sort()).toEqual(['.ward/baselines.md', 'AGENTS.md']);
+});
+
+test('the installed AGENTS.md teaches an agent to drive ward', async () => {
+  await createWorkspace(root);
+  const guidance = await Bun.file(join(root, 'AGENTS.md')).text();
+  for (const lesson of [
+    'WARD_AGENT', // declare yourself an agent caller
+    '--json', // read verbs have a parseable form
+    'ward session open', // record your session…
+    '--handle', // …with your harness's own run id
+    'ward task pr', // link the PR to the task
+    'Closing is gated', // task close needs the PR set resolved
+    'Never merge or push to a repository', // the never-merge-to-main rule
+  ]) {
+    expect(guidance).toContain(lesson);
+  }
 });
 
 test('a customized artifact is left alone, even when dirty', async () => {
