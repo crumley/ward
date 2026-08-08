@@ -4,17 +4,33 @@
 // additive: fields may be added, existing fields keep their name and
 // meaning, optional fields are omitted (never null) when unrecorded. One JSON
 // document per invocation, alone on stdout; exit codes are unchanged.
+//
+// Each builder returns the type inferred from its verb's schema in schema.ts
+// (design/0008-json-shape-home/): the schema is the contract's one source of
+// truth, and a builder drifting from it is a compile error before it is a
+// failing test. The builders stay hand-written because they are what pin key
+// order — the byte-determinism (§6) a schema alone cannot promise.
 import type { ProjectRecord, RepositoryRecord, TaskRecord, WorkState } from '../store/types.ts';
 import type { DoctorReport } from '../workspace/doctor.ts';
 import type { StatusReport, TaskStatus } from '../workspace/status.ts';
 import type { WorktreeListing } from '../workspace/worktrees.ts';
+import type {
+  DoctorShape,
+  ProjectListShape,
+  RepoListShape,
+  StatusShape,
+  StatusTaskShape,
+  TaskListShape,
+  TaskShape,
+  WorktreeListShape,
+} from './schema.ts';
 
 export function printJson(value: unknown): void {
   console.log(JSON.stringify(value, null, 2));
 }
 
 /** The task shape shared by `task list` and `status`. */
-export function taskJson(record: TaskRecord, inReview: boolean): Record<string, unknown> {
+export function taskJson(record: TaskRecord, inReview: boolean): TaskShape {
   return {
     code: record.code,
     slug: record.slug,
@@ -30,11 +46,11 @@ export function taskJson(record: TaskRecord, inReview: boolean): Record<string, 
 }
 
 /** In `status`, tasks additionally carry their open sessions. */
-function statusTaskJson(status: TaskStatus): Record<string, unknown> {
-  return { ...taskJson(status.task, status.inReview), openSessions: status.openSessions };
+function statusTaskJson(status: TaskStatus): StatusTaskShape {
+  return { ...taskJson(status.task, status.inReview), openSessions: [...status.openSessions] };
 }
 
-export function statusJson(report: StatusReport): unknown {
+export function statusJson(report: StatusReport): StatusShape {
   return {
     workspace: report.workspace,
     projects: report.projects.map((project) => ({
@@ -54,7 +70,7 @@ export interface ProjectListEntry {
   readonly taskCount: number;
 }
 
-export function projectListJson(entries: readonly ProjectListEntry[]): unknown {
+export function projectListJson(entries: readonly ProjectListEntry[]): ProjectListShape {
   return entries.map((entry) => ({
     floor: entry.record.floor,
     slug: entry.record.slug,
@@ -66,11 +82,13 @@ export function projectListJson(entries: readonly ProjectListEntry[]): unknown {
   }));
 }
 
-export function taskListJson(tasks: readonly { record: TaskRecord; inReview: boolean }[]): unknown {
+export function taskListJson(
+  tasks: readonly { record: TaskRecord; inReview: boolean }[],
+): TaskListShape {
   return tasks.map((task) => taskJson(task.record, task.inReview));
 }
 
-export function worktreeListJson(listings: readonly WorktreeListing[]): unknown {
+export function worktreeListJson(listings: readonly WorktreeListing[]): WorktreeListShape {
   return listings.map((listing) => ({
     task: listing.taskCode,
     repo: listing.record.repo,
@@ -82,7 +100,7 @@ export function worktreeListJson(listings: readonly WorktreeListing[]): unknown 
   }));
 }
 
-export function repoListJson(records: readonly RepositoryRecord[]): unknown {
+export function repoListJson(records: readonly RepositoryRecord[]): RepoListShape {
   return records.map((record) => ({
     name: record.name,
     remote: record.remote,
@@ -91,7 +109,7 @@ export function repoListJson(records: readonly RepositoryRecord[]): unknown {
   }));
 }
 
-export function doctorJson(report: DoctorReport): unknown {
+export function doctorJson(report: DoctorReport): DoctorShape {
   const finding = (f: DoctorReport['machine'][number]) => ({
     check: f.check,
     severity: f.severity,

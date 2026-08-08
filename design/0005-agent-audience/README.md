@@ -169,6 +169,10 @@ unrecorded:
   with finding `{ "check", "severity": "ok" | "info" | "warn" |
   "error", "message" }`.
 
+> **Superseded for currency by [`0008`](../0008-json-shape-home/README.md)** (2026-08-08): the
+> living contract is now emitted by the tool itself — `ward schema`. The shapes above are 0005's
+> snapshot and are not updated.
+
 ## Build log
 
 ### 2026-08-08 — The agent audience built end to end

@@ -5,7 +5,7 @@
 // See design/0001-dev-foundation/ and design/0002-store-and-workspace/.
 import { object, or } from '@optique/core/constructs';
 import { message } from '@optique/core/message';
-import { optional, withDefault } from '@optique/core/modifiers';
+import { multiple, optional, withDefault } from '@optique/core/modifiers';
 import { argument, command, constant, option } from '@optique/core/primitives';
 import { choice, integer, string } from '@optique/core/valueparser';
 import { run } from '@optique/run';
@@ -38,6 +38,7 @@ import {
   taskListJson,
   worktreeListJson,
 } from './json.ts';
+import { allSchemasJson, verbSchemaJson } from './schema.ts';
 
 // A declared agent gets deterministic output: no ANSI, whatever the terminal
 // or CI environment would otherwise negotiate (the §8 asymmetry — color is a
@@ -211,6 +212,21 @@ const doctor = command('doctor', object({ action: constant('doctor'), json: json
   brief: message`Check machine preconditions and, inside a workspace, its integrity.`,
 });
 
+// The self-describing contract (design/0008-json-shape-home/): the verb is
+// named by its own CLI words (`ward schema task list`), so discovering a
+// shape and invoking its verb agree by construction. Needs no workspace —
+// the contract is the build's, not the record's.
+const schema = command(
+  'schema',
+  object({
+    action: constant('schema'),
+    verb: multiple(argument(string({ metavar: 'VERB' }))),
+  }),
+  {
+    brief: message`Emit the JSON Schema of a --json read verb's output (all verbs when none given).`,
+  },
+);
+
 const version = object({
   version: option('-v', '--version', {
     description: message`Print the ward version.`,
@@ -224,7 +240,7 @@ if (process.argv.length === 2) {
   process.exit(0);
 }
 
-const cli = or(workspace, repo, project, task, worktree, session, status, doctor, version);
+const cli = or(workspace, repo, project, task, worktree, session, status, doctor, schema, version);
 const result = run(cli, { programName: 'ward', help: 'option' });
 
 try {
@@ -327,6 +343,9 @@ try {
         break;
       case 'doctor':
         await cmdDoctor(result.json);
+        break;
+      case 'schema':
+        cmdSchema(result.verb);
         break;
     }
   } else {
@@ -585,6 +604,15 @@ async function cmdDoctor(json: boolean): Promise<void> {
       : `\n${pc.red('unhealthy')} — problems above need attention`,
   );
   if (!report.healthy) process.exit(1);
+}
+
+/**
+ * `ward schema [VERB...]`: the one verb whose only rendering is JSON — the
+ * schema document is itself the artifact both audiences read (§8), and a
+ * prose paraphrase of it could drift from the thing it paraphrases.
+ */
+function cmdSchema(words: readonly string[]): void {
+  printJson(words.length === 0 ? allSchemasJson() : verbSchemaJson(words.join(' ')));
 }
 
 function renderFinding(finding: Finding): string {

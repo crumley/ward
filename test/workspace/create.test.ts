@@ -53,6 +53,7 @@ test('the installed AGENTS.md teaches an agent to drive ward', async () => {
   for (const lesson of [
     'WARD_AGENT', // declare yourself an agent caller
     '--json', // read verbs have a parseable form
+    'ward schema', // the shapes are discoverable from the tool itself
     'ward session open', // record your session…
     '--handle', // …with your harness's own run id
     'ward task pr', // link the PR to the task
