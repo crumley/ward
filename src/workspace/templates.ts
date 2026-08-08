@@ -42,6 +42,9 @@ You may be reading this from the workspace root or from inside a task worktree u
 - **Read state as JSON.** \`ward status --json\` says where everything stands; every read verb
   (\`status\`, \`project list\`, \`task list\`, \`worktree list\`, \`repo list\`, \`doctor\`)
   accepts \`--json\`.
+- **Discover the contract from the tool.** \`ward schema\` emits the JSON Schema of every
+  \`--json\` verb's output (one verb: \`ward schema task list\`). The shapes ship inside the
+  binary, so they are always current for the \`ward\` you are running — no repo reading needed.
 - **Record your session.** \`ward session open TASK --purpose TEXT --handle HANDLE\` before you
   start work; put your harness's own run id in \`--handle\` so the run can be located again.
 - **Work in the task's worktree** under \`worktrees/\`, never in \`repos/\` — the canonical
