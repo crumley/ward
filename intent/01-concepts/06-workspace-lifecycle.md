@@ -541,3 +541,14 @@ here closes, so silence would read as an omission rather than a decision.
   in the Ward CLI ([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)); carrying one
   out of the workspace is a crossing of the local↔remote boundary (§4) that nothing currently
   governs.
+- **Records Ward rewrites on the human's behalf vs. the installed baseline.** The artifact-type
+  catalog is installed — and baselined — at creation, yet it is exactly the record a future
+  registration verb mutates; afterward divergence detection honestly reads "customized," with the
+  wrong connotation, since the customizer was Ward holding the human's pen. The entry that builds
+  catalog registration must decide consciously: **compose** (Ward's seed separately addressable from
+  the workspace's registrations — the compose-first rule above suggests this), or **accept
+  "customized" as the honest reading** (the adjudication trigger is deliberately content-based, and
+  a registration is the human customizing the catalog whoever holds the pen). What it may **not** do
+  is refresh the baseline on Ward-driven writes: a baseline that tracks every write always matches,
+  which blinds divergence detection and would let an upgrade clobber the workspace's registered
+  types as "untouched" (§17).
