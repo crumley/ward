@@ -9,7 +9,7 @@ import { optional, withDefault } from '@optique/core/modifiers';
 import { argument, command, constant, option } from '@optique/core/primitives';
 import { choice, integer, string } from '@optique/core/valueparser';
 import { run } from '@optique/run';
-import pc from 'picocolors';
+import picocolors from 'picocolors';
 import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
 import type { WorkState } from '../store/types.ts';
@@ -25,9 +25,32 @@ import {
 } from '../workspace/repos.ts';
 import { readTasks } from '../workspace/scan.ts';
 import { closeSession, openSession } from '../workspace/sessions.ts';
-import { deriveStatus, statusReport, type TaskStatus } from '../workspace/status.ts';
+import { deriveStatus, inReview, statusReport, type TaskStatus } from '../workspace/status.ts';
 import { addTaskPr, closeTask, openTask, setTaskState } from '../workspace/tasks.ts';
 import { createWorktree, listWorktrees } from '../workspace/worktrees.ts';
+import { callerIsAgent } from './caller.ts';
+import {
+  doctorJson,
+  printJson,
+  projectListJson,
+  repoListJson,
+  statusJson,
+  taskListJson,
+  worktreeListJson,
+} from './json.ts';
+
+// A declared agent gets deterministic output: no ANSI, whatever the terminal
+// or CI environment would otherwise negotiate (the §8 asymmetry — color is a
+// human-audience cue). Interactive affordances, when the shell grows them,
+// must branch on the same predicate and never block an agent caller.
+const pc = callerIsAgent() ? picocolors.createColors(false) : picocolors;
+
+/** `--json`: the machine-readable form of a read verb (design/0005-agent-audience/). */
+function jsonFlag() {
+  return option('--json', {
+    description: message`Emit the result as JSON on stdout (a stable, documented shape).`,
+  });
+}
 
 const workspaceCreate = command(
   'create',
@@ -63,7 +86,7 @@ const repoRefresh = command(
   { brief: message`Fetch and fast-forward canonical checkouts to their main lines.` },
 );
 
-const repoList = command('list', object({ action: constant('repo-list') }), {
+const repoList = command('list', object({ action: constant('repo-list'), json: jsonFlag() }), {
   brief: message`List the registered repositories.`,
 });
 
@@ -79,7 +102,7 @@ const project = command(
       object({ action: constant('project-open'), slug: argument(string({ metavar: 'SLUG' })) }),
       { brief: message`Open a project; it takes the next floor number.` },
     ),
-    command('list', object({ action: constant('project-list') }), {
+    command('list', object({ action: constant('project-list'), json: jsonFlag() }), {
       brief: message`List projects with their derived status.`,
     }),
   ),
@@ -99,7 +122,7 @@ const task = command(
       }),
       { brief: message`Open a task, bare or under a project floor.` },
     ),
-    command('list', object({ action: constant('task-list') }), {
+    command('list', object({ action: constant('task-list'), json: jsonFlag() }), {
       brief: message`List tasks, open and closed.`,
     }),
     command(
@@ -150,7 +173,7 @@ const worktree = command(
       }),
       { brief: message`Create a deliverable worktree off the refreshed main line.` },
     ),
-    command('list', object({ action: constant('worktree-list') }), {
+    command('list', object({ action: constant('worktree-list'), json: jsonFlag() }), {
       brief: message`List worktrees across all tasks.`,
     }),
   ),
@@ -180,11 +203,11 @@ const session = command(
   { brief: message`Record agent sessions.` },
 );
 
-const status = command('status', object({ action: constant('status') }), {
+const status = command('status', object({ action: constant('status'), json: jsonFlag() }), {
   brief: message`Where everything stands — derived from the leaves, never stored.`,
 });
 
-const doctor = command('doctor', object({ action: constant('doctor') }), {
+const doctor = command('doctor', object({ action: constant('doctor'), json: jsonFlag() }), {
   brief: message`Check machine preconditions and, inside a workspace, its integrity.`,
 });
 
@@ -217,7 +240,7 @@ try {
         await cmdRepoRefresh(result.name);
         break;
       case 'repo-list':
-        await cmdRepoList();
+        await cmdRepoList(result.json);
         break;
       case 'project-open': {
         const record = await openProject(requireWorkspace(), result.slug);
@@ -227,7 +250,7 @@ try {
         break;
       }
       case 'project-list':
-        await cmdProjectList();
+        await cmdProjectList(result.json);
         break;
       case 'task-open': {
         const opened = await openTask(requireWorkspace(), result.slug, {
@@ -241,7 +264,7 @@ try {
         break;
       }
       case 'task-list':
-        await cmdTaskList();
+        await cmdTaskList(result.json);
         break;
       case 'task-pause': {
         const paused = await setTaskState(requireWorkspace(), result.code, 'paused');
@@ -281,7 +304,7 @@ try {
         break;
       }
       case 'worktree-list':
-        await cmdWorktreeList();
+        await cmdWorktreeList(result.json);
         break;
       case 'session-open': {
         const opened = await openSession(requireWorkspace(), result.task, result.purpose, {
@@ -300,10 +323,10 @@ try {
         break;
       }
       case 'status':
-        await cmdStatus();
+        await cmdStatus(result.json);
         break;
       case 'doctor':
-        await cmdDoctor();
+        await cmdDoctor(result.json);
         break;
     }
   } else {
@@ -392,9 +415,13 @@ function renderRefresh(report: RefreshReport): string {
   }[report.outcome];
 }
 
-async function cmdRepoList(): Promise<void> {
+async function cmdRepoList(json: boolean): Promise<void> {
   const root = requireWorkspace();
   const records = await listRepositories(root);
+  if (json) {
+    printJson(repoListJson(records));
+    return;
+  }
   if (records.length === 0) {
     console.log(pc.dim('no repositories registered — add one with: ward repo add SOURCE'));
     return;
@@ -412,38 +439,50 @@ function renderState(state: WorkState): string {
   ];
 }
 
-async function cmdProjectList(): Promise<void> {
+async function cmdProjectList(json: boolean): Promise<void> {
   const root = requireWorkspace();
   const projects = await readProjects(root);
-  if (projects.length === 0) {
-    console.log(pc.dim('no projects — open one with: ward project open SLUG'));
-    return;
-  }
   const tasks = await readTasks(root);
-  for (const project of projects) {
+  const entries = projects.map((project) => {
     const own = tasks.filter((task) => task.dir.startsWith(`${project.dir}/`));
     const derived =
       project.record.state === 'active'
         ? deriveStatus(own.map((task) => task.record.state))
         : project.record.state;
+    return { record: project.record, derived, taskCount: own.length };
+  });
+  if (json) {
+    printJson(projectListJson(entries));
+    return;
+  }
+  if (entries.length === 0) {
+    console.log(pc.dim('no projects — open one with: ward project open SLUG'));
+    return;
+  }
+  for (const entry of entries) {
     console.log(
-      `  floor ${pc.bold(String(project.record.floor))} — ${project.record.slug} ` +
-        `[${renderState(derived)}] ${pc.dim(`(${own.length} tasks)`)}`,
+      `  floor ${pc.bold(String(entry.record.floor))} — ${entry.record.slug} ` +
+        `[${renderState(entry.derived)}] ${pc.dim(`(${entry.taskCount} tasks)`)}`,
     );
   }
 }
 
-async function cmdTaskList(): Promise<void> {
+async function cmdTaskList(json: boolean): Promise<void> {
   const root = requireWorkspace();
   const tasks = await readTasks(root);
+  if (json) {
+    printJson(
+      taskListJson(tasks.map((task) => ({ record: task.record, inReview: inReview(task.record) }))),
+    );
+    return;
+  }
   if (tasks.length === 0) {
     console.log(pc.dim('no tasks — open one with: ward task open SLUG'));
     return;
   }
   for (const { record } of tasks) {
     const outcome = record.outcome === undefined ? '' : pc.dim(` · ${record.outcome}`);
-    const review =
-      record.prs.length > 0 && record.state !== 'closed' ? pc.cyan(' · in-review') : '';
+    const review = inReview(record) ? pc.cyan(' · in-review') : '';
     const floor = record.floor === undefined ? '' : pc.dim(` (floor ${record.floor})`);
     console.log(
       `  ${pc.bold(record.code)} ${record.slug}${floor} [${renderState(record.state)}${review}${outcome}]`,
@@ -461,8 +500,12 @@ async function cmdTaskClose(code: string, outcome: 'delivered' | 'abandoned'): P
   console.log(`\nTask ${pc.bold(code)} closed — ${verb}.`);
 }
 
-async function cmdWorktreeList(): Promise<void> {
+async function cmdWorktreeList(json: boolean): Promise<void> {
   const listings = await listWorktrees(requireWorkspace());
+  if (json) {
+    printJson(worktreeListJson(listings));
+    return;
+  }
   if (listings.length === 0) {
     console.log(pc.dim('no worktrees — create one with: ward worktree create TASK --repo NAME'));
     return;
@@ -476,8 +519,12 @@ async function cmdWorktreeList(): Promise<void> {
   }
 }
 
-async function cmdStatus(): Promise<void> {
+async function cmdStatus(json: boolean): Promise<void> {
   const report = await statusReport(requireWorkspace());
+  if (json) {
+    printJson(statusJson(report));
+    return;
+  }
   console.log(`Workspace: ${renderState(report.workspace)}\n`);
   if (report.projects.length === 0 && report.bareTasks.length === 0) {
     console.log(pc.dim('nothing in flight — an empty workspace is active, not idle'));
@@ -513,8 +560,13 @@ function renderTaskStatus(status: TaskStatus): string {
   );
 }
 
-async function cmdDoctor(): Promise<void> {
+async function cmdDoctor(json: boolean): Promise<void> {
   const report = await runDoctor(process.cwd());
+  if (json) {
+    printJson(doctorJson(report));
+    if (!report.healthy) process.exit(1);
+    return;
+  }
   console.log(pc.bold('Machine'));
   for (const finding of report.machine) {
     console.log(renderFinding(finding));

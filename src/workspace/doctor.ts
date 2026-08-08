@@ -8,11 +8,13 @@ import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
 import { type DocumentType, readDocument } from '../store/document.ts';
 import {
+  baselinesType,
   catalogType,
   type RepositoryRecord,
   repositoryRecordType,
   workspaceRecordType,
 } from '../store/types.ts';
+import { sha256OfFile } from './baselines.ts';
 import { git, gitAvailable, gitIdentityConfigured, hasCommits } from './git.ts';
 import { discoverWorkspace, IGNORE_LINES } from './layout.ts';
 import { checkoutPath, listRepositoryNames } from './repos.ts';
@@ -107,6 +109,8 @@ async function workspaceChecks(root: string): Promise<Finding[]> {
     });
   }
 
+  findings.push(...(await baselineChecks(root)));
+
   const ignoreFile = join(root, '.gitignore');
   const ignoreLines = existsSync(ignoreFile)
     ? new Set((await readFile(ignoreFile, 'utf8')).split('\n'))
@@ -136,6 +140,55 @@ async function workspaceChecks(root: string): Promise<Finding[]> {
     findings.push(...(await repositoryChecks(root, name)));
   }
 
+  return findings;
+}
+
+/**
+ * Installed-artifact baselines, read-only: customization is the yours-tier
+ * working as intended (info, never a warning); a missing artifact is either
+ * drift or deliberate departure, and doctor reports rather than guesses
+ * (intent/01-concepts/06-workspace-lifecycle.md, the repair posture).
+ */
+async function baselineChecks(root: string): Promise<Finding[]> {
+  const findings: Finding[] = [];
+  if (!existsSync(join(root, baselinesType.relPath))) {
+    findings.push({
+      check: 'installed baselines',
+      severity: 'info',
+      message:
+        'no baseline record — created by an older ward; re-run ward workspace create to start one',
+    });
+    return findings;
+  }
+  const baselines = await checkDocument(findings, root, baselinesType, 'installed baselines');
+  if (baselines === null) return findings;
+  for (const artifact of baselines.artifacts) {
+    const check = `baseline ${artifact.path}`;
+    const file = join(root, artifact.path);
+    if (!existsSync(file)) {
+      findings.push({
+        check,
+        severity: 'warn',
+        message:
+          'installed artifact is missing — deliberate departure, or drift; ' +
+          'ward workspace create reinstalls the default',
+      });
+      continue;
+    }
+    findings.push(
+      (await sha256OfFile(file)) === artifact.sha256
+        ? {
+            check,
+            severity: 'ok',
+            message: `untouched since install (ward ${artifact.wardVersion})`,
+          }
+        : {
+            check,
+            severity: 'info',
+            message: `customized since install (ward ${artifact.wardVersion}) — yours to shape`,
+          },
+    );
+  }
   return findings;
 }
 

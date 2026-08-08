@@ -126,6 +126,32 @@ export function sessionRecordType(taskDir: string, id: string): DocumentType<Ses
   return { name: 'session', relPath: `${taskDir}/sessions/${id}.md`, schema: sessionSchema };
 }
 
+export const baselinesSchema = z.object({
+  type: z.literal('baselines'),
+  /** One entry per installed artifact: the exact content Ward put in place. */
+  artifacts: z.array(
+    z.object({
+      path: z.string().min(1),
+      sha256: z.string().length(64),
+      wardVersion: z.string().min(1),
+      installedAt: z.string().min(1),
+    }),
+  ),
+});
+export type Baselines = z.infer<typeof baselinesSchema>;
+
+/**
+ * The installed-artifact baselines live under .ward/ because they are Ward's
+ * bookkeeping, not the human's record: altering them breaks what divergence
+ * detection means (intent/01-concepts/06-workspace-lifecycle.md, the
+ * membership test), so they sit with the store mechanics no human edits.
+ */
+export const baselinesType: DocumentType<Baselines> = {
+  name: 'baselines',
+  relPath: '.ward/baselines.md',
+  schema: baselinesSchema,
+};
+
 /** The artifact types Ward seeds at creation (intent/02-subsystems/00-metadata-store.md). */
 export const seededArtifactTypes: Catalog['artifactTypes'] = [
   {

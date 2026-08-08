@@ -50,3 +50,24 @@ export function runWard(argv: string[], cwd: string): CliResult {
     stderr: result.stderr.toString(),
   };
 }
+
+/**
+ * Like runWard, but the caller controls the color/caller environment: the
+ * inherited NO_COLOR / FORCE_COLOR / CI / WARD_AGENT are cleared first, so
+ * only the row's own env decides what the CLI sees — the agent-caller tests
+ * need color to be genuinely negotiable (design/0005-agent-audience/).
+ */
+export function runWardEnv(argv: string[], cwd: string, env: Record<string, string>): CliResult {
+  const merged: Record<string, string | undefined> = { ...process.env, ...GIT_ENV };
+  delete merged.NO_COLOR;
+  delete merged.FORCE_COLOR;
+  delete merged.CI;
+  delete merged.WARD_AGENT;
+  Object.assign(merged, env);
+  const result = Bun.spawnSync(['bun', cliPath, ...argv], { cwd, env: merged });
+  return {
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  };
+}
