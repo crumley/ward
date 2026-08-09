@@ -12,7 +12,8 @@ import { run } from '@optique/run';
 import picocolors from 'picocolors';
 import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
-import type { WorkState } from '../store/types.ts';
+import { type PrForgeState, probeForge } from '../forge/gh.ts';
+import type { TaskRecord, WorkState } from '../store/types.ts';
 import { createWorkspace, type StepReport } from '../workspace/create.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
@@ -26,7 +27,15 @@ import {
 import { readTasks } from '../workspace/scan.ts';
 import { scopeFromCwd } from '../workspace/scope.ts';
 import { closeSession, openSession } from '../workspace/sessions.ts';
-import { deriveStatus, inReview, statusReport, type TaskStatus } from '../workspace/status.ts';
+import {
+  deriveStatus,
+  forgeStates,
+  inReview,
+  type NeedsYouEntry,
+  openPrUrls,
+  statusReport,
+  type TaskStatus,
+} from '../workspace/status.ts';
 import { addTaskPr, closeTask, openTask, setTaskState } from '../workspace/tasks.ts';
 import { createWorktree, listWorktrees } from '../workspace/worktrees.ts';
 import { callerIsAgent } from './caller.ts';
@@ -550,24 +559,37 @@ async function cmdProjectList(json: boolean): Promise<void> {
 async function cmdTaskList(json: boolean): Promise<void> {
   const root = requireWorkspace();
   const tasks = await readTasks(root);
+  const probe = await probeForge(openPrUrls(tasks.map((task) => task.record)));
+  const entries = tasks.map(({ record }) => {
+    const forge = forgeStates(record, probe);
+    return {
+      record,
+      inReview: inReview(record, forge),
+      ...(forge === undefined ? {} : { forge }),
+    };
+  });
   if (json) {
-    printJson(
-      taskListJson(tasks.map((task) => ({ record: task.record, inReview: inReview(task.record) }))),
-    );
+    printJson(taskListJson(entries));
     return;
   }
-  if (tasks.length === 0) {
+  if (entries.length === 0) {
     console.log(pc.dim('no tasks — open one with: ward task open SLUG'));
     return;
   }
-  for (const { record } of tasks) {
+  for (const entry of entries) {
+    const { record } = entry;
     const outcome = record.outcome === undefined ? '' : pc.dim(` · ${record.outcome}`);
-    const review = inReview(record) ? pc.cyan(' · in-review') : '';
+    const review = entry.inReview ? pc.cyan(' · in-review') : '';
     const floor = record.floor === undefined ? '' : pc.dim(` (floor ${record.floor})`);
+    const prs = entry.forge === undefined ? '' : pc.dim(` — prs: ${forgeSummary(entry.forge)}`);
     console.log(
-      `  ${pc.bold(record.code)} ${record.slug}${floor} [${renderState(record.state)}${review}${outcome}]`,
+      `  ${pc.bold(record.code)} ${record.slug}${floor} [${renderState(record.state)}${review}${outcome}]${prs}`,
     );
   }
+  renderForgeUnavailable(
+    !probe.live,
+    tasks.map((task) => task.record),
+  );
 }
 
 async function cmdTaskClose(code: string, outcome: 'delivered' | 'abandoned'): Promise<void> {
@@ -625,19 +647,67 @@ async function cmdStatus(json: boolean): Promise<void> {
       console.log(renderTaskStatus(task));
     }
   }
+  const allTasks = [
+    ...report.projects.flatMap((project) => project.tasks),
+    ...report.bareTasks,
+  ].map((status) => status.task);
+  renderForgeUnavailable(report.needsYou === undefined, allTasks);
+  if (report.needsYou !== undefined && report.needsYou.length > 0) {
+    console.log(`\n${pc.bold('needs you')}`);
+    for (const entry of report.needsYou) {
+      console.log(`  ${pc.yellow('!')} ${renderNeedsYou(entry)}`);
+    }
+  }
 }
 
 function renderTaskStatus(status: TaskStatus): string {
   const review = status.inReview ? pc.cyan(' · in-review') : '';
   const outcome = status.task.outcome === undefined ? '' : pc.dim(` · ${status.task.outcome}`);
+  const prs = status.forge === undefined ? '' : pc.dim(` — prs: ${forgeSummary(status.forge)}`);
   const sessions =
     status.openSessions.length === 0
       ? ''
       : pc.dim(` — sessions: ${status.openSessions.join(', ')}`);
   return (
     `  ${pc.bold(status.task.code)} ${status.task.slug} ` +
-    `[${renderState(status.task.state)}${review}${outcome}]${sessions}`
+    `[${renderState(status.task.state)}${review}${outcome}]${prs}${sessions}`
   );
+}
+
+/** One line per PR set, counted by live state, e.g. `1 open (changes requested) · 1 merged`. */
+function forgeSummary(states: readonly PrForgeState[]): string {
+  const parts: string[] = [];
+  const of = (state: PrForgeState['state']) => states.filter((pr) => pr.state === state);
+  const open = of('open');
+  if (open.length > 0) {
+    const blocked = open.filter((pr) => pr.reviewDecision === 'changes-requested').length;
+    const note =
+      blocked === 0 ? '' : ` (${blocked === open.length ? '' : `${blocked} `}changes requested)`;
+    parts.push(`${open.length} open${note}`);
+  }
+  if (of('merged').length > 0) parts.push(`${of('merged').length} merged`);
+  if (of('closed').length > 0) parts.push(`${of('closed').length} closed unmerged`);
+  if (of('unknown').length > 0) parts.push(`${of('unknown').length} unreadable`);
+  return parts.join(' · ');
+}
+
+/**
+ * The degraded-mode marker: when the forge did not answer and live state
+ * would have been shown, say so once — everything above renders exactly as
+ * it does without a forge (design/0009-live-forge-state/).
+ */
+function renderForgeUnavailable(unavailable: boolean, tasks: readonly TaskRecord[]): void {
+  const wanted = tasks.some((task) => task.state !== 'closed' && task.prs.length > 0);
+  if (!unavailable || !wanted) return;
+  console.log(
+    pc.dim('\nforge state unavailable (gh) — in-review means linked PRs, not live review state'),
+  );
+}
+
+function renderNeedsYou(entry: NeedsYouEntry): string {
+  return entry.reason === 'awaiting-close'
+    ? `task ${pc.bold(entry.task)} — PR set fully merged; close it: ward task close ${entry.task}`
+    : `task ${pc.bold(entry.task)} — changes requested on ${entry.pr ?? 'a linked PR'}`;
 }
 
 async function cmdDoctor(json: boolean): Promise<void> {

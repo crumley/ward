@@ -18,6 +18,18 @@ import { z } from 'zod';
 import { WardError } from '../errors.ts';
 import { workStateSchema } from '../store/types.ts';
 
+/**
+ * Live forge state of one linked PR (0009) — read from the forge at answer
+ * time, never stored; the whole array vanishes when the forge is
+ * unavailable, which is why every forge-state field is optional.
+ */
+export const prForgeShape = z.strictObject({
+  url: z.string(),
+  state: z.enum(['open', 'merged', 'closed', 'unknown']),
+  reviewDecision: z.enum(['approved', 'changes-requested', 'review-required']).optional(),
+});
+export type PrForgeShape = z.infer<typeof prForgeShape>;
+
 /** The task shape shared by `task list` and `status` (0005). */
 export const taskShape = z.strictObject({
   code: z.string(),
@@ -30,12 +42,22 @@ export const taskShape = z.strictObject({
   inReview: z.boolean(),
   openedAt: z.string(),
   closedAt: z.string().optional(),
+  /** One entry per linked PR, in `prs` order (0009). */
+  forge: z.array(prForgeShape).optional(),
 });
 export type TaskShape = z.infer<typeof taskShape>;
 
 /** In `status`, tasks additionally carry their open sessions. */
 export const statusTaskShape = taskShape.extend({ openSessions: z.array(z.string()) });
 export type StatusTaskShape = z.infer<typeof statusTaskShape>;
+
+/** One derived attention item (0009): what awaits the human, nothing stored. */
+export const needsYouShape = z.strictObject({
+  task: z.string(),
+  reason: z.enum(['awaiting-close', 'changes-requested']),
+  pr: z.string().optional(),
+});
+export type NeedsYouShape = z.infer<typeof needsYouShape>;
 
 export const statusShape = z.strictObject({
   workspace: workStateSchema,
@@ -49,6 +71,8 @@ export const statusShape = z.strictObject({
     }),
   ),
   bareTasks: z.array(statusTaskShape),
+  /** Present exactly when the forge answered; empty means nothing awaits (0009). */
+  needsYou: z.array(needsYouShape).optional(),
 });
 export type StatusShape = z.infer<typeof statusShape>;
 

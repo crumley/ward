@@ -10,12 +10,14 @@
 // truth, and a builder drifting from it is a compile error before it is a
 // failing test. The builders stay hand-written because they are what pin key
 // order — the byte-determinism (§6) a schema alone cannot promise.
+import type { PrForgeState } from '../forge/gh.ts';
 import type { ProjectRecord, RepositoryRecord, TaskRecord, WorkState } from '../store/types.ts';
 import type { DoctorReport } from '../workspace/doctor.ts';
 import type { StatusReport, TaskStatus } from '../workspace/status.ts';
 import type { WorktreeListing } from '../workspace/worktrees.ts';
 import type {
   DoctorShape,
+  PrForgeShape,
   ProjectListShape,
   RepoListShape,
   StatusShape,
@@ -30,7 +32,11 @@ export function printJson(value: unknown): void {
 }
 
 /** The task shape shared by `task list` and `status`. */
-export function taskJson(record: TaskRecord, inReview: boolean): TaskShape {
+export function taskJson(
+  record: TaskRecord,
+  inReview: boolean,
+  forge?: readonly PrForgeState[],
+): TaskShape {
   return {
     code: record.code,
     slug: record.slug,
@@ -42,12 +48,25 @@ export function taskJson(record: TaskRecord, inReview: boolean): TaskShape {
     inReview,
     openedAt: record.openedAt,
     ...(record.closedAt === undefined ? {} : { closedAt: record.closedAt }),
+    ...(forge === undefined ? {} : { forge: forge.map(prForgeJson) }),
+  };
+}
+
+/** Live forge state per PR — present only when the forge answered. */
+function prForgeJson(state: PrForgeState): PrForgeShape {
+  return {
+    url: state.url,
+    state: state.state,
+    ...(state.reviewDecision === undefined ? {} : { reviewDecision: state.reviewDecision }),
   };
 }
 
 /** In `status`, tasks additionally carry their open sessions. */
 function statusTaskJson(status: TaskStatus): StatusTaskShape {
-  return { ...taskJson(status.task, status.inReview), openSessions: [...status.openSessions] };
+  return {
+    ...taskJson(status.task, status.inReview, status.forge),
+    openSessions: [...status.openSessions],
+  };
 }
 
 export function statusJson(report: StatusReport): StatusShape {
@@ -61,6 +80,15 @@ export function statusJson(report: StatusReport): StatusShape {
       tasks: project.tasks.map(statusTaskJson),
     })),
     bareTasks: report.bareTasks.map(statusTaskJson),
+    ...(report.needsYou === undefined
+      ? {}
+      : {
+          needsYou: report.needsYou.map((entry) => ({
+            task: entry.task,
+            reason: entry.reason,
+            ...(entry.pr === undefined ? {} : { pr: entry.pr }),
+          })),
+        }),
   };
 }
 
@@ -83,9 +111,9 @@ export function projectListJson(entries: readonly ProjectListEntry[]): ProjectLi
 }
 
 export function taskListJson(
-  tasks: readonly { record: TaskRecord; inReview: boolean }[],
+  tasks: readonly { record: TaskRecord; inReview: boolean; forge?: readonly PrForgeState[] }[],
 ): TaskListShape {
-  return tasks.map((task) => taskJson(task.record, task.inReview));
+  return tasks.map((task) => taskJson(task.record, task.inReview, task.forge));
 }
 
 export function worktreeListJson(listings: readonly WorktreeListing[]): WorktreeListShape {
