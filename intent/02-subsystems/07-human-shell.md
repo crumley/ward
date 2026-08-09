@@ -121,11 +121,14 @@ principle (§8) and feeds the compounding loop
   Ward installed as defaults (the persona cast the clearest case;
   [`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)). It is
   **not a first-run wizard**: it is re-runnable whenever something should change, presents current
-  values rather than blank prompts, and **converges** — a run changes only what the human chooses,
-  the same idempotency creation inherits (§6). _Why:_ configuration reachable only by knowing which
-  file or flag to edit makes discovery the human's job; a guided pass over what is configurable is
-  the interactive-resolution quality bar (above) applied to configuration. _Boundaries:_ it does
-  **not** create a workspace as a side effect — creation stays a deliberate, located act
+  values rather than blank prompts — and, where a choice depends on an external capability, that
+  capability's **live health** (the same precise findings doctor reports, §20), so the human enacts
+  change against reality rather than assumption — and **converges** — a run changes only what the
+  human chooses, the same idempotency creation inherits (§6). _Why:_ configuration reachable only by
+  knowing which file or flag to edit makes discovery the human's job; a guided pass over what is
+  configurable is the interactive-resolution quality bar (above) applied to configuration.
+  _Boundaries:_ it does **not** create a workspace as a side effect — creation stays a deliberate,
+  located act
   ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)) — and
   `doctor` stays the diagnoser: doctor **reports and recommends**, setup is where the human
   **enacts** change, guided. _Asymmetry (§8):_ a human-audience affordance; an agent changes
