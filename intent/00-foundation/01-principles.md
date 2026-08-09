@@ -185,9 +185,27 @@ proven to be a seam (§7). What this does **not** license is skipping the record
 were tried, what was observed, and why one won (or several stayed) is design history
 ([`../../design/`](../../design/)).
 
+## 20. Degrade honestly, diagnose precisely
+
+Ward takes advantage of capabilities it does not control — optional tools, credentials, the network,
+a forge. When one is unavailable, every surface still renders **everything it can**, marking what it
+cannot as **unavailable** — never a failure, never a hang, never a guess. The distinction is spent
+where it can be afforded: at the **point of use** the answer is one honest bit — the capability
+answered or it did not — bounded by a deadline proportionate to the verb's frequency; the
+**diagnosis** — which link broke (absent, unauthenticated, unreachable, expired) and what would mend
+it — belongs to the surface built for diagnosis
+([`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md), doctor), which runs
+rarely and can afford the precise question. The two halves close a loop: **a degraded surface points
+at a capability, and the diagnostic surface must be able to name that capability's actual break and
+its remedy.** **Why:** a wrong answer is worse than an honest gap — it is §17's stale cache at the
+tool boundary — and the loop is what keeps honesty cheap enough to be universal: the busy surface
+never pays for precision, the precise surface never needs to be fast. A degradation the diagnostic
+surface cannot explain trains the human to distrust both: the surface that degraded and the one that
+green-lit it.
+
 ## Canonical home for
 
-- **The cross-cutting invariants §1–§19.** Every concept and seam honors these; a slice cites a
+- **The cross-cutting invariants §1–§20.** Every concept and seam honors these; a slice cites a
   principle by number (e.g. "§17, no lost updates") rather than restating it. The _why_ on each is
   what lets a reader apply it to a case it does not literally name.
 

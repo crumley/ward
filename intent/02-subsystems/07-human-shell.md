@@ -79,12 +79,18 @@ principle (§8) and feeds the compounding loop
 - **A self-diagnosis command.** Ward offers a **`doctor`-style** command that inspects the machine,
   the current working directory, and the workspace, reports what is healthy, and **recommends
   improvements** — including **optional external tools Ward can take advantage of when installed**.
-  _Why:_ a well-designed CLI guides the user to a good setup instead of failing cryptically when one
-  is missing, and surfacing optional capabilities is how Ward stays opinionated without being
-  brittle. (The exact verb — `doctor` or the prevailing convention — is a design choice; the
-  **capability** is the constraint.) _What it checks_ — the machine **preconditions** and the
-  **integrity** of the record against the world, plus the repair posture that decides what it may
-  fix versus report — is
+  For such a tool, healthy means **capable, not merely present**: installed but unable to serve —
+  unauthenticated, unreachable, expired — is a distinct finding with its remedy, because
+  installed-but-broken is likelier a misconfiguration than a choice, and catching misconfiguration
+  is what a diagnostic is _for_. The check set also closes the degradation loop (§20): **any
+  "unavailable" another verb can honestly report must be a condition doctor can name and explain** —
+  a surface that degrades pointing at a tool doctor then green-lights has spent the human's
+  attention twice and answered nothing. _Why:_ a well-designed CLI guides the user to a good setup
+  instead of failing cryptically when one is missing, and surfacing optional capabilities is how
+  Ward stays opinionated without being brittle. (The exact verb — `doctor` or the prevailing
+  convention — is a design choice; the **capability** is the constraint.) _What it checks_ — the
+  machine **preconditions** and the **integrity** of the record against the world, plus the repair
+  posture that decides what it may fix versus report — is
   [`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)'s; this
   layer owns only the surface. It must also work **outside** a workspace, where only the machine can
   be checked. _Why:_ the first run happens before any workspace exists.
