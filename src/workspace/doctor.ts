@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
+import { type ForgeAuth, ghExecutable, probeForgeAuth } from '../forge/gh.ts';
 import { type DocumentType, readDocument } from '../store/document.ts';
 import {
   baselinesType,
@@ -36,7 +37,7 @@ export interface DoctorReport {
 }
 
 export async function runDoctor(cwd: string): Promise<DoctorReport> {
-  const machine = machineChecks(cwd);
+  const machine = await machineChecks(cwd);
   const workspaceRoot = discoverWorkspace(cwd);
   const workspace = workspaceRoot === null ? [] : await workspaceChecks(workspaceRoot);
   const healthy = [...machine, ...workspace].every((finding) => finding.severity !== 'error');
@@ -45,7 +46,7 @@ export async function runDoctor(cwd: string): Promise<DoctorReport> {
 
 // -- machine preconditions ------------------------------------------------
 
-function machineChecks(cwd: string): Finding[] {
+async function machineChecks(cwd: string): Promise<Finding[]> {
   const findings: Finding[] = [];
   if (gitAvailable()) {
     const version = git(cwd, '--version')
@@ -64,16 +65,54 @@ function machineChecks(cwd: string): Finding[] {
   } else {
     findings.push({ check: 'git', severity: 'error', message: 'not found on PATH — required' });
   }
-  findings.push(
-    Bun.which('gh') !== null
-      ? { check: 'gh', severity: 'ok', message: 'GitHub CLI available' }
-      : {
-          check: 'gh',
-          severity: 'info',
-          message: 'GitHub CLI not found — optional; Ward uses it for PR tracking when present',
-        },
-  );
+  // Presence reads the same WARD_GH seam the probe spawns, so doctor and
+  // status always describe the same binary (design/0010-doctor-forge-auth/).
+  if (ghExecutable() === null) {
+    findings.push({
+      check: 'gh',
+      severity: 'info',
+      message: 'GitHub CLI not found — optional; Ward uses it for PR tracking when present',
+    });
+  } else {
+    findings.push({ check: 'gh', severity: 'ok', message: 'GitHub CLI available' });
+    findings.push(ghAuthFinding(await probeForgeAuth()));
+  }
   return findings;
+}
+
+/**
+ * Presence and health are different findings (the git / git identity idiom):
+ * the motivating incident (design/0010-doctor-forge-auth/) was a broken
+ * token — status degraded to "forge state unavailable (gh)" while doctor
+ * green-lit the installed binary. Unauthenticated is warn, not error:
+ * nothing is blocked (every verb degrades honestly), but an
+ * installed-and-broken tool is likelier a misconfiguration than a choice,
+ * and catching that is what doctor is for. A cut check is info: doctor
+ * could not verify, and claiming broken would be a guess — doctor reports,
+ * it never guesses.
+ */
+function ghAuthFinding(auth: ForgeAuth): Finding {
+  switch (auth) {
+    case 'authenticated':
+      return {
+        check: 'gh auth',
+        severity: 'ok',
+        message: 'authenticated — live forge state available',
+      };
+    case 'unauthenticated':
+      return {
+        check: 'gh auth',
+        severity: 'warn',
+        message:
+          'installed but cannot reach the forge — forge state will be unavailable; run: gh auth login',
+      };
+    case 'unverified':
+      return {
+        check: 'gh auth',
+        severity: 'info',
+        message: 'auth check gave no answer in time — cannot verify forge access from here',
+      };
+  }
 }
 
 // -- workspace integrity --------------------------------------------------
