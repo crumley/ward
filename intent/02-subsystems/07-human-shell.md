@@ -34,16 +34,23 @@ principle (§8) and feeds the compounding loop
   is the difference between a tool people fight and one they reach for. _Asymmetry (§8):_ this is a
   **human-audience** affordance; an **agent** caller (which declares itself, below) passes explicit
   context and gets **deterministic** handling — never a blocking interactive prompt.
-- **"What needs me?" is a first-class query.** The requests addressed to the human — gated actions
-  awaiting authority (§18), toil the machinery surfaced (what is blocked, conflicted, ready —
+- **"What needs me?" is a first-class query.** What the surface presents is **everything waiting on
+  the human**, from two springs: the requests **addressed** to them — gated actions awaiting
+  authority (§18), toil the machinery surfaced (what is blocked, conflicted, ready —
   [`../01-concepts/03-work-lifecycle.md`](../01-concepts/03-work-lifecycle.md)), wakes the human
-  asked for — are recorded by the messaging seam
-  ([`02-messaging-coordination.md`](02-messaging-coordination.md)); this layer's job is to present
-  them as **one glanceable, deduplicated answer**, and to make acting on each — grant, decline, jump
-  to the session — one step. _Why:_ the human's attention is the scarcest context in the system
+  asked for — recorded by the messaging seam
+  ([`02-messaging-coordination.md`](02-messaging-coordination.md)) — and the conditions
+  **derivable** from the record and the world's live state (a task's PR set fully merged and
+  awaiting the gated close, changes requested awaiting action, version skew), which are presented
+  directly and **never stored as requests just to be presentable** (§17). This layer's job is to
+  present both as **one glanceable, deduplicated answer**, and to make acting on each — grant,
+  decline, jump to the session — one step; which items are recorded and which derived is the
+  implementation's business, invisible at the surface. _Why:_ the human's attention is the scarcest
+  context in the system
   ([`../01-concepts/01-scopes-and-personas.md`](../01-concepts/01-scopes-and-personas.md), the
   human); a workspace that can restore a dozen threads but cannot say which one is waiting on its
-  human has managed everyone's context but theirs.
+  human has managed everyone's context but theirs — and an answer scoped to what happened to be
+  recorded would be exactly such a workspace, silent about the waiting it could have derived.
 - **The human is the default caller; agents identify themselves.** A human typing in their own shell
   declares nothing. An agent caller carries its context — persona, scope, working directory — via an
   **ambient signal Ward sets when it starts an agent** (an environment variable and fields
