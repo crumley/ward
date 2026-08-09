@@ -64,7 +64,12 @@ principle (§8) and feeds the compounding loop
   workspace or scope they are standing in is exactly the friction Ward exists to remove. _Asymmetry
   (§8):_ this is a **human-audience** affordance — an **agent** caller may still be **required** to
   pass scope explicitly, since it is cheap for an agent to be precise and explicitness keeps its
-  calls deterministic.
+  calls deterministic. _The boundary:_ the locations that imply scope are the **occupied work
+  locations** — the anchors a caller works in (a worktree, a workdir, a room's working directory) —
+  **never the record tree** that describes them: standing among a task's records is browsing the
+  ledger, not doing the work. _Why:_ occupation is a deliberate act that names its purpose; a browse
+  location that silently targeted a write would spend exactly the attention this constraint exists
+  to save, on the least recoverable kind of mistake.
 - **Long free-text arguments accept a file, not only an inline string.** Any argument that can carry
   substantial text — a brief's title or body the clearest case
   ([`../01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md), Briefs) — must accept a

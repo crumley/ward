@@ -204,3 +204,24 @@ anchor kinds arrive.
   works in (worktrees, workdirs, and rooms' working directories), not the record tree that describes
   them" — or, if the record tree _should_ imply scope, saying so, at which point a later entry
   widens the resolver.
+
+  **Resolution (2026-08-09, adopted by the human; the intent edit rides this entry's PR).** The
+  boundary is pinned in the slice as the assumption stood: **occupied work locations imply scope;
+  the record tree never does** — browsing the ledger must not silently target a write. The resolver
+  as built already honors this and needs no change.
+
+  The same adjudication settles a question this entry's building surfaced twice: why worktree
+  _directories_ anchor at the workspace root (`worktrees/<task>-<branch>/`) instead of nesting under
+  the task directory that owns their record. The rationale, recorded here because 0002 chose the
+  layout without writing this part down: (1) record commits stage task directories wholesale
+  (`git add -A -- <taskDir>`), so a live checkout nested inside one would be a single bad
+  ignore-glob away from being swept into workspace history — the root anchoring makes that
+  structurally impossible rather than merely avoided; (2) the record tree is free to reorganize
+  (identity need not mirror containment) while git pins live worktrees by absolute path in the
+  canonical checkout's metadata, so co-location would couple record moves to
+  `git worktree
+  repair`; (3) containment is already expressed where truth lives (§16): the
+  worktree **record** nests under its task and carries the directory as its `path` field — which is
+  exactly what this entry's resolver follows, keeping the physical placement swappable without
+  touching the mechanism. Nesting would have collapsed worktree-cwd and record-cwd into one rule —
+  deciding SF-001 by fiat in the direction the resolution above rejects.
