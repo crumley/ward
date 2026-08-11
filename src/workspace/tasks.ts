@@ -6,6 +6,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { WardError } from '../errors.ts';
+import { probeForge } from '../forge/gh.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
 import {
   type SessionRecord,
@@ -162,31 +163,31 @@ export async function closeTask(
 
 /**
  * Completion requires the PR set resolved (every PR merged for a delivered
- * close). With gh available the forge is asked; without it, the human's
- * stated outcome is trusted and the trust is reported.
+ * close). The forge is asked through the same probe status reads
+ * (design/0009-live-forge-state/); when it cannot answer — for the whole set
+ * or any one PR — the human's stated outcome is trusted and the trust is
+ * reported.
  */
 async function resolvePrSet(record: TaskRecord, outcome: Outcome): Promise<CloseStep> {
   const step = 'pr set';
   if (record.prs.length === 0) return { step, detail: 'no linked PRs' };
-  if (Bun.which('gh') === null) {
-    return { step, detail: `gh not available — trusting the stated outcome '${outcome}'` };
+  const probe = await probeForge(record.prs);
+  if (!probe.live) {
+    return { step, detail: `forge unavailable — trusting the stated outcome '${outcome}'` };
   }
-  const states: string[] = [];
-  for (const url of record.prs) {
-    const result = Bun.spawnSync(['gh', 'pr', 'view', url, '--json', 'state', '--jq', '.state'], {
-      env: { ...process.env },
-    });
-    if (result.exitCode !== 0) {
-      return { step, detail: `could not read ${url} — trusting the stated outcome '${outcome}'` };
-    }
-    states.push(result.stdout.toString().trim());
+  const states = record.prs.map((url) => probe.states.get(url)?.state ?? 'unknown');
+  if (states.includes('unknown')) {
+    return {
+      step,
+      detail: `could not read every PR — trusting the stated outcome '${outcome}'`,
+    };
   }
-  if (states.some((state) => state === 'OPEN')) {
+  if (states.includes('open')) {
     throw new WardError(
       'a linked PR is still open — merge or close it first, or pause the task instead',
     );
   }
-  if (outcome === 'delivered' && states.some((state) => state !== 'MERGED')) {
+  if (outcome === 'delivered' && states.some((state) => state !== 'merged')) {
     throw new WardError(
       'a linked PR was closed without merging — a delivered close requires every PR merged; ' +
         'use --outcome abandoned if this work is being set aside',

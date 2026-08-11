@@ -73,7 +73,9 @@ test('the emitted schemas carry the 0005 stability policy', () => {
   const task = taskList.items;
   expect(task.additionalProperties).toBe(false);
   expect(task.required).toEqual(['code', 'slug', 'state', 'prs', 'inReview', 'openedAt']);
-  for (const optional of ['floor', 'purpose', 'outcome', 'closedAt']) {
+  // `forge` is 0009's live-forge-state field: optional because it vanishes
+  // whenever the forge cannot answer, like every forge-state field.
+  for (const optional of ['floor', 'purpose', 'outcome', 'closedAt', 'forge']) {
     expect(Object.keys(task.properties)).toContain(optional);
     expect(task.required).not.toContain(optional);
   }
