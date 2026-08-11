@@ -161,8 +161,15 @@ function deriveName(source: string): string {
   return name;
 }
 
+/**
+ * The configured origin URL, raw: `git config` rather than `remote get-url`,
+ * because the latter applies url.*.insteadOf rewrites — a transport-level,
+ * per-machine redirection — and the record should carry the remote's durable
+ * identity, not where this machine happens to fetch it from
+ * (design/0012-close-gate-reachability/).
+ */
 function originOf(checkout: string): string | null {
-  const result = git(checkout, 'remote', 'get-url', 'origin');
+  const result = git(checkout, 'config', '--get', 'remote.origin.url');
   return result.exitCode === 0 ? result.stdout.trim() : null;
 }
 

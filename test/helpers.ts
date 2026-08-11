@@ -83,8 +83,11 @@ export function runWardEnv(argv: string[], cwd: string, env: Record<string, stri
 }
 
 export interface FakeGhBehavior {
-  /** Canned `pr view --json state,reviewDecision` answer per URL; 'error' exits 1. */
-  readonly responses: Record<string, { state: string; reviewDecision?: string } | 'error'>;
+  /** Canned `pr view` answer per URL; 'error' exits 1. `mergeCommit` is the oid. */
+  readonly responses: Record<
+    string,
+    { state: string; reviewDecision?: string; mergeCommit?: string } | 'error'
+  >;
   /** `gh auth status` verdict — 'ok' exits 0, 'error' exits 1 (unset: 1). */
   readonly auth?: 'ok' | 'error';
   /** Sleep before answering — the timeout tests hang the forge with this. */
@@ -95,10 +98,12 @@ export interface FakeGhBehavior {
 
 /**
  * Write an executable fake `gh` for WARD_GH to point at: answers
- * `gh pr view URL --json state,reviewDecision` from the canned table, in
- * gh's own vocabulary (OPEN/MERGED/CLOSED, APPROVED/CHANGES_REQUESTED/…),
- * and `gh auth status` by exit code alone (design/0010-doctor-forge-auth/) —
- * so the probes' translation is what gets exercised, never the network.
+ * `gh pr view URL --json state,reviewDecision,mergeCommit` from the canned
+ * table, in gh's own vocabulary (OPEN/MERGED/CLOSED,
+ * APPROVED/CHANGES_REQUESTED/…, mergeCommit as `{oid}` or null exactly as gh
+ * emits it), and `gh auth status` by exit code alone
+ * (design/0010-doctor-forge-auth/) — so the probes' translation is what gets
+ * exercised, never the network.
  */
 export function writeFakeGh(dir: string, name: string, behavior: FakeGhBehavior): string {
   const path = join(dir, name);
@@ -118,7 +123,11 @@ if (answer === undefined || answer === 'error') {
   console.error('GraphQL: Could not resolve to a PullRequest');
   process.exit(1);
 }
-console.log(JSON.stringify({ reviewDecision: answer.reviewDecision ?? '', state: answer.state }));
+console.log(JSON.stringify({
+  mergeCommit: answer.mergeCommit ? { oid: answer.mergeCommit } : null,
+  reviewDecision: answer.reviewDecision ?? '',
+  state: answer.state,
+}));
 `;
   writeFileSync(path, script);
   chmodSync(path, 0o755);
