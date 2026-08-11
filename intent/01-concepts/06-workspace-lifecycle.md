@@ -138,6 +138,10 @@ seam where the second is checked against what the first needs. Preconditions com
 **required** (without which Ward cannot operate) and **optional** (capabilities Ward takes advantage
 of when present, and works without otherwise). _Why keep optional ones real:_ that is how Ward stays
 opinionated without being brittle (§19 — a contract may be satisfied by more than one technique).
+Either kind is checked as a **capability, not a presence**: a tool that is installed but cannot
+serve — credentials expired the canonical case, already a drift class below — is a broken
+precondition wearing a healthy one's name, and a check that stops at "installed" green-lights
+exactly the failure the runtime surfaces will be degrading around (§20).
 
 **What may live outside the workspace.** Ward carries global, machine-level configuration alongside
 workspace-local configuration

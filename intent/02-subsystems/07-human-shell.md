@@ -34,16 +34,23 @@ principle (§8) and feeds the compounding loop
   is the difference between a tool people fight and one they reach for. _Asymmetry (§8):_ this is a
   **human-audience** affordance; an **agent** caller (which declares itself, below) passes explicit
   context and gets **deterministic** handling — never a blocking interactive prompt.
-- **"What needs me?" is a first-class query.** The requests addressed to the human — gated actions
-  awaiting authority (§18), toil the machinery surfaced (what is blocked, conflicted, ready —
+- **"What needs me?" is a first-class query.** What the surface presents is **everything waiting on
+  the human**, from two springs: the requests **addressed** to them — gated actions awaiting
+  authority (§18), toil the machinery surfaced (what is blocked, conflicted, ready —
   [`../01-concepts/03-work-lifecycle.md`](../01-concepts/03-work-lifecycle.md)), wakes the human
-  asked for — are recorded by the messaging seam
-  ([`02-messaging-coordination.md`](02-messaging-coordination.md)); this layer's job is to present
-  them as **one glanceable, deduplicated answer**, and to make acting on each — grant, decline, jump
-  to the session — one step. _Why:_ the human's attention is the scarcest context in the system
+  asked for — recorded by the messaging seam
+  ([`02-messaging-coordination.md`](02-messaging-coordination.md)) — and the conditions
+  **derivable** from the record and the world's live state (a task's PR set fully merged and
+  awaiting the gated close, changes requested awaiting action, version skew), which are presented
+  directly and **never stored as requests just to be presentable** (§17). This layer's job is to
+  present both as **one glanceable, deduplicated answer**, and to make acting on each — grant,
+  decline, jump to the session — one step; which items are recorded and which derived is the
+  implementation's business, invisible at the surface. _Why:_ the human's attention is the scarcest
+  context in the system
   ([`../01-concepts/01-scopes-and-personas.md`](../01-concepts/01-scopes-and-personas.md), the
   human); a workspace that can restore a dozen threads but cannot say which one is waiting on its
-  human has managed everyone's context but theirs.
+  human has managed everyone's context but theirs — and an answer scoped to what happened to be
+  recorded would be exactly such a workspace, silent about the waiting it could have derived.
 - **The human is the default caller; agents identify themselves.** A human typing in their own shell
   declares nothing. An agent caller carries its context — persona, scope, working directory — via an
   **ambient signal Ward sets when it starts an agent** (an environment variable and fields
@@ -79,12 +86,18 @@ principle (§8) and feeds the compounding loop
 - **A self-diagnosis command.** Ward offers a **`doctor`-style** command that inspects the machine,
   the current working directory, and the workspace, reports what is healthy, and **recommends
   improvements** — including **optional external tools Ward can take advantage of when installed**.
-  _Why:_ a well-designed CLI guides the user to a good setup instead of failing cryptically when one
-  is missing, and surfacing optional capabilities is how Ward stays opinionated without being
-  brittle. (The exact verb — `doctor` or the prevailing convention — is a design choice; the
-  **capability** is the constraint.) _What it checks_ — the machine **preconditions** and the
-  **integrity** of the record against the world, plus the repair posture that decides what it may
-  fix versus report — is
+  For such a tool, healthy means **capable, not merely present**: installed but unable to serve —
+  unauthenticated, unreachable, expired — is a distinct finding with its remedy, because
+  installed-but-broken is likelier a misconfiguration than a choice, and catching misconfiguration
+  is what a diagnostic is _for_. The check set also closes the degradation loop (§20): **any
+  "unavailable" another verb can honestly report must be a condition doctor can name and explain** —
+  a surface that degrades pointing at a tool doctor then green-lights has spent the human's
+  attention twice and answered nothing. _Why:_ a well-designed CLI guides the user to a good setup
+  instead of failing cryptically when one is missing, and surfacing optional capabilities is how
+  Ward stays opinionated without being brittle. (The exact verb — `doctor` or the prevailing
+  convention — is a design choice; the **capability** is the constraint.) _What it checks_ — the
+  machine **preconditions** and the **integrity** of the record against the world, plus the repair
+  posture that decides what it may fix versus report — is
   [`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)'s; this
   layer owns only the surface. It must also work **outside** a workspace, where only the machine can
   be checked. _Why:_ the first run happens before any workspace exists.
@@ -108,11 +121,14 @@ principle (§8) and feeds the compounding loop
   Ward installed as defaults (the persona cast the clearest case;
   [`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)). It is
   **not a first-run wizard**: it is re-runnable whenever something should change, presents current
-  values rather than blank prompts, and **converges** — a run changes only what the human chooses,
-  the same idempotency creation inherits (§6). _Why:_ configuration reachable only by knowing which
-  file or flag to edit makes discovery the human's job; a guided pass over what is configurable is
-  the interactive-resolution quality bar (above) applied to configuration. _Boundaries:_ it does
-  **not** create a workspace as a side effect — creation stays a deliberate, located act
+  values rather than blank prompts — and, where a choice depends on an external capability, that
+  capability's **live health** (the same precise findings doctor reports, §20), so the human enacts
+  change against reality rather than assumption — and **converges** — a run changes only what the
+  human chooses, the same idempotency creation inherits (§6). _Why:_ configuration reachable only by
+  knowing which file or flag to edit makes discovery the human's job; a guided pass over what is
+  configurable is the interactive-resolution quality bar (above) applied to configuration.
+  _Boundaries:_ it does **not** create a workspace as a side effect — creation stays a deliberate,
+  located act
   ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)) — and
   `doctor` stays the diagnoser: doctor **reports and recommends**, setup is where the human
   **enacts** change, guided. _Asymmetry (§8):_ a human-audience affordance; an agent changes
