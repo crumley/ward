@@ -15,6 +15,8 @@
 // an impossible path so no test ever reaches the machine's gh) and
 // WARD_GH_TIMEOUT_MS overrides the deadline.
 
+import { existsSync } from 'node:fs';
+
 /** What the forge says about one PR, in Ward's vocabulary — never gh's. */
 export type PrState = 'open' | 'merged' | 'closed' | 'unknown';
 export type PrReviewDecision = 'approved' | 'changes-requested' | 'review-required';
@@ -50,7 +52,7 @@ export async function probeForge(urls: readonly string[]): Promise<ForgeProbe> {
   if (unique.length === 0) return { live: true, states: new Map() };
   const gh = ghExecutable();
   if (gh === null) return { live: false, states: new Map() };
-  const timeout = timeoutMs();
+  const timeout = timeoutMs(DEFAULT_TIMEOUT_MS);
   const answers = await Promise.all(unique.map((url) => readPr(gh, url, timeout)));
 
   const states = new Map<string, PrForgeState>();
@@ -64,15 +66,67 @@ export async function probeForge(urls: readonly string[]): Promise<ForgeProbe> {
   return { live: true, states };
 }
 
-function ghExecutable(): string | null {
+/**
+ * The executable every forge read spawns: WARD_GH names it (the test seam,
+ * and a human affordance for a nonstandard gh), otherwise `gh` on PATH. Null
+ * when nothing spawnable exists — the override is verified too (a path must
+ * exist; a bare name must resolve on PATH), so doctor's presence finding and
+ * the probe always describe the same binary, and the hermetic test pin
+ * (WARD_GH=/dev/null/gh) reads as absent everywhere
+ * (design/0010-doctor-forge-auth/).
+ */
+export function ghExecutable(): string | null {
   const override = process.env.WARD_GH;
-  if (override !== undefined && override !== '') return override;
+  if (override !== undefined && override !== '') {
+    if (!override.includes('/')) return Bun.which(override);
+    return existsSync(override) ? override : null;
+  }
   return Bun.which('gh');
 }
 
-function timeoutMs(): number {
+function timeoutMs(fallback: number): number {
   const override = Number.parseInt(process.env.WARD_GH_TIMEOUT_MS ?? '', 10);
-  return Number.isNaN(override) || override <= 0 ? DEFAULT_TIMEOUT_MS : override;
+  return Number.isNaN(override) || override <= 0 ? fallback : override;
+}
+
+/** Whether the installed gh can actually reach the forge — or nobody can say. */
+export type ForgeAuth = 'authenticated' | 'unauthenticated' | 'unverified';
+
+const AUTH_TIMEOUT_MS = 10_000;
+
+/**
+ * Doctor's health read (design/0010-doctor-forge-auth/): presence says the
+ * binary exists, `gh auth status` says it can reach the forge — the exit
+ * code alone decides, never gh's human-oriented output. The deadline is more
+ * generous than the PR probe's (10 s vs 3 s) because doctor is on-demand
+ * diagnosis, not a glance, and the auth check verifies the token over the
+ * network — slowest exactly on the degraded links doctor gets run on;
+ * WARD_GH_TIMEOUT_MS overrides both deadlines, one knob for "how long may
+ * Ward wait on gh". A cut or unspawnable check is 'unverified', never
+ * 'unauthenticated': the deadline expiring proves nothing about auth.
+ */
+export async function probeForgeAuth(): Promise<ForgeAuth> {
+  const gh = ghExecutable();
+  if (gh === null) return 'unverified';
+  try {
+    const proc = Bun.spawn([gh, 'auth', 'status'], {
+      stdout: 'ignore',
+      stderr: 'ignore',
+      stdin: 'ignore',
+      env: { ...process.env },
+    });
+    let cut = false;
+    const deadline = setTimeout(() => {
+      cut = true;
+      proc.kill();
+    }, timeoutMs(AUTH_TIMEOUT_MS));
+    await proc.exited;
+    clearTimeout(deadline);
+    if (cut) return 'unverified';
+    return proc.exitCode === 0 ? 'authenticated' : 'unauthenticated';
+  } catch {
+    return 'unverified';
+  }
 }
 
 /** One PR via `gh pr view`; any failure — spawn, exit, deadline, parse — is null. */
