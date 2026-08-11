@@ -33,6 +33,9 @@ operated with the \`ward\` CLI and tracked in git.
   one.
 - Work is never committed to a repository's main line directly; changes travel through a worktree
   and a pull request.
+- When a main line moves under work in progress, \`ward worktree rebase\` replays the task's
+  worktrees onto the refreshed tip — never through a dirty tree, and a conflict aborts cleanly,
+  leaving the worktree exactly as it was.
 
 ## Driving \`ward\` as an agent
 
@@ -56,6 +59,10 @@ You may be reading this from the workspace root or from inside a task worktree u
   verb (\`ward task list --json\` says what exists).
 - **Work in the task's worktree** under \`worktrees/\`, never in \`repos/\` — the canonical
   checkouts are reference copies of each repository's main line.
+- **Stay atop the main line.** When it moves, \`ward worktree rebase CODE\` rebases the task's
+  worktrees onto the refreshed tip. A dirty tree is refused; a conflict is aborted and reported
+  with the tree left as found — resolving it is your work, then rerun. It never pushes: publish
+  a rewritten branch yourself with \`git push --force-with-lease\`.
 - **Link your pull request.** \`ward task pr CODE URL\` records it on the task; review state is
   read live from the forge, never stored.
 - **Closing is gated.** \`ward task close\` requires the PR set resolved and tears down
