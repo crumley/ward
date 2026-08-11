@@ -5,36 +5,55 @@
 // stays live with the unreadable PRs marked unknown, never guessed.
 import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { probeForge } from '../../src/forge/gh.ts';
+import { prBelongsToRemote, probeForge } from '../../src/forge/gh.ts';
 import { applyGitTestEnv, makeTempDir, NO_GH, removeDir, writeFakeGh } from '../helpers.ts';
 
-// gh's vocabulary in, Ward's out: state plus review decision from one answer.
+const OID = '0123456789abcdef0123456789abcdef01234567';
+
+// gh's vocabulary in, Ward's out: state, review decision, and merge commit
+// from one answer — the oid rides in the same single call (0012).
 const translations = [
-  { gh: { state: 'OPEN' }, state: 'open', reviewDecision: undefined },
-  { gh: { state: 'OPEN', reviewDecision: 'APPROVED' }, state: 'open', reviewDecision: 'approved' },
+  { gh: { state: 'OPEN' }, state: 'open', reviewDecision: undefined, mergeCommit: undefined },
+  {
+    gh: { state: 'OPEN', reviewDecision: 'APPROVED' },
+    state: 'open',
+    reviewDecision: 'approved',
+    mergeCommit: undefined,
+  },
   {
     gh: { state: 'OPEN', reviewDecision: 'CHANGES_REQUESTED' },
     state: 'open',
     reviewDecision: 'changes-requested',
+    mergeCommit: undefined,
   },
   {
     gh: { state: 'OPEN', reviewDecision: 'REVIEW_REQUIRED' },
     state: 'open',
     reviewDecision: 'review-required',
+    mergeCommit: undefined,
   },
-  { gh: { state: 'MERGED' }, state: 'merged', reviewDecision: undefined },
+  { gh: { state: 'MERGED' }, state: 'merged', reviewDecision: undefined, mergeCommit: undefined },
   {
-    gh: { state: 'MERGED', reviewDecision: 'APPROVED' },
+    gh: { state: 'MERGED', reviewDecision: 'APPROVED', mergeCommit: OID },
     state: 'merged',
     reviewDecision: 'approved',
+    mergeCommit: OID,
   },
-  { gh: { state: 'CLOSED' }, state: 'closed', reviewDecision: undefined },
-  { gh: { state: 'SOMETHING_NEW' }, state: 'unknown', reviewDecision: undefined },
+  { gh: { state: 'CLOSED' }, state: 'closed', reviewDecision: undefined, mergeCommit: undefined },
+  {
+    gh: { state: 'SOMETHING_NEW' },
+    state: 'unknown',
+    reviewDecision: undefined,
+    mergeCommit: undefined,
+  },
 ] as const;
 
 test('one parallel probe translates every state into Ward vocabulary', async () => {
   const urls = translations.map((_, i) => `https://example.com/pr/${i + 1}`);
-  const responses: Record<string, { state: string; reviewDecision?: string }> = {};
+  const responses: Record<
+    string,
+    { state: string; reviewDecision?: string; mergeCommit?: string }
+  > = {};
   for (const [i, row] of translations.entries()) {
     responses[urls[i] ?? ''] = { ...row.gh };
   }
@@ -45,6 +64,43 @@ test('one parallel probe translates every state into Ward vocabulary', async () 
     const state = probe.states.get(urls[i] ?? '');
     expect(state?.state).toBe(row.state);
     expect(state?.reviewDecision).toBe(row.reviewDecision);
+    expect(state?.mergeCommit).toBe(row.mergeCommit);
+  }
+});
+
+// The close gate's URL→repository mapping (0012): host + repository path,
+// across every remote form git accepts; a local path maps to nothing.
+const mappings = [
+  {
+    pr: 'https://github.com/acme/ward/pull/24',
+    remote: 'https://github.com/acme/ward.git',
+    is: true,
+  },
+  { pr: 'https://github.com/acme/ward/pull/24', remote: 'git@github.com:acme/ward.git', is: true },
+  {
+    pr: 'https://github.com/acme/ward/pull/24',
+    remote: 'ssh://git@github.com/acme/ward.git',
+    is: true,
+  },
+  { pr: 'https://github.com/Acme/Ward/pull/24', remote: 'https://github.com/acme/ward', is: true },
+  {
+    pr: 'https://github.com/acme/ward/pull/24',
+    remote: 'https://github.com/acme/other.git',
+    is: false,
+  },
+  {
+    pr: 'https://github.com/acme/ward/pull/24',
+    remote: 'https://gitlab.com/acme/ward.git',
+    is: false,
+  },
+  { pr: 'https://github.com/acme/ward/pull/24', remote: '/tmp/remotes/ward.git', is: false },
+  { pr: 'not a url', remote: 'https://github.com/acme/ward.git', is: false },
+  { pr: 'https://github.com/acme/ward', remote: 'https://github.com/acme/ward.git', is: false },
+] as const;
+
+test('prBelongsToRemote maps PR URLs to remotes by host and repository path', () => {
+  for (const row of mappings) {
+    expect(prBelongsToRemote(row.pr, row.remote)).toBe(row.is);
   }
 });
 

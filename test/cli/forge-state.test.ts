@@ -160,6 +160,12 @@ test('task close delivers a fully merged set the forge confirmed', () => {
   const result = runWardEnv(['task', 'close', 't2'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('resolved (merged)');
+  // Reachability (0012): no registered repository can answer for this PR's
+  // remote, so the delivered close names the trust instead of guessing.
+  expect(result.stdout).toContain(
+    `${PR_DONE} — no registered repository matches its remote; ` +
+      "cannot verify it reached the main line — trusting the stated outcome 'delivered'",
+  );
 });
 
 // -- setup ----------------------------------------------------------------
@@ -191,7 +197,7 @@ beforeAll(() => {
     responses: {
       [PR_MERGED]: { state: 'MERGED' },
       [PR_CHANGES]: { state: 'OPEN', reviewDecision: 'CHANGES_REQUESTED' },
-      [PR_DONE]: { state: 'MERGED', reviewDecision: 'APPROVED' },
+      [PR_DONE]: { state: 'MERGED', reviewDecision: 'APPROVED', mergeCommit: 'a'.repeat(40) },
     },
   });
 });

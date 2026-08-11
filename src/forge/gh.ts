@@ -26,6 +26,15 @@ export interface PrForgeState {
   readonly state: PrState;
   /** Omitted when the forge reports no decision yet (or none at all). */
   readonly reviewDecision?: PrReviewDecision;
+  /**
+   * The merge commit's oid, when the forge reports one — rides in the same
+   * single `gh pr view` call at zero added forge cost. On a forge, "merged"
+   * means merged into the PR's base, not "reached the main line"; the oid is
+   * what lets the close gate verify the difference against the repository
+   * itself (design/0012-close-gate-reachability/). Omitted whenever the forge
+   * reports none: absence degrades honestly, it is never guessed.
+   */
+  readonly mergeCommit?: string;
 }
 
 export interface ForgeProbe {
@@ -132,7 +141,7 @@ export async function probeForgeAuth(): Promise<ForgeAuth> {
 /** One PR via `gh pr view`; any failure — spawn, exit, deadline, parse — is null. */
 async function readPr(gh: string, url: string, timeout: number): Promise<PrForgeState | null> {
   try {
-    const proc = Bun.spawn([gh, 'pr', 'view', url, '--json', 'state,reviewDecision'], {
+    const proc = Bun.spawn([gh, 'pr', 'view', url, '--json', 'state,reviewDecision,mergeCommit'], {
       stdout: 'pipe',
       stderr: 'ignore',
       stdin: 'ignore',
@@ -145,10 +154,12 @@ async function readPr(gh: string, url: string, timeout: number): Promise<PrForge
     const parsed: unknown = JSON.parse(output);
     if (typeof parsed !== 'object' || parsed === null) return null;
     const decision = reviewDecision(parsed);
+    const oid = mergeCommitOid(parsed);
     return {
       url,
       state: prState(parsed),
       ...(decision === undefined ? {} : { reviewDecision: decision }),
+      ...(oid === undefined ? {} : { mergeCommit: oid }),
     };
   } catch {
     return null;
@@ -181,4 +192,76 @@ function reviewDecision(answer: object): PrReviewDecision | undefined {
     default:
       return undefined;
   }
+}
+
+/** gh reports `"mergeCommit": {"oid": "…"}` for merged PRs, null otherwise. */
+function mergeCommitOid(answer: object): string | undefined {
+  const commit = 'mergeCommit' in answer ? answer.mergeCommit : undefined;
+  if (typeof commit !== 'object' || commit === null) return undefined;
+  const oid = 'oid' in commit ? commit.oid : undefined;
+  return typeof oid === 'string' && oid !== '' ? oid : undefined;
+}
+
+// -- PR → repository mapping ----------------------------------------------
+
+/**
+ * Whether a PR URL lives in the repository a git remote names — the close
+ * gate's URL→repository mapping (design/0012-close-gate-reachability/).
+ * Identity is host + repository path, compared case-insensitively: the PR URL
+ * contributes everything before its `/pull/` segment (the forge's URL shape
+ * is this adapter's knowledge, like its state vocabulary), and the remote is
+ * normalized across the forms git accepts (https, ssh://, scp-like
+ * `git@host:path`). A local-path remote names no forge host, so nothing maps
+ * to it — the caller degrades honestly rather than guessing.
+ */
+export function prBelongsToRemote(prUrl: string, remote: string): boolean {
+  const pr = prLocator(prUrl);
+  const repo = remoteLocator(remote);
+  return pr !== null && repo !== null && pr.host === repo.host && pr.path === repo.path;
+}
+
+interface RepoLocator {
+  readonly host: string;
+  readonly path: string;
+}
+
+function prLocator(prUrl: string): RepoLocator | null {
+  try {
+    const url = new URL(prUrl);
+    const cut = url.pathname.indexOf('/pull/');
+    if (cut < 0 || url.hostname === '') return null;
+    return { host: url.hostname.toLowerCase(), path: repoPath(url.pathname.slice(0, cut)) };
+  } catch {
+    return null;
+  }
+}
+
+function remoteLocator(remote: string): RepoLocator | null {
+  let host: string;
+  let path: string;
+  if (remote.includes('://')) {
+    try {
+      const url = new URL(remote);
+      host = url.hostname;
+      path = url.pathname;
+    } catch {
+      return null;
+    }
+  } else {
+    // scp-like `git@host:path` — the one remote form that is not a URL. A
+    // plain filesystem path never matches this shape (no host before a colon).
+    const scp = /^(?:[^@/]+@)?([^:/]+):(.+)$/.exec(remote);
+    if (scp === null) return null;
+    host = scp[1] ?? '';
+    path = scp[2] ?? '';
+  }
+  if (host === '') return null;
+  return { host: host.toLowerCase(), path: repoPath(path) };
+}
+
+function repoPath(path: string): string {
+  return path
+    .replace(/^\/+|\/+$/g, '')
+    .replace(/\.git$/, '')
+    .toLowerCase();
 }
