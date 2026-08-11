@@ -57,6 +57,7 @@ test('the installed AGENTS.md teaches an agent to drive ward', async () => {
     'ward session open', // record your session…
     '--handle', // …with your harness's own run id
     'ward task pr', // link the PR to the task
+    'ward worktree rebase', // stay atop the main line; publishing stays yours
     'Closing is gated', // task close needs the PR set resolved
     'Never merge or push to a repository', // the never-merge-to-main rule
   ]) {

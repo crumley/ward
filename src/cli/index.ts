@@ -37,7 +37,12 @@ import {
   type TaskStatus,
 } from '../workspace/status.ts';
 import { addTaskPr, closeTask, openTask, setTaskState } from '../workspace/tasks.ts';
-import { createWorktree, listWorktrees } from '../workspace/worktrees.ts';
+import {
+  createWorktree,
+  listWorktrees,
+  type RebaseReport,
+  rebaseTaskWorktrees,
+} from '../workspace/worktrees.ts';
 import { callerIsAgent } from './caller.ts';
 import {
   doctorJson,
@@ -199,6 +204,16 @@ const worktree = command(
       }),
       { brief: message`Create a deliverable worktree off the refreshed main line.` },
     ),
+    command(
+      'rebase',
+      object({
+        action: constant('worktree-rebase'),
+        task: optional(argument(string({ metavar: 'TASK' }))),
+      }),
+      {
+        brief: message`Rebase a task's worktrees onto the refreshed main line, never through a dirty tree.`,
+      },
+    ),
     command('list', object({ action: constant('worktree-list'), json: jsonFlag() }), {
       brief: message`List worktrees across all tasks.`,
     }),
@@ -345,6 +360,11 @@ try {
           `${pc.green('created')} ${created.record.path} ` +
             pc.dim(`(${created.record.repo}, branch ${created.record.branch}, deliverable)`),
         );
+        break;
+      }
+      case 'worktree-rebase': {
+        const target = await resolveTaskTarget(result.task, 'ward worktree rebase TASK');
+        await cmdWorktreeRebase(target.root, target.code);
         break;
       }
       case 'worktree-list':
@@ -600,6 +620,35 @@ async function cmdTaskClose(code: string, outcome: 'delivered' | 'abandoned'): P
   }
   const verb = outcome === 'delivered' ? pc.green('delivered') : pc.yellow('abandoned');
   console.log(`\nTask ${pc.bold(code)} closed — ${verb}.`);
+}
+
+async function cmdWorktreeRebase(root: string, code: string): Promise<void> {
+  const { task, reports } = await rebaseTaskWorktrees(root, code);
+  if (reports.length === 0) {
+    console.log(
+      pc.dim(
+        `no worktrees on task ${task.record.code} — create one with: ward worktree create TASK --repo NAME`,
+      ),
+    );
+    return;
+  }
+  for (const report of reports) {
+    console.log(`  ${renderRebase(report)}  ${report.record.path} ${pc.dim(`(${report.detail})`)}`);
+  }
+  // A dirty refusal is the fail-safe honored, not a failure — the same exit
+  // posture as repo refresh; conflict and failed broke the verb's promise.
+  const broken = reports.some((r) => r.outcome === 'conflict' || r.outcome === 'failed');
+  if (broken) process.exit(1);
+}
+
+function renderRebase(report: RebaseReport): string {
+  return {
+    rebased: pc.green(' rebased'),
+    current: pc.dim(' current'),
+    dirty: pc.yellow('   dirty'),
+    conflict: pc.red('conflict'),
+    failed: pc.red('  failed'),
+  }[report.outcome];
 }
 
 async function cmdWorktreeList(json: boolean): Promise<void> {
