@@ -86,7 +86,7 @@ export interface FakeGhBehavior {
   /** Canned `pr view` answer per URL; 'error' exits 1. `mergeCommit` is the oid. */
   readonly responses: Record<
     string,
-    { state: string; reviewDecision?: string; mergeCommit?: string } | 'error'
+    { state: string; reviewDecision?: string; mergeCommit?: string; baseRefName?: string } | 'error'
   >;
   /** `gh auth status` verdict — 'ok' exits 0, 'error' exits 1 (unset: 1). */
   readonly auth?: 'ok' | 'error';
@@ -98,12 +98,12 @@ export interface FakeGhBehavior {
 
 /**
  * Write an executable fake `gh` for WARD_GH to point at: answers
- * `gh pr view URL --json state,reviewDecision,mergeCommit` from the canned
- * table, in gh's own vocabulary (OPEN/MERGED/CLOSED,
- * APPROVED/CHANGES_REQUESTED/…, mergeCommit as `{oid}` or null exactly as gh
- * emits it), and `gh auth status` by exit code alone
- * (design/0010-doctor-forge-auth/) — so the probes' translation is what gets
- * exercised, never the network.
+ * `gh pr view URL --json state,reviewDecision,mergeCommit,baseRefName` from
+ * the canned table, in gh's own vocabulary (OPEN/MERGED/CLOSED,
+ * APPROVED/CHANGES_REQUESTED/…, mergeCommit as `{oid}` or null and
+ * baseRefName as a string exactly as gh emits them), and `gh auth status` by
+ * exit code alone (design/0010-doctor-forge-auth/) — so the probes'
+ * translation is what gets exercised, never the network.
  */
 export function writeFakeGh(dir: string, name: string, behavior: FakeGhBehavior): string {
   const path = join(dir, name);
@@ -124,6 +124,7 @@ if (answer === undefined || answer === 'error') {
   process.exit(1);
 }
 console.log(JSON.stringify({
+  baseRefName: answer.baseRefName ?? '',
   mergeCommit: answer.mergeCommit ? { oid: answer.mergeCommit } : null,
   reviewDecision: answer.reviewDecision ?? '',
   state: answer.state,

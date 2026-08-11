@@ -6,7 +6,7 @@
 // anywhere (design/0009-live-forge-state/).
 import { expect, test } from 'bun:test';
 import type { PrForgeState } from '../../src/forge/gh.ts';
-import type { TaskRecord, WorkState } from '../../src/store/types.ts';
+import type { RepositoryRecord, TaskRecord, WorkState } from '../../src/store/types.ts';
 import {
   deriveNeedsYou,
   deriveStatus,
@@ -57,10 +57,17 @@ for (const { forge, expected, why } of liveOverlays) {
   });
 }
 
-// The needs-you seed: the two unambiguous, purely derivable conditions.
+// The needs-you derivations: the unambiguous, purely derivable conditions —
+// 0009's two springs, plus 0014's stale base (an OPEN PR whose base is not
+// the repository's main line, mapped through the recorded remote).
+
+/** A PR living in the demo repository — the URL the mapping resolves. */
+const DEMO_PR = 'https://forge.example/demo/pull/24';
+
 const needs: ReadonlyArray<{
   name: string;
   statuses: TaskStatus[];
+  repos?: RepositoryRecord[];
   expected: NeedsYouEntry[];
 }> = [
   {
@@ -104,15 +111,95 @@ const needs: ReadonlyArray<{
       { task: 't2', reason: 'awaiting-close' },
     ],
   },
+  // 0014: the stale base — warned only when every link in the chain answers
+  // honestly (open + reported base + mappable repository + base ≠ main line).
+  {
+    name: 'an open PR based on another branch of a registered repository is a stale base',
+    statuses: [status('t1', [stackedPr('open', 'design/0009-live-forge-state')])],
+    repos: [repo()],
+    expected: [
+      {
+        task: 't1',
+        reason: 'stale-base',
+        pr: DEMO_PR,
+        base: 'design/0009-live-forge-state',
+        mainLine: 'main',
+      },
+    ],
+  },
+  {
+    name: 'an open PR based on the main line warns nothing',
+    statuses: [status('t1', [stackedPr('open', 'main')])],
+    repos: [repo()],
+    expected: [],
+  },
+  {
+    name: "a merged PR's base is history — the close gate owns that end",
+    statuses: [status('t1', [stackedPr('merged', 'design/0009-live-forge-state')])],
+    repos: [repo()],
+    expected: [{ task: 't1', reason: 'awaiting-close' }],
+  },
+  {
+    name: 'no reported base warns nothing — absence is never guessed at',
+    statuses: [status('t1', [stackedPr('open', undefined)])],
+    repos: [repo()],
+    expected: [],
+  },
+  {
+    name: 'a PR no repository record can answer for warns nothing — honest silence',
+    statuses: [status('t1', [stackedPr('open', 'feature-x')])],
+    repos: [repo('https://elsewhere.example/other.git')],
+    expected: [],
+  },
+  {
+    name: 'one open PR can both await changes and sit on a stale base',
+    statuses: [
+      status('t1', [
+        {
+          ...stackedPr('open', 'design/0009-live-forge-state'),
+          reviewDecision: 'changes-requested',
+        },
+      ]),
+    ],
+    repos: [repo()],
+    expected: [
+      { task: 't1', reason: 'changes-requested', pr: DEMO_PR },
+      {
+        task: 't1',
+        reason: 'stale-base',
+        pr: DEMO_PR,
+        base: 'design/0009-live-forge-state',
+        mainLine: 'main',
+      },
+    ],
+  },
 ];
 
-for (const { name, statuses, expected } of needs) {
+for (const { name, statuses, repos, expected } of needs) {
   test(`needs you: ${name}`, () => {
-    expect(deriveNeedsYou(statuses)).toEqual(expected);
+    expect(deriveNeedsYou(statuses, repos ?? [])).toEqual(expected);
   });
 }
 
 // -- setup ----------------------------------------------------------------
+
+function stackedPr(state: PrForgeState['state'], baseRefName: string | undefined): PrForgeState {
+  return {
+    url: DEMO_PR,
+    state,
+    ...(baseRefName === undefined ? {} : { baseRefName }),
+  };
+}
+
+function repo(remote = 'https://forge.example/demo.git'): RepositoryRecord {
+  return {
+    type: 'repository',
+    name: 'demo',
+    remote,
+    mainLine: 'main',
+    registeredAt: '2026-08-02T00:00:00.000Z',
+  };
+}
 
 function task(partial: Pick<TaskRecord, 'prs' | 'state'>): TaskRecord {
   return {

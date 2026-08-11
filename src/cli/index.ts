@@ -754,9 +754,25 @@ function renderForgeUnavailable(unavailable: boolean, tasks: readonly TaskRecord
 }
 
 function renderNeedsYou(entry: NeedsYouEntry): string {
-  return entry.reason === 'awaiting-close'
-    ? `task ${pc.bold(entry.task)} — PR set fully merged; close it: ward task close ${entry.task}`
-    : `task ${pc.bold(entry.task)} — changes requested on ${entry.pr ?? 'a linked PR'}`;
+  switch (entry.reason) {
+    case 'awaiting-close':
+      return `task ${pc.bold(entry.task)} — PR set fully merged; close it: ward task close ${entry.task}`;
+    case 'changes-requested':
+      return `task ${pc.bold(entry.task)} — changes requested on ${entry.pr ?? 'a linked PR'}`;
+    case 'stale-base': {
+      // The incident's cause, caught while it is still cheap to fix
+      // (design/0014-stale-base-warning/): name the PR, its base, the main
+      // line, the stake, and the remedy — retargeting is the human's move
+      // (§18); ward names it, never runs it.
+      const pr = entry.pr ?? 'a linked PR';
+      const main = entry.mainLine ?? 'the main line';
+      return (
+        `task ${pc.bold(entry.task)} — PR ${pr} is based on '${entry.base ?? 'another branch'}', ` +
+        `not the main line '${main}' — merging as-is delivers into a branch that may never land ` +
+        `(the close gate would refuse it); retarget first: gh pr edit ${pr} --base ${main}`
+      );
+    }
+  }
 }
 
 async function cmdDoctor(json: boolean): Promise<void> {

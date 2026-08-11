@@ -10,41 +10,74 @@ import { applyGitTestEnv, makeTempDir, NO_GH, removeDir, writeFakeGh } from '../
 
 const OID = '0123456789abcdef0123456789abcdef01234567';
 
-// gh's vocabulary in, Ward's out: state, review decision, and merge commit
-// from one answer — the oid rides in the same single call (0012).
+// gh's vocabulary in, Ward's out: state, review decision, merge commit, and
+// base branch from one answer — the oid (0012) and the base (0014) both ride
+// in the same single call.
 const translations = [
-  { gh: { state: 'OPEN' }, state: 'open', reviewDecision: undefined, mergeCommit: undefined },
   {
-    gh: { state: 'OPEN', reviewDecision: 'APPROVED' },
+    gh: { state: 'OPEN' },
+    state: 'open',
+    reviewDecision: undefined,
+    mergeCommit: undefined,
+    baseRefName: undefined,
+  },
+  {
+    gh: { state: 'OPEN', reviewDecision: 'APPROVED', baseRefName: 'main' },
     state: 'open',
     reviewDecision: 'approved',
     mergeCommit: undefined,
+    baseRefName: 'main',
   },
   {
     gh: { state: 'OPEN', reviewDecision: 'CHANGES_REQUESTED' },
     state: 'open',
     reviewDecision: 'changes-requested',
     mergeCommit: undefined,
+    baseRefName: undefined,
   },
   {
     gh: { state: 'OPEN', reviewDecision: 'REVIEW_REQUIRED' },
     state: 'open',
     reviewDecision: 'review-required',
     mergeCommit: undefined,
+    baseRefName: undefined,
   },
-  { gh: { state: 'MERGED' }, state: 'merged', reviewDecision: undefined, mergeCommit: undefined },
   {
-    gh: { state: 'MERGED', reviewDecision: 'APPROVED', mergeCommit: OID },
+    // The incident's prequel shape: an open PR stacked on another entry's
+    // branch — the base carried verbatim, for the derivation to judge.
+    gh: { state: 'OPEN', baseRefName: 'design/0009-live-forge-state' },
+    state: 'open',
+    reviewDecision: undefined,
+    mergeCommit: undefined,
+    baseRefName: 'design/0009-live-forge-state',
+  },
+  {
+    gh: { state: 'MERGED' },
+    state: 'merged',
+    reviewDecision: undefined,
+    mergeCommit: undefined,
+    baseRefName: undefined,
+  },
+  {
+    gh: { state: 'MERGED', reviewDecision: 'APPROVED', mergeCommit: OID, baseRefName: 'main' },
     state: 'merged',
     reviewDecision: 'approved',
     mergeCommit: OID,
+    baseRefName: 'main',
   },
-  { gh: { state: 'CLOSED' }, state: 'closed', reviewDecision: undefined, mergeCommit: undefined },
+  {
+    gh: { state: 'CLOSED' },
+    state: 'closed',
+    reviewDecision: undefined,
+    mergeCommit: undefined,
+    baseRefName: undefined,
+  },
   {
     gh: { state: 'SOMETHING_NEW' },
     state: 'unknown',
     reviewDecision: undefined,
     mergeCommit: undefined,
+    baseRefName: undefined,
   },
 ] as const;
 
@@ -52,7 +85,7 @@ test('one parallel probe translates every state into Ward vocabulary', async () 
   const urls = translations.map((_, i) => `https://example.com/pr/${i + 1}`);
   const responses: Record<
     string,
-    { state: string; reviewDecision?: string; mergeCommit?: string }
+    { state: string; reviewDecision?: string; mergeCommit?: string; baseRefName?: string }
   > = {};
   for (const [i, row] of translations.entries()) {
     responses[urls[i] ?? ''] = { ...row.gh };
@@ -65,6 +98,7 @@ test('one parallel probe translates every state into Ward vocabulary', async () 
     expect(state?.state).toBe(row.state);
     expect(state?.reviewDecision).toBe(row.reviewDecision);
     expect(state?.mergeCommit).toBe(row.mergeCommit);
+    expect(state?.baseRefName).toBe(row.baseRefName);
   }
 });
 

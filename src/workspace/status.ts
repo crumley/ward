@@ -8,9 +8,10 @@
 // has-linked-PRs approximation, and the report carries the derived `needs
 // you` items — nothing stored either way.
 import type { PrForgeState } from '../forge/gh.ts';
-import { type ForgeProbe, probeForge } from '../forge/gh.ts';
-import type { TaskRecord, WorkState } from '../store/types.ts';
+import { type ForgeProbe, prBelongsToRemote, probeForge } from '../forge/gh.ts';
+import type { RepositoryRecord, TaskRecord, WorkState } from '../store/types.ts';
 import { type FoundProject, readProjects } from './projects.ts';
+import { listRepositories } from './repos.ts';
 import { type FoundTask, readTasks } from './scan.ts';
 import { readSessions } from './sessions.ts';
 
@@ -59,20 +60,32 @@ export function forgeStates(
 
 export interface NeedsYouEntry {
   readonly task: string;
-  readonly reason: 'awaiting-close' | 'changes-requested';
+  readonly reason: 'awaiting-close' | 'changes-requested' | 'stale-base';
   /** The PR awaiting action, when the reason names one. */
   readonly pr?: string;
+  /** The PR's current base branch, when the reason is stale-base. */
+  readonly base?: string;
+  /** The main line the base should be — the repository record's, when the reason is stale-base. */
+  readonly mainLine?: string;
 }
 
 /**
- * The seed of the "what needs me?" surface
- * (intent/02-subsystems/07-human-shell.md): the two unambiguous, purely
- * derivable conditions — a fully merged PR set awaiting the human's gated
- * close (§18), and an open PR with changes requested. Derived from records
- * plus live forge state, nothing stored; a task with an unreadable PR never
- * claims awaiting-close (all-merged must be known, not assumed).
+ * The "what needs me?" surface (intent/02-subsystems/07-human-shell.md): the
+ * unambiguous, purely derivable conditions — a fully merged PR set awaiting
+ * the human's gated close (§18), an open PR with changes requested, and an
+ * open PR whose base is not the repository's main line
+ * (design/0014-stale-base-warning/: merged as-is it delivers into a branch
+ * that may never land — the incident 0012's close gate now refuses, caught
+ * here while it is still cheap to retarget). Derived from records plus live
+ * forge state, nothing stored; a task with an unreadable PR never claims
+ * awaiting-close (all-merged must be known, not assumed); a PR no repository
+ * record can answer for, or whose base the forge did not report, warns
+ * nothing — honest silence, and the close gate still backstops.
  */
-export function deriveNeedsYou(tasks: readonly TaskStatus[]): NeedsYouEntry[] {
+export function deriveNeedsYou(
+  tasks: readonly TaskStatus[],
+  repositories: readonly RepositoryRecord[],
+): NeedsYouEntry[] {
   const entries: NeedsYouEntry[] = [];
   for (const status of tasks) {
     const forge = status.forge;
@@ -82,12 +95,34 @@ export function deriveNeedsYou(tasks: readonly TaskStatus[]): NeedsYouEntry[] {
       continue;
     }
     for (const pr of forge) {
-      if (pr.state === 'open' && pr.reviewDecision === 'changes-requested') {
+      if (pr.state !== 'open') continue;
+      if (pr.reviewDecision === 'changes-requested') {
         entries.push({ task: status.task.code, reason: 'changes-requested', pr: pr.url });
+      }
+      const stale = staleBase(pr, repositories);
+      if (stale !== undefined) {
+        entries.push({ task: status.task.code, reason: 'stale-base', pr: pr.url, ...stale });
       }
     }
   }
   return entries;
+}
+
+/**
+ * An open PR's base and the main line it should be — when it verifiably is
+ * not: the PR maps to a repository record (0012's URL→remote identity) and
+ * its reported base differs from that repository's recorded main line. Only
+ * OPEN PRs qualify (a merged PR's base is history; the close gate owns that
+ * end). Undefined everywhere the question cannot be answered honestly.
+ */
+function staleBase(
+  pr: PrForgeState,
+  repositories: readonly RepositoryRecord[],
+): { base: string; mainLine: string } | undefined {
+  if (pr.state !== 'open' || pr.baseRefName === undefined) return undefined;
+  const repo = repositories.find((record) => prBelongsToRemote(pr.url, record.remote));
+  if (repo === undefined || pr.baseRefName === repo.mainLine) return undefined;
+  return { base: pr.baseRefName, mainLine: repo.mainLine };
 }
 
 export interface TaskStatus {
@@ -116,6 +151,7 @@ export interface StatusReport {
 export async function statusReport(root: string): Promise<StatusReport> {
   const tasks = await readTasks(root);
   const projects = await readProjects(root);
+  const repositories = await listRepositories(root);
   const probe = await probeForge(openPrUrls(tasks.map((task) => task.record)));
 
   const projectStatuses: ProjectStatus[] = [];
@@ -144,7 +180,7 @@ export async function statusReport(root: string): Promise<StatusReport> {
     workspace,
     projects: projectStatuses,
     bareTasks: bareStatuses,
-    ...(probe.live ? { needsYou: deriveNeedsYou(all) } : {}),
+    ...(probe.live ? { needsYou: deriveNeedsYou(all, repositories) } : {}),
   };
 }
 

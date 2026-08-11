@@ -27,6 +27,8 @@ export const prForgeShape = z.strictObject({
   url: z.string(),
   state: z.enum(['open', 'merged', 'closed', 'unknown']),
   reviewDecision: z.enum(['approved', 'changes-requested', 'review-required']).optional(),
+  /** The branch the PR targets, as the forge reports it; absent when unreported (0014). */
+  baseRefName: z.string().optional(),
 });
 export type PrForgeShape = z.infer<typeof prForgeShape>;
 
@@ -54,8 +56,13 @@ export type StatusTaskShape = z.infer<typeof statusTaskShape>;
 /** One derived attention item (0009): what awaits the human, nothing stored. */
 export const needsYouShape = z.strictObject({
   task: z.string(),
-  reason: z.enum(['awaiting-close', 'changes-requested']),
+  /** 'stale-base' (0014): an open PR whose base is not the repository's main line. */
+  reason: z.enum(['awaiting-close', 'changes-requested', 'stale-base']),
   pr: z.string().optional(),
+  /** The PR's current base branch, when the reason is stale-base (0014). */
+  base: z.string().optional(),
+  /** The main line the base should be, when the reason is stale-base (0014). */
+  mainLine: z.string().optional(),
 });
 export type NeedsYouShape = z.infer<typeof needsYouShape>;
 
