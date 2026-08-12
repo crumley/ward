@@ -71,7 +71,10 @@ personal — local paths, private notes, informal framing, and Ward's internal m
 
 **Why so absolute:** everything downstream (review, refresh, cleanup) assumes it, and a single
 careless direct push to main is exactly the kind of irreversible, outward-facing mistake the system
-exists to prevent.
+exists to prevent. The rule also carries a verification duty: "reached the main line through a PR"
+is proven only by the **main line itself** — the forge's "merged" speaks for the PR's base, not for
+main — so any gate that acts on "merged" confirms the merge is **reachable from the main line**
+rather than merely announced (Completion, below).
 
 ## Lifecycle hooks: customizable, idempotent setup and teardown
 
@@ -154,10 +157,16 @@ done:
    persona). **Why at close:** this is the moment the task's durable output is complete and its
    value to others (and to the remote record) can be judged — and moved across the privacy boundary
    deliberately.
-4. **Close the task.** A task is complete only when its **PR set is resolved**: every PR **merged**
-   — the **delivered** close — or, when the work is deliberately set aside, **closed unmerged** —
-   the **abandoned** close (Task states, below). A `sandbox` worktree opens no PRs, so it never
-   gates completion. Then the task is closed (and, per the session lifecycle, closed stays closed).
+4. **Close the task.** A task is complete only when its **PR set is resolved**: every PR **merged
+   and its merge reached the repository's main line** — the **delivered** close — or, when the work
+   is deliberately set aside, **closed unmerged** — the **abandoned** close (Task states, below).
+   The two clauses are not one: a forge's "merged" names the PR's **base branch**, which may itself
+   never land — a PR stacked on a retired branch merges cleanly and delivers nothing — so the
+   delivered close **verifies main-line arrival where it can and trusts aloud where it cannot**
+   (§20). **Why here:** the close is the moment the worktree holding the only other copy is torn
+   down; acting on the forge's word alone at that moment can strand the work it claims delivered. A
+   `sandbox` worktree opens no PRs, so it never gates completion. Then the task is closed (and, per
+   the session lifecycle, closed stays closed).
 5. **Refresh and clean up.** After the close, the affected main checkouts are refreshed and anchors
    no longer needed — worktrees of either disposition, and workdirs — are torn down (via the
    teardown hooks). Neither teardown is gated on a delivered close: a merged `deliverable` worktree
@@ -205,9 +214,9 @@ machine (`00-domain-model.md`, status) — so the set is deliberately small. A t
 | `closed`     | Work concluded — **delivered or abandoned** (the recorded outcome, below) — artifacts dispositioned, cleaned up. Terminal — closed stays closed. |
 
 The only transitions are `active ⇄ paused` and `active → closed`; `active → closed` is allowed only
-when completion holds — the PR set **resolved**: every PR merged, or deliberately closed unmerged
-(Completion, above) — and `closed` is terminal (`02-sessions-and-lifecycle.md`: closed stays
-closed).
+when completion holds — the PR set **resolved**: every PR merged into the main line, or deliberately
+closed unmerged (Completion, above) — and `closed` is terminal (`02-sessions-and-lifecycle.md`:
+closed stays closed).
 
 **The close records an outcome — `delivered | abandoned` — not a fourth state.** Not all work
 deserves delivery: a task can be superseded, disproven, or simply not worth finishing, and the
