@@ -7,6 +7,7 @@ import { basename, join, resolve } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
+import { withStoreLock } from '../store/lock.ts';
 import { type RepositoryRecord, repositoryRecordType } from '../store/types.ts';
 import { git, gitOrThrow } from './git.ts';
 
@@ -63,23 +64,39 @@ export async function addRepository(
   }
   const mainLine = detectMainLine(checkout, local ? resolve(source) : null);
   ensureOnMainLine(checkout, mainLine);
-  const record: RepositoryRecord = {
-    type: 'repository',
-    name,
-    remote,
-    mainLine,
-    registeredAt: new Date().toISOString(),
-  };
-  await writeDocument(root, recordType, {
-    data: record,
-    body:
-      `The record of the \`${name}\` repository: its remote and its main line, read from the ` +
-      'repository itself. Its canonical checkout lives at ' +
-      `\`repos/${name}/\` — contained in the workspace, ignored by its git, and never worked in directly.`,
+  // The clone (slow, network) stays outside the lock; only the record write
+  // and its commit are serialized (§17). The registration is re-checked
+  // under the lock so a concurrent add of the same name converges instead
+  // of double-committing.
+  return withStoreLock(root, `repo add ${name}`, async () => {
+    if (existsSync(join(root, recordType.relPath))) {
+      const existing = (await readDocument(root, recordType)).data;
+      if (existing.remote !== remote) {
+        throw new WardError(
+          `repository '${name}' is already registered with remote ${existing.remote} — ` +
+            `refusing to overwrite it with ${remote}; use --name to register under another name`,
+        );
+      }
+      return { record: existing, outcome: 'satisfied' as const };
+    }
+    const record: RepositoryRecord = {
+      type: 'repository',
+      name,
+      remote,
+      mainLine,
+      registeredAt: new Date().toISOString(),
+    };
+    await writeDocument(root, recordType, {
+      data: record,
+      body:
+        `The record of the \`${name}\` repository: its remote and its main line, read from the ` +
+        'repository itself. Its canonical checkout lives at ' +
+        `\`repos/${name}/\` — contained in the workspace, ignored by its git, and never worked in directly.`,
+    });
+    gitOrThrow(root, 'add', '--', recordType.relPath);
+    gitOrThrow(root, 'commit', '-m', `Register repository ${name} (ward ${pkg.version})`);
+    return { record, outcome: 'registered' as const };
   });
-  gitOrThrow(root, 'add', '--', recordType.relPath);
-  gitOrThrow(root, 'commit', '-m', `Register repository ${name} (ward ${pkg.version})`);
-  return { record, outcome: 'registered' };
 }
 
 // -- refresh --------------------------------------------------------------

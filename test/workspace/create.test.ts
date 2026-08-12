@@ -60,6 +60,8 @@ test('the installed AGENTS.md teaches an agent to drive ward', async () => {
     'ward worktree rebase', // stay atop the main line; publishing stays yours
     'Closing is gated', // task close needs the PR set resolved
     'Never merge or push to a repository', // the never-merge-to-main rule
+    'commands concurrently', // 0013: the sequential-writes discipline is dropped
+    '.ward/store.lock', // …because store writes serialize on a legible lock
   ]) {
     expect(guidance).toContain(lesson);
   }

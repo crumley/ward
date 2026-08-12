@@ -54,6 +54,13 @@ import {
   worktreeListJson,
 } from './json.ts';
 import { allSchemasJson, verbSchemaJson } from './schema.ts';
+import { recordInvocation } from './telemetry.ts';
+
+// Local usage telemetry, armed before anything can exit: one row per
+// invocation — read verbs included — appended at process exit so it carries
+// the outcome, covers optique's own help/usage exits, and costs the command
+// nothing while it runs (design/0013-telemetry-and-serialized-writes/).
+recordInvocation(process.argv.slice(2));
 
 // A declared agent gets deterministic output: no ANSI, whatever the terminal
 // or CI environment would otherwise negotiate (the §8 asymmetry — color is a

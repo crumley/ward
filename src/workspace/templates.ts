@@ -20,8 +20,9 @@ operated with the \`ward\` CLI and tracked in git.
 - \`repos/\` — canonical checkouts of registered repositories, kept fresh and never worked in
   directly.
 - \`worktrees/\` — per-task worktrees, where changes are actually made.
-- \`.ward/\` — Ward's store internals and bookkeeping; nothing in it is meant to be edited by
-  hand.
+- \`.ward/\` — Ward's store internals and bookkeeping, including the store write lock and local
+  usage telemetry (\`telemetry/\`, untracked — it never leaves the workspace); nothing in it is
+  meant to be edited by hand.
 
 ## Operating here
 
@@ -46,6 +47,10 @@ You may be reading this from the workspace root or from inside a task worktree u
 - **Declare yourself.** Set \`WARD_AGENT=1\` in the environment before calling \`ward\` — or,
   better, set it to your session id once you have one. A declared agent gets plain,
   deterministic output and is never given an interactive prompt.
+- **Run \`ward\` commands concurrently when it helps.** Store writes serialize on a lock
+  (\`.ward/store.lock\`) that names its holder; a write that cannot get it in time refuses
+  legibly — rerun it. A lock left by a crashed process is taken over automatically, and
+  \`ward doctor\` names a held or stale lock. Read verbs never wait on it.
 - **Read state as JSON.** \`ward status --json\` says where everything stands; every read verb
   (\`status\`, \`project list\`, \`task list\`, \`worktree list\`, \`repo list\`, \`doctor\`)
   accepts \`--json\`.
@@ -76,7 +81,10 @@ This file is yours: sharpen it as the workspace learns how it likes to work.
 export const WARD_INTERNAL_README = `# Ward store internals
 
 This directory marks the workspace root for the \`ward\` CLI and holds store mechanics: the
-staging area for atomic writes (\`tmp/\`), locks when they become necessary, and Ward's own
+staging area for atomic writes (\`tmp/\`); the store write lock (\`store.lock\`), which appears
+only while a write is in flight and names its holder — a lock whose holder is gone is taken
+over automatically, and \`ward doctor\` names its state; local usage telemetry
+(\`telemetry/\`, untracked — local and personal, it never leaves the workspace); and Ward's own
 bookkeeping — \`baselines.md\`, the fingerprints of what Ward installed, which is how an upgrade
 tells customized from untouched. Nothing in it is meant to be edited by hand.
 `;
