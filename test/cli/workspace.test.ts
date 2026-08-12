@@ -13,7 +13,7 @@ test('workspace create produces a valid workspace with a first commit', () => {
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('established');
   expect(result.stdout).toContain('Workspace ready');
-  for (const file of ['workspace.md', 'catalog.md', 'AGENTS.md', '.gitignore']) {
+  for (const file of ['workspace.md', 'catalog.md', 'AGENTS.md', 'CLAUDE.md', '.gitignore']) {
     expect(existsSync(join(ws, file))).toBe(true);
   }
   expect(git(ws, 'rev-list', '--count', 'HEAD').stdout.trim()).toBe('1');
@@ -22,7 +22,7 @@ test('workspace create produces a valid workspace with a first commit', () => {
 test('re-running create converges: exit 0, all satisfied, clean tree', () => {
   const result = runWard(['workspace', 'create', ws], outside);
   expect(result.exitCode).toBe(0);
-  expect(result.stdout).toContain('0 established, 10 already satisfied');
+  expect(result.stdout).toContain('0 established, 11 already satisfied');
   expect(git(ws, 'status', '--porcelain').stdout).toBe('');
 });
 

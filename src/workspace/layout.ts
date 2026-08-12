@@ -1,7 +1,7 @@
 // The on-disk layout of a workspace and its discovery from a working
 // directory (design/0002-store-and-workspace/): records live in the visible
 // tree; the hidden .ward/ holds only the marker and store mechanics.
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readlinkSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 export const MARKER_DIR = '.ward';
@@ -23,6 +23,30 @@ export const IGNORE_LINES = [
   '/.ward/store.lock',
   '/.ward/telemetry/',
 ] as const;
+
+/**
+ * The state of the workspace root's CLAUDE.md — the bridge that gives Claude
+ * Code its expected filename over the harness-neutral AGENTS.md
+ * (design/0017-claude-md-symlink/). One classifier serves both creation
+ * (converge or leave alone) and doctor (name the state), so the two verbs can
+ * never disagree about what counts as linked. `linked` means the link's
+ * target resolves to this workspace's own AGENTS.md, however spelled —
+ * a link that reads the right guidance is not divergence.
+ */
+export type ClaudeGuidance = 'linked' | 'absent' | 'file' | 'elsewhere';
+
+export function inspectClaudeGuidance(root: string): ClaudeGuidance {
+  const link = join(root, 'CLAUDE.md');
+  let stat: ReturnType<typeof lstatSync>;
+  try {
+    stat = lstatSync(link); // lstat: a dangling symlink still *exists* as an arrangement
+  } catch {
+    return 'absent';
+  }
+  if (!stat.isSymbolicLink()) return 'file';
+  const target = resolve(root, readlinkSync(link));
+  return target === join(root, 'AGENTS.md') ? 'linked' : 'elsewhere';
+}
 
 /**
  * Walk up from a working directory to the workspace root — the nearest

@@ -2,7 +2,7 @@
 // check-then-do — which is what makes re-running create the update path
 // rather than a second mechanism (intent/01-concepts/06-workspace-lifecycle.md).
 import { existsSync, statSync } from 'node:fs';
-import { appendFile, mkdir, readdir, readFile } from 'node:fs/promises';
+import { appendFile, mkdir, readdir, readFile, symlink } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
@@ -16,7 +16,7 @@ import {
 } from '../store/types.ts';
 import { sha256OfFile } from './baselines.ts';
 import { git, gitAvailable, gitOrThrow, hasCommits } from './git.ts';
-import { IGNORE_LINES, MARKER_DIR, SCOPE_DIRS } from './layout.ts';
+import { IGNORE_LINES, inspectClaudeGuidance, MARKER_DIR, SCOPE_DIRS } from './layout.ts';
 import {
   AGENTS_MD,
   CATALOG_BODY,
@@ -67,6 +67,7 @@ export async function createWorkspace(path: string): Promise<CreateReport> {
     steps.push(await establishWorkspaceRecord(ctx));
     steps.push(await establishCatalog(ctx));
     steps.push(await establishAgentsGuidance(ctx));
+    steps.push(await establishClaudeGuidance(ctx));
     steps.push(await establishIgnorePolicy(ctx));
     steps.push(await establishScopeDirs(ctx));
     steps.push(await establishBaselines(ctx));
@@ -153,6 +154,30 @@ async function establishAgentsGuidance(ctx: CreateContext): Promise<StepReport> 
   ctx.establishedPaths.push('AGENTS.md');
   ctx.installedArtifacts.push('AGENTS.md');
   return { step, outcome: 'established', detail: 'AGENTS.md' };
+}
+
+/**
+ * Claude Code reads CLAUDE.md; the workspace's guidance lives in the
+ * harness-neutral AGENTS.md (§5). A relative symlink gives that harness its
+ * expected filename with one source of truth — nothing duplicated to drift
+ * (§16). A pre-existing regular CLAUDE.md or a link aimed elsewhere is
+ * evidence of the human's own arrangement and is never overwritten (the
+ * reconcile-never-clobber posture, intent/01-concepts/06-workspace-lifecycle.md);
+ * doctor names that state, create leaves it. The link gets no baseline entry:
+ * sha256OfFile would follow it and fingerprint AGENTS.md's content under a
+ * second name, double-reporting every AGENTS.md customization — the link's
+ * real content is its target, and doctor reads that directly.
+ */
+async function establishClaudeGuidance(ctx: CreateContext): Promise<StepReport> {
+  const step = 'claude guidance';
+  const state = inspectClaudeGuidance(ctx.root);
+  if (state !== 'absent') {
+    const detail = state === 'linked' ? 'CLAUDE.md → AGENTS.md' : 'CLAUDE.md is yours — left as is';
+    return { step, outcome: 'satisfied', detail };
+  }
+  await symlink('AGENTS.md', join(ctx.root, 'CLAUDE.md'));
+  ctx.establishedPaths.push('CLAUDE.md');
+  return { step, outcome: 'established', detail: 'CLAUDE.md → AGENTS.md' };
 }
 
 async function establishIgnorePolicy(ctx: CreateContext): Promise<StepReport> {
