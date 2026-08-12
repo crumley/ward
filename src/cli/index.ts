@@ -42,6 +42,7 @@ import {
   listWorktrees,
   type RebaseReport,
   rebaseTaskWorktrees,
+  type WorktreeStatus,
 } from '../workspace/worktrees.ts';
 import { callerIsAgent } from './caller.ts';
 import {
@@ -833,10 +834,34 @@ function renderTaskStatus(status: TaskStatus): string {
     status.openSessions.length === 0
       ? ''
       : pc.dim(` — sessions: ${status.openSessions.join(', ')}`);
-  return (
+  const lines = [
     `  ${pc.bold(status.task.code)} ${status.task.slug} ` +
-    `[${renderState(status.task.state)}${review}${outcome}]${prs}${sessions}`
-  );
+      `[${renderState(status.task.state)}${review}${outcome}]${prs}${sessions}`,
+  ];
+  for (const worktree of status.worktrees ?? []) {
+    lines.push(renderWorktreeFreshness(status.task.code, worktree));
+  }
+  return lines.join('\n');
+}
+
+/**
+ * One sub-line per worktree under its task (design/0016-worktree-freshness/):
+ * which worktrees are behind, which are clean — readable at a glance, from
+ * local git alone, as fresh as the last `repo refresh`. The task line stays
+ * the compact rollup; the sub-line carries the path (which worktree), the
+ * verdict, and — where behind — the remedy. Rebasing is the caller's act:
+ * status is a read verb and names the command, never runs it.
+ */
+function renderWorktreeFreshness(code: string, status: WorktreeStatus): string {
+  const head = `    ${pc.dim(status.record.path)} — `;
+  if (status.freshness === undefined) return `${head}${pc.dim('freshness unavailable (git)')}`;
+  const detail = status.detail ?? status.freshness;
+  if (status.freshness === 'current') return head + pc.dim(detail);
+  if (status.freshness === 'behind') {
+    return head + pc.yellow(detail) + pc.dim(` — rebase with: ward worktree rebase ${code}`);
+  }
+  if (status.freshness === 'unreadable') return head + pc.red(detail);
+  return head + pc.yellow(detail); // dirty | drifted — occupancy and drift, in warning color
 }
 
 /** One line per PR set, counted by live state, e.g. `1 open (changes requested) · 1 merged`. */

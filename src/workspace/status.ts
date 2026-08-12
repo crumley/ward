@@ -14,6 +14,7 @@ import { type FoundProject, readProjects } from './projects.ts';
 import { listRepositories } from './repos.ts';
 import { type FoundTask, readTasks } from './scan.ts';
 import { readSessions } from './sessions.ts';
+import { type WorktreeStatus, worktreeStatuses } from './worktrees.ts';
 
 /** The derivation rule: precedence `active ▸ paused ▸ closed`; empty is active. */
 export function deriveStatus(children: readonly WorkState[]): WorkState {
@@ -131,6 +132,13 @@ export interface TaskStatus {
   /** Live forge state per linked PR; absent when the forge did not answer. */
   readonly forge?: readonly PrForgeState[];
   readonly openSessions: readonly string[];
+  /**
+   * Per-worktree freshness against the main line, derived from local git at
+   * read time (design/0016-worktree-freshness/). Absent on closed tasks —
+   * their worktrees were settled at the gated close, and asking again spends
+   * reads on settled work (the 0009 posture, applied to git).
+   */
+  readonly worktrees?: readonly WorktreeStatus[];
 }
 
 export interface ProjectStatus {
@@ -193,6 +201,8 @@ async function taskStatuses(
   for (const task of tasks) {
     const sessions = await readSessions(root, task.dir);
     const forge = forgeStates(task.record, probe);
+    const worktrees =
+      task.record.state === 'closed' ? undefined : await worktreeStatuses(root, task.dir);
     statuses.push({
       task: task.record,
       inReview: inReview(task.record, forge),
@@ -200,6 +210,7 @@ async function taskStatuses(
       openSessions: sessions
         .filter((session) => session.state === 'open')
         .map((session) => session.id),
+      ...(worktrees === undefined ? {} : { worktrees }),
     });
   }
   return statuses;

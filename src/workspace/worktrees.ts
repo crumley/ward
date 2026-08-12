@@ -223,6 +223,114 @@ export async function readTaskWorktrees(root: string, taskDir: string): Promise<
   return records;
 }
 
+// -- freshness --------------------------------------------------------------
+// The glance the rebase verb answers to (design/0016-worktree-freshness/):
+// which worktrees are behind the main line, which are clean — derived at read
+// time, never stored (§17). LOCAL git reads only: worktrees are worktrees of
+// the canonical checkout and share its object store and refs, so
+// origin/<mainLine> is readable here with zero network — which makes the
+// answer exactly as fresh as the last `ward repo refresh`, and status (the
+// high-frequency glance) affords it (§20: precision is a cost decision).
+
+export type WorktreeFreshness = 'current' | 'behind' | 'dirty' | 'drifted' | 'unreadable';
+
+export interface WorktreeStatus {
+  readonly record: WorktreeRecord;
+  /** Present exactly when local git could be asked (the availability convention). */
+  readonly freshness?: WorktreeFreshness;
+  /** Commits origin/<mainLine> holds that the worktree lacks — present exactly when behind. */
+  readonly behindBy?: number;
+  /** The branch actually checked out — present exactly when drifted onto another branch. */
+  readonly checkedOut?: string;
+  /** The honest phrase behind the verdict — present with freshness. */
+  readonly detail?: string;
+}
+
+/**
+ * Whether the git this module would spawn actually exists: Bun.which reads
+ * the process's original environment, while git() spawns with the runtime
+ * env — passing PATH explicitly keeps the guard and the guarded spawn in
+ * agreement (and testable the same way the hermetic git pins are).
+ */
+function gitOnPath(): boolean {
+  return Bun.which('git', { PATH: process.env.PATH ?? '' }) !== null;
+}
+
+/** One task's worktrees with their freshness, in record order. A read: mutates nothing. */
+export async function worktreeStatuses(root: string, taskDir: string): Promise<WorktreeStatus[]> {
+  const withGit = gitOnPath();
+  const statuses: WorktreeStatus[] = [];
+  for (const record of await readTaskWorktrees(root, taskDir)) {
+    // Without git the rows keep their record identity and the freshness
+    // fields vanish — degraded honestly, not failed (§20).
+    statuses.push(withGit ? await freshnessOf(root, record) : { record });
+  }
+  return statuses;
+}
+
+async function freshnessOf(root: string, record: WorktreeRecord): Promise<WorktreeStatus> {
+  const worktree = join(root, record.path);
+  if (!existsSync(worktree)) {
+    return { record, freshness: 'unreadable', detail: 'unreadable (missing on disk)' };
+  }
+  const tree = git(worktree, 'status', '--porcelain');
+  if (tree.exitCode !== 0) {
+    return { record, freshness: 'unreadable', detail: `unreadable (${tree.stderr.trim()})` };
+  }
+  // Occupancy first, the same order the toil checks it (0011): uncommitted
+  // changes are evidence of unrecorded work, and a behind-count under them
+  // would invite the very rebase the fail-safe refuses — the occupancy is
+  // the fact worth reporting (intent/01-concepts/03-work-lifecycle.md).
+  if (tree.stdout.trim() !== '') {
+    return {
+      record,
+      freshness: 'dirty',
+      detail: 'dirty (uncommitted changes — treated as occupied)',
+    };
+  }
+  // The record claims the branch (§16); anything else checked out is drift
+  // the freshness question must not paper over with a number.
+  const head = git(worktree, 'symbolic-ref', '--short', 'HEAD');
+  const checkedOut = head.exitCode === 0 ? head.stdout.trim() : '';
+  if (checkedOut !== record.branch) {
+    return {
+      record,
+      freshness: 'drifted',
+      ...(checkedOut === '' ? {} : { checkedOut }),
+      detail:
+        `drifted (checked out ${checkedOut === '' ? 'a detached HEAD' : `'${checkedOut}'`} ` +
+        `where the record names '${record.branch}')`,
+    };
+  }
+  if (!existsSync(join(root, repositoryRecordType(record.repo).relPath))) {
+    return {
+      record,
+      freshness: 'unreadable',
+      detail: `unreadable (no repository record for '${record.repo}')`,
+    };
+  }
+  const mainLine = (await readDocument(root, repositoryRecordType(record.repo))).data.mainLine;
+  const target = `origin/${mainLine}`;
+  const count = git(worktree, 'rev-list', '--count', `HEAD..${target}`);
+  const behindBy = Number.parseInt(count.stdout.trim(), 10);
+  if (count.exitCode !== 0 || Number.isNaN(behindBy)) {
+    return {
+      record,
+      freshness: 'unreadable',
+      detail: `unreadable (cannot read ${target}: ${count.stderr.trim()})`,
+    };
+  }
+  if (behindBy > 0) {
+    return {
+      record,
+      freshness: 'behind',
+      behindBy,
+      detail: `behind ${target} by ${behindBy} commit${behindBy === 1 ? '' : 's'}`,
+    };
+  }
+  return { record, freshness: 'current', detail: `current (atop ${target})` };
+}
+
 export interface WorktreeListing {
   readonly taskCode: string;
   readonly record: WorktreeRecord;
