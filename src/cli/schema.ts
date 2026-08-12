@@ -1,6 +1,7 @@
 // The living home of the --json contract (design/0008-json-shape-home/): one
-// zod schema per read verb's output document, and one registry mapping the
-// verb's CLI words to its schema. Everything derives from here — the builders
+// zod schema per --json verb's output document — read verbs (0005) and
+// mutation reports (design/0015-mutation-json/) — and one registry mapping
+// the verb's CLI words to its schema. Everything derives from here — the builders
 // in json.ts return these inferred types (drift is a compile error), the
 // schema tests validate live output against them (drift is a test failure),
 // and `ward schema` emits them as JSON Schema (the documentation ships inside
@@ -136,19 +137,174 @@ export const doctorShape = z.strictObject({
 });
 export type DoctorShape = z.infer<typeof doctorShape>;
 
+// -- mutation reports (design/0015-mutation-json/) --------------------------
+// Every mutation verb emits its existing typed report — the same steps,
+// outcomes, and named trusts the human rendering shows — never a serialized
+// internal and never a bare success boolean. The shapes are deliberately
+// separate from the read-verb shapes above: a mutation report describes the
+// state the verb just recorded (§16), while the read shapes carry derived
+// overlays (inReview, live forge state) computed at read time.
+
+/** One establishment step of `workspace create` (0002): check-then-do, named. */
+const createStepShape = z.strictObject({
+  step: z.string(),
+  outcome: z.enum(['established', 'satisfied']),
+  detail: z.string(),
+});
+
+export const workspaceCreateShape = z.strictObject({
+  root: z.string(),
+  steps: z.array(createStepShape),
+});
+export type WorkspaceCreateShape = z.infer<typeof workspaceCreateShape>;
+
+/** `repo add`: the record as written, plus how the run converged (0003). */
+export const repoAddShape = z.strictObject({
+  name: z.string(),
+  outcome: z.enum(['registered', 'converged', 'satisfied']),
+  remote: z.string(),
+  mainLine: z.string(),
+  registeredAt: z.string(),
+});
+export type RepoAddShape = z.infer<typeof repoAddShape>;
+
+/** `repo refresh`: one row per repository; a `failed` row keeps the exit-1 posture. */
+export const repoRefreshShape = z.array(
+  z.strictObject({
+    name: z.string(),
+    outcome: z.enum(['refreshed', 'current', 'dirty', 'failed']),
+    detail: z.string(),
+  }),
+);
+export type RepoRefreshShape = z.infer<typeof repoRefreshShape>;
+
+export const projectOpenShape = z.strictObject({
+  floor: z.number().int().positive(),
+  slug: z.string(),
+  state: workStateSchema,
+  openedAt: z.string(),
+});
+export type ProjectOpenShape = z.infer<typeof projectOpenShape>;
+
+/**
+ * The task record as a mutation wrote it — shared by `task open`, `task
+ * pause`, `task resume`, and `task pr`, and carried inside `task close`,
+ * because each writes the same record and reports it back. `outcome` and
+ * `closedAt` are recorded only by a close.
+ */
+export const taskMutationShape = z.strictObject({
+  code: z.string(),
+  slug: z.string(),
+  state: workStateSchema,
+  floor: z.number().int().positive().optional(),
+  purpose: z.string().optional(),
+  prs: z.array(z.string()),
+  outcome: z.enum(['delivered', 'abandoned']).optional(),
+  openedAt: z.string(),
+  closedAt: z.string().optional(),
+});
+export type TaskMutationShape = z.infer<typeof taskMutationShape>;
+
+/**
+ * `task close`: the gate's step list, verbatim. The named trusts (forge
+ * unavailable, reachability unverifiable — 0012) live in each step's
+ * `detail`, exactly as the human reads them; a refused close emits no
+ * document at all (the error posture below).
+ */
+export const taskCloseShape = z.strictObject({
+  task: taskMutationShape,
+  outcome: z.enum(['delivered', 'abandoned']),
+  steps: z.array(z.strictObject({ step: z.string(), detail: z.string() })),
+});
+export type TaskCloseShape = z.infer<typeof taskCloseShape>;
+
+/** `worktree create`: the record as written, flat like the `worktree list` rows. */
+export const worktreeCreateShape = z.strictObject({
+  task: z.string(),
+  repo: z.string(),
+  branch: z.string(),
+  disposition: z.literal('deliverable'),
+  path: z.string(),
+  createdAt: z.string(),
+});
+export type WorktreeCreateShape = z.infer<typeof worktreeCreateShape>;
+
+/**
+ * `worktree rebase` (0011): one row per worktree. `dirty` is a respected
+ * refusal (exit 0); `conflict` and `failed` broke the verb's promise and keep
+ * the exit-1 posture, with the document still emitted.
+ */
+export const worktreeRebaseShape = z.strictObject({
+  task: z.string(),
+  reports: z.array(
+    z.strictObject({
+      repo: z.string(),
+      branch: z.string(),
+      path: z.string(),
+      outcome: z.enum(['rebased', 'current', 'dirty', 'conflict', 'failed']),
+      detail: z.string(),
+    }),
+  ),
+});
+export type WorktreeRebaseShape = z.infer<typeof worktreeRebaseShape>;
+
+/** The session record as written — shared by `session open` and `session close`. */
+export const sessionMutationShape = z.strictObject({
+  id: z.string(),
+  task: z.string(),
+  purpose: z.string(),
+  workingDirectory: z.string(),
+  handle: z.string().optional(),
+  state: z.enum(['open', 'closed']),
+  openedAt: z.string(),
+  closedAt: z.string().optional(),
+});
+export type SessionMutationShape = z.infer<typeof sessionMutationShape>;
+
 /**
  * The registry: each key is exactly what the caller types after `ward` (minus
  * `--json`), so discovering a shape and invoking its verb agree by
  * construction. Order matches the documented verb list; JSON.stringify
  * preserves it, keeping `ward schema` byte-deterministic (§6).
+ *
+ * The read verbs (0005/0008): what an agent polls between actions. Their
+ * argv is derivable from the key alone, which the schema tests rely on.
  */
-export const jsonVerbShapes: Readonly<Record<string, z.ZodType>> = {
+export const readVerbShapes: Readonly<Record<string, z.ZodType>> = {
   status: statusShape,
   'project list': projectListShape,
   'task list': taskListShape,
   'worktree list': worktreeListShape,
   'repo list': repoListShape,
   doctor: doctorShape,
+};
+
+/**
+ * The mutation verbs (0015): each emits its typed report under `--json`, in
+ * lifecycle order. Their argv needs arguments and sequencing, so their live
+ * proof is the sequenced suite in test/cli/mutation-json.test.ts, not the
+ * derived read-verb table.
+ */
+export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
+  'workspace create': workspaceCreateShape,
+  'repo add': repoAddShape,
+  'repo refresh': repoRefreshShape,
+  'project open': projectOpenShape,
+  'task open': taskMutationShape,
+  'task pause': taskMutationShape,
+  'task resume': taskMutationShape,
+  'task pr': taskMutationShape,
+  'task close': taskCloseShape,
+  'worktree create': worktreeCreateShape,
+  'worktree rebase': worktreeRebaseShape,
+  'session open': sessionMutationShape,
+  'session close': sessionMutationShape,
+};
+
+/** The whole `--json` contract: read verbs first, then the mutation verbs. */
+export const jsonVerbShapes: Readonly<Record<string, z.ZodType>> = {
+  ...readVerbShapes,
+  ...mutationVerbShapes,
 };
 
 /** The whole contract: every --json verb's JSON Schema, keyed by its CLI words. */

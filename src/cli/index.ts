@@ -48,10 +48,19 @@ import {
   doctorJson,
   printJson,
   projectListJson,
+  projectOpenJson,
+  repoAddJson,
   repoListJson,
+  repoRefreshJson,
+  sessionMutationJson,
   statusJson,
+  taskCloseJson,
   taskListJson,
+  taskMutationJson,
+  workspaceCreateJson,
+  worktreeCreateJson,
   worktreeListJson,
+  worktreeRebaseJson,
 } from './json.ts';
 import { allSchemasJson, verbSchemaJson } from './schema.ts';
 import { recordInvocation } from './telemetry.ts';
@@ -68,7 +77,10 @@ recordInvocation(process.argv.slice(2));
 // must branch on the same predicate and never block an agent caller.
 const pc = callerIsAgent() ? picocolors.createColors(false) : picocolors;
 
-/** `--json`: the machine-readable form of a read verb (design/0005-agent-audience/). */
+/**
+ * `--json`: the machine-readable form of a verb — read verbs since 0005,
+ * mutation reports since design/0015-mutation-json/.
+ */
 function jsonFlag() {
   return option('--json', {
     description: message`Emit the result as JSON on stdout (a stable, documented shape).`,
@@ -80,6 +92,7 @@ const workspaceCreate = command(
   object({
     action: constant('workspace-create'),
     path: argument(string({ metavar: 'PATH' })),
+    json: jsonFlag(),
   }),
   {
     brief: message`Create a Ward workspace at PATH (re-running converges).`,
@@ -96,6 +109,7 @@ const repoAdd = command(
     action: constant('repo-add'),
     source: argument(string({ metavar: 'SOURCE' })),
     name: optional(option('--name', string({ metavar: 'NAME' }))),
+    json: jsonFlag(),
   }),
   { brief: message`Register a repository: clone a URL or adopt a local checkout.` },
 );
@@ -105,6 +119,7 @@ const repoRefresh = command(
   object({
     action: constant('repo-refresh'),
     name: optional(argument(string({ metavar: 'NAME' }))),
+    json: jsonFlag(),
   }),
   { brief: message`Fetch and fast-forward canonical checkouts to their main lines.` },
 );
@@ -122,7 +137,11 @@ const project = command(
   or(
     command(
       'open',
-      object({ action: constant('project-open'), slug: argument(string({ metavar: 'SLUG' })) }),
+      object({
+        action: constant('project-open'),
+        slug: argument(string({ metavar: 'SLUG' })),
+        json: jsonFlag(),
+      }),
       { brief: message`Open a project; it takes the next floor number.` },
     ),
     command('list', object({ action: constant('project-list'), json: jsonFlag() }), {
@@ -142,6 +161,7 @@ const task = command(
         slug: argument(string({ metavar: 'SLUG' })),
         project: optional(option('--project', integer({ metavar: 'FLOOR' }))),
         purpose: optional(option('--purpose', string({ metavar: 'TEXT' }))),
+        json: jsonFlag(),
       }),
       { brief: message`Open a task, bare or under a project floor.` },
     ),
@@ -153,6 +173,7 @@ const task = command(
       object({
         action: constant('task-pause'),
         code: optional(argument(string({ metavar: 'CODE' }))),
+        json: jsonFlag(),
       }),
       { brief: message`Set a task down, resumable. CODE is inferred inside a task's worktree.` },
     ),
@@ -161,6 +182,7 @@ const task = command(
       object({
         action: constant('task-resume'),
         code: optional(argument(string({ metavar: 'CODE' }))),
+        json: jsonFlag(),
       }),
       { brief: message`Pick a paused task back up. CODE is inferred inside a task's worktree.` },
     ),
@@ -173,11 +195,13 @@ const task = command(
         object({
           action: constant('task-pr'),
           url: argument(string({ metavar: 'URL' })),
+          json: jsonFlag(),
         }),
         object({
           action: constant('task-pr'),
           code: argument(string({ metavar: 'CODE' })),
           url: argument(string({ metavar: 'URL' })),
+          json: jsonFlag(),
         }),
       ),
       { brief: message`Link a pull request to a task. CODE is inferred inside a task's worktree.` },
@@ -191,6 +215,7 @@ const task = command(
           option('--outcome', choice(['delivered', 'abandoned'])),
           'delivered' as const,
         ),
+        json: jsonFlag(),
       }),
       { brief: message`Close a task: PR set resolved, worktrees torn down, outcome recorded.` },
     ),
@@ -208,6 +233,7 @@ const worktree = command(
         task: optional(argument(string({ metavar: 'TASK' }))),
         repo: option('--repo', string({ metavar: 'NAME' })),
         branch: optional(option('--branch', string({ metavar: 'NAME' }))),
+        json: jsonFlag(),
       }),
       { brief: message`Create a deliverable worktree off the refreshed main line.` },
     ),
@@ -216,6 +242,7 @@ const worktree = command(
       object({
         action: constant('worktree-rebase'),
         task: optional(argument(string({ metavar: 'TASK' }))),
+        json: jsonFlag(),
       }),
       {
         brief: message`Rebase a task's worktrees onto the refreshed main line, never through a dirty tree.`,
@@ -239,12 +266,17 @@ const session = command(
         purpose: option('--purpose', string({ metavar: 'TEXT' })),
         handle: optional(option('--handle', string({ metavar: 'TEXT' }))),
         dir: optional(option('--dir', string({ metavar: 'PATH' }))),
+        json: jsonFlag(),
       }),
       { brief: message`Record a session on a task (you run the agent yourself).` },
     ),
     command(
       'close',
-      object({ action: constant('session-close'), id: argument(string({ metavar: 'ID' })) }),
+      object({
+        action: constant('session-close'),
+        id: argument(string({ metavar: 'ID' })),
+        json: jsonFlag(),
+      }),
       { brief: message`Close a session record; closed stays closed.` },
     ),
   ),
@@ -294,19 +326,23 @@ try {
   if ('action' in result) {
     switch (result.action) {
       case 'workspace-create':
-        await cmdWorkspaceCreate(result.path);
+        await cmdWorkspaceCreate(result.path, result.json);
         break;
       case 'repo-add':
-        await cmdRepoAdd(result.source, result.name);
+        await cmdRepoAdd(result.source, result.name, result.json);
         break;
       case 'repo-refresh':
-        await cmdRepoRefresh(result.name);
+        await cmdRepoRefresh(result.name, result.json);
         break;
       case 'repo-list':
         await cmdRepoList(result.json);
         break;
       case 'project-open': {
         const record = await openProject(requireWorkspace(), result.slug);
+        if (result.json) {
+          printJson(projectOpenJson(record));
+          break;
+        }
         console.log(
           `${pc.green('opened')} floor ${pc.bold(String(record.floor))} — ${record.slug}`,
         );
@@ -320,6 +356,10 @@ try {
           ...(result.project === undefined ? {} : { floor: result.project }),
           ...(result.purpose === undefined ? {} : { purpose: result.purpose }),
         });
+        if (result.json) {
+          printJson(taskMutationJson(opened.record));
+          break;
+        }
         console.log(
           `${pc.green('opened')} task ${pc.bold(opened.record.code)} — ${opened.record.slug}` +
             (opened.record.floor === undefined ? '' : pc.dim(` (floor ${opened.record.floor})`)),
@@ -330,16 +370,24 @@ try {
         await cmdTaskList(result.json);
         break;
       case 'task-pause': {
-        const target = await resolveTaskTarget(result.code, 'ward task pause CODE');
+        const target = await resolveTaskTarget(result.code, 'ward task pause CODE', result.json);
         const paused = await setTaskState(target.root, target.code, 'paused');
+        if (result.json) {
+          printJson(taskMutationJson(paused.record));
+          break;
+        }
         console.log(
           `${pc.yellow('paused')} ${pc.bold(paused.record.code)} — ${paused.record.slug}`,
         );
         break;
       }
       case 'task-resume': {
-        const target = await resolveTaskTarget(result.code, 'ward task resume CODE');
+        const target = await resolveTaskTarget(result.code, 'ward task resume CODE', result.json);
         const resumed = await setTaskState(target.root, target.code, 'active');
+        if (result.json) {
+          printJson(taskMutationJson(resumed.record));
+          break;
+        }
         console.log(
           `${pc.green('resumed')} ${pc.bold(resumed.record.code)} — ${resumed.record.slug}`,
         );
@@ -347,22 +395,31 @@ try {
       }
       case 'task-pr': {
         const code = 'code' in result ? result.code : undefined;
-        const target = await resolveTaskTarget(code, 'ward task pr CODE URL');
+        const target = await resolveTaskTarget(code, 'ward task pr CODE URL', result.json);
         const linked = await addTaskPr(target.root, target.code, result.url);
+        if (result.json) {
+          printJson(taskMutationJson(linked.record));
+          break;
+        }
         console.log(
           `${pc.green('linked')} ${result.url} ${pc.dim(`(${linked.record.prs.length} in the set)`)}`,
         );
         break;
       }
       case 'task-close':
-        await cmdTaskClose(result.code, result.outcome);
+        await cmdTaskClose(result.code, result.outcome, result.json);
         break;
       case 'worktree-create': {
         const target = await resolveTaskTarget(
           result.task,
           'ward worktree create TASK --repo NAME',
+          result.json,
         );
         const created = await createWorktree(target.root, target.code, result.repo, result.branch);
+        if (result.json) {
+          printJson(worktreeCreateJson(created.task.record.code, created.record));
+          break;
+        }
         console.log(
           `${pc.green('created')} ${created.record.path} ` +
             pc.dim(`(${created.record.repo}, branch ${created.record.branch}, deliverable)`),
@@ -370,8 +427,12 @@ try {
         break;
       }
       case 'worktree-rebase': {
-        const target = await resolveTaskTarget(result.task, 'ward worktree rebase TASK');
-        await cmdWorktreeRebase(target.root, target.code);
+        const target = await resolveTaskTarget(
+          result.task,
+          'ward worktree rebase TASK',
+          result.json,
+        );
+        await cmdWorktreeRebase(target.root, target.code, result.json);
         break;
       }
       case 'worktree-list':
@@ -381,6 +442,7 @@ try {
         const target = await resolveTaskTarget(
           result.task,
           'ward session open TASK --purpose TEXT',
+          result.json,
         );
         // An inferred task pins the working directory too: the caller stands
         // in the very worktree the record should name (unless --dir overrides).
@@ -389,6 +451,10 @@ try {
           ...(result.handle === undefined ? {} : { handle: result.handle }),
           ...(dir === undefined ? {} : { workingDirectory: dir }),
         });
+        if (result.json) {
+          printJson(sessionMutationJson(opened));
+          break;
+        }
         console.log(
           `${pc.green('opened')} session ${pc.bold(opened.id)} ` +
             pc.dim(`(in ${opened.workingDirectory})`),
@@ -397,6 +463,10 @@ try {
       }
       case 'session-close': {
         const closed = await closeSession(requireWorkspace(), result.id);
+        if (result.json) {
+          printJson(sessionMutationJson(closed));
+          break;
+        }
         console.log(`${pc.dim('closed')} session ${pc.bold(closed.id)}`);
         break;
       }
@@ -434,8 +504,12 @@ function printVersion(explicit: boolean): void {
   }
 }
 
-async function cmdWorkspaceCreate(path: string): Promise<void> {
+async function cmdWorkspaceCreate(path: string, json: boolean): Promise<void> {
   const report = await createWorkspace(path);
+  if (json) {
+    printJson(workspaceCreateJson(report));
+    return;
+  }
   console.log(`Workspace at ${pc.bold(report.root)}\n`);
   for (const step of report.steps) {
     console.log(`  ${renderOutcome(step)}  ${step.step} ${pc.dim(`(${step.detail})`)}`);
@@ -475,7 +549,11 @@ interface TaskTarget {
  * caller standing nowhere claimed gets a deterministic error naming the fix —
  * never a prompt (design/0006-scope-from-cwd/).
  */
-async function resolveTaskTarget(explicit: string | undefined, usage: string): Promise<TaskTarget> {
+async function resolveTaskTarget(
+  explicit: string | undefined,
+  usage: string,
+  json = false,
+): Promise<TaskTarget> {
   const root = requireWorkspace();
   if (explicit !== undefined) return { root, code: explicit };
   if (callerIsAgent()) {
@@ -491,13 +569,20 @@ async function resolveTaskTarget(explicit: string | undefined, usage: string): P
         '(see: ward task list)',
     );
   }
-  console.log(pc.dim(`task ${scope.task.record.code} — from the working directory`));
+  // Under --json the derivation echo moves to stderr: stdout carries one JSON
+  // document, alone (0005), and the echo is a human affordance, not data.
+  const echo = json ? console.error : console.log;
+  echo(pc.dim(`task ${scope.task.record.code} — from the working directory`));
   return { root, code: scope.task.record.code, worktreePath: scope.worktree.path };
 }
 
-async function cmdRepoAdd(source: string, name: string | undefined): Promise<void> {
+async function cmdRepoAdd(source: string, name: string | undefined, json: boolean): Promise<void> {
   const root = requireWorkspace();
   const report = await addRepository(root, source, name);
+  if (json) {
+    printJson(repoAddJson(report));
+    return;
+  }
   const verb = {
     registered: pc.green('registered'),
     converged: pc.green('converged'),
@@ -509,9 +594,18 @@ async function cmdRepoAdd(source: string, name: string | undefined): Promise<voi
   console.log(`  checkout  ${pc.dim(`repos/${report.record.name}/`)}`);
 }
 
-async function cmdRepoRefresh(name: string | undefined): Promise<void> {
+async function cmdRepoRefresh(name: string | undefined, json: boolean): Promise<void> {
   const root = requireWorkspace();
   const reports = await refreshRepositories(root, name);
+  if (json) {
+    // The document is emitted whatever the rows say; a failed row keeps the
+    // human path's exit-1 verdict — the caller reads the outcome from the
+    // document and the verdict from $?, and the two never disagree (0005's
+    // doctor posture).
+    printJson(repoRefreshJson(reports));
+    if (reports.some((report) => report.outcome === 'failed')) process.exit(1);
+    return;
+  }
   if (reports.length === 0) {
     console.log(pc.dim('no repositories registered — add one with: ward repo add SOURCE'));
     return;
@@ -619,8 +713,16 @@ async function cmdTaskList(json: boolean): Promise<void> {
   );
 }
 
-async function cmdTaskClose(code: string, outcome: 'delivered' | 'abandoned'): Promise<void> {
+async function cmdTaskClose(
+  code: string,
+  outcome: 'delivered' | 'abandoned',
+  json: boolean,
+): Promise<void> {
   const report = await closeTask(requireWorkspace(), code, outcome);
+  if (json) {
+    printJson(taskCloseJson(report));
+    return;
+  }
   console.log(`Closing task ${pc.bold(code)} — ${report.task.record.slug}\n`);
   for (const step of report.steps) {
     console.log(`  ${pc.green('✓')} ${step.step} ${pc.dim(`(${step.detail})`)}`);
@@ -629,8 +731,18 @@ async function cmdTaskClose(code: string, outcome: 'delivered' | 'abandoned'): P
   console.log(`\nTask ${pc.bold(code)} closed — ${verb}.`);
 }
 
-async function cmdWorktreeRebase(root: string, code: string): Promise<void> {
+async function cmdWorktreeRebase(root: string, code: string, json: boolean): Promise<void> {
   const { task, reports } = await rebaseTaskWorktrees(root, code);
+  // A dirty refusal is the fail-safe honored, not a failure — the same exit
+  // posture as repo refresh; conflict and failed broke the verb's promise.
+  const broken = reports.some((r) => r.outcome === 'conflict' || r.outcome === 'failed');
+  if (json) {
+    // The per-worktree outcomes are the document, conflicts included — the
+    // verb completed and reported; only the exit code carries the verdict.
+    printJson(worktreeRebaseJson(task.record.code, reports));
+    if (broken) process.exit(1);
+    return;
+  }
   if (reports.length === 0) {
     console.log(
       pc.dim(
@@ -642,9 +754,6 @@ async function cmdWorktreeRebase(root: string, code: string): Promise<void> {
   for (const report of reports) {
     console.log(`  ${renderRebase(report)}  ${report.record.path} ${pc.dim(`(${report.detail})`)}`);
   }
-  // A dirty refusal is the fail-safe honored, not a failure — the same exit
-  // posture as repo refresh; conflict and failed broke the verb's promise.
-  const broken = reports.some((r) => r.outcome === 'conflict' || r.outcome === 'failed');
   if (broken) process.exit(1);
 }
 
