@@ -7,6 +7,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { WardError } from '../errors.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
+import { withStoreLock } from '../store/lock.ts';
 import { repositoryRecordType, type WorktreeRecord, worktreeRecordType } from '../store/types.ts';
 import { git, gitOrThrow } from './git.ts';
 import { type RefreshReport, refreshRepositories } from './repos.ts';
@@ -60,14 +61,20 @@ export async function createWorktree(
     path,
     createdAt: new Date().toISOString(),
   };
-  await writeDocument(root, recordType, {
-    data: record,
-    body:
-      `Worktree of \`${repoName}\` on branch \`${branch}\`, occupied for task ` +
-      `\`${task.record.code}\`. Deliverable: its changes reach the main line only through a ` +
-      'pull request.',
+  // Only the record write and its commit are serialized (§17) — the refresh
+  // and `git worktree add` above stay outside the lock because they can be
+  // slow (a fetch) and their collisions are git's own legible errors (a
+  // branch that already exists), not store races.
+  await withStoreLock(root, `worktree create ${taskCode}`, async () => {
+    await writeDocument(root, recordType, {
+      data: record,
+      body:
+        `Worktree of \`${repoName}\` on branch \`${branch}\`, occupied for task ` +
+        `\`${task.record.code}\`. Deliverable: its changes reach the main line only through a ` +
+        'pull request.',
+    });
+    commitRecords(root, `Create worktree ${branch} for task ${taskCode}`, task.dir);
   });
-  commitRecords(root, `Create worktree ${branch} for task ${taskCode}`, task.dir);
   return { task, record };
 }
 

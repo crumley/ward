@@ -5,31 +5,37 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { WardError } from '../errors.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
+import { withStoreLock } from '../store/lock.ts';
 import { type ProjectRecord, projectRecordType } from '../store/types.ts';
 import { commitRecords, projectDirs, requireSlug } from './scan.ts';
 
 export async function openProject(root: string, slugInput: string): Promise<ProjectRecord> {
   const slug = requireSlug(slugInput);
-  // Floors are monotonic over every project ever opened — closed floors are
-  // retired, never reused, because they root historical room addresses.
-  const floors = projectDirs(root).map(floorOf);
-  const floor = floors.length === 0 ? 1 : Math.max(...floors) + 1;
-  const dir = `projects/${floor}-${slug}`;
-  const record: ProjectRecord = {
-    type: 'project',
-    floor,
-    slug,
-    state: 'active',
-    openedAt: new Date().toISOString(),
-  };
-  await writeDocument(root, projectRecordType(dir), {
-    data: record,
-    body:
-      `Floor ${floor}: the \`${slug}\` project. Its tasks live in \`tasks/\` beside this ` +
-      'record, and its status is derived from theirs, never stored here.',
+  // Allocation through commit is the serialized critical section (§17): the
+  // floor scan must not race another writer's, and the commit must not race
+  // another commit (design/0013-telemetry-and-serialized-writes/).
+  return withStoreLock(root, `project open ${slug}`, async () => {
+    // Floors are monotonic over every project ever opened — closed floors are
+    // retired, never reused, because they root historical room addresses.
+    const floors = projectDirs(root).map(floorOf);
+    const floor = floors.length === 0 ? 1 : Math.max(...floors) + 1;
+    const dir = `projects/${floor}-${slug}`;
+    const record: ProjectRecord = {
+      type: 'project',
+      floor,
+      slug,
+      state: 'active',
+      openedAt: new Date().toISOString(),
+    };
+    await writeDocument(root, projectRecordType(dir), {
+      data: record,
+      body:
+        `Floor ${floor}: the \`${slug}\` project. Its tasks live in \`tasks/\` beside this ` +
+        'record, and its status is derived from theirs, never stored here.',
+    });
+    commitRecords(root, `Open project ${slug} (floor ${floor})`, dir);
+    return record;
   });
-  commitRecords(root, `Open project ${slug} (floor ${floor})`, dir);
-  return record;
 }
 
 export interface FoundProject {

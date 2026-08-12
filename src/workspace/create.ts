@@ -7,6 +7,7 @@ import { basename, join, resolve } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
+import { withStoreLock } from '../store/lock.ts';
 import {
   baselinesType,
   catalogType,
@@ -57,14 +58,21 @@ export async function createWorkspace(path: string): Promise<CreateReport> {
   const steps: StepReport[] = [];
   steps.push(await establishRoot(ctx));
   steps.push(await establishMarker(ctx));
-  steps.push(await establishWorkspaceRecord(ctx));
-  steps.push(await establishCatalog(ctx));
-  steps.push(await establishAgentsGuidance(ctx));
-  steps.push(await establishIgnorePolicy(ctx));
-  steps.push(await establishScopeDirs(ctx));
-  steps.push(await establishBaselines(ctx));
-  steps.push(establishGitRepository(ctx));
-  steps.push(establishCommit(ctx));
+  // The store exists once the marker does, and from there a convergence run
+  // is one more store writer: the remaining steps — including the converge
+  // commit — run under the store lock so create cannot race a concurrent
+  // verb's commit (design/0013-telemetry-and-serialized-writes/). A fresh
+  // create is trivially uncontended; the uniform path costs nothing.
+  await withStoreLock(root, 'workspace create', async () => {
+    steps.push(await establishWorkspaceRecord(ctx));
+    steps.push(await establishCatalog(ctx));
+    steps.push(await establishAgentsGuidance(ctx));
+    steps.push(await establishIgnorePolicy(ctx));
+    steps.push(await establishScopeDirs(ctx));
+    steps.push(await establishBaselines(ctx));
+    steps.push(establishGitRepository(ctx));
+    steps.push(establishCommit(ctx));
+  });
   return { root, steps };
 }
 

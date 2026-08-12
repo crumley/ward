@@ -8,6 +8,7 @@ import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
 import { type ForgeAuth, ghExecutable, probeForgeAuth } from '../forge/gh.ts';
 import { type DocumentType, readDocument } from '../store/document.ts';
+import { inspectStoreLock } from '../store/lock.ts';
 import {
   baselinesType,
   catalogType,
@@ -175,11 +176,71 @@ async function workspaceChecks(root: string): Promise<Finding[]> {
         },
   );
 
+  findings.push(storeLockFinding(root));
+  findings.push(...telemetryFindings(root));
+
   for (const name of listRepositoryNames(root)) {
     findings.push(...(await repositoryChecks(root, name)));
   }
 
   return findings;
+}
+
+/**
+ * The store write lock, named (§20): a held lock is normal and brief; a
+ * stale one is exactly the wedged-looking condition doctor exists to
+ * explain. Warn, never error — the next write takes a stale lock over by
+ * itself, so nothing is blocked
+ * (design/0013-telemetry-and-serialized-writes/).
+ */
+function storeLockFinding(root: string): Finding {
+  const check = 'store lock';
+  const seen = inspectStoreLock(root);
+  if (!seen.present) {
+    return { check, severity: 'ok', message: 'no writer holds the store lock' };
+  }
+  const holder =
+    seen.holder === undefined
+      ? 'an unreadable holder'
+      : `pid ${seen.holder.pid} (ward ${seen.holder.verb}, ${seen.holder.caller})`;
+  const held = seen.heldMs === undefined ? '' : ` for ${Math.round(seen.heldMs / 1000)}s`;
+  return seen.verdict === 'live'
+    ? {
+        check,
+        severity: 'info',
+        message: `held by ${holder}${held} — concurrent writes are waiting their turn`,
+      }
+    : {
+        check,
+        severity: 'warn',
+        message:
+          `stale — left by ${holder}${held}; the next write takes it over, ` +
+          'and deleting .ward/store.lock is also safe',
+      };
+}
+
+/**
+ * Telemetry must stay local (§4): a tracked telemetry file is one push from
+ * leaving the workspace, which is exactly the leak the human-shell contract
+ * forbids — the one condition worth a warning. Untracked is the healthy
+ * state; a workspace with no telemetry yet has nothing to report.
+ */
+function telemetryFindings(root: string): Finding[] {
+  const check = 'telemetry';
+  const tracked = git(root, 'ls-files', '--', '.ward/telemetry').stdout.trim();
+  if (tracked !== '') {
+    return [
+      {
+        check,
+        severity: 'warn',
+        message:
+          'usage telemetry is tracked in the workspace history — it is local and personal, ' +
+          'never shared; untrack it: git rm -r --cached .ward/telemetry',
+      },
+    ];
+  }
+  if (!existsSync(join(root, '.ward', 'telemetry'))) return [];
+  return [{ check, severity: 'ok', message: 'usage telemetry stays local (untracked)' }];
 }
 
 /**

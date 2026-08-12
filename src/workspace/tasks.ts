@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { WardError } from '../errors.ts';
 import { type PrForgeState, prBelongsToRemote, probeForge } from '../forge/gh.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
+import { withStoreLock } from '../store/lock.ts';
 import {
   type RepositoryRecord,
   type SessionRecord,
@@ -46,31 +47,36 @@ export async function openTask(
   options: OpenTaskOptions,
 ): Promise<FoundTask> {
   const slug = requireSlug(slugInput);
-  const container = await taskContainer(root, options.floor);
-  const openCodes = (await readTasks(root))
-    .filter((task) => task.record.state !== 'closed')
-    .map((task) => Number.parseInt(task.record.code.replace(/^t/, ''), 10))
-    .filter((code) => !Number.isNaN(code));
-  const code = `t${smallestFree(openCodes)}`;
-  const dir = `${container}/${code}-${slug}`;
-  const record: TaskRecord = {
-    type: 'task',
-    code,
-    slug,
-    state: 'active',
-    ...(options.floor === undefined ? {} : { floor: options.floor }),
-    ...(options.purpose === undefined ? {} : { purpose: options.purpose }),
-    prs: [],
-    openedAt: new Date().toISOString(),
-  };
-  await writeDocument(root, taskRecordType(dir), {
-    data: record,
-    body:
-      `The \`${slug}\` task, addressed by its bare code \`${code}\` while open. Its worktree ` +
-      'and session records nest beside this document; its status is stored here, at the leaf.',
+  // The code-allocation scan through the commit is the serialized critical
+  // section (§17): two concurrent opens must not both read the same free
+  // code, and their commits must not race (design/0013-telemetry-and-serialized-writes/).
+  return withStoreLock(root, `task open ${slug}`, async () => {
+    const container = await taskContainer(root, options.floor);
+    const openCodes = (await readTasks(root))
+      .filter((task) => task.record.state !== 'closed')
+      .map((task) => Number.parseInt(task.record.code.replace(/^t/, ''), 10))
+      .filter((code) => !Number.isNaN(code));
+    const code = `t${smallestFree(openCodes)}`;
+    const dir = `${container}/${code}-${slug}`;
+    const record: TaskRecord = {
+      type: 'task',
+      code,
+      slug,
+      state: 'active',
+      ...(options.floor === undefined ? {} : { floor: options.floor }),
+      ...(options.purpose === undefined ? {} : { purpose: options.purpose }),
+      prs: [],
+      openedAt: new Date().toISOString(),
+    };
+    await writeDocument(root, taskRecordType(dir), {
+      data: record,
+      body:
+        `The \`${slug}\` task, addressed by its bare code \`${code}\` while open. Its worktree ` +
+        'and session records nest beside this document; its status is stored here, at the leaf.',
+    });
+    commitRecords(root, `Open task ${slug} (${code})`, dir);
+    return { dir, record };
   });
-  commitRecords(root, `Open task ${slug} (${code})`, dir);
-  return { dir, record };
 }
 
 export async function setTaskState(
@@ -78,21 +84,26 @@ export async function setTaskState(
   code: string,
   state: 'active' | 'paused',
 ): Promise<FoundTask> {
-  const task = await resolveOpenTask(root, code);
-  if (task.record.state === state) return task;
-  const record: TaskRecord = { ...task.record, state };
-  await writeTask(root, task.dir, record);
-  commitRecords(root, `${state === 'paused' ? 'Pause' : 'Resume'} task ${code}`, task.dir);
-  return { dir: task.dir, record };
+  const verb = state === 'paused' ? 'pause' : 'resume';
+  return withStoreLock(root, `task ${verb} ${code}`, async () => {
+    const task = await resolveOpenTask(root, code);
+    if (task.record.state === state) return task;
+    const record: TaskRecord = { ...task.record, state };
+    await writeTask(root, task.dir, record);
+    commitRecords(root, `${state === 'paused' ? 'Pause' : 'Resume'} task ${code}`, task.dir);
+    return { dir: task.dir, record };
+  });
 }
 
 export async function addTaskPr(root: string, code: string, url: string): Promise<FoundTask> {
-  const task = await resolveOpenTask(root, code);
-  if (task.record.prs.includes(url)) return task;
-  const record: TaskRecord = { ...task.record, prs: [...task.record.prs, url] };
-  await writeTask(root, task.dir, record);
-  commitRecords(root, `Link PR to task ${code}`, task.dir);
-  return { dir: task.dir, record };
+  return withStoreLock(root, `task pr ${code}`, async () => {
+    const task = await resolveOpenTask(root, code);
+    if (task.record.prs.includes(url)) return task;
+    const record: TaskRecord = { ...task.record, prs: [...task.record.prs, url] };
+    await writeTask(root, task.dir, record);
+    commitRecords(root, `Link PR to task ${code}`, task.dir);
+    return { dir: task.dir, record };
+  });
 }
 
 // -- close ----------------------------------------------------------------
@@ -121,44 +132,53 @@ export async function closeTask(
   // Every gate is checked before anything mutates: a refused close must
   // leave the task exactly as it found it, or retrying it closes less than
   // the first attempt did (§6 — the only safe operation repeats cleanly).
+  // The gates run outside the store lock — they are read-only and may wait
+  // on the forge — so the lock covers only the brief mutate-and-commit span.
   steps.push(...(await resolvePrSet(root, task.record, outcome)));
   const worktrees = await readTaskWorktrees(root, task.dir);
   for (const worktree of worktrees) {
     validateTeardown(root, task.record, worktree, outcome);
   }
 
-  const sessions = await readSessions(root, task.dir);
-  const open = sessions.filter((session) => session.state === 'open');
-  for (const session of open) {
-    const closed: SessionRecord = {
-      ...session,
+  const record = await withStoreLock(root, `task close ${code}`, async () => {
+    // Re-resolve under the lock: a concurrent close of the same code loses
+    // here with the legible "no open task" refusal instead of half-applying.
+    await resolveOpenTask(root, code);
+
+    const sessions = await readSessions(root, task.dir);
+    const open = sessions.filter((session) => session.state === 'open');
+    for (const session of open) {
+      const closed: SessionRecord = {
+        ...session,
+        state: 'closed',
+        closedAt: new Date().toISOString(),
+      };
+      await writeDocument(root, sessionRecordType(task.dir, session.id), {
+        data: closed,
+        body: `Session \`${session.id}\` of task \`${task.record.code}\`.`,
+      });
+    }
+    steps.push({
+      step: 'sessions',
+      detail: open.length === 0 ? 'none open' : `closed ${open.map((s) => s.id).join(', ')}`,
+    });
+
+    for (const worktree of worktrees) {
+      steps.push(removeWorktree(root, worktree, outcome));
+    }
+    if (worktrees.length === 0) steps.push({ step: 'worktrees', detail: 'none to tear down' });
+
+    const closedRecord: TaskRecord = {
+      ...task.record,
       state: 'closed',
+      outcome,
       closedAt: new Date().toISOString(),
     };
-    await writeDocument(root, sessionRecordType(task.dir, session.id), {
-      data: closed,
-      body: `Session \`${session.id}\` of task \`${task.record.code}\`.`,
-    });
-  }
-  steps.push({
-    step: 'sessions',
-    detail: open.length === 0 ? 'none open' : `closed ${open.map((s) => s.id).join(', ')}`,
+    await writeTask(root, task.dir, closedRecord);
+    commitRecords(root, `Close task ${code} (${outcome})`, task.dir);
+    steps.push({ step: 'record', detail: `closed with outcome ${outcome}` });
+    return closedRecord;
   });
-
-  for (const worktree of worktrees) {
-    steps.push(removeWorktree(root, worktree, outcome));
-  }
-  if (worktrees.length === 0) steps.push({ step: 'worktrees', detail: 'none to tear down' });
-
-  const record: TaskRecord = {
-    ...task.record,
-    state: 'closed',
-    outcome,
-    closedAt: new Date().toISOString(),
-  };
-  await writeTask(root, task.dir, record);
-  commitRecords(root, `Close task ${code} (${outcome})`, task.dir);
-  steps.push({ step: 'record', detail: `closed with outcome ${outcome}` });
 
   for (const worktree of worktrees) {
     await refreshRepositories(root, worktree.repo).catch(() => undefined);

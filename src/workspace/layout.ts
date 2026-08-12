@@ -9,8 +9,20 @@ export const MARKER_DIR = '.ward';
 /** Directories reserved by the layout. `tasks/` holds bare tasks — levels are elided, not faked. */
 export const SCOPE_DIRS = ['repos', 'repositories', 'worktrees', 'projects', 'tasks'] as const;
 
-/** Checkouts and scratch are the world the record describes, not the record. */
-export const IGNORE_LINES = ['/repos/', '/worktrees/', '/workdirs/', '/.ward/tmp/'] as const;
+/**
+ * Checkouts and scratch are the world the record describes, not the record;
+ * the store's transient mechanics (staging, the write lock) live and die
+ * within a command; telemetry is local and personal (§4) — tracked telemetry
+ * would be one push from leaving the workspace.
+ */
+export const IGNORE_LINES = [
+  '/repos/',
+  '/worktrees/',
+  '/workdirs/',
+  '/.ward/tmp/',
+  '/.ward/store.lock',
+  '/.ward/telemetry/',
+] as const;
 
 /**
  * Walk up from a working directory to the workspace root — the nearest
