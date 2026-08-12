@@ -58,6 +58,7 @@ function prForgeJson(state: PrForgeState): PrForgeShape {
     url: state.url,
     state: state.state,
     ...(state.reviewDecision === undefined ? {} : { reviewDecision: state.reviewDecision }),
+    ...(state.baseRefName === undefined ? {} : { baseRefName: state.baseRefName }),
   };
 }
 
@@ -87,6 +88,8 @@ export function statusJson(report: StatusReport): StatusShape {
             task: entry.task,
             reason: entry.reason,
             ...(entry.pr === undefined ? {} : { pr: entry.pr }),
+            ...(entry.base === undefined ? {} : { base: entry.base }),
+            ...(entry.mainLine === undefined ? {} : { mainLine: entry.mainLine }),
           })),
         }),
   };

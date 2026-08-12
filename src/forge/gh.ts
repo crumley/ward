@@ -35,6 +35,15 @@ export interface PrForgeState {
    * reports none: absence degrades honestly, it is never guessed.
    */
   readonly mergeCommit?: string;
+  /**
+   * The branch the PR targets, when the forge reports one — one more field in
+   * the same single call, zero added forge cost. An OPEN PR whose base is not
+   * the repository's main line is the motivating incident's cause caught
+   * early: merged as-is it delivers into a branch that may never land
+   * (design/0014-stale-base-warning/). Omitted when the forge reports none —
+   * absent stays absent, same convention as `reviewDecision`.
+   */
+  readonly baseRefName?: string;
 }
 
 export interface ForgeProbe {
@@ -141,12 +150,15 @@ export async function probeForgeAuth(): Promise<ForgeAuth> {
 /** One PR via `gh pr view`; any failure — spawn, exit, deadline, parse — is null. */
 async function readPr(gh: string, url: string, timeout: number): Promise<PrForgeState | null> {
   try {
-    const proc = Bun.spawn([gh, 'pr', 'view', url, '--json', 'state,reviewDecision,mergeCommit'], {
-      stdout: 'pipe',
-      stderr: 'ignore',
-      stdin: 'ignore',
-      env: { ...process.env },
-    });
+    const proc = Bun.spawn(
+      [gh, 'pr', 'view', url, '--json', 'state,reviewDecision,mergeCommit,baseRefName'],
+      {
+        stdout: 'pipe',
+        stderr: 'ignore',
+        stdin: 'ignore',
+        env: { ...process.env },
+      },
+    );
     const deadline = setTimeout(() => proc.kill(), timeout);
     const [output] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
     clearTimeout(deadline);
@@ -155,11 +167,13 @@ async function readPr(gh: string, url: string, timeout: number): Promise<PrForge
     if (typeof parsed !== 'object' || parsed === null) return null;
     const decision = reviewDecision(parsed);
     const oid = mergeCommitOid(parsed);
+    const base = baseRefName(parsed);
     return {
       url,
       state: prState(parsed),
       ...(decision === undefined ? {} : { reviewDecision: decision }),
       ...(oid === undefined ? {} : { mergeCommit: oid }),
+      ...(base === undefined ? {} : { baseRefName: base }),
     };
   } catch {
     return null;
@@ -192,6 +206,12 @@ function reviewDecision(answer: object): PrReviewDecision | undefined {
     default:
       return undefined;
   }
+}
+
+/** gh reports `"baseRefName": "main"` — a branch name, or nothing to report. */
+function baseRefName(answer: object): string | undefined {
+  const base = 'baseRefName' in answer ? answer.baseRefName : undefined;
+  return typeof base === 'string' && base !== '' ? base : undefined;
 }
 
 /** gh reports `"mergeCommit": {"oid": "…"}` for merged PRs, null otherwise. */

@@ -142,6 +142,46 @@ test('with no PRs anywhere needs-you is vacuously empty — present even without
   expect(human.stdout).not.toContain('needs you');
 });
 
+// 0014: the base rides the same probe call. This workspace registers no
+// repositories, so no PR URL maps to a main line and no stale-base warning is
+// derivable — honest silence (a guess would be worse; the close gate still
+// backstops) — but the raw datum reaches the per-PR JSON rows, where an agent
+// reading `task list --json` (which has no needsYou surface) can see it.
+test('an open PR on a non-main base with no mappable repository warns nothing; JSON carries the base', () => {
+  const stacked = writeFakeGh(scratch, 'gh-stacked', {
+    responses: {
+      [PR_MERGED]: { state: 'MERGED', baseRefName: 'main' },
+      [PR_CHANGES]: {
+        state: 'OPEN',
+        reviewDecision: 'CHANGES_REQUESTED',
+        baseRefName: 'feature-x',
+      },
+      [PR_DONE]: { state: 'MERGED', reviewDecision: 'APPROVED', baseRefName: 'main' },
+    },
+  });
+  const json = runWardEnv(['status', '--json'], ws, { NO_COLOR: '1', WARD_GH: stacked });
+  const status = JSON.parse(json.stdout);
+  expect(() => statusShape.parse(status)).not.toThrow();
+  expect(status.bareTasks[0].forge).toEqual([
+    { url: PR_MERGED, state: 'merged', baseRefName: 'main' },
+    {
+      url: PR_CHANGES,
+      state: 'open',
+      reviewDecision: 'changes-requested',
+      baseRefName: 'feature-x',
+    },
+  ]);
+  expect(status.needsYou).toEqual([
+    { task: 't1', reason: 'changes-requested', pr: PR_CHANGES },
+    { task: 't2', reason: 'awaiting-close' },
+  ]);
+  // The human summary stays a count line — the base belongs to needs-you,
+  // which stays silent here rather than guessing at an unmappable URL.
+  const human = runWardEnv(['status'], ws, { NO_COLOR: '1', WARD_GH: stacked });
+  expect(human.stdout).not.toContain('feature-x');
+  expect(human.stdout).not.toContain('is based on');
+});
+
 // The close gate reads the same boundary: an open PR refuses the close, a
 // fully merged set delivers, and the trusted path reports its trust.
 test('task close reads the forge through the same seam', () => {
