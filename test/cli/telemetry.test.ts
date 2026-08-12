@@ -11,6 +11,9 @@ import { verbPath } from '../../src/cli/telemetry.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
+import { addRepository } from '../../src/workspace/repos.ts';
+import { openTask } from '../../src/workspace/tasks.ts';
+import { createWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, NO_GH, removeDir, runWard, runWardEnv } from '../helpers.ts';
 
 test('a human invocation appends one row: verb, caller, cwd, outcome, duration', () => {
@@ -60,6 +63,34 @@ test('the verb path is the command words, never the arguments', () => {
   ];
   for (const [argv, expected] of table) {
     expect(verbPath(argv)).toBe(expected);
+  }
+});
+
+test('the row records the invocation scope, anchor-shaped: task, repo, workspace', async () => {
+  // A registered repository and a claimed worktree to stand in.
+  const remote = join(scratch, `remote-${caseId}.git`);
+  gitOrThrow('.', 'init', '--bare', '--initial-branch=main', remote);
+  const seed = join(scratch, `seed-${caseId}`);
+  gitOrThrow('.', 'clone', remote, seed);
+  await Bun.write(join(seed, 'src', 'lib.ts'), 'export {};\n');
+  gitOrThrow(seed, 'checkout', '-b', 'main');
+  gitOrThrow(seed, 'add', '-A');
+  gitOrThrow(seed, 'commit', '-m', 'seed');
+  gitOrThrow(seed, 'push', '-u', 'origin', 'main');
+  await addRepository(ws, remote, 'demo');
+  await openTask(ws, 'scoped', {});
+  const { record } = await createWorktree(ws, 't1', 'demo');
+
+  const table: ReadonlyArray<[string, string]> = [
+    [ws, 'workspace'],
+    [join(ws, record.path), 'task:t1'],
+    [join(ws, record.path, 'src'), 'task:t1'],
+    [join(ws, 'repos', 'demo'), 'repo:demo'],
+  ];
+  for (const [dir, expected] of table) {
+    expect(runWard(['task', 'list'], dir).exitCode).toBe(0);
+    const row = telemetryRows(ws).at(-1) as Record<string, unknown>;
+    expect(row.scope).toBe(expected);
   }
 });
 

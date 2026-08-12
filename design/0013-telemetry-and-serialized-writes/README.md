@@ -34,10 +34,11 @@ writes_); this entry climbs its last rung and adds the first genuinely concurren
   archaeology — doctor names its state and the refusal names its holder. _Sized to its real load:_
   brief critical sections (the mutate-and-commit span only), a bounded wait, an honest refusal.
 - [`human-shell`](../../intent/02-subsystems/07-human-shell.md) — "record command usage as local
-  telemetry, per invocation," realized as what exists today of the named fields (persona and scope
-  do not exist in the implementation yet — SF-001); the Not-list's "not telemetry that ever leaves
-  the workspace" enforced structurally (untracked twice over, below); the `doctor` surface grows the
-  two findings this entry's conditions need (§20).
+  telemetry, per invocation," realized as what exists today of the named fields (scope is recorded
+  anchor-shaped, as far as the concept exists; persona does not exist in the implementation yet —
+  SF-001); the Not-list's "not telemetry that ever leaves the workspace" enforced structurally
+  (untracked twice over, below); the `doctor` surface grows the two findings this entry's conditions
+  need (§20).
 - [`principles`](../../intent/00-foundation/01-principles.md) §17 — no lost updates, the entry's
   reason to exist; §4 — telemetry is local and personal, and a tracked telemetry file would be one
   `git push` from leaving, so the boundary is guarded structurally and by doctor; §6 — takeover is
@@ -68,12 +69,15 @@ writes_); this entry climbs its last rung and adds the first genuinely concurren
   - **Local usage telemetry** (`src/cli/telemetry.ts`): armed at CLI startup, written by a process
     exit handler — one JSONL row per invocation, read verbs included: `at`, `verb` (command words
     only, never arguments), `caller` (`human`/`agent`), `agent` (the declared `WARD_AGENT` value,
-    when present), `cwd`, `exit`, `ms`, `ward`. Appended with one small `O_APPEND` write to
-    `.ward/telemetry/usage-YYYY-MM.jsonl`. Untracked **twice over**: root `.gitignore` lines (new in
-    `IGNORE_LINES`: `/.ward/store.lock`, `/.ward/telemetry/`) and a self-defending catch-all
-    `.gitignore` inside `.ward/telemetry/` itself, so a workspace created before this entry leaks
-    nothing either. Any telemetry failure is swallowed silently; outside a workspace nothing is
-    recorded and nothing is created. Reads never take the store lock for it.
+    when present), `cwd`, `scope` (the invocation's scope as the concept exists today,
+    anchor-shaped: `task:tN` inside a worktree a non-closed task claims, `repo:<name>` inside a
+    registered canonical checkout, `workspace` anywhere else inside — resolved eagerly at
+    invocation, omitted if the command exits first), `exit`, `ms`, `ward`. Appended with one small
+    `O_APPEND` write to `.ward/telemetry/usage-YYYY-MM.jsonl`. Untracked **twice over**: root
+    `.gitignore` lines (new in `IGNORE_LINES`: `/.ward/store.lock`, `/.ward/telemetry/`) and a
+    self-defending catch-all `.gitignore` inside `.ward/telemetry/` itself, so a workspace created
+    before this entry leaks nothing either. Any telemetry failure is swallowed silently; outside a
+    workspace nothing is recorded and nothing is created. Reads never take the store lock for it.
   - **Doctor names the new conditions** (§20): `store lock` — absent `ok`, held-by-live-writer
     `info` (pid, verb, held-for), stale `warn` (who left it, that the next write takes it over, that
     deleting it is safe) — never an error, because nothing is blocked; `telemetry` — tracked
@@ -121,7 +125,9 @@ writes_); this entry climbs its last rung and adds the first genuinely concurren
      contention past the bound exits 1 naming the holder's pid and verb and mutates nothing; a live
      same-host holder is never stolen; unknown-host and unreadable locks age out on the bound;
   3. telemetry rows are appended for a human-shaped and an agent-shaped caller (with the declared
-     value), record verb words never arguments, and carry the outcome; an unwritable telemetry path
+     value), record verb words never arguments, and carry the outcome; the row records the
+     invocation's scope, anchor-shaped — `workspace` at the root, `task:tN` inside (and below) a
+     claimed worktree, `repo:<name>` inside a canonical checkout; an unwritable telemetry path
      leaves exit code, stdout, and stderr byte-identical to a healthy run; nothing telemetry-related
      shows in the store's `git status`, including in a workspace whose root `.gitignore` predates
      this entry; outside a workspace nothing is recorded;
@@ -177,6 +183,21 @@ writes_); this entry climbs its last rung and adds the first genuinely concurren
     never guessed. No `workspace` field: the row lives **in** the workspace it describes — storing
     it would be a stored roll-up of the file's own location (§17's derive-don't-store, in
     miniature).
+  - **The row records the resolved scope, not just the raw cwd** (amended 2026-08-12, at the
+    workspace owner's direction). The first build recorded only `cwd`, judging "scope" to have no
+    runtime referent (the original SF-001) — but the 0006 resolver is exactly that referent: the
+    working directory already resolves to the anchors the records claim. The deciding argument is
+    that the derivation is **moment-bound**: worktrees are torn down at close and task codes are
+    **reused**, so a `cwd` recorded in January resolves to nothing — or to the wrong task — in
+    March. §17 forbids storing what _stays_ derivable; this does not stay derivable, so the row
+    records it (the same reason session logs record their handle). Values are anchor-shaped
+    (`task:tN` / `repo:<name>` / `workspace`) — the vocabulary grows when the full scope model
+    arrives, rather than pre-claiming it. Resolution runs **eagerly at invocation** — the honest
+    moment (the command may tear down the very anchor it stands in), and the exit handler cannot
+    await — cached for the exit row, omitted with honesty if the command exits first. Persona stays
+    unrecorded entirely: absence over `null` or a fabricated `"default"` is the codebase-wide
+    convention (`reviewDecision`, `mergeCommit`, `baseRefName`), and every row carries `ward`, so
+    absence is never era-ambiguous.
   - **Appends need no lock.** That is why append-over-rewrite sits below serialization in the
     ladder: one small `O_APPEND` write per invocation interleaves as whole lines between concurrent
     writers on a local filesystem, and the theoretical torn line harms one telemetry row, never the
@@ -201,8 +222,9 @@ writes_); this entry climbs its last rung and adds the first genuinely concurren
   verify → discard | restore) → deadline? refuse-naming-holder → backoff-sleep }; _release:_ unlink
   only if the lock's nonce is still ours; _inspect:_ one shared reader (`inspectStoreLock`) feeds
   the acquire loop, the refusal text, and doctor, so they can never disagree about the same file;
-  _telemetry:_ startup captures argv + clock, exit handler discovers the workspace from cwd, ensures
-  the self-ignoring directory, appends one row, swallows every failure.
+  _telemetry:_ startup captures argv + clock and fires the scope resolution (0006 resolver, then
+  registered-checkout prefix match, then `workspace`), exit handler discovers the workspace from
+  cwd, ensures the self-ignoring directory, appends one row, swallows every failure.
 
 ## Build log
 
@@ -260,19 +282,38 @@ discipline in real multi-task delivery and watch the lock's contention profile; 
 analysis loop when intent settles its open question (which also owns retention); canonical-checkout
 serialization if real contention ever shows there.
 
+### 2026-08-12 — The row learns its scope (review amendment)
+
+**Goal.** Record the invocation's scope, per the workspace owner's review of the original SF-001:
+the 0006 resolver is scope's runtime referent as far as it exists, and the derivation from `cwd` is
+moment-bound (torn-down worktrees, reused codes), so the row must capture it at the only moment it
+can. **What was done.** `src/cli/telemetry.ts` resolves scope eagerly at invocation (0006's
+`scopeFromCwd`, then a registered-checkout prefix match, then `workspace`) and the exit row carries
+it; the decision, SF-001, and the mechanisms line above updated to match.
+
+**What works now — with the commands that prove it:** `bun test` →
+`195 pass, 0 fail, 668 expect() calls` across 23 files (the baseline moved twice: this entry's first
+build ended at 181/621/22, the rebase onto a main that now includes 0014 brought it to 194/660/23,
+and this amendment adds one case with 8 expects): the new `test/cli/telemetry.test.ts` case drives
+the spawned CLI from the workspace root, a claimed worktree (and a subdirectory of it), and a
+canonical checkout, asserting `workspace`, `task:t1`, `task:t1`, `repo:demo` in turn.
+`mise run check` → exit 0.
+
 ## Spec-feedback
 
 - **SF-001** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Record command usage
   as local telemetry_. _Friction:_ the constraint enumerates the per-invocation fields as "persona,
-  scope, working directory, and human-or-agent," but persona and scope do not exist in the
-  implementation (personas are unbuilt; scope-from-cwd exists only as a human affordance for task
-  inference) — a faithful build cannot record what has no runtime referent, and the _Left to
+  scope, working directory, and human-or-agent," but persona does not exist in the implementation
+  (personas are unbuilt), and the first build judged scope absent too — the workspace owner's review
+  corrected that (the 0006 resolver **is** scope's runtime referent, as far as it exists), and the
+  row now records it anchor-shaped (amended 2026-08-12; the decision above). The _Left to
   implementation_ note ("the telemetry storage format, fields") already treats fields as open.
-  _Assumption to keep moving:_ the enumerated fields are the ambition for when they exist, not a
-  gate; the invariant part is per-invocation + local + never remote, and the row records what exists
-  today (verb, working directory, human-or-agent, the declared agent value, outcome, duration).
-  _Proposed revision:_ "per invocation: the caller's context as it exists — working directory and
-  human-or-agent today; persona and scope as they come to exist."
+  _Assumption to keep moving:_ the enumerated fields are the ambition, recorded **as they exist**,
+  not a gate; the invariant part is per-invocation + local + never remote. The row records verb,
+  working directory, scope (anchor-shaped today), human-or-agent, the declared agent value, outcome,
+  and duration; persona is omitted entirely (absence over `null`/`"default"`) until it exists.
+  _Proposed revision:_ "per invocation: the caller's context as it exists — working directory, scope
+  as far as it resolves, and human-or-agent today; persona as it comes to exist."
 - **SF-002** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), the same bullet read
   with the Not-list ("not telemetry that ever leaves the workspace"). _Friction:_ "record usage
   **per invocation**" is unqualified, but some invocations run outside any workspace (`ward doctor`
@@ -281,8 +322,10 @@ serialization if real contention ever shows there.
   machine-scoped state the workspace-lifecycle slice treats as an open question. _Assumption to keep
   moving:_ telemetry is workspace-scoped; outside a workspace, nothing is recorded and nothing is
   created. _Proposed revision:_ append to the bullet: "recorded in the enclosing workspace; an
-  invocation outside any workspace records nothing." One near-candidate not filed: the store
-  contract's "contention is legible … in the workspace itself" does not say whether the
+  invocation outside any workspace records nothing." _(Assumption confirmed by the workspace owner
+  in review, 2026-08-12, with the sharper why: telemetry exists to feed reflection that improves the
+  workspace itself — outside one there is no reflection to be had.)_ One near-candidate not filed:
+  the store contract's "contention is legible … in the workspace itself" does not say whether the
   _mechanism's_ transient files (the lock) belong to the tracked record or the ignored mechanics —
   adjudicated here as ignored mechanics (the lock lives and dies within a command; tracking it would
   commit churn with no reader), consistent with the contract's own `.gitignore`-policy latitude.

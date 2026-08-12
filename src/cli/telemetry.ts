@@ -8,9 +8,11 @@
 // failure never fails, slows, or noisies the command it records: the
 // command's work is the work (§20).
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join, relative } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import { discoverWorkspace } from '../workspace/layout.ts';
+import { checkoutPath, listRepositories } from '../workspace/repos.ts';
+import { scopeFromCwd } from '../workspace/scope.ts';
 import { callerIsAgent } from './caller.ts';
 
 /**
@@ -51,6 +53,19 @@ export function verbPath(argv: readonly string[]): string {
 export function recordInvocation(argv: readonly string[]): void {
   const startedAt = new Date();
   const begun = performance.now();
+  // Scope is resolved eagerly, not at exit: the honest moment is where the
+  // caller stood when invoking (the command may tear down the very anchor it
+  // stands in), and the exit handler below cannot await. A command that exits
+  // before the resolution lands omits the field — absence over blocking.
+  let scope: string | undefined;
+  const invokedIn = discoverWorkspace(process.cwd());
+  if (invokedIn !== null) {
+    void resolveScope(invokedIn, process.cwd())
+      .then((value) => {
+        scope = value;
+      })
+      .catch(() => {});
+  }
   process.on('exit', (code) => {
     try {
       const workspace = discoverWorkspace(process.cwd());
@@ -70,6 +85,7 @@ export function recordInvocation(argv: readonly string[]): void {
         caller: callerIsAgent() ? 'agent' : 'human',
         ...(agent !== undefined && agent !== '' ? { agent } : {}),
         cwd: process.cwd(),
+        ...(scope === undefined ? {} : { scope }),
         exit: code,
         ms: Math.round(performance.now() - begun),
         ward: pkg.version,
@@ -84,4 +100,30 @@ export function recordInvocation(argv: readonly string[]): void {
       // A telemetry failure never fails the command it records (§20).
     }
   });
+}
+
+/**
+ * The invocation's scope, as the concept exists today — anchor-shaped
+ * (intent/02-subsystems/07-human-shell.md names scope among the telemetry
+ * fields; the full scope model is unbuilt, but the working directory already
+ * resolves to the anchors the records claim): `task:tN` inside a worktree a
+ * non-closed task claims (the 0006 resolver — closed tasks claim nothing, so
+ * a reused code is never mis-attributed), `repo:<name>` inside a registered
+ * repository's canonical checkout, `workspace` anywhere else inside. Recorded
+ * rather than left derivable from `cwd`, because the derivation is
+ * moment-bound: worktrees are torn down and task codes reused, so
+ * yesterday's cwd resolves to nothing tomorrow — §17 forbids storing what
+ * STAYS derivable, and this does not.
+ */
+async function resolveScope(root: string, cwd: string): Promise<string> {
+  const claimed = await scopeFromCwd(root, cwd);
+  if (claimed !== null) return `task:${claimed.task.record.code}`;
+  const rel = relative(root, cwd);
+  if (rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)) {
+    for (const repo of await listRepositories(root)) {
+      const checkout = relative(root, checkoutPath(root, repo.name));
+      if (rel === checkout || rel.startsWith(`${checkout}/`)) return `repo:${repo.name}`;
+    }
+  }
+  return 'workspace';
 }
