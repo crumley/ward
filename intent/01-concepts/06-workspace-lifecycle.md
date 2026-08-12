@@ -218,6 +218,23 @@ Composition does not reach everything, and the residue is what reconciliation ex
 `AGENTS.md` hierarchy — is left to [`design/`](../../design/), and §19 permits more than one
 technique converging through use.)
 
+**Settled — the artifact-type catalog is a worked instance of this rule.** The catalog is
+**composed**: Ward's **seed** (the types Ward ships) and the workspace's **registrations** are
+separately addressable documents read as one catalog, later content winning per type name — so the
+workspace can evolve even a seeded type by re-registering it in its own document, without editing
+what Ward owns. The registration verb — Ward holding the human's pen — writes **only the workspace's
+document**, which dissolves the question this settles (a Ward-driven write reading as "customized"
+against the installed baseline, with the wrong connotation): the seed is written by exactly two
+acts, creation and upgrade (replaced wholesale, as above), and any other change to it is drift,
+named plainly. The seed **names its manager in its own text** and points edits at the registration
+surface — the artifact itself teaches the boundary, so the mistake is prevented where it would be
+made rather than diagnosed after. What was true either way remains binding: the installed baseline
+is **never refreshed on Ward-driven writes** — a baseline that tracks every write always matches,
+which blinds divergence detection and would let an upgrade clobber the workspace's registered types
+as "untouched" (§17). (The registration verb itself, and the on-disk shape — a catalog directory
+holding the seed beside the workspace's own files, or another layout — are
+[`design/`](../../design/)'s.)
+
 ### Installed artifacts come in two tiers
 
 - **Yours** — nearly everything: the root `AGENTS.md`, the workspace's skills, the workflow policy,
@@ -545,14 +562,5 @@ here closes, so silence would read as an omission rather than a decision.
   in the Ward CLI ([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)); carrying one
   out of the workspace is a crossing of the local↔remote boundary (§4) that nothing currently
   governs.
-- **Records Ward rewrites on the human's behalf vs. the installed baseline.** The artifact-type
-  catalog is installed — and baselined — at creation, yet it is exactly the record a future
-  registration verb mutates; afterward divergence detection honestly reads "customized," with the
-  wrong connotation, since the customizer was Ward holding the human's pen. The entry that builds
-  catalog registration must decide consciously: **compose** (Ward's seed separately addressable from
-  the workspace's registrations — the compose-first rule above suggests this), or **accept
-  "customized" as the honest reading** (the adjudication trigger is deliberately content-based, and
-  a registration is the human customizing the catalog whoever holds the pen). What it may **not** do
-  is refresh the baseline on Ward-driven writes: a baseline that tracks every write always matches,
-  which blinds divergence detection and would let an upgrade clobber the workspace's registered
-  types as "untouched" (§17).
+- _(Records Ward rewrites on the human's behalf vs. the installed baseline — **now settled as
+  compose**; see "the artifact-type catalog is a worked instance," under Compose first, above.)_

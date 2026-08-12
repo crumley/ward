@@ -171,3 +171,10 @@ relevant slice (and reflected in tests and code).
 - **Theming is stable-by-record, not a pure function.** The accent is **recorded at creation**,
   picked collision-free among what is visible — the record, not a hash of identity, is what survives
   reboots ([`../02-subsystems/05-visual-theming.md`](../02-subsystems/05-visual-theming.md)).
+- **The artifact-type catalog composes.** Ward's **seed** and the workspace's **registrations** are
+  separately addressable documents read as one catalog, later winning per type name; the
+  registration verb writes **only the workspace's document**, the seed is written only by creation
+  and upgrade (replaced wholesale) and names its manager in its own text, and the installed baseline
+  is **never refreshed on a Ward-driven write**
+  ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md), the
+  compose-first rule's worked instance).
