@@ -56,10 +56,13 @@ that survives reboots ([`../00-foundation/01-principles.md`](../00-foundation/01
   recovery records, reflection proposals and cursors, the version stamp — versioned with the CLI and
   changed only through its update/migration path. **Artifact types** are an open set: seeded by Ward
   (**brief**, **decision**, **note**), extendable by the workspace itself, each registered with a
-  runtime-validated schema — and the catalog of registered types is itself a validated document, so
-  the store stays self-describing as it grows. _Why:_ the machinery must be able to rely on its own
-  records absolutely, while the workspace's output vocabulary must be free to evolve (§13, §14) — a
-  reflection can propose a new artifact type without waiting on a CLI release
+  runtime-validated schema — and the catalog of registered types is itself a validated document,
+  **composed** from Ward's seed and the workspace's own registrations, later winning per type name
+  ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md), the
+  compose-first rule's worked instance), so the store stays self-describing as it grows. _Why:_ the
+  machinery must be able to rely on its own records absolutely, while the workspace's output
+  vocabulary must be free to evolve (§13, §14) — a reflection can propose a new artifact type
+  without waiting on a CLI release
   ([`../01-concepts/04-reflection-and-evolution.md`](../01-concepts/04-reflection-and-evolution.md)).
 
 ## What this is NOT
