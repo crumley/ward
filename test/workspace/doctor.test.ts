@@ -7,6 +7,9 @@
 // stays info (optional tool) — and none of them flip doctor's exit code:
 // report-only.
 import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test';
+import { rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { createWorkspace } from '../../src/workspace/create.ts';
 import { type Finding, runDoctor } from '../../src/workspace/doctor.ts';
 import {
   applyGitTestEnv,
@@ -79,6 +82,65 @@ test('the human rendering carries the warn mark and the remedy', () => {
   expect(result.stdout).toContain('! gh auth — installed but cannot reach the forge');
   expect(result.stdout).toContain('gh auth login');
 });
+
+// -- claude guidance (design/0017-claude-md-symlink/) ----------------------
+// Creation bridges Claude Code's expected filename onto the harness-neutral
+// AGENTS.md with a relative symlink; doctor names the states without ever
+// failing the run: linked is ok; absent is the pre-0017 workspace — the
+// first workspace-migration target — info carrying the one-line remedy a
+// future upgrade will automate; a regular file or a link aimed elsewhere is
+// the human's own arrangement — info, never an instruction to delete it.
+
+const claudeRows: ReadonlyArray<{
+  name: string;
+  arrange: (ws: string) => void;
+  expected: Record<string, unknown>;
+}> = [
+  {
+    name: 'fresh workspace: the link reads ok',
+    arrange: () => {},
+    expected: { severity: 'ok', message: expect.stringContaining('CLAUDE.md → AGENTS.md') },
+  },
+  {
+    name: 'absent (the pre-0017 shape): info carrying the symlink remedy',
+    arrange: (ws) => rmSync(join(ws, 'CLAUDE.md')),
+    expected: {
+      severity: 'info',
+      message: expect.stringContaining('ln -s AGENTS.md CLAUDE.md'),
+    },
+  },
+  {
+    name: 'a divergent regular file: the arrangement is theirs, info',
+    arrange: (ws) => {
+      rmSync(join(ws, 'CLAUDE.md'));
+      writeFileSync(join(ws, 'CLAUDE.md'), 'my own claude guidance\n');
+    },
+    expected: { severity: 'info', message: expect.stringContaining('your own arrangement') },
+  },
+  {
+    name: 'a symlink aimed elsewhere: the arrangement is theirs, info',
+    arrange: (ws) => {
+      rmSync(join(ws, 'CLAUDE.md'));
+      symlinkSync('somewhere/else.md', join(ws, 'CLAUDE.md'));
+    },
+    expected: { severity: 'info', message: expect.stringContaining('your own arrangement') },
+  },
+];
+
+let claudeCase = 0;
+for (const row of claudeRows) {
+  test(`claude guidance — ${row.name}`, async () => {
+    claudeCase += 1;
+    const ws = join(scratch, `ws-claude-${claudeCase}`);
+    await createWorkspace(ws);
+    row.arrange(ws);
+    const report = await runDoctor(ws);
+    const finding = report.workspace.find((f) => f.check === 'claude guidance');
+    expect(finding?.message).not.toContain('delete'); // report, never a removal instruction
+    expect(finding).toMatchObject(row.expected);
+    expect(report.healthy).toBe(true); // report-only: no CLAUDE.md state is ever an error
+  });
+}
 
 // -- setup ----------------------------------------------------------------
 // Each test points WARD_GH at its own fake; afterEach restores the hermetic

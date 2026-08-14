@@ -3,7 +3,7 @@
 // are never touched, and unsafe targets are refused
 // (intent/01-concepts/06-workspace-lifecycle.md; design/0002-store-and-workspace/).
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readlinkSync, rmSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { git } from '../../src/workspace/git.ts';
@@ -12,11 +12,12 @@ import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
 
 test('a fresh create establishes every step and commits once', async () => {
   const report = await createWorkspace(root);
-  expect(report.steps.map((step) => step.outcome)).toEqual(Array(10).fill('established'));
+  expect(report.steps.map((step) => step.outcome)).toEqual(Array(11).fill('established'));
   for (const file of [
     'workspace.md',
     'catalog.md',
     'AGENTS.md',
+    'CLAUDE.md',
     '.gitignore',
     '.ward/README.md',
     '.ward/baselines.md',
@@ -30,7 +31,7 @@ test('a fresh create establishes every step and commits once', async () => {
 test('re-running create is satisfied throughout and changes nothing', async () => {
   await createWorkspace(root);
   const report = await createWorkspace(root);
-  expect(report.steps.map((step) => step.outcome)).toEqual(Array(10).fill('satisfied'));
+  expect(report.steps.map((step) => step.outcome)).toEqual(Array(11).fill('satisfied'));
   expect(commitCount()).toBe(1);
   expect(git(root, 'status', '--porcelain').stdout).toBe('');
 });
@@ -65,6 +66,47 @@ test('the installed AGENTS.md teaches an agent to drive ward', async () => {
   ]) {
     expect(guidance).toContain(lesson);
   }
+});
+
+// The CLAUDE.md bridge (design/0017-claude-md-symlink/): Claude Code's
+// expected filename symlinked onto the harness-neutral guidance — one source
+// of truth, tracked in the workspace's own history like AGENTS.md itself.
+test('CLAUDE.md is a relative symlink resolving to the AGENTS.md guidance', async () => {
+  await createWorkspace(root);
+  const link = join(root, 'CLAUDE.md');
+  expect(lstatSync(link).isSymbolicLink()).toBe(true);
+  expect(readlinkSync(link)).toBe('AGENTS.md'); // relative — survives moving the workspace
+  expect(await Bun.file(link).text()).toBe(await Bun.file(join(root, 'AGENTS.md')).text());
+  // Tracked as a symlink (git mode 120000), not as a copy of the content.
+  expect(git(root, 'ls-files', '-s', '--', 'CLAUDE.md').stdout).toStartWith('120000');
+});
+
+test('a removed CLAUDE.md link is re-established on converge, with no baseline entry', async () => {
+  await createWorkspace(root);
+  rmSync(join(root, 'CLAUDE.md'));
+  git(root, 'commit', '-am', 'human removed the link');
+  const report = await createWorkspace(root);
+  const outcomes = new Map(report.steps.map((step) => [step.step, step.outcome]));
+  expect(outcomes.get('claude guidance')).toBe('established');
+  expect(outcomes.get('agent guidance')).toBe('satisfied');
+  // The link's content is its target, read directly — never fingerprinted,
+  // so the convergence commit holds the link and nothing else.
+  const committed = git(root, 'show', '--name-only', '--format=', 'HEAD').stdout.trim();
+  expect(committed).toBe('CLAUDE.md');
+});
+
+test('a pre-existing CLAUDE.md — regular file or link aimed elsewhere — is never overwritten', async () => {
+  await createWorkspace(root);
+  rmSync(join(root, 'CLAUDE.md'));
+  await Bun.write(join(root, 'CLAUDE.md'), 'my own claude guidance\n');
+  let report = await createWorkspace(root);
+  expect(report.steps.find((step) => step.step === 'claude guidance')?.outcome).toBe('satisfied');
+  expect(await Bun.file(join(root, 'CLAUDE.md')).text()).toBe('my own claude guidance\n');
+  rmSync(join(root, 'CLAUDE.md'));
+  symlinkSync('somewhere/else.md', join(root, 'CLAUDE.md')); // dangling — still theirs
+  report = await createWorkspace(root);
+  expect(report.steps.find((step) => step.step === 'claude guidance')?.outcome).toBe('satisfied');
+  expect(readlinkSync(join(root, 'CLAUDE.md'))).toBe('somewhere/else.md');
 });
 
 test('a customized artifact is left alone, even when dirty', async () => {

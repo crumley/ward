@@ -18,7 +18,7 @@ import {
 } from '../store/types.ts';
 import { sha256OfFile } from './baselines.ts';
 import { git, gitAvailable, gitIdentityConfigured, hasCommits } from './git.ts';
-import { discoverWorkspace, IGNORE_LINES } from './layout.ts';
+import { discoverWorkspace, IGNORE_LINES, inspectClaudeGuidance } from './layout.ts';
 import { checkoutPath, listRepositoryNames } from './repos.ts';
 
 export type Severity = 'ok' | 'info' | 'warn' | 'error';
@@ -150,6 +150,7 @@ async function workspaceChecks(root: string): Promise<Finding[]> {
   }
 
   findings.push(...(await baselineChecks(root)));
+  findings.push(claudeGuidanceFinding(root));
 
   const ignoreFile = join(root, '.gitignore');
   const ignoreLines = existsSync(ignoreFile)
@@ -290,6 +291,53 @@ async function baselineChecks(root: string): Promise<Finding[]> {
     );
   }
   return findings;
+}
+
+/**
+ * The CLAUDE.md bridge (design/0017-claude-md-symlink/): creation symlinks
+ * Claude Code's expected filename onto the harness-neutral AGENTS.md. Absent
+ * is the pre-0017 workspace — the first workspace-migration target; the
+ * upgrade machinery that will carry the link there does not exist yet, so
+ * doctor names the gap with its one-line remedy (§20). A regular file or a
+ * link aimed elsewhere is the human's own arrangement — info like any
+ * customization (the yours-tier working as intended), named for the drift a
+ * second guidance surface can hide (§16), never an instruction to delete
+ * their content. Nothing here is broken, so nothing is ever warn or error.
+ */
+function claudeGuidanceFinding(root: string): Finding {
+  const check = 'claude guidance';
+  switch (inspectClaudeGuidance(root)) {
+    case 'linked':
+      return {
+        check,
+        severity: 'ok',
+        message: 'CLAUDE.md → AGENTS.md — Claude Code reads the workspace guidance',
+      };
+    case 'absent':
+      return {
+        check,
+        severity: 'info',
+        message:
+          'no CLAUDE.md — Claude Code will not find the workspace guidance; add the bridge: ' +
+          'ln -s AGENTS.md CLAUDE.md (a future workspace upgrade will carry this)',
+      };
+    case 'file':
+      return {
+        check,
+        severity: 'info',
+        message:
+          'CLAUDE.md is a regular file, not a link to AGENTS.md — your own arrangement, kept; ' +
+          'two guidance surfaces drift apart unless tended together',
+      };
+    case 'elsewhere':
+      return {
+        check,
+        severity: 'info',
+        message:
+          'CLAUDE.md is a symlink aimed away from AGENTS.md — your own arrangement, kept; ' +
+          'Claude Code reads that target instead of the workspace guidance',
+      };
+  }
 }
 
 /** Record↔disk and record↔repository drift for one registered repository. */
