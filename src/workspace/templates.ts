@@ -56,6 +56,10 @@ You may be reading this from the workspace root or from inside a task worktree u
 - **Read state as JSON.** \`ward status --json\` says where everything stands; every read verb
   (\`status\`, \`project list\`, \`task list\`, \`worktree list\`, \`repo list\`, \`doctor\`)
   accepts \`--json\`.
+- **Mutations report as JSON too.** Every mutation verb accepts \`--json\` and emits its report —
+  steps, per-item outcomes, and any named trusts — as one document on stdout. A refusal (a gated
+  close, a bad argument) emits no document: the error stays on stderr with a nonzero exit, so
+  parse stdout only when the exit code says the verb ran.
 - **Discover the contract from the tool.** \`ward schema\` emits the JSON Schema of every
   \`--json\` verb's output (one verb: \`ward schema task list\`). The shapes ship inside the
   binary, so they are always current for the \`ward\` you are running — no repo reading needed.

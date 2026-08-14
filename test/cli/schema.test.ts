@@ -1,22 +1,25 @@
 // The self-describing contract (design/0008-json-shape-home/): `ward schema`
-// emits the JSON Schema of every --json read verb's output, and the schema is
-// proven against the tool's own live output — each verb is run against a real
-// workspace and its document validated, strictly, under the shape the schema
-// is emitted from. The table derives each verb's argv from its registry key,
-// so a future --json verb is covered by adding its registry row, not by
-// editing this file.
+// emits the JSON Schema of every --json verb's output, and the schema is
+// proven against the tool's own live output — each read verb is run against a
+// real workspace and its document validated, strictly, under the shape the
+// schema is emitted from. The table derives each read verb's argv from its
+// registry key, so a future --json read verb is covered by adding its
+// registry row, not by editing this file. The mutation verbs (0015) need
+// arguments and sequencing, so their live proof is the sequenced suite in
+// mutation-json.test.ts; the whole-contract and slice cases below still
+// cover their schema documents.
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { jsonVerbShapes } from '../../src/cli/schema.ts';
+import { jsonVerbShapes, readVerbShapes } from '../../src/cli/schema.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
 
 const PR_URL = 'https://example.com/pr/1';
 
-// -- the table: every --json verb, validated live against its own schema ----
+// -- the table: every --json read verb, validated live against its own schema
 
-for (const [verb, shape] of Object.entries(jsonVerbShapes)) {
+for (const [verb, shape] of Object.entries(readVerbShapes)) {
   const argv = [...verb.split(' '), '--json'];
 
   test(`${verb} --json: the live document validates against the verb's schema`, () => {

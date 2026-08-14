@@ -1,5 +1,6 @@
-// The --json shapes of the read verbs (design/0005-agent-audience/): built
-// explicitly here — never by serializing internal structs — so the shape is a
+// The --json shapes of the read verbs (design/0005-agent-audience/) and the
+// mutation reports (design/0015-mutation-json/): built explicitly here —
+// never by serializing internal structs — so the shape is a
 // documented contract that survives refactors below it. Evolution is
 // additive: fields may be added, existing fields keep their name and
 // meaning, optional fields are omitted (never null) when unrecorded. One JSON
@@ -11,20 +12,39 @@
 // failing test. The builders stay hand-written because they are what pin key
 // order — the byte-determinism (§6) a schema alone cannot promise.
 import type { PrForgeState } from '../forge/gh.ts';
-import type { ProjectRecord, RepositoryRecord, TaskRecord, WorkState } from '../store/types.ts';
+import type {
+  ProjectRecord,
+  RepositoryRecord,
+  SessionRecord,
+  TaskRecord,
+  WorkState,
+  WorktreeRecord,
+} from '../store/types.ts';
+import type { CreateReport } from '../workspace/create.ts';
 import type { DoctorReport } from '../workspace/doctor.ts';
+import type { AddReport, RefreshReport } from '../workspace/repos.ts';
 import type { StatusReport, TaskStatus } from '../workspace/status.ts';
-import type { WorktreeListing } from '../workspace/worktrees.ts';
+import type { CloseReport } from '../workspace/tasks.ts';
+import type { RebaseReport, WorktreeListing } from '../workspace/worktrees.ts';
 import type {
   DoctorShape,
   PrForgeShape,
   ProjectListShape,
+  ProjectOpenShape,
+  RepoAddShape,
   RepoListShape,
+  RepoRefreshShape,
+  SessionMutationShape,
   StatusShape,
   StatusTaskShape,
+  TaskCloseShape,
   TaskListShape,
+  TaskMutationShape,
   TaskShape,
+  WorkspaceCreateShape,
+  WorktreeCreateShape,
   WorktreeListShape,
+  WorktreeRebaseShape,
 } from './schema.ts';
 
 export function printJson(value: unknown): void {
@@ -138,6 +158,114 @@ export function repoListJson(records: readonly RepositoryRecord[]): RepoListShap
     mainLine: record.mainLine,
     registeredAt: record.registeredAt,
   }));
+}
+
+// -- mutation reports (design/0015-mutation-json/) --------------------------
+// Each builder emits the verb's existing typed report — the same steps,
+// outcomes, and named trusts the human rendering shows. A verb that refuses
+// before producing a report emits nothing here: refusals stay the error path
+// (stderr + exit 1, stdout empty), the posture 0005 set.
+
+export function workspaceCreateJson(report: CreateReport): WorkspaceCreateShape {
+  return {
+    root: report.root,
+    steps: report.steps.map((step) => ({
+      step: step.step,
+      outcome: step.outcome,
+      detail: step.detail,
+    })),
+  };
+}
+
+export function repoAddJson(report: AddReport): RepoAddShape {
+  return {
+    name: report.record.name,
+    outcome: report.outcome,
+    remote: report.record.remote,
+    mainLine: report.record.mainLine,
+    registeredAt: report.record.registeredAt,
+  };
+}
+
+export function repoRefreshJson(reports: readonly RefreshReport[]): RepoRefreshShape {
+  return reports.map((report) => ({
+    name: report.name,
+    outcome: report.outcome,
+    detail: report.detail,
+  }));
+}
+
+export function projectOpenJson(record: ProjectRecord): ProjectOpenShape {
+  return {
+    floor: record.floor,
+    slug: record.slug,
+    state: record.state,
+    openedAt: record.openedAt,
+  };
+}
+
+/** The task record as the mutation wrote it — no derived overlays (§16). */
+export function taskMutationJson(record: TaskRecord): TaskMutationShape {
+  return {
+    code: record.code,
+    slug: record.slug,
+    state: record.state,
+    ...(record.floor === undefined ? {} : { floor: record.floor }),
+    ...(record.purpose === undefined ? {} : { purpose: record.purpose }),
+    prs: record.prs,
+    ...(record.outcome === undefined ? {} : { outcome: record.outcome }),
+    openedAt: record.openedAt,
+    ...(record.closedAt === undefined ? {} : { closedAt: record.closedAt }),
+  };
+}
+
+/** The close report: steps verbatim — the trust language lives in `detail`. */
+export function taskCloseJson(report: CloseReport): TaskCloseShape {
+  return {
+    task: taskMutationJson(report.task.record),
+    outcome: report.outcome,
+    steps: report.steps.map((step) => ({ step: step.step, detail: step.detail })),
+  };
+}
+
+export function worktreeCreateJson(taskCode: string, record: WorktreeRecord): WorktreeCreateShape {
+  return {
+    task: taskCode,
+    repo: record.repo,
+    branch: record.branch,
+    disposition: record.disposition,
+    path: record.path,
+    createdAt: record.createdAt,
+  };
+}
+
+export function worktreeRebaseJson(
+  taskCode: string,
+  reports: readonly RebaseReport[],
+): WorktreeRebaseShape {
+  return {
+    task: taskCode,
+    reports: reports.map((report) => ({
+      repo: report.record.repo,
+      branch: report.record.branch,
+      path: report.record.path,
+      outcome: report.outcome,
+      detail: report.detail,
+    })),
+  };
+}
+
+export function sessionMutationJson(record: SessionRecord): SessionMutationShape {
+  return {
+    id: record.id,
+    task: record.task,
+    purpose: record.purpose,
+    workingDirectory: record.workingDirectory,
+    ...(record.handle === undefined ? {} : { handle: record.handle }),
+    state: record.state,
+    openedAt: record.openedAt,
+    ...(record.closedAt === undefined ? {} : { closedAt: record.closedAt }),
+  };
 }
 
 export function doctorJson(report: DoctorReport): DoctorShape {
