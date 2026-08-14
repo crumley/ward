@@ -25,7 +25,7 @@ import type { DoctorReport } from '../workspace/doctor.ts';
 import type { AddReport, RefreshReport } from '../workspace/repos.ts';
 import type { StatusReport, TaskStatus } from '../workspace/status.ts';
 import type { CloseReport } from '../workspace/tasks.ts';
-import type { RebaseReport, WorktreeListing } from '../workspace/worktrees.ts';
+import type { RebaseReport, WorktreeListing, WorktreeStatus } from '../workspace/worktrees.ts';
 import type {
   DoctorShape,
   PrForgeShape,
@@ -37,6 +37,7 @@ import type {
   SessionMutationShape,
   StatusShape,
   StatusTaskShape,
+  StatusWorktreeShape,
   TaskCloseShape,
   TaskListShape,
   TaskMutationShape,
@@ -82,11 +83,30 @@ function prForgeJson(state: PrForgeState): PrForgeShape {
   };
 }
 
-/** In `status`, tasks additionally carry their open sessions. */
+/**
+ * One worktree row in `status` (0016): the record's identity plus the
+ * derived freshness — `freshness` absent when local git could not be asked,
+ * `behindBy`/`checkedOut` present exactly with their conditions.
+ */
+function statusWorktreeJson(status: WorktreeStatus): StatusWorktreeShape {
+  return {
+    repo: status.record.repo,
+    branch: status.record.branch,
+    path: status.record.path,
+    ...(status.freshness === undefined ? {} : { freshness: status.freshness }),
+    ...(status.behindBy === undefined ? {} : { behindBy: status.behindBy }),
+    ...(status.checkedOut === undefined ? {} : { checkedOut: status.checkedOut }),
+  };
+}
+
+/** In `status`, tasks additionally carry their open sessions and worktrees. */
 function statusTaskJson(status: TaskStatus): StatusTaskShape {
   return {
     ...taskJson(status.task, status.inReview, status.forge),
     openSessions: [...status.openSessions],
+    ...(status.worktrees === undefined
+      ? {}
+      : { worktrees: status.worktrees.map(statusWorktreeJson) }),
   };
 }
 

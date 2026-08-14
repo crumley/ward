@@ -50,8 +50,29 @@ export const taskShape = z.strictObject({
 });
 export type TaskShape = z.infer<typeof taskShape>;
 
-/** In `status`, tasks additionally carry their open sessions. */
-export const statusTaskShape = taskShape.extend({ openSessions: z.array(z.string()) });
+/**
+ * One worktree of a task in `status` (0016): identity from the record;
+ * freshness derived at read time from local git alone — as fresh as the last
+ * `repo refresh`, zero network — and absent when git could not be asked.
+ */
+export const statusWorktreeShape = z.strictObject({
+  repo: z.string(),
+  branch: z.string(),
+  path: z.string(),
+  freshness: z.enum(['current', 'behind', 'dirty', 'drifted', 'unreadable']).optional(),
+  /** Commits origin/<mainLine> holds that the worktree lacks — present exactly when behind. */
+  behindBy: z.number().int().positive().optional(),
+  /** The branch actually checked out — present exactly when drifted onto another branch. */
+  checkedOut: z.string().optional(),
+});
+export type StatusWorktreeShape = z.infer<typeof statusWorktreeShape>;
+
+/** In `status`, tasks additionally carry their open sessions and worktrees. */
+export const statusTaskShape = taskShape.extend({
+  openSessions: z.array(z.string()),
+  /** Per-worktree freshness (0016) — absent on closed tasks, whose worktrees settled at close. */
+  worktrees: z.array(statusWorktreeShape).optional(),
+});
 export type StatusTaskShape = z.infer<typeof statusTaskShape>;
 
 /** One derived attention item (0009): what awaits the human, nothing stored. */

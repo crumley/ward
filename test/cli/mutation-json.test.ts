@@ -50,7 +50,7 @@ test('workspace create --json: the establishment report, one document alone on s
   expect(result.exitCode).toBe(0);
   const report = validated('workspace create', workspaceCreateShape, result.stdout);
   expect(report.root).toBe(ws);
-  expect(report.steps.length).toBe(10);
+  expect(report.steps.length).toBe(11);
   expect(report.steps.every((step) => step.outcome === 'established')).toBe(true);
 });
 
