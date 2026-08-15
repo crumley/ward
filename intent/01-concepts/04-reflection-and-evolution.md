@@ -60,6 +60,15 @@ with a second meaning: it is the sanctioned moment the stable context prefix may
 a batched, priced cache re-prime rather than continuous churn
 ([`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §12).
 
+Adoption also has a **place**. Where adopted proposals change the workspace's installed artifacts or
+its record, they land through the **stewardship path** — staged on a branch of the workspace's own
+repository and carried to its main line by the human's gated merge
+([`06-workspace-lifecycle.md`](06-workspace-lifecycle.md), _journal and stewardship_), with the work
+living in the **standing workspace project** alongside upgrades and migrations. The adoption
+boundary is thereby a **merge**: previewable as one diff, landed as one deliberate act — the
+batching above made mechanical. Proposals themselves remain ordinary artifacts; it is **adoption**
+that is stewardship.
+
 ## Reflection must scale by chunking and rolling up
 
 We **cannot assume users reflect often, or often enough.** A reflection may have to cover a long or
@@ -104,7 +113,9 @@ customizations are folded in deliberately, never overwritten (§14).
   _why_ it is scoped rather than "look at everything."
 - **The map-reduce shape** (chunk → distill → roll up) and the **reflection cursor** that keeps it
   incremental.
-- **That reflection is asynchronous and produces proposals**, not silent edits.
+- **That reflection is asynchronous and produces proposals**, not silent edits — with adoption
+  landing through the stewardship merge, in the standing workspace project (both
+  [`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s).
 - **The two axes of evolution** and why they are not conflated — inward from experience (here),
   outward from a new Ward ([`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)).
 

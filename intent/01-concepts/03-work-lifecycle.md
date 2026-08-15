@@ -76,6 +76,14 @@ is proven only by the **main line itself** — the forge's "merged" speaks for t
 main — so any gate that acts on "merged" confirms the merge is **reachable from the main line**
 rather than merely announced (Completion, below).
 
+**One main line has a second lawful writer: the workspace's own.** The workspace record is itself a
+repository, and Ward's **journal** — the bookkeeping commit each lifecycle verb records — lands on
+its main line directly: the record of work happening, not work product, each entry authorized at its
+verb. Deliberate change **to the workspace itself** — stewardship — enjoys no such standing and
+takes the same path as all other work: a branch, a worktree, and the human's gated merge. The
+distinction is [`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s (_journal and
+stewardship_); it scopes this rule, it does not soften it.
+
 ## Lifecycle hooks: customizable, idempotent setup and teardown
 
 Lifecycle transitions have **setup and teardown hooks the user can customize** — how to set up a new
@@ -258,7 +266,9 @@ Local↔remote linkage is an **orthogonal attribute** that can change in any non
 - **The task's discoverable cast** — who is involved (resident, charge nurse, rooms, sessions),
   derived from its session logs and containment rather than stored.
 - **Local-only vs. remote-linked tasks** and the attach/merge transitions (identity stays stable).
-- **The never-merge-to-main cardinal rule.**
+- **The never-merge-to-main cardinal rule** — scoped for the workspace's own record by the
+  journal/stewardship distinction, which is
+  [`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s.
 - **Ward absorbing the recurring maintenance toil** (refresh, rebase + conflict handling, PR/CI
   status-watching, …) and surfacing only what needs a human — the durable intent, not the catalog —
   including that the **toil yields to occupancy** and to **evidence of unrecorded work** (a dirty
