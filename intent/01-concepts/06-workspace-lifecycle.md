@@ -57,6 +57,10 @@ human or agent — needs for the workspace to be **self-sufficient** from its fi
   human picks or accepts ([`01-scopes-and-personas.md`](01-scopes-and-personas.md)). _Why:_ a
   workspace is productive immediately and free to diverge afterwards (_How a workspace evolves_,
   below).
+- **The standing workspace project** — the home for the workspace's own work (_The standing
+  workspace project_, below). _Why:_ the workspace's arc begins at creation, and its first
+  stewardship acts — the first upgrade, the first reflection — need a home every workspace keeps in
+  the same place.
 - **Version control over itself** — the workspace is tracked as a git repository
   ([`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §15) from creation, with
   the ignore policy in place. _Why:_ the first thing worth rolling back is a bad migration (_Version
@@ -175,6 +179,102 @@ or destructive to the human as a gated action (§18) surfaced through "what need
 everything:** several drifts are ambiguous in the direction that matters — an untracked worktree is
 either garbage or the human's unrecorded work, and §17 makes guessing wrong a silent loss. Reporting
 is always safe; repairing is not.
+
+## The workspace's own main line: journal and stewardship
+
+The workspace is itself a git repository
+([`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §15), so it has a main
+line of its own — and that main line has **two kinds of writer**, separated here so that every other
+rule about main lines can stay absolute.
+
+**The journal: Ward's bookkeeping lands directly.** Every lifecycle verb records its effect as a
+commit on the workspace's main line — a task opened, a worktree created, a close completed. These
+commits are **the record advancing, not work product**: each was authorized at its verb (gated where
+gating applies, §18), and each merely writes down an act already taken. **Why direct:** review is
+for proposals, and a journal entry proposes nothing — routing bookkeeping through a review boundary
+would ask the human to approve, one commit at a time, what has already happened, attention spent
+where no decision exists ([`../00-foundation/00-vision.md`](../00-foundation/00-vision.md)). This
+scopes the cardinal rule ([`03-work-lifecycle.md`](03-work-lifecycle.md)) without softening it: what
+may never reach a main line directly is _work_, and the journal is the record of work happening.
+
+**Stewardship: deliberate change travels like work, because it is work.** Change to what the
+workspace _is_ — an upgrade's reconciliation, a structural migration, the adoption of a reflection's
+proposals ([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)) — is work product
+about the workspace itself, and it takes the path every deliverable takes: **a task, a branch, a
+worktree, and a merge that is the human's gated act** (§18). The worktree is **of the workspace's
+own repository** — contained under the workspace like any other anchor and ignored by the record's
+git ([`00-domain-model.md`](00-domain-model.md), Anchor).
+
+**Why this shape** — several reasons converge:
+
+- **Preview before commitment.** §15 promises rollback because the first thing worth rolling back is
+  a bad migration; better than rolling one back is reading it first. A stewardship branch makes the
+  whole change — record, installed artifacts, baselines, stamp — **one reviewable diff** against the
+  main line, and the worktree is a **candidate workspace**: integrity can be checked against the
+  upgraded copy before a single record on the main line has moved.
+- **Decisions land atomically with what makes them detectable.** The installed baseline must move
+  with the artifact it fingerprints or divergence detection is blinded (§17; _How a workspace
+  evolves_, below); on a branch the two ride one commit and arrive as one.
+- **Ordinary work is never interrupted.** The workspace's root checkout **never leaves its main
+  line**; a stewardship branch exists only inside its worktree. The journal keeps landing on main
+  beside the stewardship work — nothing is frozen by the existence of a proposal.
+- **The merge is the adjudication.** Reconciliation already ties "upgraded" to a completed
+  adjudication (below); a gated, Ward-managed merge is that adjudication made mechanical — one
+  deliberate act that lands exactly what the human has decided.
+
+**The review boundary is the branch, not a forge.** A workspace's repository commonly has no remote,
+and needs none. Ward therefore provides the preview — the diff, and reads against the candidate copy
+— and the **gated merge** itself; where the workspace does have a forge remote, the same boundary
+may be reviewed as a pull request instead (§19 — one contract, more than one technique). The
+invariant is only this: **stewardship reaches the workspace's main line through a branch the human
+explicitly merges.**
+
+**A stewardship copy is not a second workspace.** The worktree materializes the record — the
+workspace document and all — so a workspace-discovering command standing inside it finds what looks
+like a root. The rule: a root that is itself a worktree of an enclosing workspace is a **stewardship
+copy**. Reads serve preview — checking the candidate is the point — but **the journal never writes
+there**: a lifecycle verb invoked inside a stewardship copy addresses the enclosing workspace, or
+refuses plainly (§20). **Why:** a journal entry recorded on a stewardship branch would merge back
+into the main line as false history — the record corrupted by its own machinery (§17).
+
+**Completion is verified on the workspace's own main line.** A stewardship task's `delivered` close
+asserts what every delivered close asserts — the work reached the main line — and verifies it
+against the workspace repository's own history rather than any forge's word
+([`03-work-lifecycle.md`](03-work-lifecycle.md), Completion — the same verification duty, pointed
+inward).
+
+**Migration must not deadlock on its own record-keeping.** Version skew blocks structural writes
+(below) — but opening and running the stewardship task that performs a migration takes record writes
+of its own: the task, its sessions, its worktree. Those writes, made **in the shape the workspace
+currently has**, are the carve-out; blocking them would leave the workspace unable to run the very
+task that unblocks it — the same deadlock reconciliation refuses by running as ordinary work
+(_Reconciliation_, below).
+
+### The standing workspace project
+
+Every workspace carries **one standing project for the workspace itself** — the home for stewardship
+work: upgrades and their reconciliation, migrations, reflections, and whatever else operates **on**
+the workspace rather than in it.
+
+- **It passes the project test; it does not bend it.** A project exists when success is more than
+  "are the tasks done" ([`00-domain-model.md`](00-domain-model.md)) — and this project's success is
+  the workspace staying healthy and evolving across its whole life. Establishing it at creation is
+  not an empty container for ceremony's sake: its first clients are guaranteed by Ward's own
+  machinery — the first upgrade, the first reflection — and an empty project is honestly `active`
+  ([`00-domain-model.md`](00-domain-model.md), derivation), the true reading of a workspace whose
+  own arc has just begun.
+- **It never closes.** The workspace has no terminal state (_A workspace is not closed_, below), and
+  this is the one project whose arc _is_ the workspace's own — so it shares that rule, uniquely
+  among projects. Its identity is allocated like any project's
+  ([`00-domain-model.md`](00-domain-model.md), Identity); the concrete address form is
+  [`design/`](../../design/)'s.
+- **It concentrates the workspace's own history in one place.** "What has been done _to_ this
+  workspace?" — every upgrade adjudicated, every migration, every reflection adopted — is answered
+  by one project's record, in the same place in every workspace (§3).
+
+(Bare tasks directly under the workspace remain what they are — the cheapest one-off
+([`00-domain-model.md`](00-domain-model.md)); the standing project is where workspace-directed work
+belongs, not a new requirement on unrelated odd jobs.)
 
 ## How a workspace evolves: what Ward installs, and how it survives your changes
 
@@ -349,6 +449,14 @@ written at the close. **Why:** §16 prefers recorded state over live state, and 
 interrupted at its fifth artifact must not, on resume, re-raise the four already settled. That would
 be the same nagging at a smaller scale, and the record is what prevents it.
 
+**And the branch is where that record lives until it lands.** The reconciliation task is stewardship
+work (_The workspace's own main line_, above): it anchors in a worktree of the workspace's own
+repository, and each artifact's decision — the fold-in or the recorded decline, with the baseline
+refresh that accompanies it — lands as a commit on its branch the moment it is made. An interrupted
+upgrade resumes by reading its own branch. The human's gated merge is the adjudication act that
+carries the whole to the main line, and the `delivered` close then verifies arrival exactly as any
+close does (§18; [`03-work-lifecycle.md`](03-work-lifecycle.md), Completion).
+
 **Declining is recorded, and that record has a job.** A declined difference is marked as **chosen,
 not drifted** — which is what stops `doctor` reporting the artifact as divergence on every run
 (_Workspace integrity_, above), and what lets a later recap say "this differs because you decided it
@@ -443,9 +551,10 @@ What this slice owns beyond the stamp and the update/migrate paths above is **be
   it can act on, never as prose in output the agent must parse around (§8).
 - **Migration is gated, and rides version control.** Transforming the structure of the record is
   outward of nothing but irreversible in practice, so it takes the human's explicit authority (§18),
-  and it lands as its own commit in the workspace's own history (§15) so it can be rolled back.
+  and it travels the stewardship path (_The workspace's own main line_, above) — its own branch,
+  previewed as a diff, merged into the workspace's own history (§15) so it can be rolled back.
   _Why:_ keeping the risky path rare and explicit (above) means little unless the rare path is also
-  recoverable.
+  recoverable — and a migration is the change most worth reading before it lands.
 
 ## Putting a workspace right: three operations, one map
 
@@ -472,9 +581,11 @@ Unlike every level inside it, a workspace has **no terminal state**. It is not c
 archived by Ward; it persists, and its history persists with it. **Why:** the workspace is the frame
 the record is kept in, and the record is meant to be read long after the work is done — floor
 numbers are retired but never reused for exactly this reason
-([`00-domain-model.md`](00-domain-model.md), Identity). A human may of course delete the directory;
-that is an act on files, not a lifecycle Ward models. **Why say so explicitly:** every other noun
-here closes, so silence would read as an omission rather than a decision.
+([`00-domain-model.md`](00-domain-model.md), Identity). Its **standing project** shares the rule —
+the one project with no terminal state, because its arc is the workspace's own (_The standing
+workspace project_, above). A human may of course delete the directory; that is an act on files, not
+a lifecycle Ward models. **Why say so explicitly:** every other noun here closes, so silence would
+read as an omission rather than a decision.
 
 ## Canonical home for
 
@@ -493,6 +604,17 @@ here closes, so silence would read as an omission rather than a decision.
   (preferences only; nothing resumption depends on).
 - **Workspace integrity** — the classes of drift between record and world, and the **repair
   posture** (report all, repair only the local and reversible, gate the rest).
+- **The workspace's own main line** — the **journal** (Ward's bookkeeping landing directly: the
+  record advancing, not work product) versus **stewardship** (deliberate change to the workspace
+  itself, traveling as work: a branch in a worktree of the workspace's own repository, the root
+  checkout never leaving its main line, previewed, landed by the human's gated Ward-managed merge —
+  a pull request only where a remote exists; the branch-and-merge boundary is the invariant); the
+  **stewardship copy** rule (reads serve preview; the journal never writes there); **completion
+  verified on the workspace's own history**; and the **migration record-keeping carve-out** (the
+  record writes that open and run a migration's own task are never blocked by the skew that task
+  fixes).
+- **The standing workspace project** — one per workspace, established at creation, home of
+  stewardship work, the only project that never closes.
 - **How a workspace evolves** — the **version stamp**; **update vs. migrate**; **composition first**
   (Ward's contribution and the human's separately addressable, Ward's ordered first, so most
   divergence never occurs) and the residue composition cannot separate; the **two tiers of installed
@@ -529,8 +651,10 @@ here closes, so silence would read as an omission rather than a decision.
   precondition and integrity check sets and how each is probed; the form of the global
   configuration; how a structural write is recognized in order to be blocked under skew; **how the
   installed baseline is recorded and compared** to detect divergence (a fingerprint, a retained
-  pristine copy, or a merge base); the contents of the workspace skill and the root `AGENTS.md`; and
-  the reconciliation skill's own procedure. Planned in [`design/`](../../design/).
+  pristine copy, or a merge base); the contents of the workspace skill and the root `AGENTS.md`; the
+  reconciliation skill's own procedure; and the **stewardship surface** — the preview and merge
+  verbs, stewardship branch naming, how a stewardship copy is recognized, and the standing workspace
+  project's concrete address. Planned in [`design/`](../../design/).
 
 ## Open questions
 

@@ -66,6 +66,12 @@ A coherent body of work with its own definition of success: not just "are the ta
 they add up to the outcome the project was for." It is the natural scope for a managing persona that
 holds the whole picture. Projects may be heavyweight and durable, or **ad hoc and lightweight**.
 
+One project is **standing** in every workspace: the workspace's own — the home for work **on** the
+workspace itself (upgrades, migrations, reflection adoption), established at creation, and the only
+project that never closes because its arc is the workspace's, which has no terminal state. It passes
+the project test rather than bending it; the argument, and the stewardship work it houses, are
+[`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s (_The standing workspace project_).
+
 ### Task
 
 One unit of deliverable work — the level at which work is started, tracked, paused, resumed, and
@@ -84,7 +90,9 @@ anchors. An anchor is one of two kinds:
 - **Worktree** — a branch of a single repository, checked out so it can be changed independently of
   the repository's main line. Worktrees are where code actually changes; the governed record they
   feed is **git commits, delivered through pull requests** (`03-work-lifecycle.md`). Each worktree
-  belongs to one repository and one branch, and carries a **disposition**, fixed at creation:
+  belongs to one repository — possibly the **workspace's own**, the stewardship case
+  ([`06-workspace-lifecycle.md`](06-workspace-lifecycle.md), _journal and stewardship_) — and one
+  branch, and carries a **disposition**, fixed at creation:
   - **`deliverable`** — carries changes destined for the main line. The default, and the kind the
     maintenance toil serves (`03-work-lifecycle.md`).
   - **`sandbox`** — a checkout for work that reads, runs, or instruments code without ever
@@ -174,6 +182,11 @@ current main line locally at any moment. The _what_ is: the workspace maintains 
 contained checkouts of its repositories, distinct from the per-task worktrees branched off them; the
 rest of the arc — registration, adopt-or-clone, why containment — is
 [`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s.
+
+The workspace's **own** repository is not a member of this set: it is registered nowhere, needs no
+remote and no separate canonical checkout — the workspace root **is** its main-line checkout, and it
+never leaves that main line. Stewardship worktrees branch from it directly; its two writers — the
+journal and stewardship — are [`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s.
 
 ## Status: recorded at the leaves, derived above
 
@@ -459,9 +472,10 @@ detours is the prime directive in miniature. (Mechanics and modes in `01-scopes-
   _levels-are-elided-not-faked_ rule with its **per-level existence tests** (task as the universal
   quantum; elision changes ceremony, never semantics).
 - **Anchors** — the scratch-medium/governed-record symmetry; the worktree (with its
-  `deliverable | sandbox` **disposition**, fixed at creation — a sandbox never opens a PR) and the
-  workdir; the **one-anchor-per-room** rule; **occupancy on the anchor** (at most one occupant — a
-  room or an elided session; an occupied anchor is written only through its occupant).
+  `deliverable | sandbox` **disposition**, fixed at creation — a sandbox never opens a PR; its
+  repository possibly the workspace's own, the stewardship case) and the workdir; the
+  **one-anchor-per-room** rule; **occupancy on the anchor** (at most one occupant — a room or an
+  elided session; an occupied anchor is written only through its occupant).
 - **The Agent / Persona / Session distinction**, and _multiple personas per scope_.
 - **The two axes of a session** — scope and working directory (assembly in
   [`05-context-loading.md`](05-context-loading.md)) — and the **scope vocabulary**: a session's

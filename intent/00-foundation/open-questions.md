@@ -72,6 +72,16 @@ relevant slice (and reflected in tests and code).
 
 ## Recently resolved (kept briefly for context)
 
+- **The workspace's own main line has two writers: journal and stewardship.** Ward's **journal** —
+  one bookkeeping commit per lifecycle verb — lands on the workspace repository's main line directly
+  (the record advancing, not work product); **stewardship** — deliberate change to the workspace
+  itself: upgrade reconciliation, migration, reflection adoption — travels as ordinary work in a
+  worktree of the workspace's own repository, previewed, and landed by the human's gated,
+  Ward-managed merge (a PR only where a remote exists; the branch-and-merge boundary is the
+  invariant). The root checkout never leaves main; a **stewardship copy** serves reads but never
+  takes journal writes; completion is verified on the workspace's own history; and stewardship work
+  lives in the **standing workspace project** — established at creation, the only project that never
+  closes ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)).
 - **The workspace has a lifecycle of its own.** Creation as a deliberate located act and what it
   establishes (including the root `AGENTS.md` and Ward's workspace skill — the guidance an agent
   needs to work there); repository registration; preconditions (§3 is about the **record**, not the
