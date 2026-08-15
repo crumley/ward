@@ -95,15 +95,27 @@ export function taskRecordType(dir: string): DocumentType<TaskRecord> {
   return { name: 'task', relPath: `${dir}/task.md`, schema: taskSchema };
 }
 
-export const worktreeSchema = z.object({
-  type: z.literal('worktree'),
-  repo: z.string().min(1),
-  branch: z.string().min(1),
-  disposition: z.literal('deliverable'),
-  /** Workspace-relative directory of the worktree itself. */
-  path: z.string().min(1),
-  createdAt: z.string().min(1),
-});
+export const worktreeSchema = z
+  .object({
+    type: z.literal('worktree'),
+    /** The registered repository — present exactly when the source is one. */
+    repo: z.string().min(1).optional(),
+    /**
+     * `workspace` marks the stewardship case: a worktree of the workspace's
+     * own repository, which is registered nowhere and carries no name in the
+     * repository set (design/0019-stewardship-worktrees/) — absence of `repo`
+     * over a fabricated name, the codebase-wide convention.
+     */
+    source: z.literal('workspace').optional(),
+    branch: z.string().min(1),
+    disposition: z.literal('deliverable'),
+    /** Workspace-relative directory of the worktree itself. */
+    path: z.string().min(1),
+    createdAt: z.string().min(1),
+  })
+  .refine((record) => (record.repo === undefined) !== (record.source === undefined), {
+    message: "exactly one of 'repo' and 'source: workspace' names the worktree's repository",
+  });
 export type WorktreeRecord = z.infer<typeof worktreeSchema>;
 
 export function worktreeRecordType(

@@ -36,8 +36,10 @@ import {
   statusReport,
   type TaskStatus,
 } from '../workspace/status.ts';
+import { mergeWorkspaceBranch, refuseStewardshipCopy } from '../workspace/steward.ts';
 import { addTaskPr, closeTask, openTask, setTaskState } from '../workspace/tasks.ts';
 import {
+  createWorkspaceWorktree,
   createWorktree,
   listWorktrees,
   type RebaseReport,
@@ -59,6 +61,7 @@ import {
   taskListJson,
   taskMutationJson,
   workspaceCreateJson,
+  workspaceMergeJson,
   worktreeCreateJson,
   worktreeListJson,
   worktreeRebaseJson,
@@ -100,7 +103,26 @@ const workspaceCreate = command(
   },
 );
 
-const workspace = command('workspace', workspaceCreate, {
+// The gated, Ward-managed merge (design/0019-stewardship-worktrees/): the
+// human's act that lands a stewardship branch on the workspace's own main
+// line. The noun is the workspace because the main line being merged into is
+// the workspace's own — the verb reads true at the level the act operates on.
+const workspaceMerge = command(
+  'merge',
+  object({
+    action: constant('workspace-merge'),
+    branch: argument(string({ metavar: 'BRANCH' })),
+    preview: option('--preview', {
+      description: message`Show what would merge (commit count and diff stat) without merging.`,
+    }),
+    json: jsonFlag(),
+  }),
+  {
+    brief: message`Land a stewardship branch on the workspace's own main line (the gated merge).`,
+  },
+);
+
+const workspace = command('workspace', or(workspaceCreate, workspaceMerge), {
   brief: message`Operate on a workspace.`,
 });
 
@@ -232,11 +254,19 @@ const worktree = command(
       object({
         action: constant('worktree-create'),
         task: optional(argument(string({ metavar: 'TASK' }))),
-        repo: option('--repo', string({ metavar: 'NAME' })),
+        repo: optional(option('--repo', string({ metavar: 'NAME' }))),
+        // The workspace's own repository is registered nowhere and has no name
+        // in the repository set, so it is addressed plainly rather than by a
+        // faked registration (design/0019-stewardship-worktrees/).
+        workspace: option('--workspace', {
+          description: message`Anchor in the workspace's own repository (the stewardship case).`,
+        }),
         branch: optional(option('--branch', string({ metavar: 'NAME' }))),
         json: jsonFlag(),
       }),
-      { brief: message`Create a deliverable worktree off the refreshed main line.` },
+      {
+        brief: message`Create a deliverable worktree off the refreshed main line (--repo NAME or --workspace).`,
+      },
     ),
     command(
       'rebase',
@@ -329,6 +359,9 @@ try {
       case 'workspace-create':
         await cmdWorkspaceCreate(result.path, result.json);
         break;
+      case 'workspace-merge':
+        await cmdWorkspaceMerge(result.branch, result.preview, result.json);
+        break;
       case 'repo-add':
         await cmdRepoAdd(result.source, result.name, result.json);
         break;
@@ -339,7 +372,7 @@ try {
         await cmdRepoList(result.json);
         break;
       case 'project-open': {
-        const record = await openProject(requireWorkspace(), result.slug);
+        const record = await openProject(requireMutableWorkspace(), result.slug);
         if (result.json) {
           printJson(projectOpenJson(record));
           break;
@@ -353,7 +386,7 @@ try {
         await cmdProjectList(result.json);
         break;
       case 'task-open': {
-        const opened = await openTask(requireWorkspace(), result.slug, {
+        const opened = await openTask(requireMutableWorkspace(), result.slug, {
           ...(result.project === undefined ? {} : { floor: result.project }),
           ...(result.purpose === undefined ? {} : { purpose: result.purpose }),
         });
@@ -413,17 +446,29 @@ try {
       case 'worktree-create': {
         const target = await resolveTaskTarget(
           result.task,
-          'ward worktree create TASK --repo NAME',
+          'ward worktree create TASK --repo NAME | --workspace',
           result.json,
         );
-        const created = await createWorktree(target.root, target.code, result.repo, result.branch);
+        if (result.workspace === (result.repo !== undefined)) {
+          throw new WardError(
+            'name the worktree source: --repo NAME for a registered repository, or ' +
+              "--workspace for the workspace's own (exactly one of the two)",
+          );
+        }
+        const created =
+          result.repo === undefined
+            ? await createWorkspaceWorktree(target.root, target.code, result.branch)
+            : await createWorktree(target.root, target.code, result.repo, result.branch);
         if (result.json) {
           printJson(worktreeCreateJson(created.task.record.code, created.record));
           break;
         }
         console.log(
           `${pc.green('created')} ${created.record.path} ` +
-            pc.dim(`(${created.record.repo}, branch ${created.record.branch}, deliverable)`),
+            pc.dim(
+              `(${created.record.repo ?? "the workspace's own repository"}, ` +
+                `branch ${created.record.branch}, deliverable)`,
+            ),
         );
         break;
       }
@@ -463,7 +508,7 @@ try {
         break;
       }
       case 'session-close': {
-        const closed = await closeSession(requireWorkspace(), result.id);
+        const closed = await closeSession(requireMutableWorkspace(), result.id);
         if (result.json) {
           printJson(sessionMutationJson(closed));
           break;
@@ -524,6 +569,39 @@ function renderOutcome(step: StepReport): string {
   return step.outcome === 'established' ? pc.green('established') : pc.dim('  satisfied');
 }
 
+/**
+ * The gated merge (design/0019-stewardship-worktrees/): a mutation at the
+ * workspace root, so the stewardship-copy guard applies; a refusal (dirty
+ * root, conflict, unknown branch) throws before any document is printed —
+ * stderr + exit 1 with stdout empty, the 0015 posture.
+ */
+async function cmdWorkspaceMerge(branch: string, preview: boolean, json: boolean): Promise<void> {
+  const report = await mergeWorkspaceBranch(requireMutableWorkspace(), branch, preview);
+  if (json) {
+    printJson(workspaceMergeJson(report));
+    return;
+  }
+  const plural = report.commits === 1 ? 'commit' : 'commits';
+  if (report.outcome === 'merged') {
+    console.log(
+      `${pc.green('merged')} '${pc.bold(report.branch)}' into ${report.mainLine} — ` +
+        `${report.commits} ${plural}, merge commit ${report.mergeCommit ?? '?'}`,
+    );
+    return;
+  }
+  if (report.outcome === 'already-merged') {
+    console.log(
+      pc.dim(`'${report.branch}' is already merged into ${report.mainLine} — nothing to do`),
+    );
+    return;
+  }
+  console.log(
+    `would merge '${pc.bold(report.branch)}' into ${report.mainLine} — ${report.commits} ${plural}`,
+  );
+  if (report.diffStat !== undefined && report.diffStat !== '') console.log(pc.dim(report.diffStat));
+  console.log(pc.dim(`merge with: ward workspace merge ${report.branch}`));
+}
+
 /** Resolve the enclosing workspace or fail legibly — for verbs that need one. */
 function requireWorkspace(): string {
   const root = discoverWorkspace(process.cwd());
@@ -532,6 +610,20 @@ function requireWorkspace(): string {
       'no Ward workspace encloses this directory — create one with: ward workspace create PATH',
     );
   }
+  return root;
+}
+
+/**
+ * The stewardship-copy guard (design/0019-stewardship-worktrees/): a
+ * stewardship worktree materializes the record, so discovery finds what looks
+ * like a root there. Reads proceed against the candidate copy — that preview
+ * is the copy's purpose — but every mutating verb resolves its workspace
+ * through this instead: a record written in a copy would merge back into the
+ * main line as false history, so the refusal names the enclosing workspace.
+ */
+function requireMutableWorkspace(): string {
+  const root = requireWorkspace();
+  refuseStewardshipCopy(root);
   return root;
 }
 
@@ -555,7 +647,9 @@ async function resolveTaskTarget(
   usage: string,
   json = false,
 ): Promise<TaskTarget> {
-  const root = requireWorkspace();
+  // Every caller of this resolver is a mutation, so the stewardship-copy
+  // guard rides the workspace resolution (design/0019-stewardship-worktrees/).
+  const root = requireMutableWorkspace();
   if (explicit !== undefined) return { root, code: explicit };
   if (callerIsAgent()) {
     throw new WardError(
@@ -578,7 +672,7 @@ async function resolveTaskTarget(
 }
 
 async function cmdRepoAdd(source: string, name: string | undefined, json: boolean): Promise<void> {
-  const root = requireWorkspace();
+  const root = requireMutableWorkspace();
   const report = await addRepository(root, source, name);
   if (json) {
     printJson(repoAddJson(report));
@@ -596,7 +690,7 @@ async function cmdRepoAdd(source: string, name: string | undefined, json: boolea
 }
 
 async function cmdRepoRefresh(name: string | undefined, json: boolean): Promise<void> {
-  const root = requireWorkspace();
+  const root = requireMutableWorkspace();
   const reports = await refreshRepositories(root, name);
   if (json) {
     // The document is emitted whatever the rows say; a failed row keeps the
@@ -719,7 +813,7 @@ async function cmdTaskClose(
   outcome: 'delivered' | 'abandoned',
   json: boolean,
 ): Promise<void> {
-  const report = await closeTask(requireWorkspace(), code, outcome);
+  const report = await closeTask(requireMutableWorkspace(), code, outcome);
   if (json) {
     printJson(taskCloseJson(report));
     return;
@@ -780,8 +874,11 @@ async function cmdWorktreeList(json: boolean): Promise<void> {
   }
   for (const { taskCode, record, present } of listings) {
     const where = present ? pc.dim(record.path) : pc.yellow(`${record.path} (missing)`);
+    // A workspace-anchored worktree names its source plainly — the workspace
+    // repo has no name in the repository set (0019).
+    const source = record.repo ?? 'workspace';
     console.log(
-      `  ${pc.bold(taskCode)} ${record.repo}:${record.branch} ` +
+      `  ${pc.bold(taskCode)} ${source}:${record.branch} ` +
         `${pc.dim(`(${record.disposition})`)} ${where}`,
     );
   }

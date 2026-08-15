@@ -56,7 +56,10 @@ export type TaskShape = z.infer<typeof taskShape>;
  * `repo refresh`, zero network — and absent when git could not be asked.
  */
 export const statusWorktreeShape = z.strictObject({
-  repo: z.string(),
+  /** The registered repository — present exactly when the source is one (0019). */
+  repo: z.string().optional(),
+  /** 'workspace': a worktree of the workspace's own repository — the stewardship case (0019). */
+  source: z.enum(['workspace']).optional(),
   branch: z.string(),
   path: z.string(),
   freshness: z.enum(['current', 'behind', 'dirty', 'drifted', 'unreadable']).optional(),
@@ -124,7 +127,10 @@ export type TaskListShape = z.infer<typeof taskListShape>;
 export const worktreeListShape = z.array(
   z.strictObject({
     task: z.string(),
-    repo: z.string(),
+    /** The registered repository — present exactly when the source is one (0019). */
+    repo: z.string().optional(),
+    /** 'workspace': a worktree of the workspace's own repository — the stewardship case (0019). */
+    source: z.enum(['workspace']).optional(),
     branch: z.string(),
     disposition: z.literal('deliverable'),
     path: z.string(),
@@ -242,7 +248,10 @@ export type TaskCloseShape = z.infer<typeof taskCloseShape>;
 /** `worktree create`: the record as written, flat like the `worktree list` rows. */
 export const worktreeCreateShape = z.strictObject({
   task: z.string(),
-  repo: z.string(),
+  /** The registered repository — present exactly when the source is one (0019). */
+  repo: z.string().optional(),
+  /** 'workspace': a worktree of the workspace's own repository — the stewardship case (0019). */
+  source: z.enum(['workspace']).optional(),
   branch: z.string(),
   disposition: z.literal('deliverable'),
   path: z.string(),
@@ -259,7 +268,10 @@ export const worktreeRebaseShape = z.strictObject({
   task: z.string(),
   reports: z.array(
     z.strictObject({
-      repo: z.string(),
+      /** The registered repository — present exactly when the source is one (0019). */
+      repo: z.string().optional(),
+      /** 'workspace': a worktree of the workspace's own repository (0019). */
+      source: z.enum(['workspace']).optional(),
       branch: z.string(),
       path: z.string(),
       outcome: z.enum(['rebased', 'current', 'dirty', 'conflict', 'failed']),
@@ -268,6 +280,26 @@ export const worktreeRebaseShape = z.strictObject({
   ),
 });
 export type WorktreeRebaseShape = z.infer<typeof worktreeRebaseShape>;
+
+/**
+ * `workspace merge` (design/0019-stewardship-worktrees/): the gated act that
+ * lands a stewardship branch on the workspace's own main line. One shape for
+ * all three outcomes — `merged` carries the merge commit, `previewed` the
+ * diff stat, `already-merged` neither; a refusal (dirty root, conflict,
+ * unknown branch) emits no document at all (the 0015 posture).
+ */
+export const workspaceMergeShape = z.strictObject({
+  branch: z.string(),
+  mainLine: z.string(),
+  outcome: z.enum(['merged', 'already-merged', 'previewed']),
+  /** Commits the branch holds beyond the main line, at the moment of asking. */
+  commits: z.number().int().nonnegative(),
+  /** The landed merge commit (short) — present exactly when merged. */
+  mergeCommit: z.string().optional(),
+  /** `git diff --stat` against the merge base — present exactly when previewed. */
+  diffStat: z.string().optional(),
+});
+export type WorkspaceMergeShape = z.infer<typeof workspaceMergeShape>;
 
 /** The session record as written — shared by `session open` and `session close`. */
 export const sessionMutationShape = z.strictObject({
@@ -320,6 +352,7 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'worktree rebase': worktreeRebaseShape,
   'session open': sessionMutationShape,
   'session close': sessionMutationShape,
+  'workspace merge': workspaceMergeShape,
 };
 
 /** The whole `--json` contract: read verbs first, then the mutation verbs. */

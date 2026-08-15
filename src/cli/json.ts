@@ -24,6 +24,7 @@ import type { CreateReport } from '../workspace/create.ts';
 import type { DoctorReport } from '../workspace/doctor.ts';
 import type { AddReport, RefreshReport } from '../workspace/repos.ts';
 import type { StatusReport, TaskStatus } from '../workspace/status.ts';
+import type { MergeReport } from '../workspace/steward.ts';
 import type { CloseReport } from '../workspace/tasks.ts';
 import type { RebaseReport, WorktreeListing, WorktreeStatus } from '../workspace/worktrees.ts';
 import type {
@@ -43,6 +44,7 @@ import type {
   TaskMutationShape,
   TaskShape,
   WorkspaceCreateShape,
+  WorkspaceMergeShape,
   WorktreeCreateShape,
   WorktreeListShape,
   WorktreeRebaseShape,
@@ -90,7 +92,8 @@ function prForgeJson(state: PrForgeState): PrForgeShape {
  */
 function statusWorktreeJson(status: WorktreeStatus): StatusWorktreeShape {
   return {
-    repo: status.record.repo,
+    ...(status.record.repo === undefined ? {} : { repo: status.record.repo }),
+    ...(status.record.source === undefined ? {} : { source: status.record.source }),
     branch: status.record.branch,
     path: status.record.path,
     ...(status.freshness === undefined ? {} : { freshness: status.freshness }),
@@ -162,7 +165,8 @@ export function taskListJson(
 export function worktreeListJson(listings: readonly WorktreeListing[]): WorktreeListShape {
   return listings.map((listing) => ({
     task: listing.taskCode,
-    repo: listing.record.repo,
+    ...(listing.record.repo === undefined ? {} : { repo: listing.record.repo }),
+    ...(listing.record.source === undefined ? {} : { source: listing.record.source }),
     branch: listing.record.branch,
     disposition: listing.record.disposition,
     path: listing.record.path,
@@ -251,7 +255,8 @@ export function taskCloseJson(report: CloseReport): TaskCloseShape {
 export function worktreeCreateJson(taskCode: string, record: WorktreeRecord): WorktreeCreateShape {
   return {
     task: taskCode,
-    repo: record.repo,
+    ...(record.repo === undefined ? {} : { repo: record.repo }),
+    ...(record.source === undefined ? {} : { source: record.source }),
     branch: record.branch,
     disposition: record.disposition,
     path: record.path,
@@ -266,12 +271,25 @@ export function worktreeRebaseJson(
   return {
     task: taskCode,
     reports: reports.map((report) => ({
-      repo: report.record.repo,
+      ...(report.record.repo === undefined ? {} : { repo: report.record.repo }),
+      ...(report.record.source === undefined ? {} : { source: report.record.source }),
       branch: report.record.branch,
       path: report.record.path,
       outcome: report.outcome,
       detail: report.detail,
     })),
+  };
+}
+
+/** The gated merge's report (design/0019-stewardship-worktrees/) — outcome-conditional fields. */
+export function workspaceMergeJson(report: MergeReport): WorkspaceMergeShape {
+  return {
+    branch: report.branch,
+    mainLine: report.mainLine,
+    outcome: report.outcome,
+    commits: report.commits,
+    ...(report.mergeCommit === undefined ? {} : { mergeCommit: report.mergeCommit }),
+    ...(report.diffStat === undefined ? {} : { diffStat: report.diffStat }),
   };
 }
 
