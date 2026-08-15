@@ -11,12 +11,14 @@ import { withStoreLock } from '../store/lock.ts';
 import {
   baselinesType,
   catalogType,
+  projectRecordType,
   seededArtifactTypes,
   workspaceRecordType,
 } from '../store/types.ts';
 import { sha256OfFile } from './baselines.ts';
 import { git, gitAvailable, gitOrThrow, hasCommits } from './git.ts';
 import { IGNORE_LINES, inspectClaudeGuidance, MARKER_DIR, SCOPE_DIRS } from './layout.ts';
+import { findStandingProject, nextFloor, STANDING_PROJECT_SLUG } from './projects.ts';
 import {
   AGENTS_MD,
   CATALOG_BODY,
@@ -70,6 +72,7 @@ export async function createWorkspace(path: string): Promise<CreateReport> {
     steps.push(await establishClaudeGuidance(ctx));
     steps.push(await establishIgnorePolicy(ctx));
     steps.push(await establishScopeDirs(ctx));
+    steps.push(await establishStandingProject(ctx));
     steps.push(await establishBaselines(ctx));
     steps.push(establishGitRepository(ctx));
     steps.push(establishCommit(ctx));
@@ -206,6 +209,46 @@ async function establishScopeDirs(ctx: CreateContext): Promise<StepReport> {
     await mkdir(join(ctx.root, dir), { recursive: true });
   }
   return { step, outcome: missing.length > 0 ? 'established' : 'satisfied', detail };
+}
+
+/**
+ * Every workspace carries one standing project for work on the workspace
+ * itself — upgrades, migrations, reflection adoption
+ * (intent/01-concepts/06-workspace-lifecycle.md, The standing workspace
+ * project). Its identity is allocated like any project's: the next floor
+ * number — floor 1 in a fresh workspace, next-available on the converge run
+ * that carries it to a pre-0018 workspace (the 0017 migration-target
+ * pattern). Resolution is by the record's `standing` marker, written here and
+ * nowhere else. The record gets no baseline entry: it is a record the store
+ * validates by schema, not an installed artifact whose customization a
+ * fingerprint must detect. The store lock is already held by createWorkspace,
+ * so the allocation scan and write happen inline, not through openProject.
+ */
+async function establishStandingProject(ctx: CreateContext): Promise<StepReport> {
+  const step = 'standing project';
+  const existing = await findStandingProject(ctx.root);
+  if (existing !== undefined) {
+    return { step, outcome: 'satisfied', detail: `${existing.dir}/` };
+  }
+  const floor = nextFloor(ctx.root);
+  const dir = `projects/${floor}-${STANDING_PROJECT_SLUG}`;
+  await writeDocument(ctx.root, projectRecordType(dir), {
+    data: {
+      type: 'project',
+      floor,
+      slug: STANDING_PROJECT_SLUG,
+      standing: true,
+      state: 'active',
+      openedAt: new Date().toISOString(),
+    },
+    body:
+      `Floor ${floor}: the standing workspace project — the home for work on the workspace ` +
+      'itself (upgrades and their reconciliation, migrations, reflection adoption). ' +
+      'Established at creation, and the one project that never closes: its arc is the ' +
+      "workspace's own, which has no terminal state.",
+  });
+  ctx.establishedPaths.push(`${dir}/project.md`);
+  return { step, outcome: 'established', detail: `${dir}/` };
 }
 
 /**

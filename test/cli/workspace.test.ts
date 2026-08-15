@@ -22,7 +22,7 @@ test('workspace create produces a valid workspace with a first commit', () => {
 test('re-running create converges: exit 0, all satisfied, clean tree', () => {
   const result = runWard(['workspace', 'create', ws], outside);
   expect(result.exitCode).toBe(0);
-  expect(result.stdout).toContain('0 established, 11 already satisfied');
+  expect(result.stdout).toContain('0 established, 12 already satisfied');
   expect(git(ws, 'status', '--porcelain').stdout).toBe('');
 });
 

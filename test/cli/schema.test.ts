@@ -109,9 +109,9 @@ beforeAll(async () => {
   gitOrThrow(seed, 'push', '-u', 'origin', 'main');
 
   runWard(['repo', 'add', remote, '--name', 'demo'], ws);
-  runWard(['project', 'open', 'agent-output'], ws);
+  runWard(['project', 'open', 'agent-output'], ws); // floor 2 — the standing project holds 1
   runWard(
-    ['task', 'open', 'json-output', '--project', '1', '--purpose', 'machine-readable output'],
+    ['task', 'open', 'json-output', '--project', '2', '--purpose', 'machine-readable output'],
     ws,
   );
   runWard(['worktree', 'create', 't1', '--repo', 'demo'], ws);

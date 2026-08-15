@@ -17,8 +17,10 @@ import { createWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
 
 test('the bootstrap loop: project → task → worktree → work → merge → delivered close', async () => {
-  await openProject(ws, 'agent-output');
-  const task = await openTask(ws, 'json-output', { floor: 1, purpose: 'machine-readable output' });
+  // Floor 1 is the standing workspace project, established at creation
+  // (design/0018-standing-workspace-project/); opened projects start at 2.
+  expect((await openProject(ws, 'agent-output')).floor).toBe(2);
+  const task = await openTask(ws, 'json-output', { floor: 2, purpose: 'machine-readable output' });
   expect(task.record.code).toBe('t1');
 
   const { record: wt } = await createWorktree(ws, 't1', 'demo');
@@ -44,8 +46,12 @@ test('the bootstrap loop: project → task → worktree → work → merge → d
   expect(sessions.map((s) => s.state)).toEqual(['closed']);
 
   const status = await statusReport(ws);
-  expect(status.workspace).toBe('closed');
-  expect(status.projects[0]?.derived).toBe('closed');
+  // The delivered arc reads closed; the workspace rollup stays active because
+  // the standing project is empty until its first stewardship task — the
+  // honest empty-container reading (design/0018-standing-workspace-project/).
+  expect(status.workspace).toBe('active');
+  expect(status.projects.find((p) => p.project.slug === 'agent-output')?.derived).toBe('closed');
+  expect(status.projects.find((p) => p.project.slug === 'workspace')?.derived).toBe('active');
 });
 
 test('a refused close mutates nothing: sessions stay open, worktrees stay', async () => {
@@ -80,11 +86,11 @@ test('unmerged local-only commits refuse a delivered close; abandoned discards t
 });
 
 test('floors are monotonic and never reused, even past a closed project', async () => {
-  await openProject(ws, 'first');
-  const t = await openTask(ws, 'only', { floor: 1 });
+  await openProject(ws, 'first'); // floor 2 — the standing project holds 1
+  const t = await openTask(ws, 'only', { floor: 2 });
   await closeTask(ws, t.record.code, 'abandoned');
-  expect((await openProject(ws, 'second')).floor).toBe(2);
-  expect((await openProject(ws, 'third')).floor).toBe(3);
+  expect((await openProject(ws, 'second')).floor).toBe(3);
+  expect((await openProject(ws, 'third')).floor).toBe(4);
 });
 
 test('task codes are unique among open tasks and reused only after close', async () => {
@@ -97,15 +103,17 @@ test('task codes are unique among open tasks and reused only after close', async
 });
 
 test('pause and resume route attention; the PR overlay follows the set', async () => {
-  await openProject(ws, 'p');
-  await openTask(ws, 'a', { floor: 1 });
+  await openProject(ws, 'p'); // floor 2 — the standing project holds 1
+  await openTask(ws, 'a', { floor: 2 });
+  const derivedP = async () =>
+    (await statusReport(ws)).projects.find((project) => project.project.slug === 'p');
   await setTaskState(ws, 't1', 'paused');
-  expect((await statusReport(ws)).projects[0]?.derived).toBe('paused');
+  expect((await derivedP())?.derived).toBe('paused');
   await setTaskState(ws, 't1', 'active');
   await addTaskPr(ws, 't1', 'https://example.com/pr/1');
-  const status = await statusReport(ws);
-  expect(status.projects[0]?.derived).toBe('active');
-  expect(status.projects[0]?.tasks[0]?.inReview).toBe(true);
+  const p = await derivedP();
+  expect(p?.derived).toBe('active');
+  expect(p?.tasks[0]?.inReview).toBe(true);
 });
 
 test('session ids are workspace-unique among open sessions; closed frees the discriminator', async () => {
