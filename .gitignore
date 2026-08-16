@@ -1,2 +1,6 @@
 .DS_Store
 node_modules/
+
+# Per-machine harness settings (local permission allowlists, personal paths) —
+# machine-specific by nature, never shared.
+.claude/settings.local.json

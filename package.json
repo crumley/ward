@@ -2,6 +2,7 @@
   "name": "ward",
   "version": "0.1.0",
   "description": "A CLI for operating opinionated, structured human+agent workspaces.",
+  "license": "MIT",
   "type": "module",
   "private": true,
   "bin": {

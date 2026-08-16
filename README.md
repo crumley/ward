@@ -40,3 +40,7 @@ repo. **Read it first.**
 Ward eats its own dog food: this repo uses a harness-neutral `AGENTS.md`, the same convention Ward
 standardizes on for workspace context
 ([`intent/01-concepts/05-context-loading.md`](intent/01-concepts/05-context-loading.md)).
+
+## License
+
+[MIT](LICENSE).
