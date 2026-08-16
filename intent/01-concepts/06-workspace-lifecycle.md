@@ -63,9 +63,9 @@ human or agent — needs for the workspace to be **self-sufficient** from its fi
   the same place.
 - **Version control over itself** — the workspace is tracked as a git repository
   ([`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §15) from creation, with
-  the ignore policy in place. _Why:_ the first thing worth rolling back is a bad migration (_Version
-  skew_, below); a workspace that becomes tracked only later has an untracked origin no rollback can
-  reach.
+  the ignore policy in place and the name of its own main line recorded (_The workspace's own main
+  line_, below). _Why:_ the first thing worth rolling back is a bad migration (_Version skew_,
+  below); a workspace that becomes tracked only later has an untracked origin no rollback can reach.
 - **Its repository set** — possibly empty (_The repository set_, below).
 
 **Re-running creation on an existing workspace converges; it does not clobber.** Creation is a
@@ -162,8 +162,9 @@ agreement between the record and the world**, and it is what a health check chec
 statement is the **classes of drift**, not a catalog of checks — the catalog will grow, exactly as
 the maintenance toil's does ([`03-work-lifecycle.md`](03-work-lifecycle.md)):
 
-- **Record ↔ disk** — an anchor the record knows that is no longer there, or a worktree on disk that
-  no record claims.
+- **Record ↔ disk** — an anchor the record knows that is no longer there, a worktree on disk that no
+  record claims, or the root checkout standing off the workspace's recorded main line (_The
+  workspace's own main line_, below).
 - **Record ↔ harness** — a session whose harness handle no longer resolves
   ([`02-sessions-and-lifecycle.md`](02-sessions-and-lifecycle.md)), so it can never be resumed.
 - **Record ↔ repository** — a registered repository whose remote moved or whose main line was
@@ -237,6 +238,19 @@ there**: a lifecycle verb invoked inside a stewardship copy addresses the enclos
 refuses plainly (§20). **Why:** a journal entry recorded on a stewardship branch would merge back
 into the main line as false history — the record corrupted by its own machinery (§17).
 
+**The main line's name is recorded — here too.** The repository set's rule — the main line is
+recorded from the repository, not assumed — applies to the workspace's own repository as well:
+creation records the name of the workspace's main line in the workspace's own record. **Why:** "the
+root checkout never leaves its main line" is an invariant, and an invariant nothing can check is a
+hope — with the name recorded, a root standing on another branch is ordinary drift (_Workspace
+integrity_, above), named by doctor rather than quietly redefining what the main line is. And
+because journal writes are the record advancing, they do not stop for it: **a journal commit landing
+off the recorded main line proceeds — refusing would wedge the record's own bookkeeping — but never
+silently** (§20). The verb says so as it writes, so the human learns at the moment it matters, not
+at the next health check. (This is the drift case, distinct from the stewardship copy above, which
+is refused: there the write would merge back into the main line as false history; here it lands on a
+branch history the human has chosen, and the honest response is a loud proceed.)
+
 **Completion is verified on the workspace's own main line.** A stewardship task's `delivered` close
 asserts what every delivered close asserts — the work reached the main line — and verifies it
 against the workspace repository's own history rather than any forge's word
@@ -264,10 +278,14 @@ the workspace rather than in it.
   ([`00-domain-model.md`](00-domain-model.md), derivation), the true reading of a workspace whose
   own arc has just begun.
 - **It never closes.** The workspace has no terminal state (_A workspace is not closed_, below), and
-  this is the one project whose arc _is_ the workspace's own — so it shares that rule, uniquely
-  among projects. Its identity is allocated like any project's
-  ([`00-domain-model.md`](00-domain-model.md), Identity); the concrete address form is
-  [`design/`](../../design/)'s.
+  this is the one project whose arc _is_ the workspace's own — the guaranteed instance of an
+  **ongoing project** ([`00-domain-model.md`](00-domain-model.md), Project). Its identity is
+  allocated like any project's ([`00-domain-model.md`](00-domain-model.md), Identity); the concrete
+  address form is [`design/`](../../design/)'s.
+- **And the rollup consequence is blessed, not accidental.** With a standing project in every
+  workspace, the workspace-level status derives `active` over an empty standing project — **a
+  workspace is never done being a workspace**, and the status now says so plainly instead of reading
+  `closed` between arcs. The derivation rule is untouched; this is its honest reading.
 - **It concentrates the workspace's own history in one place.** "What has been done _to_ this
   workspace?" — every upgrade adjudicated, every migration, every reflection adopted — is answered
   by one project's record, in the same place in every workspace (§3).
@@ -609,12 +627,15 @@ read as an omission rather than a decision.
   itself, traveling as work: a branch in a worktree of the workspace's own repository, the root
   checkout never leaving its main line, previewed, landed by the human's gated Ward-managed merge —
   a pull request only where a remote exists; the branch-and-merge boundary is the invariant); the
-  **stewardship copy** rule (reads serve preview; the journal never writes there); **completion
-  verified on the workspace's own history**; and the **migration record-keeping carve-out** (the
-  record writes that open and run a migration's own task are never blocked by the skew that task
-  fixes).
+  **stewardship copy** rule (reads serve preview; the journal never writes there); the **main line's
+  name recorded at creation** — a root standing elsewhere is drift doctor names, and a journal write
+  landing off the recorded line proceeds loudly, never silently; **completion verified on the
+  workspace's own history**; and the **migration record-keeping carve-out** (the record writes that
+  open and run a migration's own task are never blocked by the skew that task fixes).
 - **The standing workspace project** — one per workspace, established at creation, home of
-  stewardship work, the only project that never closes.
+  stewardship work, the guaranteed instance of an ongoing project — never closes, and the
+  workspace-level rollup reading `active` over it while empty is **blessed**: a workspace is never
+  done being a workspace.
 - **How a workspace evolves** — the **version stamp**; **update vs. migrate**; **composition first**
   (Ward's contribution and the human's separately addressable, Ward's ordered first, so most
   divergence never occurs) and the residue composition cannot separate; the **two tiers of installed
@@ -653,8 +674,9 @@ read as an omission rather than a decision.
   installed baseline is recorded and compared** to detect divergence (a fingerprint, a retained
   pristine copy, or a merge base); the contents of the workspace skill and the root `AGENTS.md`; the
   reconciliation skill's own procedure; and the **stewardship surface** — the preview and merge
-  verbs, stewardship branch naming, how a stewardship copy is recognized, and the standing workspace
-  project's concrete address. Planned in [`design/`](../../design/).
+  verbs, stewardship branch naming, how a stewardship copy is recognized, where the workspace
+  records its own main-line name, the form of the off-main-line surfacing at write time, and the
+  standing workspace project's concrete address. Planned in [`design/`](../../design/).
 
 ## Open questions
 

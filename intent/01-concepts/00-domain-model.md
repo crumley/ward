@@ -65,12 +65,17 @@ forward as Ward changes — is [`06-workspace-lifecycle.md`](06-workspace-lifecy
 A coherent body of work with its own definition of success: not just "are the tasks done" but "do
 they add up to the outcome the project was for." It is the natural scope for a managing persona that
 holds the whole picture. Projects may be heavyweight and durable, or **ad hoc and lightweight**.
+Some are **ongoing** — a body of work with no finish line, holding tasks for as long as its concern
+exists; nothing about a project requires it ever to close. The derivation (below) reads an ongoing
+project honestly: `active` while work is in flight or newly possible, and its floor is simply never
+retired.
 
 One project is **standing** in every workspace: the workspace's own — the home for work **on** the
-workspace itself (upgrades, migrations, reflection adoption), established at creation, and the only
-project that never closes because its arc is the workspace's, which has no terminal state. It passes
-the project test rather than bending it; the argument, and the stewardship work it houses, are
-[`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s (_The standing workspace project_).
+workspace itself (upgrades, migrations, reflection adoption), established at creation and never
+closing, because its arc is the workspace's, which has no terminal state — the guaranteed instance
+of an ongoing project (above). It passes the project test rather than bending it; the argument, and
+the stewardship work it houses, are [`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s (_The
+standing workspace project_).
 
 ### Task
 
@@ -185,8 +190,11 @@ rest of the arc — registration, adopt-or-clone, why containment — is
 
 The workspace's **own** repository is not a member of this set: it is registered nowhere, needs no
 remote and no separate canonical checkout — the workspace root **is** its main-line checkout, and it
-never leaves that main line. Stewardship worktrees branch from it directly; its two writers — the
-journal and stewardship — are [`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s.
+never leaves that main line, whose **name is recorded at creation like any repository's** (the
+recorded-not-assumed rule, applied to the workspace itself) — so a root moved off it is detectable
+drift, not a quiet redefinition of the main line. Stewardship worktrees branch from it directly; its
+two writers — the journal and stewardship — are
+[`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s.
 
 ## Status: recorded at the leaves, derived above
 
@@ -470,7 +478,8 @@ detours is the prime directive in miniature. (Mechanics and modes in `01-scopes-
 
 - **The containment hierarchy** — Workspace → Project → Task → Anchor → Room — and the
   _levels-are-elided-not-faked_ rule with its **per-level existence tests** (task as the universal
-  quantum; elision changes ceremony, never semantics).
+  quantum; elision changes ceremony, never semantics); that projects may be **ongoing** — no finish
+  line, never required to close.
 - **Anchors** — the scratch-medium/governed-record symmetry; the worktree (with its
   `deliverable | sandbox` **disposition**, fixed at creation — a sandbox never opens a PR; its
   repository possibly the workspace's own, the stewardship case) and the workdir; the

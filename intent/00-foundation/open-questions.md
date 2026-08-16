@@ -72,6 +72,20 @@ relevant slice (and reflected in tests and code).
 
 ## Recently resolved (kept briefly for context)
 
+- **Projects may be ongoing, and the workspace rollup's reading is blessed.** Some projects have no
+  finish line — nothing requires a project ever to close — and the standing workspace project is the
+  guaranteed instance. The consequence the standing-project build surfaced is chosen, not
+  accidental: the workspace-level status derives `active` over an empty standing project, because
+  **a workspace is never done being a workspace**; the derivation rule is untouched
+  ([`../01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md),
+  [`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)).
+- **The workspace records the name of its own main line.** The recorded-not-assumed rule reaches the
+  workspace's own repository: creation records the main-line name, making "the root never leaves its
+  main line" checkable — a root standing elsewhere is drift doctor names, and a journal write
+  landing off the recorded line proceeds loudly, never silently (refusing would wedge the record's
+  own bookkeeping; the stewardship copy remains the refused case). Raised as spec-feedback by the
+  stewardship-rails design entry
+  ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)).
 - **The workspace's own main line has two writers: journal and stewardship.** Ward's **journal** —
   one bookkeeping commit per lifecycle verb — lands on the workspace repository's main line directly
   (the record advancing, not work product); **stewardship** — deliberate change to the workspace
@@ -80,8 +94,8 @@ relevant slice (and reflected in tests and code).
   Ward-managed merge (a PR only where a remote exists; the branch-and-merge boundary is the
   invariant). The root checkout never leaves main; a **stewardship copy** serves reads but never
   takes journal writes; completion is verified on the workspace's own history; and stewardship work
-  lives in the **standing workspace project** — established at creation, the only project that never
-  closes ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)).
+  lives in the **standing workspace project** — established at creation, never closing
+  ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)).
 - **The workspace has a lifecycle of its own.** Creation as a deliberate located act and what it
   establishes (including the root `AGENTS.md` and Ward's workspace skill — the guidance an agent
   needs to work there); repository registration; preconditions (§3 is about the **record**, not the
