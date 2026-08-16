@@ -34,6 +34,7 @@ import {
   smallestFree,
 } from './scan.ts';
 import { readSessions } from './sessions.ts';
+import { workspaceMainLine } from './steward.ts';
 import { readTaskWorktrees } from './worktrees.ts';
 
 export interface OpenTaskOptions {
@@ -139,6 +140,17 @@ export async function closeTask(
   for (const worktree of worktrees) {
     validateTeardown(root, task.record, worktree, outcome);
   }
+  // The local delivered-close gate (design/0019-stewardship-worktrees/): a
+  // workspace-anchored worktree has no forge and no PR — its delivery claim
+  // is verified against the workspace repository's own history, before any
+  // teardown, exactly as 0012 verifies a merged PR against the main line.
+  if (outcome === 'delivered') {
+    for (const worktree of worktrees) {
+      if (worktree.source === 'workspace') {
+        steps.push(verifyWorkspaceReachability(root, worktree));
+      }
+    }
+  }
 
   const record = await withStoreLock(root, `task close ${code}`, async () => {
     // Re-resolve under the lock: a concurrent close of the same code loses
@@ -181,6 +193,9 @@ export async function closeTask(
   });
 
   for (const worktree of worktrees) {
+    // The workspace's own repository has no canonical checkout to refresh —
+    // the root already is its current main line.
+    if (worktree.repo === undefined) continue;
     await refreshRepositories(root, worktree.repo).catch(() => undefined);
   }
 
@@ -330,6 +345,54 @@ async function refreshOnce(
   return report;
 }
 
+// -- workspace-anchored reachability (design/0019-stewardship-worktrees/) --
+
+/**
+ * The delivered close of a stewardship worktree asserts what every delivered
+ * close asserts — the work reached the main line — and verifies it against
+ * the workspace repository's own history rather than any forge's word
+ * (intent/01-concepts/06-workspace-lifecycle.md, completion verified on the
+ * workspace's own main line). Unlike the forge path there is no trust to
+ * degrade to: the repository is the workspace itself, always local, so the
+ * question is always answerable — a tip that has not reached the main line
+ * refuses, before any teardown, with the landing verb as the remedy.
+ */
+function verifyWorkspaceReachability(root: string, worktree: WorktreeRecord): CloseStep {
+  const step = 'reachability';
+  const mainLine = workspaceMainLine(root);
+  const branchRef = git(root, 'rev-parse', '--verify', '--quiet', `refs/heads/${worktree.branch}`);
+  let tip: string;
+  if (branchRef.exitCode === 0) {
+    tip = branchRef.stdout.trim();
+  } else if (existsSync(join(root, worktree.path))) {
+    // The branch ref is gone but the worktree still stands (a detached copy):
+    // what teardown would destroy is its HEAD, so that is what must be proven.
+    tip = git(join(root, worktree.path), 'rev-parse', 'HEAD').stdout.trim();
+  } else {
+    return {
+      step,
+      detail:
+        `branch '${worktree.branch}' no longer exists and ${worktree.path} is gone — ` +
+        'nothing left to verify',
+    };
+  }
+  const short = tip.slice(0, 7);
+  if (git(root, 'merge-base', '--is-ancestor', tip, mainLine).exitCode === 0) {
+    return {
+      step,
+      detail:
+        `branch '${worktree.branch}' (tip ${short}) reaches ${mainLine} ` +
+        "in the workspace's own history",
+    };
+  }
+  throw new WardError(
+    `branch '${worktree.branch}' has not reached the workspace's main line — its tip ${short} ` +
+      `is not an ancestor of ${mainLine}, so a delivered close would tear down ` +
+      `${worktree.path} and strand the work. Land it first: ward workspace merge ` +
+      `${worktree.branch} — or close with --outcome abandoned to discard it.`,
+  );
+}
+
 /**
  * The §18 gate, checked before anything mutates: a dirty tree or, for a task
  * with no PR record, a branch ahead of the main line refuses a delivered
@@ -344,13 +407,17 @@ function validateTeardown(
   if (outcome !== 'delivered') return;
   const absolute = join(root, worktree.path);
   if (!existsSync(absolute)) return;
-  const canonical = join(root, 'repos', worktree.repo);
   if (git(absolute, 'status', '--porcelain').stdout.trim() !== '') {
     throw new WardError(
       `${worktree.path} has uncommitted changes — commit or discard them, ` +
         'or close with --outcome abandoned to discard the worktree',
     );
   }
+  // A workspace-anchored worktree's delivery question is owned by the
+  // reachability gate (verifyWorkspaceReachability) — stronger than the
+  // ahead-of-main heuristic, and never forge-shaped.
+  if (worktree.repo === undefined) return;
+  const canonical = join(root, 'repos', worktree.repo);
   if (task.prs.length === 0 && aheadOfMain(canonical, worktree.branch)) {
     throw new WardError(
       `${worktree.path} holds commits that never reached a PR — open one and link it ` +
@@ -362,7 +429,10 @@ function validateTeardown(
 function removeWorktree(root: string, worktree: WorktreeRecord, outcome: Outcome): CloseStep {
   const step = `worktree ${worktree.path}`;
   const absolute = join(root, worktree.path);
-  const canonical = join(root, 'repos', worktree.repo);
+  // Teardown speaks to the repository the worktree is of: the canonical
+  // checkout for a registered one, the workspace root itself for the
+  // stewardship case (design/0019-stewardship-worktrees/).
+  const canonical = worktree.repo === undefined ? root : join(root, 'repos', worktree.repo);
   if (!existsSync(absolute)) {
     git(canonical, 'worktree', 'prune');
     return { step, detail: 'already gone' };

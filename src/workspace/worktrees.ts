@@ -12,6 +12,7 @@ import { repositoryRecordType, type WorktreeRecord, worktreeRecordType } from '.
 import { git, gitOrThrow } from './git.ts';
 import { type RefreshReport, refreshRepositories } from './repos.ts';
 import { commitRecords, type FoundTask, readTasks, resolveOpenTask } from './scan.ts';
+import { workspaceMainLine } from './steward.ts';
 
 export async function createWorktree(
   root: string,
@@ -78,6 +79,78 @@ export async function createWorktree(
   return { task, record };
 }
 
+// -- the workspace as a worktree source -------------------------------------
+// The stewardship case (design/0019-stewardship-worktrees/): a task anchored
+// in a worktree of the workspace's OWN repository — the record itself, checked
+// out as a candidate. The workspace repo is registered nowhere (the root IS
+// its main-line checkout — intent/01-concepts/00-domain-model.md), so this
+// path takes no repository name: the source is the workspace, said plainly.
+// Git fully supports a linked worktree at an ignored path inside its own
+// repository's working tree; only tracked files materialize, so the copy
+// holds the record and none of the checkouts the record describes.
+
+export async function createWorkspaceWorktree(
+  root: string,
+  taskCode: string,
+  branchInput?: string,
+): Promise<{ task: FoundTask; record: WorktreeRecord }> {
+  const task = await resolveOpenTask(root, taskCode);
+  // A namespaced default: stewardship branches sit beside the journal in the
+  // workspace's own `git branch`, and the prefix is what announces them there.
+  const branch = branchInput ?? `steward/${task.record.slug}`;
+  const fileName = `workspace--${branch.replaceAll('/', '-')}`;
+  const recordType = worktreeRecordType(task.dir, fileName);
+  const path = `worktrees/${task.record.code}-${branch.replaceAll('/', '-')}`;
+  const mainLine = workspaceMainLine(root);
+
+  let record: WorktreeRecord;
+  if (existsSync(join(root, recordType.relPath))) {
+    record = (await readDocument(root, recordType)).data;
+    if (existsSync(join(root, record.path))) {
+      return { task, record }; // convergent: already there
+    }
+  } else {
+    record = {
+      type: 'worktree',
+      source: 'workspace',
+      branch,
+      disposition: 'deliverable',
+      path,
+      createdAt: new Date().toISOString(),
+    };
+    // Record first, worktree second — the reverse of the repository path, on
+    // purpose: the branch then materializes a copy that includes its own
+    // worktree record (the candidate describes itself), and starts zero
+    // commits behind the main line instead of one. A worktree-add failure
+    // after the commit leaves a record whose path is missing — legible in
+    // `worktree list` and converged by re-running this verb (§6).
+    await withStoreLock(root, `worktree create ${taskCode}`, async () => {
+      await writeDocument(root, recordType, {
+        data: record,
+        body:
+          `Worktree of the workspace's own repository on branch \`${branch}\`, occupied for ` +
+          `task \`${task.record.code}\` — the stewardship case: its changes reach the ` +
+          "workspace's main line only through the gated merge (`ward workspace merge`).",
+      });
+      commitRecords(root, `Create stewardship worktree ${branch} for task ${taskCode}`, task.dir);
+    });
+  }
+  // Establish (or re-establish) the worktree: a branch that already exists is
+  // checked out where it stands — its commits are work, never recreated. A
+  // stale registration left by a hand-deleted directory is pruned first.
+  git(root, 'worktree', 'prune');
+  const branchExists =
+    git(root, 'rev-parse', '--verify', '--quiet', `refs/heads/${record.branch}`).exitCode === 0;
+  const args = branchExists
+    ? ['worktree', 'add', join(root, record.path), record.branch]
+    : ['worktree', 'add', '-b', record.branch, join(root, record.path), mainLine];
+  const result = git(root, ...args);
+  if (result.exitCode !== 0) {
+    throw new WardError(`git worktree add failed: ${result.stderr.trim()}`);
+  }
+  return { task, record };
+}
+
 // -- rebase ---------------------------------------------------------------
 // The other half of the freshening toil (design/0011-worktree-rebase/):
 // bring a task's worktrees up to date with their repository's main line.
@@ -133,20 +206,29 @@ async function rebaseOne(
       detail: `checked out '${current || '(detached)'}' where the record names '${record.branch}' — refusing to rebase`,
     };
   }
-  // The canonical checkout learns the tip first — the same refresh worktree
-  // creation runs. Worktrees share the repository's object store, so a
-  // refreshed origin/<mainLine> is current here too; a refresh that refuses
-  // or fails refuses the rebase, rather than rebasing onto a stale tip.
-  const refresh = await refreshRepo(root, record.repo, refreshed);
-  if (refresh.outcome === 'dirty' || refresh.outcome === 'failed') {
-    const why =
-      refresh.outcome === 'dirty'
-        ? `repos/${record.repo} is dirty — the canonical checkout is never worked in directly; clean it first`
-        : `cannot refresh repos/${record.repo}: ${refresh.detail}`;
-    return { record, outcome: 'failed', detail: why };
+  // The rebase target. For a registered repository, the canonical checkout
+  // learns the tip first — the same refresh worktree creation runs; worktrees
+  // share the repository's object store, so a refreshed origin/<mainLine> is
+  // current here too, and a refresh that refuses or fails refuses the rebase
+  // rather than rebasing onto a stale tip. The workspace's own repository
+  // needs no refresh — the root checkout IS its current main line, one object
+  // store away — so the target is that branch itself
+  // (design/0019-stewardship-worktrees/).
+  let target: string;
+  if (record.repo === undefined) {
+    target = workspaceMainLine(root);
+  } else {
+    const refresh = await refreshRepo(root, record.repo, refreshed);
+    if (refresh.outcome === 'dirty' || refresh.outcome === 'failed') {
+      const why =
+        refresh.outcome === 'dirty'
+          ? `repos/${record.repo} is dirty — the canonical checkout is never worked in directly; clean it first`
+          : `cannot refresh repos/${record.repo}: ${refresh.detail}`;
+      return { record, outcome: 'failed', detail: why };
+    }
+    const mainLine = (await readDocument(root, repositoryRecordType(record.repo))).data.mainLine;
+    target = `origin/${mainLine}`;
   }
-  const mainLine = (await readDocument(root, repositoryRecordType(record.repo))).data.mainLine;
-  const target = `origin/${mainLine}`;
   if (git(worktree, 'merge-base', '--is-ancestor', target, 'HEAD').exitCode === 0) {
     return { record, outcome: 'current', detail: `already atop ${target}` };
   }
@@ -302,15 +384,32 @@ async function freshnessOf(root: string, record: WorktreeRecord): Promise<Worktr
         `where the record names '${record.branch}')`,
     };
   }
-  if (!existsSync(join(root, repositoryRecordType(record.repo).relPath))) {
-    return {
-      record,
-      freshness: 'unreadable',
-      detail: `unreadable (no repository record for '${record.repo}')`,
-    };
+  // The comparison target: origin/<mainLine> for a registered repository (as
+  // fresh as the last `repo refresh`); for the workspace's own repository the
+  // root checkout is the main line itself, always current by construction
+  // (design/0019-stewardship-worktrees/).
+  let target: string;
+  if (record.repo === undefined) {
+    try {
+      target = workspaceMainLine(root);
+    } catch (error) {
+      return {
+        record,
+        freshness: 'unreadable',
+        detail: `unreadable (${(error as Error).message})`,
+      };
+    }
+  } else {
+    if (!existsSync(join(root, repositoryRecordType(record.repo).relPath))) {
+      return {
+        record,
+        freshness: 'unreadable',
+        detail: `unreadable (no repository record for '${record.repo}')`,
+      };
+    }
+    const mainLine = (await readDocument(root, repositoryRecordType(record.repo))).data.mainLine;
+    target = `origin/${mainLine}`;
   }
-  const mainLine = (await readDocument(root, repositoryRecordType(record.repo))).data.mainLine;
-  const target = `origin/${mainLine}`;
   const count = git(worktree, 'rev-list', '--count', `HEAD..${target}`);
   const behindBy = Number.parseInt(count.stdout.trim(), 10);
   if (count.exitCode !== 0 || Number.isNaN(behindBy)) {
