@@ -57,6 +57,15 @@ export const projectSchema = z.object({
   type: z.literal('project'),
   floor: z.number().int().positive(),
   slug: z.string().min(1),
+  /**
+   * The standing workspace project's marker
+   * (design/0018-standing-workspace-project/): present-and-true on exactly
+   * the one project that is the workspace's own — the home for stewardship
+   * work, the project that never closes. Written only by workspace creation;
+   * `ward project open` never writes it, which is what keeps the standing
+   * project single. Optional so every pre-0018 record stays valid unchanged.
+   */
+  standing: z.literal(true).optional(),
   state: workStateSchema,
   openedAt: z.string().min(1),
   closedAt: z.string().min(1).optional(),

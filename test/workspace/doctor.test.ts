@@ -142,6 +142,37 @@ for (const row of claudeRows) {
   });
 }
 
+// -- standing project (design/0018-standing-workspace-project/) ------------
+// Creation establishes the workspace's own project; a pre-0018 workspace
+// lacks it — the same migration-target shape as the missing CLAUDE.md above:
+// info carrying the converge remedy, doctor never creating it itself, and no
+// state ever failing the run.
+
+test('standing project — fresh workspace: ok, naming its floor', async () => {
+  const ws = join(scratch, 'ws-standing-ok');
+  await createWorkspace(ws);
+  const report = await runDoctor(ws);
+  const finding = report.workspace.find((f) => f.check === 'standing project');
+  expect(finding).toMatchObject({
+    severity: 'ok',
+    message: expect.stringContaining('floor 1 (projects/1-workspace/)'),
+  });
+  expect(report.healthy).toBe(true);
+});
+
+test('standing project — absent (the pre-0018 shape): info carrying the converge remedy', async () => {
+  const ws = join(scratch, 'ws-standing-absent');
+  await createWorkspace(ws);
+  rmSync(join(ws, 'projects', '1-workspace'), { recursive: true });
+  const report = await runDoctor(ws);
+  const finding = report.workspace.find((f) => f.check === 'standing project');
+  expect(finding).toMatchObject({
+    severity: 'info',
+    message: expect.stringContaining(`ward workspace create ${ws}`),
+  });
+  expect(report.healthy).toBe(true); // report-only: absence is a bridge, not a failure
+});
+
 // -- setup ----------------------------------------------------------------
 // Each test points WARD_GH at its own fake; afterEach restores the hermetic
 // pin so no later test inherits a fake (or reaches the machine's real gh).

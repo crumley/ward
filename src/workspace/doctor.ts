@@ -19,6 +19,7 @@ import {
 import { sha256OfFile } from './baselines.ts';
 import { git, gitAvailable, gitIdentityConfigured, hasCommits } from './git.ts';
 import { discoverWorkspace, IGNORE_LINES, inspectClaudeGuidance } from './layout.ts';
+import { findStandingProject } from './projects.ts';
 import { checkoutPath, listRepositoryNames } from './repos.ts';
 
 export type Severity = 'ok' | 'info' | 'warn' | 'error';
@@ -151,6 +152,7 @@ async function workspaceChecks(root: string): Promise<Finding[]> {
 
   findings.push(...(await baselineChecks(root)));
   findings.push(claudeGuidanceFinding(root));
+  findings.push(await standingProjectFinding(root));
 
   const ignoreFile = join(root, '.gitignore');
   const ignoreLines = existsSync(ignoreFile)
@@ -337,6 +339,42 @@ function claudeGuidanceFinding(root: string): Finding {
           'CLAUDE.md is a symlink aimed away from AGENTS.md — your own arrangement, kept; ' +
           'Claude Code reads that target instead of the workspace guidance',
       };
+  }
+}
+
+/**
+ * The standing workspace project
+ * (design/0018-standing-workspace-project/): established by creation, so its
+ * absence is the pre-0018 workspace — a migration target exactly like 0017's
+ * missing CLAUDE.md, bridged the same way: info, never warn (nothing is
+ * broken, ordinary work is unaffected), carrying the converge remedy doctor
+ * itself never runs (report-only, the repair posture). An unreadable project
+ * record surfaces as error through the same conversion checkDocument applies
+ * — doctor reports what it cannot read rather than guessing past it.
+ */
+async function standingProjectFinding(root: string): Promise<Finding> {
+  const check = 'standing project';
+  try {
+    const standing = await findStandingProject(root);
+    return standing === undefined
+      ? {
+          check,
+          severity: 'info',
+          message:
+            'no standing workspace project — the home for upgrades, migrations, and ' +
+            `reflections; establish it: ward workspace create ${root} ` +
+            '(a future workspace upgrade will carry it)',
+        }
+      : {
+          check,
+          severity: 'ok',
+          message: `floor ${standing.record.floor} (${standing.dir}/) — the workspace's own project`,
+        };
+  } catch (error) {
+    if (error instanceof WardError) {
+      return { check, severity: 'error', message: error.message };
+    }
+    throw error;
   }
 }
 

@@ -15,10 +15,11 @@ export async function openProject(root: string, slugInput: string): Promise<Proj
   // floor scan must not race another writer's, and the commit must not race
   // another commit (design/0013-telemetry-and-serialized-writes/).
   return withStoreLock(root, `project open ${slug}`, async () => {
-    // Floors are monotonic over every project ever opened — closed floors are
-    // retired, never reused, because they root historical room addresses.
-    const floors = projectDirs(root).map(floorOf);
-    const floor = floors.length === 0 ? 1 : Math.max(...floors) + 1;
+    // This record never carries the standing marker — creation is the only
+    // writer of `standing: true`, so `project open` cannot mint a second
+    // standing project, whatever slug it is given
+    // (design/0018-standing-workspace-project/).
+    const floor = nextFloor(root);
     const dir = `projects/${floor}-${slug}`;
     const record: ProjectRecord = {
       type: 'project',
@@ -38,9 +39,34 @@ export async function openProject(root: string, slugInput: string): Promise<Proj
   });
 }
 
+/**
+ * The next floor number: monotonic over every project ever opened — closed
+ * floors are retired, never reused, because they root historical room
+ * addresses (intent/01-concepts/00-domain-model.md, Identity). Callers hold
+ * the store lock; the scan must not race another writer's.
+ */
+export function nextFloor(root: string): number {
+  const floors = projectDirs(root).map(floorOf);
+  return floors.length === 0 ? 1 : Math.max(...floors) + 1;
+}
+
+/** The slug creation gives the standing workspace project. */
+export const STANDING_PROJECT_SLUG = 'workspace';
+
 export interface FoundProject {
   readonly dir: string;
   readonly record: ProjectRecord;
+}
+
+/**
+ * The standing workspace project, resolved by its marker — never by slug: a
+ * human may open an ordinary project named anything, and only the record
+ * creation marked is the workspace's own
+ * (design/0018-standing-workspace-project/). Undefined on a pre-0018
+ * workspace until a converge run establishes it.
+ */
+export async function findStandingProject(root: string): Promise<FoundProject | undefined> {
+  return (await readProjects(root)).find((project) => project.record.standing === true);
 }
 
 export async function readProjects(root: string): Promise<FoundProject[]> {

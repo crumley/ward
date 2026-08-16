@@ -50,7 +50,7 @@ test('workspace create --json: the establishment report, one document alone on s
   expect(result.exitCode).toBe(0);
   const report = validated('workspace create', workspaceCreateShape, result.stdout);
   expect(report.root).toBe(ws);
-  expect(report.steps.length).toBe(11);
+  expect(report.steps.length).toBe(12); // 0018 added the standing-project step
   expect(report.steps.every((step) => step.outcome === 'established')).toBe(true);
 });
 
@@ -84,16 +84,17 @@ test('repo refresh --json: one row per repository; the empty set is []', () => {
 });
 
 test('project open --json: the opened floor', () => {
+  // Floor 1 is the standing workspace project, established by create (0018).
   const result = runWard(['project', 'open', 'agent-output', '--json'], ws);
   expect(result.exitCode).toBe(0);
   const project = validated('project open', projectOpenShape, result.stdout);
-  expect(project).toMatchObject({ floor: 1, slug: 'agent-output', state: 'active' });
+  expect(project).toMatchObject({ floor: 2, slug: 'agent-output', state: 'active' });
   expect(typeof project.openedAt).toBe('string');
 });
 
 test('task open --json: the record as written, optional fields omitted', () => {
   const result = runWard(
-    ['task', 'open', 'json-output', '--project', '1', '--purpose', 'mutation reports', '--json'],
+    ['task', 'open', 'json-output', '--project', '2', '--purpose', 'mutation reports', '--json'],
     ws,
   );
   expect(result.exitCode).toBe(0);
@@ -102,7 +103,7 @@ test('task open --json: the record as written, optional fields omitted', () => {
     code: 't1',
     slug: 'json-output',
     state: 'active',
-    floor: 1,
+    floor: 2,
     purpose: 'mutation reports',
     prs: [],
   });

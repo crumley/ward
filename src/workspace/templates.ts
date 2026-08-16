@@ -16,7 +16,10 @@ operated with the \`ward\` CLI and tracked in git.
 - \`catalog.md\` — the artifact types this workspace can produce.
 - \`CLAUDE.md\` — a relative symlink to this AGENTS.md, so a harness that looks for that name
   reads the same guidance: one source of truth, nothing duplicated to drift.
-- \`projects/\` — project records (floors), each with its tasks nested beside it.
+- \`projects/\` — project records (floors), each with its tasks nested beside it. One is the
+  standing workspace project (slug \`workspace\`, marked \`standing: true\` in its record): the
+  home for work on the workspace itself — upgrades, migrations, reflections — and the one
+  project that never closes.
 - \`tasks/\` — bare tasks opened directly under the workspace (levels are elided, not faked).
 - \`repositories/\` — the records of registered repositories (one document each).
 - \`repos/\` — canonical checkouts of registered repositories, kept fresh and never worked in

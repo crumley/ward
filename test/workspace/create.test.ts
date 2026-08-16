@@ -8,11 +8,12 @@ import { join } from 'node:path';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { git } from '../../src/workspace/git.ts';
 import { discoverWorkspace } from '../../src/workspace/layout.ts';
+import { findStandingProject, openProject } from '../../src/workspace/projects.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
 
 test('a fresh create establishes every step and commits once', async () => {
   const report = await createWorkspace(root);
-  expect(report.steps.map((step) => step.outcome)).toEqual(Array(11).fill('established'));
+  expect(report.steps.map((step) => step.outcome)).toEqual(Array(12).fill('established'));
   for (const file of [
     'workspace.md',
     'catalog.md',
@@ -21,6 +22,7 @@ test('a fresh create establishes every step and commits once', async () => {
     '.gitignore',
     '.ward/README.md',
     '.ward/baselines.md',
+    'projects/1-workspace/project.md',
   ]) {
     expect(existsSync(join(root, file))).toBe(true);
   }
@@ -31,7 +33,7 @@ test('a fresh create establishes every step and commits once', async () => {
 test('re-running create is satisfied throughout and changes nothing', async () => {
   await createWorkspace(root);
   const report = await createWorkspace(root);
-  expect(report.steps.map((step) => step.outcome)).toEqual(Array(11).fill('satisfied'));
+  expect(report.steps.map((step) => step.outcome)).toEqual(Array(12).fill('satisfied'));
   expect(commitCount()).toBe(1);
   expect(git(root, 'status', '--porcelain').stdout).toBe('');
 });
@@ -108,6 +110,41 @@ test('a pre-existing CLAUDE.md — regular file or link aimed elsewhere — is n
   report = await createWorkspace(root);
   expect(report.steps.find((step) => step.step === 'claude guidance')?.outcome).toBe('satisfied');
   expect(readlinkSync(join(root, 'CLAUDE.md'))).toBe('somewhere/else.md');
+});
+
+// The standing workspace project (design/0018-standing-workspace-project/):
+// creation establishes the one project for work on the workspace itself,
+// identified by the `standing` marker in its typed front matter — which only
+// creation writes, so `project open` cannot mint a second one.
+test('creation establishes the standing project on floor 1, marked in its record', async () => {
+  await createWorkspace(root);
+  const standing = await findStandingProject(root);
+  expect(standing?.dir).toBe('projects/1-workspace');
+  expect(standing?.record).toMatchObject({
+    floor: 1,
+    slug: 'workspace',
+    standing: true,
+    state: 'active',
+  });
+  // An ordinary project — whatever it is named — never carries the marker.
+  const ordinary = await openProject(root, 'workspace-lookalike');
+  expect(ordinary.floor).toBe(2);
+  expect(ordinary.standing).toBeUndefined();
+  expect((await findStandingProject(root))?.dir).toBe('projects/1-workspace');
+});
+
+test('a removed standing project is re-established on converge at the next floor, never a reused one', async () => {
+  await createWorkspace(root);
+  rmSync(join(root, 'projects', '1-workspace'), { recursive: true });
+  git(root, 'commit', '-am', 'human removed the standing project');
+  await openProject(root, 'theirs'); // now shaped like a pre-0018 workspace: floor 1 is theirs
+  const report = await createWorkspace(root);
+  const outcomes = new Map(report.steps.map((step) => [step.step, step.outcome]));
+  expect(outcomes.get('standing project')).toBe('established');
+  expect((await findStandingProject(root))?.dir).toBe('projects/2-workspace');
+  // The converge commit holds exactly the re-established record.
+  const committed = git(root, 'show', '--name-only', '--format=', 'HEAD').stdout.trim();
+  expect(committed).toBe('projects/2-workspace/project.md');
 });
 
 test('a customized artifact is left alone, even when dirty', async () => {
