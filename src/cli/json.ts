@@ -23,6 +23,7 @@ import type {
 import type { CreateReport } from '../workspace/create.ts';
 import type { DoctorReport } from '../workspace/doctor.ts';
 import type { AddReport, RefreshReport } from '../workspace/repos.ts';
+import type { RestoreReport } from '../workspace/restore.ts';
 import type { StatusReport, TaskStatus } from '../workspace/status.ts';
 import type { MergeReport } from '../workspace/steward.ts';
 import type { CloseReport } from '../workspace/tasks.ts';
@@ -45,6 +46,7 @@ import type {
   TaskShape,
   WorkspaceCreateShape,
   WorkspaceMergeShape,
+  WorkspaceRestoreShape,
   WorktreeCreateShape,
   WorktreeListShape,
   WorktreeRebaseShape,
@@ -290,6 +292,28 @@ export function workspaceMergeJson(report: MergeReport): WorkspaceMergeShape {
     commits: report.commits,
     ...(report.mergeCommit === undefined ? {} : { mergeCommit: report.mergeCommit }),
     ...(report.diffStat === undefined ? {} : { diffStat: report.diffStat }),
+  };
+}
+
+/** The restore report (design/0021-restore-from-clone/) — per-item rows, sessions named. */
+export function workspaceRestoreJson(report: RestoreReport): WorkspaceRestoreShape {
+  return {
+    root: report.root,
+    repositories: report.repositories.map((item) => ({
+      name: item.name,
+      outcome: item.outcome,
+      detail: item.detail,
+    })),
+    worktrees: report.worktrees.map((item) => ({
+      task: item.taskCode,
+      ...(item.record.repo === undefined ? {} : { repo: item.record.repo }),
+      ...(item.record.source === undefined ? {} : { source: item.record.source }),
+      branch: item.record.branch,
+      path: item.record.path,
+      outcome: item.outcome,
+      detail: item.detail,
+    })),
+    sessions: { open: report.sessions.open, detail: report.sessions.detail },
   };
 }
 

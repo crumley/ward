@@ -24,6 +24,7 @@ import {
   type RefreshReport,
   refreshRepositories,
 } from '../workspace/repos.ts';
+import { restoreConverged, restoreWorkspace } from '../workspace/restore.ts';
 import { readTasks } from '../workspace/scan.ts';
 import { scopeFromCwd } from '../workspace/scope.ts';
 import { closeSession, openSession } from '../workspace/sessions.ts';
@@ -62,6 +63,7 @@ import {
   taskMutationJson,
   workspaceCreateJson,
   workspaceMergeJson,
+  workspaceRestoreJson,
   worktreeCreateJson,
   worktreeListJson,
   worktreeRebaseJson,
@@ -122,7 +124,22 @@ const workspaceMerge = command(
   },
 );
 
-const workspace = command('workspace', or(workspaceCreate, workspaceMerge), {
+// Restore (design/0021-restore-from-clone/): the record re-materializing the
+// world after a fresh clone — canonical checkouts re-cloned, worktrees
+// re-created from surviving branches, lost work named. The converse of every
+// other verb: it changes disk to match the record and writes no record.
+const workspaceRestore = command(
+  'restore',
+  object({
+    action: constant('workspace-restore'),
+    json: jsonFlag(),
+  }),
+  {
+    brief: message`Re-materialize repos/ and worktrees/ from the record (a fresh clone's verb).`,
+  },
+);
+
+const workspace = command('workspace', or(workspaceCreate, workspaceMerge, workspaceRestore), {
   brief: message`Operate on a workspace.`,
 });
 
@@ -362,6 +379,9 @@ try {
       case 'workspace-merge':
         await cmdWorkspaceMerge(result.branch, result.preview, result.json);
         break;
+      case 'workspace-restore':
+        await cmdWorkspaceRestore(result.json);
+        break;
       case 'repo-add':
         await cmdRepoAdd(result.source, result.name, result.json);
         break;
@@ -600,6 +620,71 @@ async function cmdWorkspaceMerge(branch: string, preview: boolean, json: boolean
   );
   if (report.diffStat !== undefined && report.diffStat !== '') console.log(pc.dim(report.diffStat));
   console.log(pc.dim(`merge with: ward workspace merge ${report.branch}`));
+}
+
+/**
+ * Restore (design/0021-restore-from-clone/): per-item rows in three groups —
+ * repositories, worktrees, sessions — mirroring the report. A `lost` or
+ * `failed` row keeps the exit-1 posture with the rows still rendered (the
+ * repo-refresh convention): the verb completed and reported; the verdict
+ * lives in $?. Loud rows stay undimmed — a lost branch must not whisper.
+ */
+async function cmdWorkspaceRestore(json: boolean): Promise<void> {
+  const report = await restoreWorkspace(requireMutableWorkspace());
+  const converged = restoreConverged(report);
+  if (json) {
+    printJson(workspaceRestoreJson(report));
+    if (!converged) process.exit(1);
+    return;
+  }
+  console.log(`Restoring workspace at ${pc.bold(report.root)}\n`);
+  console.log(pc.bold('  repositories'));
+  if (report.repositories.length === 0) {
+    console.log(pc.dim('    none registered'));
+  }
+  for (const item of report.repositories) {
+    console.log(`    ${renderRestore(item.outcome)}  ${item.name} ${pc.dim(`(${item.detail})`)}`);
+  }
+  console.log(pc.bold('  worktrees'));
+  if (report.worktrees.length === 0) {
+    console.log(pc.dim('    none recorded on open tasks'));
+  }
+  for (const item of report.worktrees) {
+    const source = item.record.repo ?? 'workspace';
+    const identity = `${item.record.path} ${pc.dim(`(${source}:${item.record.branch})`)}`;
+    const loud = item.outcome === 'lost' || item.outcome === 'failed';
+    const detail = loud ? ` — ${item.detail}` : ` ${pc.dim(`(${item.detail})`)}`;
+    console.log(`    ${renderRestore(item.outcome)}  ${identity}${detail}`);
+  }
+  console.log(pc.bold('  sessions'));
+  console.log(
+    report.sessions.open === 0
+      ? pc.dim(`    ${report.sessions.detail}`)
+      : `    ${report.sessions.detail}`,
+  );
+  const count = (outcome: string) =>
+    [...report.repositories, ...report.worktrees].filter((item) => item.outcome === outcome).length;
+  if (converged) {
+    console.log(
+      `\nWorkspace restored — ${count('restored')} restored, ${count('satisfied')} already satisfied.`,
+    );
+    return;
+  }
+  console.log(
+    `\n${pc.red('Restore incomplete')} — ${count('restored')} restored, ` +
+      `${count('satisfied')} satisfied, ${count('lost')} lost, ${count('failed')} failed; ` +
+      'the rows above carry the remedies.',
+  );
+  process.exit(1);
+}
+
+function renderRestore(outcome: 'restored' | 'satisfied' | 'lost' | 'failed'): string {
+  return {
+    restored: pc.green(' restored'),
+    satisfied: pc.dim('satisfied'),
+    lost: pc.red('     lost'),
+    failed: pc.red('   failed'),
+  }[outcome];
 }
 
 /** Resolve the enclosing workspace or fail legibly — for verbs that need one. */

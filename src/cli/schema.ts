@@ -301,6 +301,45 @@ export const workspaceMergeShape = z.strictObject({
 });
 export type WorkspaceMergeShape = z.infer<typeof workspaceMergeShape>;
 
+/**
+ * `workspace restore` (design/0021-restore-from-clone/): the record
+ * re-materializing the world — one row per registered repository and per
+ * worktree of a non-closed task, plus the honest note about open session
+ * records that cannot be live here. `lost` is a worktree-only outcome: the
+ * recorded branch is reachable nowhere, the record is kept, nothing is
+ * fabricated. A `lost` or `failed` row keeps the exit-1 posture with the
+ * document still emitted (the repo-refresh convention).
+ */
+export const workspaceRestoreShape = z.strictObject({
+  root: z.string(),
+  repositories: z.array(
+    z.strictObject({
+      name: z.string(),
+      outcome: z.enum(['restored', 'satisfied', 'failed']),
+      detail: z.string(),
+    }),
+  ),
+  worktrees: z.array(
+    z.strictObject({
+      task: z.string(),
+      /** The registered repository — present exactly when the source is one (0019). */
+      repo: z.string().optional(),
+      /** 'workspace': a worktree of the workspace's own repository (0019). */
+      source: z.enum(['workspace']).optional(),
+      branch: z.string(),
+      path: z.string(),
+      outcome: z.enum(['restored', 'satisfied', 'lost', 'failed']),
+      detail: z.string(),
+    }),
+  ),
+  /** Open session records found in the record — named, never restored. */
+  sessions: z.strictObject({
+    open: z.number().int().nonnegative(),
+    detail: z.string(),
+  }),
+});
+export type WorkspaceRestoreShape = z.infer<typeof workspaceRestoreShape>;
+
 /** The session record as written — shared by `session open` and `session close`. */
 export const sessionMutationShape = z.strictObject({
   id: z.string(),
@@ -353,6 +392,7 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'session open': sessionMutationShape,
   'session close': sessionMutationShape,
   'workspace merge': workspaceMergeShape,
+  'workspace restore': workspaceRestoreShape,
 };
 
 /** The whole `--json` contract: read verbs first, then the mutation verbs. */
