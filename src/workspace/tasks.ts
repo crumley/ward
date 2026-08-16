@@ -34,7 +34,7 @@ import {
   smallestFree,
 } from './scan.ts';
 import { readSessions } from './sessions.ts';
-import { workspaceMainLine } from './steward.ts';
+import { resolveWorkspaceMainLine } from './steward.ts';
 import { readTaskWorktrees } from './worktrees.ts';
 
 export interface OpenTaskOptions {
@@ -359,7 +359,9 @@ async function refreshOnce(
  */
 function verifyWorkspaceReachability(root: string, worktree: WorktreeRecord): CloseStep {
   const step = 'reachability';
-  const mainLine = workspaceMainLine(root);
+  // Resolved through the recorded name (0020): a drifted root must not make
+  // "reached the main line" mean "reached whatever branch the root is on".
+  const mainLine = resolveWorkspaceMainLine(root);
   const branchRef = git(root, 'rev-parse', '--verify', '--quiet', `refs/heads/${worktree.branch}`);
   let tip: string;
   if (branchRef.exitCode === 0) {

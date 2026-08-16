@@ -27,6 +27,7 @@ import type { RestoreReport } from '../workspace/restore.ts';
 import type { StatusReport, TaskStatus } from '../workspace/status.ts';
 import type { MergeReport } from '../workspace/steward.ts';
 import type { CloseReport } from '../workspace/tasks.ts';
+import type { UpgradeReport } from '../workspace/upgrade.ts';
 import type { RebaseReport, WorktreeListing, WorktreeStatus } from '../workspace/worktrees.ts';
 import type {
   DoctorShape,
@@ -47,6 +48,7 @@ import type {
   WorkspaceCreateShape,
   WorkspaceMergeShape,
   WorkspaceRestoreShape,
+  WorkspaceUpgradeShape,
   WorktreeCreateShape,
   WorktreeListShape,
   WorktreeRebaseShape,
@@ -314,6 +316,26 @@ export function workspaceRestoreJson(report: RestoreReport): WorkspaceRestoreSha
       detail: item.detail,
     })),
     sessions: { open: report.sessions.open, detail: report.sessions.detail },
+  };
+}
+
+/** The deterministic upgrade's report (design/0020-deterministic-upgrade/). */
+export function workspaceUpgradeJson(report: UpgradeReport): WorkspaceUpgradeShape {
+  return {
+    task: report.task,
+    branch: report.branch,
+    path: report.path,
+    outcome: report.outcome,
+    mainLine: { name: report.mainLine.name, action: report.mainLine.action },
+    stamp: { wardVersion: report.stamp.wardVersion, action: report.stamp.action },
+    baselines: report.baselines,
+    artifacts: report.artifacts.map((artifact) => ({
+      path: artifact.path,
+      action: artifact.action,
+      detail: artifact.detail,
+    })),
+    residue: [...report.residue],
+    ...(report.commit === undefined ? {} : { commit: report.commit }),
   };
 }
 

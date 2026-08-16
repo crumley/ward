@@ -8,11 +8,13 @@
 // line). This module holds the pieces every other module leans on: reading
 // the workspace's own main line, recognizing a stewardship copy, and the
 // gated merge itself.
-import { lstatSync } from 'node:fs';
+import { lstatSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
+import { splitFrontMatter } from '../store/frontmatter.ts';
 import { withStoreLock } from '../store/lock.ts';
+import { workspaceRecordSchema, workspaceRecordType } from '../store/types.ts';
 import { git } from './git.ts';
 
 /**
@@ -33,6 +35,63 @@ export function workspaceMainLine(root: string): string {
     );
   }
   return branch;
+}
+
+/**
+ * The RECORDED name of the workspace's own main line — the workspace record's
+ * `mainLine` field (design/0020-deterministic-upgrade/), written at creation
+ * from the repository and backfilled on older workspaces by converge or
+ * upgrade. Undefined on a pre-0020 record, and undefined when the record
+ * cannot be read: the callers here are write paths that must not fail on a
+ * broken record doctor already names — absence degrades to the live read
+ * below, never to a crash. Read synchronously so the journal's commit path
+ * (commitRecords) can consult it.
+ */
+export function recordedWorkspaceMainLine(root: string): string | undefined {
+  try {
+    const text = readFileSync(join(root, workspaceRecordType.relPath), 'utf8');
+    const raw = splitFrontMatter(text, workspaceRecordType.relPath);
+    const parsed = workspaceRecordSchema.safeParse(Bun.YAML.parse(raw.frontMatter));
+    return parsed.success ? parsed.data.mainLine : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The main line every stewardship mechanism should aim at: the recorded name
+ * when the record carries one (the record is the truth — a root standing on
+ * another branch is drift, not a new main line), the live root-checkout read
+ * otherwise (the pre-0020 record has nothing better, and the root checkout IS
+ * the main-line checkout by intent). Branching, rebase targets, freshness,
+ * and the delivered-close gate all resolve through this, so a drifted root
+ * cannot silently retarget them.
+ */
+export function resolveWorkspaceMainLine(root: string): string {
+  return recordedWorkspaceMainLine(root) ?? workspaceMainLine(root);
+}
+
+/**
+ * The loud proceed (intent/01-concepts/06-workspace-lifecycle.md, the main
+ * line's name is recorded): a journal commit landing while the root stands
+ * off the recorded main line PROCEEDS — refusing would wedge the record's own
+ * bookkeeping — but never silently. Called by the journal's commit path as it
+ * writes; the note goes to stderr, so under --json stdout still carries one
+ * document alone (the 0006 derivation-echo precedent). Inside a stewardship
+ * copy there is nothing to say: commits there are stewardship work landing on
+ * a branch by design, and the copy guard already keeps the journal out.
+ */
+export function warnJournalOffMainLine(root: string): void {
+  if (stewardshipEnclosure(root) !== null) return;
+  const recorded = recordedWorkspaceMainLine(root);
+  if (recorded === undefined) return;
+  const actual = git(root, 'symbolic-ref', '--short', 'HEAD').stdout.trim();
+  if (actual === '' || actual === recorded) return;
+  console.error(
+    `note: this record commit landed on branch '${actual}', off the recorded main line ` +
+      `'${recorded}' — the journal proceeds on the branch history you have checked out, ` +
+      `never silently; return the root with: git switch ${recorded}`,
+  );
 }
 
 /**
@@ -117,6 +176,19 @@ export async function mergeWorkspaceBranch(
 ): Promise<MergeReport> {
   refuseStewardshipCopy(root); // the merge is the enclosing workspace's act
   const mainLine = workspaceMainLine(root);
+  // The merge advances the branch the root stands on — that is its mechanism.
+  // With a recorded main-line name (design/0020-deterministic-upgrade/), a
+  // root standing elsewhere would carry stewardship into the wrong history:
+  // unlike the journal's loud proceed, this is deliberate change landing, so
+  // it refuses with the way back rather than proceeding.
+  const recorded = recordedWorkspaceMainLine(root);
+  if (recorded !== undefined && recorded !== mainLine) {
+    throw new WardError(
+      `the workspace root stands on '${mainLine}' but the recorded main line is '${recorded}' — ` +
+        'the merge lands on the branch the root is on, which would carry stewardship into the ' +
+        `wrong history. Return the root first: git switch ${recorded}`,
+    );
+  }
   if (branch === mainLine) {
     throw new WardError(`'${branch}' is the workspace's main line itself — nothing to merge`);
   }

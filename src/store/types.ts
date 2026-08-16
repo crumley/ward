@@ -8,6 +8,18 @@ export const workspaceRecordSchema = z.object({
   type: z.literal('workspace'),
   name: z.string().min(1),
   wardVersion: z.string().min(1),
+  /**
+   * The name of the workspace's own main line — recorded from the repository
+   * at creation (or backfilled by converge/upgrade), never assumed, exactly
+   * as a registered repository's is (design/0020-deterministic-upgrade/;
+   * intent/01-concepts/06-workspace-lifecycle.md, the main line's name is
+   * recorded — here too). With it recorded, a root checkout standing on
+   * another branch is ordinary record↔disk drift doctor can name, instead of
+   * a quiet redefinition of what the main line is (0019's SF-001, resolved).
+   * Optional so every pre-0020 record stays valid unchanged; doctor points
+   * the absence at the upgrade that records it.
+   */
+  mainLine: z.string().min(1).optional(),
   createdAt: z.string().min(1),
 });
 export type WorkspaceRecord = z.infer<typeof workspaceRecordSchema>;

@@ -12,7 +12,11 @@ import { repositoryRecordType, type WorktreeRecord, worktreeRecordType } from '.
 import { git, gitOrThrow } from './git.ts';
 import { type RefreshReport, refreshRepositories } from './repos.ts';
 import { commitRecords, type FoundTask, readTasks, resolveOpenTask } from './scan.ts';
-import { workspaceMainLine } from './steward.ts';
+// The workspace's own main line resolves through the recorded name when the
+// record carries one (design/0020-deterministic-upgrade/): a root standing on
+// another branch is drift, and branching, rebase, and freshness must not
+// silently follow it there.
+import { resolveWorkspaceMainLine } from './steward.ts';
 
 export async function createWorktree(
   root: string,
@@ -101,7 +105,7 @@ export async function createWorkspaceWorktree(
   const fileName = `workspace--${branch.replaceAll('/', '-')}`;
   const recordType = worktreeRecordType(task.dir, fileName);
   const path = `worktrees/${task.record.code}-${branch.replaceAll('/', '-')}`;
-  const mainLine = workspaceMainLine(root);
+  const mainLine = resolveWorkspaceMainLine(root);
 
   let record: WorktreeRecord;
   if (existsSync(join(root, recordType.relPath))) {
@@ -216,7 +220,7 @@ async function rebaseOne(
   // (design/0019-stewardship-worktrees/).
   let target: string;
   if (record.repo === undefined) {
-    target = workspaceMainLine(root);
+    target = resolveWorkspaceMainLine(root);
   } else {
     const refresh = await refreshRepo(root, record.repo, refreshed);
     if (refresh.outcome === 'dirty' || refresh.outcome === 'failed') {
@@ -391,7 +395,7 @@ async function freshnessOf(root: string, record: WorktreeRecord): Promise<Worktr
   let target: string;
   if (record.repo === undefined) {
     try {
-      target = workspaceMainLine(root);
+      target = resolveWorkspaceMainLine(root);
     } catch (error) {
       return {
         record,

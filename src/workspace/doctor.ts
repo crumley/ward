@@ -171,8 +171,9 @@ async function workspaceChecks(root: string): Promise<Finding[]> {
         },
   );
 
+  const tracked = existsSync(join(root, '.git')) && hasCommits(root);
   findings.push(
-    existsSync(join(root, '.git')) && hasCommits(root)
+    tracked
       ? { check: 'version control', severity: 'ok', message: 'workspace tracks itself in git' }
       : {
           check: 'version control',
@@ -180,6 +181,9 @@ async function workspaceChecks(root: string): Promise<Finding[]> {
           message: 'workspace is not tracked in git — re-run ward workspace create to converge',
         },
   );
+  if (record !== null && tracked) {
+    findings.push(mainLineFinding(root, record.mainLine));
+  }
 
   findings.push(storeLockFinding(root));
   findings.push(...telemetryFindings(root));
@@ -380,6 +384,65 @@ async function standingProjectFinding(root: string): Promise<Finding> {
     }
     throw error;
   }
+}
+
+/**
+ * The workspace's own main line (design/0020-deterministic-upgrade/): its
+ * name is recorded in the workspace record — from the repository, never
+ * assumed, the same rule every registered repository lives by — so a root
+ * checkout standing elsewhere is ordinary record↔disk drift with a name,
+ * instead of quietly redefining what the main line is (0019's SF-001). An
+ * unrecorded name is the pre-0020 workspace: info, never warn — nothing is
+ * broken, every rail falls back to the live root read — carrying the upgrade
+ * and converge remedies doctor itself never runs. Drift is warn, not error:
+ * the journal proceeds loudly and the rails aim at the recorded name, so the
+ * workspace still operates; the remedy is one `git switch`.
+ */
+function mainLineFinding(root: string, recorded: string | undefined): Finding {
+  const check = 'workspace main line';
+  if (recorded === undefined) {
+    return {
+      check,
+      severity: 'info',
+      message:
+        'no recorded main-line name — created by an older ward; a workspace upgrade records ' +
+        `it (ward workspace upgrade TASK), as does re-running ward workspace create ${root}`,
+    };
+  }
+  if (git(root, 'rev-parse', '--verify', '--quiet', `refs/heads/${recorded}`).exitCode !== 0) {
+    return {
+      check,
+      severity: 'warn',
+      message:
+        `the record names '${recorded}' but no such branch exists in the workspace's own ` +
+        'repository — record↔disk drift; restore or rename the branch, or converge the record',
+    };
+  }
+  const head = git(root, 'symbolic-ref', '--short', 'HEAD').stdout.trim();
+  if (head === '') {
+    return {
+      check,
+      severity: 'warn',
+      message:
+        `the root checkout is detached, off the recorded main line '${recorded}' — ` +
+        `journal commits are landing off the main line; return it: git switch ${recorded}`,
+    };
+  }
+  if (head !== recorded) {
+    return {
+      check,
+      severity: 'warn',
+      message:
+        `the root checkout stands on '${head}' but the recorded main line is '${recorded}' — ` +
+        'record↔disk drift: journal commits are landing off the main line (loudly), and the ' +
+        `gated merge refuses until it is back; return it: git switch ${recorded}`,
+    };
+  }
+  return {
+    check,
+    severity: 'ok',
+    message: `the root checkout stands on '${recorded}', the recorded main line`,
+  };
 }
 
 /** Record↔disk and record↔repository drift for one registered repository. */

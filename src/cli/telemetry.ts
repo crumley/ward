@@ -21,7 +21,7 @@ import { callerIsAgent } from './caller.ts';
  * unknown first word is recorded as itself (bounded), so nothing is guessed.
  */
 const VERB_TREE: Record<string, readonly string[]> = {
-  workspace: ['create', 'merge', 'restore'],
+  workspace: ['create', 'merge', 'restore', 'upgrade'],
   repo: ['add', 'refresh', 'list'],
   project: ['open', 'list'],
   task: ['open', 'list', 'pause', 'resume', 'pr', 'close'],
