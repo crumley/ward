@@ -43,13 +43,23 @@ export async function readDocument<T>(root: string, type: DocumentType<T>): Prom
   return { data: result.data, body: raw.body };
 }
 
+/**
+ * The exact bytes a document writes to disk. Exported so the artifact lineage
+ * (design/0020-deterministic-upgrade/) can know what a generated installed
+ * artifact's current default looks like through the very serializer that
+ * installs it — one code path, so the two can never disagree.
+ */
+export function renderDocument<T>(type: DocumentType<T>, document: Document<T>): string {
+  const data = type.schema.parse(document.data);
+  return joinFrontMatter(Bun.YAML.stringify(data, null, 2), document.body);
+}
+
 export async function writeDocument<T>(
   root: string,
   type: DocumentType<T>,
   document: Document<T>,
 ): Promise<void> {
-  const data = type.schema.parse(document.data);
-  const text = joinFrontMatter(Bun.YAML.stringify(data, null, 2), document.body);
+  const text = renderDocument(type, document);
   const file = join(root, type.relPath);
   await mkdir(dirname(file), { recursive: true });
   const tmpDir = join(root, '.ward', 'tmp');

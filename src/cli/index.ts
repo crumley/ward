@@ -39,6 +39,7 @@ import {
 } from '../workspace/status.ts';
 import { mergeWorkspaceBranch, refuseStewardshipCopy } from '../workspace/steward.ts';
 import { addTaskPr, closeTask, openTask, setTaskState } from '../workspace/tasks.ts';
+import { upgradeWorkspace } from '../workspace/upgrade.ts';
 import {
   createWorkspaceWorktree,
   createWorktree,
@@ -64,6 +65,7 @@ import {
   workspaceCreateJson,
   workspaceMergeJson,
   workspaceRestoreJson,
+  workspaceUpgradeJson,
   worktreeCreateJson,
   worktreeListJson,
   worktreeRebaseJson,
@@ -139,9 +141,28 @@ const workspaceRestore = command(
   },
 );
 
-const workspace = command('workspace', or(workspaceCreate, workspaceMerge, workspaceRestore), {
-  brief: message`Operate on a workspace.`,
-});
+// The deterministic upgrade (design/0020-deterministic-upgrade/): a tool act
+// that writes into TASK's stewardship worktree — untouched installed
+// artifacts to current defaults, missing ones installed, customized ones left
+// byte-untouched and named as reconciliation residue — then previewed and
+// landed through the 0019 rails (workspace merge, the gated act).
+const workspaceUpgrade = command(
+  'upgrade',
+  object({
+    action: constant('workspace-upgrade'),
+    task: optional(argument(string({ metavar: 'TASK' }))),
+    json: jsonFlag(),
+  }),
+  {
+    brief: message`Upgrade installed artifacts deterministically, into TASK's workspace worktree.`,
+  },
+);
+
+const workspace = command(
+  'workspace',
+  or(workspaceCreate, workspaceMerge, workspaceRestore, workspaceUpgrade),
+  { brief: message`Operate on a workspace.` },
+);
 
 const repoAdd = command(
   'add',
@@ -382,6 +403,15 @@ try {
       case 'workspace-restore':
         await cmdWorkspaceRestore(result.json);
         break;
+      case 'workspace-upgrade': {
+        const target = await resolveTaskTarget(
+          result.task,
+          'ward workspace upgrade TASK',
+          result.json,
+        );
+        await cmdWorkspaceUpgrade(target.root, target.code, result.json);
+        break;
+      }
       case 'repo-add':
         await cmdRepoAdd(result.source, result.name, result.json);
         break;
@@ -685,6 +715,62 @@ function renderRestore(outcome: 'restored' | 'satisfied' | 'lost' | 'failed'): s
     lost: pc.red('     lost'),
     failed: pc.red('   failed'),
   }[outcome];
+}
+
+/**
+ * The deterministic upgrade's rendering: one row per installed artifact with
+ * the mechanical action taken, then the record lines, then — set apart — the
+ * reconciliation residue and the next verbs (preview, merge): the tool's part
+ * ends at naming what only a human or agent can merge (0020).
+ */
+async function cmdWorkspaceUpgrade(root: string, code: string, json: boolean): Promise<void> {
+  const report = await upgradeWorkspace(root, code);
+  if (json) {
+    printJson(workspaceUpgradeJson(report));
+    return;
+  }
+  console.log(
+    `Upgrading workspace via task ${pc.bold(report.task)} ` +
+      pc.dim(`(branch ${report.branch}, in ${report.path})`) +
+      '\n',
+  );
+  for (const artifact of report.artifacts) {
+    console.log(
+      `  ${renderUpgradeAction(artifact.action)}  ${artifact.path} ${pc.dim(`(${artifact.detail})`)}`,
+    );
+  }
+  console.log(
+    `  ${renderUpgradeAction(report.mainLine.action === 'recorded' ? 'upgraded' : 'current')}  ` +
+      `main line ${pc.dim(`('${report.mainLine.name}' ${report.mainLine.action})`)}`,
+  );
+  console.log(
+    `  ${renderUpgradeAction(report.baselines === 'updated' ? 'upgraded' : 'current')}  ` +
+      `baselines ${pc.dim(`(${report.baselines})`)}`,
+  );
+  if (report.residue.length > 0) {
+    console.log(`\n${pc.bold('reconciliation residue')} — yours (or an agent's) to merge:`);
+    for (const path of report.residue) {
+      console.log(`  ${pc.yellow('!')} ${path} ${pc.dim('— left byte-untouched')}`);
+    }
+  }
+  if (report.outcome === 'current') {
+    console.log(`\n${pc.dim('nothing to upgrade — everything already current')}`);
+    return;
+  }
+  console.log(
+    `\ncommitted ${pc.bold(report.commit ?? '?')} on ${report.branch} — preview and land it:` +
+      `\n  ward workspace merge ${report.branch} --preview` +
+      `\n  ward workspace merge ${report.branch}`,
+  );
+}
+
+function renderUpgradeAction(action: 'upgraded' | 'installed' | 'current' | 'kept'): string {
+  return {
+    upgraded: pc.green(' upgraded'),
+    installed: pc.green('installed'),
+    current: pc.dim('  current'),
+    kept: pc.yellow('     kept'),
+  }[action];
 }
 
 /** Resolve the enclosing workspace or fail legibly — for verbs that need one. */

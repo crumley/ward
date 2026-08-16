@@ -19,6 +19,7 @@ import { sha256OfFile } from './baselines.ts';
 import { git, gitAvailable, gitOrThrow, hasCommits } from './git.ts';
 import { IGNORE_LINES, inspectClaudeGuidance, MARKER_DIR, SCOPE_DIRS } from './layout.ts';
 import { findStandingProject, nextFloor, STANDING_PROJECT_SLUG } from './projects.ts';
+import { warnJournalOffMainLine, workspaceMainLine } from './steward.ts';
 import {
   AGENTS_MD,
   CATALOG_BODY,
@@ -75,6 +76,7 @@ export async function createWorkspace(path: string): Promise<CreateReport> {
     steps.push(await establishStandingProject(ctx));
     steps.push(await establishBaselines(ctx));
     steps.push(establishGitRepository(ctx));
+    steps.push(await establishMainLine(ctx));
     steps.push(establishCommit(ctx));
   });
   return { root, steps };
@@ -294,6 +296,34 @@ function establishGitRepository(ctx: CreateContext): StepReport {
   return { step, outcome: 'established', detail: '.git/' };
 }
 
+/**
+ * Record the name of the workspace's own main line in the workspace record —
+ * read from the repository, never assumed, the same rule the repository set
+ * follows (intent/01-concepts/06-workspace-lifecycle.md, the main line's name
+ * is recorded — here too; design/0020-deterministic-upgrade/). Runs after the
+ * git step because the name is the repository's to give (a fresh `git init`
+ * already has a symbolic HEAD to read), and before the commit so the run's
+ * one commit carries it. On converge, a record that already names its main
+ * line is left alone even when the root stands elsewhere: that disagreement
+ * is drift for doctor to name, not for creation to silently re-record.
+ */
+async function establishMainLine(ctx: CreateContext): Promise<StepReport> {
+  const step = 'workspace main line';
+  const existing = await readDocument(ctx.root, workspaceRecordType);
+  if (existing.data.mainLine !== undefined) {
+    return { step, outcome: 'satisfied', detail: existing.data.mainLine };
+  }
+  const branch = workspaceMainLine(ctx.root);
+  await writeDocument(ctx.root, workspaceRecordType, {
+    data: { ...existing.data, mainLine: branch },
+    body: existing.body,
+  });
+  if (!ctx.establishedPaths.includes(workspaceRecordType.relPath)) {
+    ctx.establishedPaths.push(workspaceRecordType.relPath);
+  }
+  return { step, outcome: 'established', detail: branch };
+}
+
 function establishCommit(ctx: CreateContext): StepReport {
   const step = 'workspace history';
   if (!hasCommits(ctx.root)) {
@@ -308,6 +338,9 @@ function establishCommit(ctx: CreateContext): StepReport {
     // edits are never swept into a convergence commit.
     gitOrThrow(ctx.root, 'add', '--', ...ctx.establishedPaths);
     gitOrThrow(ctx.root, 'commit', '-m', `Converge Ward workspace (ward ${pkg.version})`);
+    // The convergence commit is a journal write like any other: landing off
+    // the recorded main line proceeds loudly, never silently (0020).
+    warnJournalOffMainLine(ctx.root);
     return { step, outcome: 'established', detail: 'convergence commit' };
   }
   return { step, outcome: 'satisfied', detail: 'nothing to commit' };

@@ -10,6 +10,7 @@ import { WardError } from '../errors.ts';
 import { readDocument } from '../store/document.ts';
 import { type TaskRecord, taskRecordType } from '../store/types.ts';
 import { gitOrThrow } from './git.ts';
+import { warnJournalOffMainLine } from './steward.ts';
 
 /** Workspace-relative project directories, e.g. `projects/1-agent-output`. */
 export function projectDirs(root: string): string[] {
@@ -72,10 +73,17 @@ export function requireSlug(value: string): string {
   return value;
 }
 
-/** Commit record changes under the given workspace-relative paths. */
+/**
+ * Commit record changes under the given workspace-relative paths — the
+ * journal advancing. A journal commit landing while the root stands off the
+ * recorded main line proceeds (refusing would wedge the record's own
+ * bookkeeping) but never silently: the verb surfaces it as it writes
+ * (design/0020-deterministic-upgrade/; intent/01-concepts/06-workspace-lifecycle.md).
+ */
 export function commitRecords(root: string, subject: string, ...relPaths: string[]): void {
   gitOrThrow(root, 'add', '-A', '--', ...relPaths);
   gitOrThrow(root, 'commit', '-m', `${subject} (ward ${pkg.version})`);
+  warnJournalOffMainLine(root);
 }
 
 function subdirs(dir: string): string[] {

@@ -13,7 +13,7 @@ import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
 
 test('a fresh create establishes every step and commits once', async () => {
   const report = await createWorkspace(root);
-  expect(report.steps.map((step) => step.outcome)).toEqual(Array(12).fill('established'));
+  expect(report.steps.map((step) => step.outcome)).toEqual(Array(13).fill('established'));
   for (const file of [
     'workspace.md',
     'catalog.md',
@@ -33,7 +33,7 @@ test('a fresh create establishes every step and commits once', async () => {
 test('re-running create is satisfied throughout and changes nothing', async () => {
   await createWorkspace(root);
   const report = await createWorkspace(root);
-  expect(report.steps.map((step) => step.outcome)).toEqual(Array(12).fill('satisfied'));
+  expect(report.steps.map((step) => step.outcome)).toEqual(Array(13).fill('satisfied'));
   expect(commitCount()).toBe(1);
   expect(git(root, 'status', '--porcelain').stdout).toBe('');
 });

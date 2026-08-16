@@ -340,6 +340,43 @@ export const workspaceRestoreShape = z.strictObject({
 });
 export type WorkspaceRestoreShape = z.infer<typeof workspaceRestoreShape>;
 
+/**
+ * `workspace upgrade` (design/0020-deterministic-upgrade/): the deterministic
+ * upgrade's report — one row per installed artifact naming the mechanical
+ * action taken, the reconciliation residue (customized artifacts left
+ * byte-untouched, named for a human or agent to merge), the recorded
+ * main-line name, the stamp, and the commit landed on the stewardship branch.
+ * A refusal (no workspace worktree, dirty copy) emits no document (0015).
+ */
+export const workspaceUpgradeShape = z.strictObject({
+  task: z.string(),
+  branch: z.string(),
+  /** Workspace-relative path of the stewardship worktree written into. */
+  path: z.string(),
+  outcome: z.enum(['upgraded', 'current']),
+  mainLine: z.strictObject({
+    name: z.string(),
+    action: z.enum(['recorded', 'already-recorded']),
+  }),
+  stamp: z.strictObject({
+    wardVersion: z.string(),
+    action: z.enum(['advanced', 'current']),
+  }),
+  baselines: z.enum(['updated', 'current']),
+  artifacts: z.array(
+    z.strictObject({
+      path: z.string(),
+      action: z.enum(['upgraded', 'installed', 'current', 'kept']),
+      detail: z.string(),
+    }),
+  ),
+  /** Paths left byte-untouched because their content is the human's own. */
+  residue: z.array(z.string()),
+  /** The upgrade commit on the stewardship branch (short) — when one landed. */
+  commit: z.string().optional(),
+});
+export type WorkspaceUpgradeShape = z.infer<typeof workspaceUpgradeShape>;
+
 /** The session record as written — shared by `session open` and `session close`. */
 export const sessionMutationShape = z.strictObject({
   id: z.string(),
@@ -393,6 +430,7 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'session close': sessionMutationShape,
   'workspace merge': workspaceMergeShape,
   'workspace restore': workspaceRestoreShape,
+  'workspace upgrade': workspaceUpgradeShape,
 };
 
 /** The whole `--json` contract: read verbs first, then the mutation verbs. */
