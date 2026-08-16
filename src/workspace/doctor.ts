@@ -21,6 +21,8 @@ import { git, gitAvailable, gitIdentityConfigured, hasCommits } from './git.ts';
 import { discoverWorkspace, IGNORE_LINES, inspectClaudeGuidance } from './layout.ts';
 import { findStandingProject } from './projects.ts';
 import { checkoutPath, listRepositoryNames } from './repos.ts';
+import { readTasks } from './scan.ts';
+import { readTaskWorktrees } from './worktrees.ts';
 
 export type Severity = 'ok' | 'info' | 'warn' | 'error';
 
@@ -185,6 +187,8 @@ async function workspaceChecks(root: string): Promise<Finding[]> {
   for (const name of listRepositoryNames(root)) {
     findings.push(...(await repositoryChecks(root, name)));
   }
+
+  findings.push(...(await worktreeChecks(root)));
 
   return findings;
 }
@@ -394,7 +398,9 @@ async function repositoryChecks(root: string, name: string): Promise<Finding[]> 
     findings.push({
       check,
       severity: 'warn',
-      message: `canonical checkout repos/${name}/ is missing — run: ward repo add ${record.remote}`,
+      message:
+        `canonical checkout repos/${name}/ is missing — re-materialize it: ` +
+        `ward workspace restore (or: ward repo add ${record.remote})`,
     });
     return findings;
   }
@@ -420,6 +426,54 @@ async function repositoryChecks(root: string, name: string): Promise<Finding[]> 
     severity: 'ok',
     message: `checkout present, tracking ${record.mainLine}`,
   });
+  return findings;
+}
+
+/**
+ * Record↔disk drift for the worktrees of non-closed tasks
+ * (design/0021-restore-from-clone/): each record names repo (or the
+ * workspace), branch, and path, and a fresh clone — or a hand-deleted
+ * directory — has the record without the world. One finding per worktree,
+ * the repository idiom: present is ok, missing is warn naming the
+ * re-materializing verb. Doctor reports; restore is the remedy — the repair
+ * posture keeps them separate verbs. Closed tasks are not asked: their
+ * worktrees settled at the gated close, and reporting a correct teardown as
+ * drift would manufacture noise (the 0016 posture).
+ */
+async function worktreeChecks(root: string): Promise<Finding[]> {
+  const findings: Finding[] = [];
+  try {
+    for (const task of await readTasks(root)) {
+      if (task.record.state === 'closed') continue;
+      for (const record of await readTaskWorktrees(root, task.dir)) {
+        const check = `worktree ${record.path}`;
+        const source =
+          record.repo === undefined ? "the workspace's own repository" : `repos/${record.repo}`;
+        findings.push(
+          existsSync(join(root, record.path))
+            ? {
+                check,
+                severity: 'ok',
+                message: `on disk — branch '${record.branch}' of ${source}`,
+              }
+            : {
+                check,
+                severity: 'warn',
+                message:
+                  `missing on disk — task ${task.record.code} anchors branch ` +
+                  `'${record.branch}' of ${source} there; re-materialize it: ` +
+                  'ward workspace restore',
+              },
+        );
+      }
+    }
+  } catch (error) {
+    if (error instanceof WardError) {
+      findings.push({ check: 'worktrees', severity: 'error', message: error.message });
+    } else {
+      throw error;
+    }
+  }
   return findings;
 }
 
