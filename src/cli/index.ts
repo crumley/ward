@@ -71,6 +71,7 @@ import {
   worktreeRebaseJson,
 } from './json.ts';
 import { allSchemasJson, verbSchemaJson } from './schema.ts';
+import { repoName, schemaVerb, sessionId, taskCode, workspaceBranch } from './suggest.ts';
 import { recordInvocation } from './telemetry.ts';
 
 // Local usage telemetry, armed before anything can exit: one row per
@@ -115,7 +116,7 @@ const workspaceMerge = command(
   'merge',
   object({
     action: constant('workspace-merge'),
-    branch: argument(string({ metavar: 'BRANCH' })),
+    branch: argument(workspaceBranch()),
     preview: option('--preview', {
       description: message`Show what would merge (commit count and diff stat) without merging.`,
     }),
@@ -150,7 +151,7 @@ const workspaceUpgrade = command(
   'upgrade',
   object({
     action: constant('workspace-upgrade'),
-    task: optional(argument(string({ metavar: 'TASK' }))),
+    task: optional(argument(taskCode('TASK'))),
     json: jsonFlag(),
   }),
   {
@@ -179,7 +180,7 @@ const repoRefresh = command(
   'refresh',
   object({
     action: constant('repo-refresh'),
-    name: optional(argument(string({ metavar: 'NAME' }))),
+    name: optional(argument(repoName())),
     json: jsonFlag(),
   }),
   { brief: message`Fetch and fast-forward canonical checkouts to their main lines.` },
@@ -233,7 +234,7 @@ const task = command(
       'pause',
       object({
         action: constant('task-pause'),
-        code: optional(argument(string({ metavar: 'CODE' }))),
+        code: optional(argument(taskCode('CODE'))),
         json: jsonFlag(),
       }),
       { brief: message`Set a task down, resumable. CODE is inferred inside a task's worktree.` },
@@ -242,7 +243,7 @@ const task = command(
       'resume',
       object({
         action: constant('task-resume'),
-        code: optional(argument(string({ metavar: 'CODE' }))),
+        code: optional(argument(taskCode('CODE'))),
         json: jsonFlag(),
       }),
       { brief: message`Pick a paused task back up. CODE is inferred inside a task's worktree.` },
@@ -260,7 +261,7 @@ const task = command(
         }),
         object({
           action: constant('task-pr'),
-          code: argument(string({ metavar: 'CODE' })),
+          code: argument(taskCode('CODE')),
           url: argument(string({ metavar: 'URL' })),
           json: jsonFlag(),
         }),
@@ -271,7 +272,7 @@ const task = command(
       'close',
       object({
         action: constant('task-close'),
-        code: argument(string({ metavar: 'CODE' })),
+        code: argument(taskCode('CODE')),
         outcome: withDefault(
           option('--outcome', choice(['delivered', 'abandoned'])),
           'delivered' as const,
@@ -291,8 +292,8 @@ const worktree = command(
       'create',
       object({
         action: constant('worktree-create'),
-        task: optional(argument(string({ metavar: 'TASK' }))),
-        repo: optional(option('--repo', string({ metavar: 'NAME' }))),
+        task: optional(argument(taskCode('TASK'))),
+        repo: optional(option('--repo', repoName())),
         // The workspace's own repository is registered nowhere and has no name
         // in the repository set, so it is addressed plainly rather than by a
         // faked registration (design/0019-stewardship-worktrees/).
@@ -310,7 +311,7 @@ const worktree = command(
       'rebase',
       object({
         action: constant('worktree-rebase'),
-        task: optional(argument(string({ metavar: 'TASK' }))),
+        task: optional(argument(taskCode('TASK'))),
         json: jsonFlag(),
       }),
       {
@@ -331,7 +332,7 @@ const session = command(
       'open',
       object({
         action: constant('session-open'),
-        task: optional(argument(string({ metavar: 'TASK' }))),
+        task: optional(argument(taskCode('TASK'))),
         purpose: option('--purpose', string({ metavar: 'TEXT' })),
         handle: optional(option('--handle', string({ metavar: 'TEXT' }))),
         dir: optional(option('--dir', string({ metavar: 'PATH' }))),
@@ -343,7 +344,7 @@ const session = command(
       'close',
       object({
         action: constant('session-close'),
-        id: argument(string({ metavar: 'ID' })),
+        id: argument(sessionId()),
         json: jsonFlag(),
       }),
       { brief: message`Close a session record; closed stays closed.` },
@@ -368,7 +369,7 @@ const schema = command(
   'schema',
   object({
     action: constant('schema'),
-    verb: multiple(argument(string({ metavar: 'VERB' }))),
+    verb: multiple(argument(schemaVerb())),
   }),
   {
     brief: message`Emit the JSON Schema of a --json read verb's output (all verbs when none given).`,
@@ -383,13 +384,25 @@ const version = object({
 
 // Bare `ward` (no arguments) keeps its 0001 behavior — version plus a help
 // pointer — handled before optique, whose or-of-commands rejects empty input.
+// Completion never reaches here: both the script generation and the per-TAB
+// callback carry `completion <shell> …` (design/0022-shell-completion/).
 if (process.argv.length === 2) {
   printVersion(false);
   process.exit(0);
 }
 
 const cli = or(workspace, repo, project, task, worktree, session, status, doctor, schema, version);
-const result = run(cli, { programName: 'ward', help: 'option' });
+// `completion: 'command'` adds `ward completion <shell>` — the script
+// generator AND the per-TAB callback the generated script calls back into, so
+// suggestions are derived from this very tree and can never drift from it
+// (design/0022-shell-completion/). Awaited because the dynamic suggesters in
+// suggest.ts read the record asynchronously, which makes the whole parser
+// async-mode; nothing else about parsing changes.
+const result = await run(cli, {
+  programName: 'ward',
+  help: 'option',
+  completion: 'command',
+});
 
 try {
   if ('action' in result) {

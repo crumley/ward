@@ -41,6 +41,42 @@ Ward eats its own dog food: this repo uses a harness-neutral `AGENTS.md`, the sa
 standardizes on for workspace context
 ([`intent/01-concepts/05-context-loading.md`](intent/01-concepts/05-context-loading.md)).
 
+## Shell completion
+
+`ward` completes its own noun/verb tree **and** the identities in your workspace — open task codes
+(with their slugs), registered repository names, open session ids, stewardship branches, schema verb
+phrases. Suggestions are read live from the workspace you are standing in, so what the shell offers
+is what the verb will accept; outside a workspace only the command tree completes.
+
+Install the script for your shell (fish first — it is the one this is tuned for):
+
+```fish
+ward completion fish > ~/.config/fish/completions/ward.fish
+```
+
+```bash
+# bash — needs bash-completion loaded
+ward completion bash > ~/.local/share/bash-completion/completions/ward
+```
+
+```zsh
+# zsh — any directory on your $fpath works
+ward completion zsh > "${fpath[1]}/_ward"
+```
+
+```powershell
+# PowerShell — append to your profile so it loads every session
+ward completion pwsh >> $PROFILE
+```
+
+```nu
+# Nushell
+ward completion nu | save ward-completion.nu; source ./ward-completion.nu
+```
+
+Re-run the command after upgrading Ward. The design and its mechanics are in
+[`design/0022-shell-completion/`](design/0022-shell-completion/README.md).
+
 ## License
 
 [MIT](LICENSE).

@@ -89,12 +89,18 @@ export async function readSessions(root: string, taskDir: string): Promise<Sessi
   return records;
 }
 
-interface OpenSessionListing {
+export interface OpenSessionListing {
   readonly taskDir: string;
   readonly record: SessionRecord;
 }
 
-async function readOpenSessions(root: string): Promise<OpenSessionListing[]> {
+/**
+ * Every open session in the workspace. Exported since
+ * design/0022-shell-completion/, so `session close ID` completes from the
+ * very listing `closeSession` resolves against — one reader, so what the
+ * shell offers and what the verb accepts cannot disagree.
+ */
+export async function readOpenSessions(root: string): Promise<OpenSessionListing[]> {
   const listings: OpenSessionListing[] = [];
   for (const task of await readTasks(root)) {
     for (const record of await readSessions(root, task.dir)) {

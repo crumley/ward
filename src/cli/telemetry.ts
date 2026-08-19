@@ -14,6 +14,7 @@ import { discoverWorkspace } from '../workspace/layout.ts';
 import { checkoutPath, listRepositories } from '../workspace/repos.ts';
 import { scopeFromCwd } from '../workspace/scope.ts';
 import { callerIsAgent } from './caller.ts';
+import { isCompletionCallback } from './suggest.ts';
 
 /**
  * The known command tree, verbs only — what separates the verb path from its
@@ -30,6 +31,10 @@ const VERB_TREE: Record<string, readonly string[]> = {
   status: [],
   doctor: [],
   schema: [],
+  // Generating a shell's completion script is a real, deliberate invocation —
+  // one per install (design/0022-shell-completion/). The shell name is an
+  // argument, not a sub-verb, so the row is verb `completion` alone.
+  completion: [],
 };
 
 /** The verb path of an invocation, from raw argv (`['task','open','x']` → `task open`). */
@@ -51,6 +56,13 @@ export function verbPath(argv: readonly string[]): string {
  * there is nowhere for it to live and nothing is recorded.
  */
 export function recordInvocation(argv: readonly string[]): void {
+  // A completion callback is the shell asking, not a human or agent invoking:
+  // it fires on every TAB, several times per typed command, and recording it
+  // would bury the usage signal this file exists to produce (§4 — telemetry
+  // is analyzed to see which flows are clumsy) under keystroke noise, at a
+  // write per keystroke. Script generation IS recorded, as verb `completion`
+  // (design/0022-shell-completion/).
+  if (isCompletionCallback(argv)) return;
   const startedAt = new Date();
   const begun = performance.now();
   // Scope is resolved eagerly, not at exit: the honest moment is where the
