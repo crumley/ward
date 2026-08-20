@@ -75,10 +75,15 @@ principle (§8) and feeds the compounding loop
   propagated to subprocesses); when that signal is present Ward **requires** the context, when
   absent it requires nothing. _Why:_ remove ceremony from the common interactive case while still
   capturing rich provenance from the side that can afford to be explicit.
-- **Record command usage as local telemetry** — per invocation: persona, scope, working directory,
-  and human-or-agent. It is **local and personal** (§4) and **never** surfaced to remote artifacts.
-  _Why:_ over time it is analyzed (a natural reflection type) to decide what needs a new alias,
-  which flows are clumsy, which tooling is missing — how the interaction layer compounds.
+- **Record command usage as local telemetry** — one row per **command the caller invoked**: persona,
+  scope, working directory, and human-or-agent. It is **local and personal** (§4) and **never**
+  surfaced to remote artifacts. **Machinery invocations the interaction layer makes of itself are
+  not usage and are not recorded** — a shell-completion callback today, anything of the same kind
+  later: from the caller's seat they never ran Ward; the surface's own plumbing did. _Why:_ over
+  time the signal is analyzed (a natural reflection type) to decide what needs a new alias, which
+  flows are clumsy, which tooling is missing — how the interaction layer compounds — and rows
+  written per keystroke would bury the commands under the machinery, degrading the very analysis
+  this constraint exists to enable.
 - **Workspace- and scope-aware from any working directory.** Invoked anywhere **inside** an
   initialized workspace — at the root or deep in a subdirectory — Ward **discovers the workspace
   itself**, with no flag and no "which workspace?" prompt. It goes further: when the working
