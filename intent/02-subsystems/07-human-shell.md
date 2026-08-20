@@ -20,20 +20,38 @@ principle (§8) and feeds the compounding loop
   both audiences and stays coherent as it grows.
 - **The interactive layer adds mnemonic shorthands** for common operations — thin plumbing,
   **evolvable** as telemetry reveals real usage.
-- **Resolve missing or ambiguous arguments interactively — and make it delightful.** When an
-  interactive (human) caller invokes a verb that needs a noun they did not supply — or supplied
-  ambiguously (a command that needs a **room** but none was named) — the shell does **not** fail
-  with "missing argument." It **prompts the human to quickly pick what they meant** from the valid
-  candidates, and **autocompletes** partially-typed nouns, verbs, and identities. Candidates are
-  shown with the cues the human already holds — identity handle plus **accent color and type glyph**
-  ([`05-visual-theming.md`](05-visual-theming.md)) — so "the blue 🗂️ one" is selectable, not just
-  `4A12`. _Why:_ the prime directive is to spend the human's attention only where a real decision is
-  needed ([`../00-foundation/00-vision.md`](../00-foundation/00-vision.md)); making them recall an
-  exact handle, or re-run a command with the right flag, is precisely the friction Ward exists to
-  remove. This is a **quality bar, not just a feature** — fast, low-ceremony interactive resolution
-  is the difference between a tool people fight and one they reach for. _Asymmetry (§8):_ this is a
-  **human-audience** affordance; an **agent** caller (which declares itself, below) passes explicit
-  context and gets **deterministic** handling — never a blocking interactive prompt.
+- **Supply nouns by recognition, never by recall — and make it delightful.** Making the human recall
+  an exact handle, or re-run a command with the right flag, is precisely the friction Ward exists to
+  remove; a verb that needs a noun (a command that needs a **room**, say) must offer a low-ceremony
+  way to pick it from the valid candidates. Ward owes this through **two mechanisms**, distinct in
+  where they run and what they can show, serving that one purpose. _Why:_ the prime directive is to
+  spend the human's attention only where a real decision is needed
+  ([`../00-foundation/00-vision.md`](../00-foundation/00-vision.md)). This is a **quality bar, not
+  just a feature** — fast, low-ceremony noun resolution is the difference between a tool people
+  fight and one they reach for.
+  - **Shell completion** — Ward **autocompletes** partially-typed nouns, verbs, and identities at
+    the shell's own completion surface. It runs **out of process, before any command exists**: no
+    TTY, no prompt, and so no agent hazard — a human-audience affordance that is harmless to every
+    other caller. Its cues are **limited to what the shell's completion protocol carries** — the
+    candidate plus a plain-text description (the slug behind a code, the main line behind a repo
+    name); the accent-and-glyph requirement below does **not** apply at this surface, where it is
+    unbuildable, not merely unbuilt. _Why the split matters:_ completion is the cheap, always-on
+    half — every noun it fills in is a picker session that never needs to happen — and it must be
+    shippable and judgeable on its own, not read as a partial build of the picker.
+  - **Interactive resolution (the picker)** — a mode the human **enters deliberately**, by
+    explicitly asking Ward to run interactively; it is **independent of shell completion**, not a
+    side effect of omitting an argument. In it, Ward **prompts the human to quickly pick what they
+    meant** from the valid candidates, shown with the cues the human already holds — identity handle
+    plus **accent color and type glyph** ([`05-visual-theming.md`](05-visual-theming.md)) — so "the
+    blue 🗂️ one" is selectable, not just `4A12`. It runs **in the process**, owns its rendering, and
+    **branches on caller identity**. _Why explicit entry:_ a prompt that springs from a missing
+    argument makes the same invocation blocking or failing depending on who typed it; a deliberately
+    entered mode keeps every non-interactive invocation deterministic for both audiences.
+
+  _Asymmetry (§8):_ both mechanisms are **human-audience** affordances; an **agent** caller (which
+  declares itself, below) passes explicit context and gets **deterministic** handling — a missing
+  argument outside the picker is a deterministic error naming the fix, never a blocking interactive
+  prompt.
 - **"What needs me?" is a first-class query.** What the surface presents is **everything waiting on
   the human**, from two springs: the requests **addressed** to them — gated actions awaiting
   authority (§18), toil the machinery surfaced (what is blocked, conflicted, ready —
@@ -57,10 +75,15 @@ principle (§8) and feeds the compounding loop
   propagated to subprocesses); when that signal is present Ward **requires** the context, when
   absent it requires nothing. _Why:_ remove ceremony from the common interactive case while still
   capturing rich provenance from the side that can afford to be explicit.
-- **Record command usage as local telemetry** — per invocation: persona, scope, working directory,
-  and human-or-agent. It is **local and personal** (§4) and **never** surfaced to remote artifacts.
-  _Why:_ over time it is analyzed (a natural reflection type) to decide what needs a new alias,
-  which flows are clumsy, which tooling is missing — how the interaction layer compounds.
+- **Record command usage as local telemetry** — one row per **command the caller invoked**: persona,
+  scope, working directory, and human-or-agent. It is **local and personal** (§4) and **never**
+  surfaced to remote artifacts. **Machinery invocations the interaction layer makes of itself are
+  not usage and are not recorded** — a shell-completion callback today, anything of the same kind
+  later: from the caller's seat they never ran Ward; the surface's own plumbing did. _Why:_ over
+  time the signal is analyzed (a natural reflection type) to decide what needs a new alias, which
+  flows are clumsy, which tooling is missing — how the interaction layer compounds — and rows
+  written per keystroke would bury the commands under the machinery, degrading the very analysis
+  this constraint exists to enable.
 - **Workspace- and scope-aware from any working directory.** Invoked anywhere **inside** an
   initialized workspace — at the root or deep in a subdirectory — Ward **discovers the workspace
   itself**, with no flag and no "which workspace?" prompt. It goes further: when the working
