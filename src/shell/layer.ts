@@ -20,6 +20,18 @@ const LAYERS: Record<string, string> = { fish: FISH_LAYER };
 
 export const SHELL_LAYERS: readonly string[] = Object.keys(LAYERS);
 
+/**
+ * What `ward shell init <shell>` writes to stdout, byte for byte: the script
+ * plus the trailing newline a line-oriented print adds. It is a function
+ * rather than a fact the CLI knows privately because doctor compares an
+ * installed file against these exact bytes
+ * (design/0026-shell-staleness-doctor/) — one definition, so the emission and
+ * the comparison cannot drift apart.
+ */
+export function emitShellLayer(shell: string): string {
+  return `${renderShellLayer(shell)}\n`;
+}
+
 /** The script for a shell, or a refusal that names what does exist (§20). */
 export function renderShellLayer(shell: string): string {
   const layer = LAYERS[shell];

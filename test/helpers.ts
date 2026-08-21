@@ -27,11 +27,21 @@ export const NO_GH = '/dev/null/gh';
  * `$XDG_STATE_HOME` — or the developer's own workspace registry — unless it
  * points these at a directory of its own. Created once per test process and
  * removed at exit.
+ *
+ * `XDG_CONFIG_HOME` is pinned alongside them because doctor reads OTHER tools'
+ * directories under it now — `fish/conf.d/ward.fish` and
+ * `fish/completions/ward.fish` (design/0026-shell-staleness-doctor/) — and no
+ * test may read the developer's real fish configuration. It changes nothing
+ * about Ward's own directories: `WARD_CONFIG_DIR` overrides it.
  */
 export const WARD_GLOBAL_ENV = ((): Readonly<Record<string, string>> => {
   const dir = mkdtempSync(join(tmpdir(), 'ward-test-global-'));
   process.on('exit', () => rmSync(dir, { recursive: true, force: true }));
-  return { WARD_CONFIG_DIR: join(dir, 'config'), WARD_STATE_DIR: join(dir, 'state') };
+  return {
+    WARD_CONFIG_DIR: join(dir, 'config'),
+    WARD_STATE_DIR: join(dir, 'state'),
+    XDG_CONFIG_HOME: join(dir, 'xdg-config'),
+  };
 })();
 
 export function applyGitTestEnv(): void {

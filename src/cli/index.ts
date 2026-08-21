@@ -26,7 +26,7 @@ import {
   viewRegistry,
 } from '../global/registry.ts';
 import { CANDIDATE_KINDS, candidates, renderCandidates } from '../shell/candidates.ts';
-import { renderShellLayer } from '../shell/layer.ts';
+import { emitShellLayer } from '../shell/layer.ts';
 import type { TaskRecord, WorkState } from '../store/types.ts';
 import { createWorkspace, type StepReport } from '../workspace/create.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
@@ -616,7 +616,9 @@ try {
       case 'shell-init':
         // stdout carries the script and nothing else — it is redirected into
         // a file the shell will source (§18: Ward emits, the human installs).
-        console.log(renderShellLayer(result.shell));
+        // The emitted bytes are `emitShellLayer`'s, because doctor compares an
+        // installed file against them (design/0026-shell-staleness-doctor/).
+        process.stdout.write(emitShellLayer(result.shell));
         break;
       case 'shell-candidates': {
         // Machinery, and shaped like it: one NAME<TAB>CUE line per candidate,

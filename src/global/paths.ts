@@ -22,17 +22,36 @@ import { isAbsolute, join } from 'node:path';
  * A relative `XDG_CONFIG_HOME` is ignored, as the XDG basedir spec requires.
  */
 export function configDir(env: Env = process.env): string {
-  return chosen(env.WARD_CONFIG_DIR, env.XDG_CONFIG_HOME, join(homedir(), '.config'));
+  return chosen(env.WARD_CONFIG_DIR, xdgConfigHome(env));
 }
 
 /** Machine state — the workspace registry and its lock. */
 export function stateDir(env: Env = process.env): string {
-  return chosen(env.WARD_STATE_DIR, env.XDG_STATE_HOME, join(homedir(), '.local', 'state'));
+  return chosen(env.WARD_STATE_DIR, base(env.XDG_STATE_HOME, join(homedir(), '.local', 'state')));
+}
+
+/**
+ * The per-user configuration root itself — `$XDG_CONFIG_HOME`, default
+ * `~/.config`. Ward's own preferences live in `ward/` under it (above), but
+ * OTHER tools' directories under the same root are Ward's business too: the
+ * emitted shell layer and completions are installed into
+ * `$XDG_CONFIG_HOME/fish/`, and doctor reads them from there
+ * (design/0026-shell-staleness-doctor/). Exported so that one function
+ * decides where the root is, and one environment variable moves it — which is
+ * also the seam that keeps tests off the developer's real `~/.config`.
+ */
+export function xdgConfigHome(env: Env = process.env): string {
+  return base(env.XDG_CONFIG_HOME, join(homedir(), '.config'));
 }
 
 type Env = Record<string, string | undefined>;
 
-function chosen(override: string | undefined, xdgHome: string | undefined, fallback: string) {
+/** A relative `XDG_*_HOME` is ignored, as the XDG basedir spec requires. */
+function base(xdgHome: string | undefined, fallback: string): string {
+  return xdgHome !== undefined && isAbsolute(xdgHome) ? xdgHome : fallback;
+}
+
+function chosen(override: string | undefined, xdgBase: string) {
   if (override !== undefined && override !== '') return override;
-  return join(xdgHome !== undefined && isAbsolute(xdgHome) ? xdgHome : fallback, 'ward');
+  return join(xdgBase, 'ward');
 }

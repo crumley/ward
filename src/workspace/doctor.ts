@@ -16,6 +16,7 @@ import {
   registryPath,
   resolutionOrder,
 } from '../global/registry.ts';
+import { type InstalledArtifact, inspectInstalledShellArtifacts } from '../shell/installed.ts';
 import { type DocumentType, readDocument } from '../store/document.ts';
 import { inspectLock, inspectStoreLock } from '../store/lock.ts';
 import {
@@ -91,6 +92,7 @@ async function machineChecks(cwd: string): Promise<Finding[]> {
     findings.push(ghAuthFinding(await probeForgeAuth()));
   }
   findings.push(pickerFinding());
+  findings.push(...(await shellArtifactFindings()));
   findings.push(await globalConfigFinding());
   findings.push(await workspaceRegistryFinding());
   findings.push(...registryLockFindings());
@@ -117,6 +119,78 @@ function pickerFinding(): Finding {
           '(without it, wrcd/wwcd list the candidates and ask you to name one)',
       }
     : { check, severity: 'ok', message: 'fzf available — the shell layer can pick interactively' };
+}
+
+/**
+ * The installed shell artifacts — the emitted fish layer and ward's fish
+ * completions (design/0026-shell-staleness-doctor/). Machine-level, because
+ * they are per-user machine state: the files live in the human's own shell
+ * configuration, and doctor is the surface that works outside a workspace.
+ *
+ * They are checked at all because both are installed by REDIRECT, which makes
+ * each a snapshot of the ward that emitted it — and the human-shell contract
+ * expects the shorthand set to churn, an expectation that means nothing if
+ * nobody can see that their copy has fallen behind. Surfaced, not nagged: a
+ * stale file is `warn` with the exact re-run, and everything else is quieter.
+ * Never `error` — a convenience cannot make a machine unhealthy (0024's
+ * posture), and declining to install one is a choice, not a fault.
+ *
+ * Silence is the answer when this machine keeps no fish configuration at all:
+ * doctor names conditions, and "you could install a fish layer" is not one on
+ * a machine that does not run fish.
+ */
+async function shellArtifactFindings(): Promise<Finding[]> {
+  const { configured, artifacts } = await inspectInstalledShellArtifacts();
+  if (!configured && artifacts.every((artifact) => artifact.state === 'absent')) return [];
+  return artifacts.map(shellArtifactFinding);
+}
+
+function shellArtifactFinding(artifact: InstalledArtifact): Finding {
+  const check = artifact.what;
+  const install = `${artifact.command} > ${artifact.path}`;
+  switch (artifact.state) {
+    case 'absent':
+      return {
+        check,
+        severity: 'info',
+        message: `not installed — optional; ward emits it and you redirect: ${install}`,
+      };
+    case 'current':
+      return {
+        check,
+        severity: 'ok',
+        message: `${artifact.path} — matches what this ward emits`,
+      };
+    case 'stale':
+      return {
+        check,
+        severity: 'warn',
+        message:
+          `${artifact.path} differs from what this ward emits — the installed copy is a ` +
+          `snapshot of an earlier ward; re-emit it: ${install}`,
+      };
+    case 'foreign':
+      // The honest reading, and the reason it is not a warning: a file ward
+      // did not write is somebody's own arrangement (the claude-guidance
+      // idiom), and telling them to redirect over it would be Ward writing
+      // into a human's shell configuration by proxy (§18).
+      return {
+        check,
+        severity: 'info',
+        message:
+          `${artifact.path} is present but is not ward's emission — your own file, kept; ` +
+          `ward will not tell you to overwrite what it did not write (were it meant to be ` +
+          `ward's, ${install} replaces it)`,
+      };
+    case 'unreadable':
+      return {
+        check,
+        severity: 'warn',
+        message:
+          `${artifact.path} could not be read — ${artifact.reason}; whether the installed ` +
+          'copy is current cannot be told from here',
+      };
+  }
 }
 
 /**
