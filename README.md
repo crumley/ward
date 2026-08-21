@@ -150,6 +150,43 @@ and reported as yours). Only fish today; other shells are unbuilt, not unsupport
 [`design/0025-fish-shell-layer/`](design/0025-fish-shell-layer/README.md), the staleness check in
 [`design/0026-shell-staleness-doctor/`](design/0026-shell-staleness-doctor/README.md).
 
+### Or adopt them as files you own
+
+The layer above is one file Ward keeps fresh. The other style is to **adopt** the shorthands you
+actually want, as files that become yours:
+
+```fish
+ward shell adopt fish              # what's on offer, and where each stands
+ward shell adopt fish wrcd wwcd    # take these two
+ward shell adopt fish --all        # take all of them
+```
+
+Each adopted shorthand lands as `~/.config/fish/functions/<name>.fish` plus its completion in
+`completions/`, holding the **real definition** — not a stub that calls back into Ward. Track them
+in your dotfiles, edit them, keep them: nothing in Ward rewrites an adopted file unless you name it
+again. A file at one of those paths that Ward did not write is yours and is never touched without
+`--force`.
+
+Because what you adopted is a snapshot, Ward can tell you when its own definition has moved on — per
+alias, with the choice left to you:
+
+```fish
+ward doctor                        # ! fish shorthand wrr — wrr has changed …
+ward shell diff fish wrr           # see exactly what changed
+ward shell adopt fish wrr          # take this ward's version, or ignore it and keep yours
+```
+
+`--dir PATH` writes into any fish config root instead of the live one — how a dotfiles repo adopts
+them into a stow package; the files name no path, so they work wherever they are symlinked from.
+
+**Which style:** take `shell init` if you want the current set with no upkeep and do not mind that
+the file is Ward's. Take `shell adopt` if you keep your shell configuration in git, want only some
+of the shorthands, or want to edit one — the trade is that adopted files go stale until you choose
+to refresh them, which is exactly the control you are asking for. Do not run both: fish sources
+`conf.d/` at startup, so an installed layer wins over anything adopted beside it — `ward doctor`
+says so if you do. The design is in
+[`design/0027-shell-adoption/`](design/0027-shell-adoption/README.md).
+
 [fzf]: https://github.com/junegunn/fzf
 
 ## License

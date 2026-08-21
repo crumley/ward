@@ -37,6 +37,10 @@ for (const [verb, shape] of Object.entries(readVerbShapes)) {
 
 // -- the whole-contract document -------------------------------------------
 
+// One CLI spawn per registered verb, so this case's cost grows with the
+// contract — it crossed bun's 5s default the moment the registry did, on a
+// machine no slower than CI's. The timeout is stated rather than left implicit
+// because the growth is expected: every --json verb added here adds a spawn.
 test('ward schema: one document covering every --json verb, keyed by its CLI words', () => {
   const result = runWard(['schema'], ws);
   expect(result.exitCode).toBe(0);
@@ -47,7 +51,7 @@ test('ward schema: one document covering every --json verb, keyed by its CLI wor
     const single = JSON.parse(runWard(['schema', ...verb.split(' ')], ws).stdout);
     expect(contract[verb]).toEqual(single);
   }
-});
+}, 30_000);
 
 test('ward schema is byte-identical across runs', () => {
   const first = runWard(['schema'], ws);

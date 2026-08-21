@@ -451,6 +451,38 @@ export const sessionMutationShape = z.strictObject({
 export type SessionMutationShape = z.infer<typeof sessionMutationShape>;
 
 /**
+ * `ward shell adopt <shell>` (design/0027-shell-adoption/): the offering and
+ * the write report in one document, because they are one verb's answer —
+ * naming nothing lists what is offered (`offeredOnly: true`, every shorthand
+ * carrying its standing and no file rows), naming shorthands writes them and
+ * reports what each file's write did. `status` is always the standing AFTER
+ * the run, so an agent reads the result rather than the intent.
+ */
+export const shellAdoptShape = z.strictObject({
+  shell: z.string(),
+  /** The fish configuration root written into — `--dir`'s path, or the live one. */
+  dir: z.string(),
+  /** True when the run only listed the offering: nothing was written. */
+  offeredOnly: z.boolean(),
+  shorthands: z.array(
+    z.strictObject({
+      name: z.string(),
+      summary: z.string(),
+      status: z.enum(['available', 'current', 'changed', 'yours', 'unreadable']),
+      /** One row per file this shorthand owns; empty when the run only listed. */
+      files: z.array(
+        z.strictObject({
+          /** Relative to `dir` — the files are location-independent by construction. */
+          path: z.string(),
+          outcome: z.enum(['written', 'unchanged', 'kept', 'replaced']),
+        }),
+      ),
+    }),
+  ),
+});
+export type ShellAdoptShape = z.infer<typeof shellAdoptShape>;
+
+/**
  * The registry: each key is exactly what the caller types after `ward` (minus
  * `--json`), so discovering a shape and invoking its verb agree by
  * construction. Order matches the documented verb list; JSON.stringify
@@ -508,6 +540,7 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'workspace register': workspaceRegistryShape,
   'workspace unregister': workspaceRegistryShape,
   'workspace default': workspaceRegistryShape,
+  'shell adopt': shellAdoptShape,
 };
 
 /** The whole `--json` contract: read verbs, the path verbs, then the mutations. */
