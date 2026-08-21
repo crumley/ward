@@ -40,10 +40,39 @@ export interface WorkspaceRef {
 }
 
 export interface RepoLocation {
+  /** The name that ANSWERED — which is not the name asked for, after a fuzzy match. */
   readonly repo: string;
   readonly workspace: WorkspaceRef;
   /** Absolute path of the canonical checkout, `repos/<name>/`. */
   readonly path: string;
+  /** How the asked-for name reached this one (design/0025-fish-shell-layer/). */
+  readonly matched: MatchKind;
+}
+
+/** How a typed name found its repository: as itself, or as a unique shorthand for it. */
+export type MatchKind = 'exact' | 'prefix' | 'substring';
+
+/**
+ * The resolution ladder for a repository name, tried in this order and no
+ * other. Exact is case-sensitive and always first, so a name that IS a
+ * repository can never be answered by a different one; the two fuzzy rungs
+ * are case-insensitive, and each demands a UNIQUE match — `dot` reaches
+ * `dotfiles` only while nothing else could have been meant.
+ *
+ * Prefix before substring is what makes the ladder useful rather than merely
+ * lenient: with `dotfiles` and `my-dotfiles` registered, `dot` is a unique
+ * prefix of one and a substring of both, and the prefix rung answers it.
+ */
+const MATCH_LADDER: readonly { readonly kind: MatchKind; readonly hit: Match }[] = [
+  { kind: 'exact', hit: (typed, name) => name === typed },
+  { kind: 'prefix', hit: (typed, name) => lower(name).startsWith(lower(typed)) },
+  { kind: 'substring', hit: (typed, name) => lower(name).includes(lower(typed)) },
+];
+
+type Match = (typed: string, name: string) => boolean;
+
+function lower(value: string): string {
+  return value.toLowerCase();
 }
 
 /**
@@ -90,11 +119,20 @@ export async function locateWorkspace(target?: string): Promise<WorkspaceListing
  * the workspace they are standing in, then the default, then most recently
  * used — first one whose record registers the name wins. Ties cannot arise:
  * the order is total and deterministic (§6).
+ *
+ * `fuzzy` opens the two shorthand rungs of `MATCH_LADDER`, and is the §8
+ * asymmetry applied to a name: a human typing `wrcd dot` means the one
+ * repository that could be, while a declared agent — for whom being precise
+ * is cheap — resolves names exactly, so that the same call cannot change
+ * meaning because an unrelated repository was registered later. The refusal
+ * still names what the shorthand WOULD have reached, so an agent corrects in
+ * one step rather than guessing (design/0025-fish-shell-layer/).
  */
 export async function locateRepo(
   name: string,
   from: string,
   workspaceTarget?: string,
+  fuzzy = false,
 ): Promise<RepoLocation> {
   const order = await searchOrder(from, workspaceTarget);
   // A record that claims the name but has no checkout on disk does not end the
@@ -102,19 +140,33 @@ export async function locateRepo(
   // that is not there would be the wrong kind of honesty. It is remembered,
   // so that if nothing else answers, the report is the drift and its remedy
   // rather than a bare "not found" (§20).
-  let claimed: { workspace: WorkspaceRef; path: string } | undefined;
-  for (const workspace of order) {
-    if (!listRepositoryNames(workspace.path).includes(name)) continue;
-    const path = checkoutPath(workspace.path, name);
-    if (!existsSync(path)) {
-      claimed ??= { workspace, path };
-      continue;
+  let claimed: { workspace: WorkspaceRef; path: string; repo: string } | undefined;
+  // Rung by rung across the WHOLE search order, never workspace by workspace
+  // across the whole ladder: an exact name in the default workspace must beat
+  // a shorthand in the one underfoot, or a repository would become
+  // unreachable by its own name the day a longer one appeared beside it.
+  for (const rung of fuzzy ? MATCH_LADDER : MATCH_LADDER.slice(0, 1)) {
+    for (const workspace of order) {
+      const matches = listRepositoryNames(workspace.path).filter((known) => rung.hit(name, known));
+      const [only] = matches;
+      if (only === undefined) continue;
+      if (matches.length > 1) {
+        throw new WardError(
+          `'${name}' matches ${matches.length} repositories in workspace ` +
+            `'${workspace.name}': ${matches.join(', ')} — name one exactly`,
+        );
+      }
+      const path = checkoutPath(workspace.path, only);
+      if (!existsSync(path)) {
+        claimed ??= { workspace, path, repo: only };
+        continue;
+      }
+      return { repo: only, workspace, path, matched: rung.kind };
     }
-    return { repo: name, workspace, path };
   }
   if (claimed !== undefined) {
     throw new WardError(
-      `'${name}' is registered in workspace '${claimed.workspace.name}' but its canonical ` +
+      `'${claimed.repo}' is registered in workspace '${claimed.workspace.name}' but its canonical ` +
         `checkout is missing at ${claimed.path} — re-materialize it: ward workspace restore`,
     );
   }
@@ -125,9 +177,29 @@ export async function locateRepo(
     );
   }
   throw new WardError(
-    `no repository named '${name}' is registered in ${describeSearch(order)} — ` +
-      'see: ward repo list (or register it: ward repo add SOURCE)',
+    `no repository named '${name}' is registered in ${describeSearch(order)}${
+      fuzzy ? '' : nearMiss(name, order)
+    } — see: ward repo list (or register it: ward repo add SOURCE)`,
   );
+}
+
+/**
+ * What the shorthand rungs would have reached, named in the refusal a caller
+ * who does not get them receives. Declining to resolve a shorthand and
+ * declining to SAY what it was are different acts: the first keeps an agent's
+ * calls deterministic, the second would just make it guess (§20).
+ */
+function nearMiss(name: string, order: readonly WorkspaceRef[]): string {
+  for (const rung of MATCH_LADDER.slice(1)) {
+    for (const workspace of order) {
+      const matches = listRepositoryNames(workspace.path).filter((known) => rung.hit(name, known));
+      const [only] = matches;
+      if (only !== undefined && matches.length === 1) {
+        return ` (a declared agent resolves names exactly — did you mean '${only}'?)`;
+      }
+    }
+  }
+  return '';
 }
 
 /** The workspaces a cross-workspace lookup asks, in the order it asks them. */

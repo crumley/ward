@@ -45,7 +45,29 @@ const VERB_TREE: Record<string, readonly string[]> = {
   // one per install (design/0022-shell-completion/). The shell name is an
   // argument, not a sub-verb, so the row is verb `completion` alone.
   completion: [],
+  // `shell init` is the same deliberate once-per-install act and is recorded;
+  // `shell candidates` is the emitted layer's own callback and is not — see
+  // isMachineryInvocation (design/0025-fish-shell-layer/).
+  shell: ['init', 'candidates'],
 };
+
+/**
+ * An invocation the interaction layer made of ITSELF, rather than one the
+ * caller asked for — the exclusion intent's telemetry constraint needs to
+ * mean what it says ("commands the caller invoked"; 0022's SF-002). Two
+ * today, one class: a completion callback fires per TAB, and
+ * `ward shell candidates KIND` fires whenever the emitted shell layer needs a
+ * list to complete or to pick from. From the caller's seat neither ever ran
+ * Ward; their shell's plumbing did. Recording them would bury the usage
+ * signal §4 exists to produce under keystroke noise, and put a file append on
+ * the shell's latency path.
+ *
+ * The same predicate keeps both off the registry's recency: machinery does
+ * not make a workspace "most recently used" either.
+ */
+export function isMachineryInvocation(argv: readonly string[]): boolean {
+  return isCompletionCallback(argv) || (argv[0] === 'shell' && argv[1] === 'candidates');
+}
 
 /** The verb path of an invocation, from raw argv (`['task','open','x']` → `task open`). */
 export function verbPath(argv: readonly string[]): string {
@@ -66,13 +88,12 @@ export function verbPath(argv: readonly string[]): string {
  * there is nowhere for it to live and nothing is recorded.
  */
 export function recordInvocation(argv: readonly string[]): void {
-  // A completion callback is the shell asking, not a human or agent invoking:
-  // it fires on every TAB, several times per typed command, and recording it
-  // would bury the usage signal this file exists to produce (§4 — telemetry
-  // is analyzed to see which flows are clumsy) under keystroke noise, at a
-  // write per keystroke. Script generation IS recorded, as verb `completion`
-  // (design/0022-shell-completion/).
-  if (isCompletionCallback(argv)) return;
+  // The interaction layer's own machinery is not usage: a completion callback
+  // is the shell asking, and a shell-layer candidate feed is the emitted
+  // script asking. Both fire per keystroke; neither is a command anybody
+  // invoked. Script generation IS recorded — `completion`, `shell init` — as
+  // the deliberate once-per-install act it is.
+  if (isMachineryInvocation(argv)) return;
   const startedAt = new Date();
   const begun = performance.now();
   // Scope is resolved eagerly, not at exit: the honest moment is where the
