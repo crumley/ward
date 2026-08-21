@@ -49,14 +49,24 @@ export function inspectClaudeGuidance(root: string): ClaudeGuidance {
 }
 
 /**
+ * Whether a directory IS a workspace root — it carries the marker directory.
+ * One test, so everything that asks the question (discovery below, the
+ * registry's staleness check in design/0024-global-config-registry/) can never
+ * disagree about what counts: a `.ward` FILE is not a marker.
+ */
+export function isWorkspaceRoot(dir: string): boolean {
+  const marker = join(dir, MARKER_DIR);
+  return existsSync(marker) && statSync(marker).isDirectory();
+}
+
+/**
  * Walk up from a working directory to the workspace root — the nearest
  * ancestor containing the .ward marker — or null when there is none.
  */
 export function discoverWorkspace(from: string): string | null {
   let dir = resolve(from);
   while (true) {
-    const marker = join(dir, MARKER_DIR);
-    if (existsSync(marker) && statSync(marker).isDirectory()) return dir;
+    if (isWorkspaceRoot(dir)) return dir;
     const parent = dirname(dir);
     if (parent === dir) return null;
     dir = parent;

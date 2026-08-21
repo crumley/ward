@@ -25,6 +25,7 @@ import {
   removeDir,
   runWard,
   runWardEnv,
+  WARD_GLOBAL_ENV,
 } from '../helpers.ts';
 
 test('five concurrent task opens through the CLI: unique codes, every record, linear history', async () => {
@@ -129,7 +130,7 @@ test('doctor names the lock state: held is info, stale is warn, neither unhealth
 async function spawnWard(argv: string[], cwd: string): Promise<CliResult> {
   const child = Bun.spawn(['bun', cliPath, ...argv], {
     cwd,
-    env: { ...process.env, NO_COLOR: '1', WARD_GH: NO_GH, ...GIT_ENV },
+    env: { ...process.env, NO_COLOR: '1', WARD_GH: NO_GH, ...GIT_ENV, ...WARD_GLOBAL_ENV },
     stdout: 'pipe',
     stderr: 'pipe',
   });

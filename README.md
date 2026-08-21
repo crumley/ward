@@ -77,6 +77,43 @@ ward completion nu | save ward-completion.nu; source ./ward-completion.nu
 Re-run the command after upgrading Ward. The design and its mechanics are in
 [`design/0022-shell-completion/`](design/0022-shell-completion/README.md).
 
+## Working from anywhere
+
+Inside a workspace, `ward` finds it by walking up from the working directory. Register a workspace
+and it can answer from **outside** one too:
+
+```fish
+cd ~/w/main; ward workspace register   # the first one registered becomes the default
+ward workspace list                    # most recently used first, the default starred
+ward workspace default other           # point the default somewhere else
+```
+
+With that in place, `ward status` from anywhere reports the default workspace (and says so on
+stderr, so the implicit input is never silent), and two verbs print paths a shell can use directly:
+
+```fish
+cd (ward workspace path)               # the default workspace
+cd (ward repo path ward)               # a repository's canonical checkout, found across workspaces
+```
+
+The registry is a **convenience**, kept in `$XDG_STATE_HOME/ward/workspaces.md`: everything in it is
+derivable by standing in a workspace, so deleting it loses shortcuts and nothing else. Preferences
+live beside it in `$XDG_CONFIG_HOME/ward/config.md` — a dotted key is its path through the document:
+
+```yaml
+---
+type: ward-config
+repo:
+  refresh:
+    stash: true
+---
+```
+
+That key is validated and reported today; the `ward repo refresh --stash` flag that consumes it
+lands with its own entry. `ward doctor` names the state of both files — including a config that will
+not parse, or an entry whose workspace is gone. The design is in
+[`design/0024-global-config-registry/`](design/0024-global-config-registry/README.md).
+
 ## License
 
 [MIT](LICENSE).

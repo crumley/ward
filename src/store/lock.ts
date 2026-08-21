@@ -10,6 +10,11 @@
 // holder is taken over through a rename-and-verify break that is safe to
 // repeat, §6); sized to its real load (brief critical sections, a bounded
 // wait, an honest refusal when it is exceeded).
+//
+// The primitive is site-parameterized (`LockSite`), because the same three
+// properties are what the machine-level global state needs
+// (design/0024-global-config-registry/): one implementation, so a second
+// shared file can never grow a second, subtly different contention story.
 import {
   linkSync,
   mkdirSync,
@@ -46,8 +51,40 @@ export interface LockInspection {
   readonly heldMs?: number;
 }
 
+/**
+ * A lock and the words that describe it. One primitive serves the workspace
+ * store and the machine-level global state (design/0024-global-config-registry/):
+ * both are shared files a concurrent invocation could clobber, and both want
+ * the same legible-contention, fail-safe-takeover behavior. The staging
+ * directory must share a filesystem with the lock — the acquire is a link(2).
+ */
+export interface LockSite {
+  readonly path: string;
+  readonly tmpDir: string;
+  /** What the lock guards, as the refusal and takeover notes name it. */
+  readonly subject: string;
+  /** Bounded wait before an honest refusal; the site default when absent. */
+  readonly timeoutMs?: number;
+  /**
+   * Suppress the takeover note on stderr. Set at a site whose writes are
+   * invisible to the caller — the registry's recency touch rides every
+   * invocation, and a lock note out of it would be noise on an unrelated
+   * command's stderr, from a write nobody asked for
+   * (design/0024-global-config-registry/).
+   */
+  readonly quiet?: boolean;
+}
+
 export function storeLockPath(root: string): string {
   return join(root, '.ward', 'store.lock');
+}
+
+export function storeLockSite(root: string): LockSite {
+  return {
+    path: storeLockPath(root),
+    tmpDir: join(root, '.ward', 'tmp'),
+    subject: 'store',
+  };
 }
 
 /**
@@ -63,6 +100,11 @@ export async function withStoreLock<T>(
   verb: string,
   fn: () => Promise<T>,
 ): Promise<T> {
+  return withLock(storeLockSite(root), verb, fn);
+}
+
+/** The same critical section, at any lock site. */
+export async function withLock<T>(site: LockSite, verb: string, fn: () => Promise<T>): Promise<T> {
   const holder: LockHolder = {
     pid: process.pid,
     host: hostname(),
@@ -71,11 +113,11 @@ export async function withStoreLock<T>(
     startedAt: new Date().toISOString(),
     nonce: crypto.randomUUID(),
   };
-  await acquire(root, holder);
+  await acquire(site, holder);
   try {
     return await fn();
   } finally {
-    release(root, holder);
+    release(site, holder);
   }
 }
 
@@ -88,7 +130,11 @@ export async function withStoreLock<T>(
  * stale only past the age bound.
  */
 export function inspectStoreLock(root: string): LockInspection {
-  const path = storeLockPath(root);
+  return inspectLock(storeLockPath(root));
+}
+
+/** The same inspection, at any lock path. */
+export function inspectLock(path: string): LockInspection {
   let raw: string;
   let mtimeMs: number;
   try {
@@ -116,32 +162,37 @@ export function inspectStoreLock(root: string): LockInspection {
 }
 
 /** One line naming the holder — the contention refusal and takeover note share it. */
-export function describeHolder(seen: LockInspection): string {
+export function describeHolder(seen: LockInspection, lockPath: string): string {
   const held = seen.heldMs === undefined ? '' : `, held ${Math.round(seen.heldMs / 1000)}s`;
-  if (seen.holder === undefined) return `an unreadable holder (.ward/store.lock${held})`;
+  if (seen.holder === undefined) return `an unreadable holder (${lockPath}${held})`;
   const h = seen.holder;
   return `pid ${h.pid} on ${h.host} (ward ${h.verb}, ${h.caller}${held})`;
 }
 
 // -- acquisition ----------------------------------------------------------
 
-async function acquire(root: string, holder: LockHolder): Promise<void> {
-  const bound = timeoutMs();
+async function acquire(site: LockSite, holder: LockHolder): Promise<void> {
+  const bound = site.timeoutMs ?? timeoutMs();
   const deadline = Date.now() + bound;
   let delay = 15;
   while (true) {
-    if (tryLink(root, holder)) return;
-    const seen = inspectStoreLock(root);
+    if (tryLink(site, holder)) return;
+    const seen = inspectLock(site.path);
     if (!seen.present) continue; // released between attempts — try again now
-    if (seen.verdict === 'stale' && seen.raw !== undefined && breakStale(root, seen.raw)) {
+    if (seen.verdict === 'stale' && seen.raw !== undefined && breakStale(site, seen.raw)) {
       // Announced on stderr so the takeover is visible in the transcript
-      // that performed it, not only inferable from the record afterward.
-      console.error(`ward: took over a stale store lock left by ${describeHolder(seen)}`);
+      // that performed it, not only inferable from the record afterward —
+      // unless the site is quiet, where the write itself is invisible.
+      if (site.quiet !== true) {
+        console.error(
+          `ward: took over a stale ${site.subject} lock left by ${describeHolder(seen, site.path)}`,
+        );
+      }
       continue;
     }
     if (Date.now() >= deadline) {
       throw new WardError(
-        `the store is write-locked by ${describeHolder(seen)} — gave up after ` +
+        `the ${site.subject} is write-locked by ${describeHolder(seen, site.path)} — gave up after ` +
           `${Math.round(bound / 1000)}s; a lock whose holder is gone is taken over ` +
           `automatically, and ward doctor names the lock's state`,
       );
@@ -158,15 +209,14 @@ async function acquire(root: string, holder: LockHolder): Promise<void> {
  * a lock that cannot say who holds it (the store's no-partial-reads rule,
  * applied to the mechanism itself).
  */
-function tryLink(root: string, holder: LockHolder): boolean {
-  const tmpDir = join(root, '.ward', 'tmp');
-  mkdirSync(tmpDir, { recursive: true });
-  const tmp = join(tmpDir, `lock-${holder.pid}-${holder.nonce}`);
+function tryLink(site: LockSite, holder: LockHolder): boolean {
+  mkdirSync(site.tmpDir, { recursive: true });
+  const tmp = join(site.tmpDir, `lock-${holder.pid}-${holder.nonce}`);
   try {
     // Synchronous throughout, so acquisition is one uninterruptible step
     // even for in-process contenders sharing the event loop.
     writeFileSync(tmp, `${JSON.stringify(holder)}\n`);
-    linkSync(tmp, storeLockPath(root));
+    linkSync(tmp, site.path);
     return true;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
@@ -185,10 +235,11 @@ function tryLink(root: string, holder: LockHolder): boolean {
  * retaken during the mistake) refuses loudly rather than piling a third
  * writer onto a race (§20) — it cannot repair what it can no longer prove.
  */
-function breakStale(root: string, judgedRaw: string): boolean {
-  const path = storeLockPath(root);
-  const parked = join(root, '.ward', 'tmp', `lock-broken-${process.pid}-${crypto.randomUUID()}`);
+function breakStale(site: LockSite, judgedRaw: string): boolean {
+  const path = site.path;
+  const parked = join(site.tmpDir, `lock-broken-${process.pid}-${crypto.randomUUID()}`);
   try {
+    mkdirSync(site.tmpDir, { recursive: true });
     renameSync(path, parked);
   } catch {
     return false; // another waiter broke it first — rejoin the acquire loop
@@ -210,14 +261,15 @@ function breakStale(root: string, judgedRaw: string): boolean {
   } catch {
     rmSync(parked, { force: true });
     throw new WardError(
-      'the store lock changed hands mid-takeover and could not be restored — stop concurrent ' +
-        'ward commands, run ward doctor, and remove .ward/store.lock only if doctor calls it stale',
+      `the ${site.subject} lock changed hands mid-takeover and could not be restored — stop ` +
+        `concurrent ward commands, run ward doctor, and remove ${site.path} only if doctor ` +
+        'calls it stale',
     );
   }
 }
 
-function release(root: string, holder: LockHolder): void {
-  const path = storeLockPath(root);
+function release(site: LockSite, holder: LockHolder): void {
+  const path = site.path;
   try {
     // Unlink only our own lock: if a takeover replaced it, the file now
     // guards someone else's critical section.

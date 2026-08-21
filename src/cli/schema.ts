@@ -150,6 +150,45 @@ export const repoListShape = z.array(
 );
 export type RepoListShape = z.infer<typeof repoListShape>;
 
+/**
+ * One registered workspace (design/0024-global-config-registry/), as
+ * `workspace list` reports it: MRU-ordered rows, the default marked, and
+ * `stale` telling the truth about an entry whose path no longer holds a
+ * workspace — reported, never hidden and never silently resolved to (§20).
+ * `lastUsedAt` is absent until an invocation has run inside it.
+ */
+export const workspaceListShape = z.array(
+  z.strictObject({
+    name: z.string(),
+    path: z.string(),
+    default: z.boolean(),
+    stale: z.boolean(),
+    registeredAt: z.string(),
+    lastUsedAt: z.string().optional(),
+  }),
+);
+export type WorkspaceListShape = z.infer<typeof workspaceListShape>;
+
+/** `workspace path`: the resolved workspace — the path is what the shell uses. */
+export const workspacePathShape = z.strictObject({
+  name: z.string(),
+  path: z.string(),
+});
+export type WorkspacePathShape = z.infer<typeof workspacePathShape>;
+
+/**
+ * `repo path`: the canonical checkout, plus which workspace answered — the
+ * search may have crossed workspaces, and the caller should be able to see
+ * which one claimed the name.
+ */
+export const repoPathShape = z.strictObject({
+  repo: z.string(),
+  workspace: z.string(),
+  workspacePath: z.string(),
+  path: z.string(),
+});
+export type RepoPathShape = z.infer<typeof repoPathShape>;
+
 const findingShape = z.strictObject({
   check: z.string(),
   severity: z.enum(['ok', 'info', 'warn', 'error']),
@@ -382,6 +421,22 @@ export const workspaceUpgradeShape = z.strictObject({
 });
 export type WorkspaceUpgradeShape = z.infer<typeof workspaceUpgradeShape>;
 
+/**
+ * The three registry mutations share one shape
+ * (design/0024-global-config-registry/): each acts on exactly one entry and
+ * reports it as it now reads, with `outcome` carrying how the run converged —
+ * `satisfied` is what makes the idempotency visible (§6). An unregistered
+ * entry reports `default: false`: it is out of the registry, so it is not the
+ * default any more.
+ */
+export const workspaceRegistryShape = z.strictObject({
+  name: z.string(),
+  path: z.string(),
+  default: z.boolean(),
+  outcome: z.enum(['registered', 'satisfied', 'unregistered', 'default-set']),
+});
+export type WorkspaceRegistryShape = z.infer<typeof workspaceRegistryShape>;
+
 /** The session record as written — shared by `session open` and `session close`. */
 export const sessionMutationShape = z.strictObject({
   id: z.string(),
@@ -410,7 +465,21 @@ export const readVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'task list': taskListShape,
   'worktree list': worktreeListShape,
   'repo list': repoListShape,
+  'workspace list': workspaceListShape,
   doctor: doctorShape,
+};
+
+/**
+ * Read verbs whose argv is NOT derivable from the key alone
+ * (design/0024-global-config-registry/): the path verbs take an identity, and
+ * their answer depends on the machine's registry rather than the workspace
+ * the caller stands in. They are read verbs in every other sense — no
+ * mutation, one document on stdout — so they are registered here and proven
+ * live in the entry's own suite, the same split the mutation verbs use.
+ */
+export const pathVerbShapes: Readonly<Record<string, z.ZodType>> = {
+  'workspace path': workspacePathShape,
+  'repo path': repoPathShape,
 };
 
 /**
@@ -436,11 +505,15 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'workspace merge': workspaceMergeShape,
   'workspace restore': workspaceRestoreShape,
   'workspace upgrade': workspaceUpgradeShape,
+  'workspace register': workspaceRegistryShape,
+  'workspace unregister': workspaceRegistryShape,
+  'workspace default': workspaceRegistryShape,
 };
 
-/** The whole `--json` contract: read verbs first, then the mutation verbs. */
+/** The whole `--json` contract: read verbs, the path verbs, then the mutations. */
 export const jsonVerbShapes: Readonly<Record<string, z.ZodType>> = {
   ...readVerbShapes,
+  ...pathVerbShapes,
   ...mutationVerbShapes,
 };
 

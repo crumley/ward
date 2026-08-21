@@ -20,8 +20,22 @@ export const GIT_ENV = {
 // explicitly points WARD_GH at a fake (design/0009-live-forge-state/).
 export const NO_GH = '/dev/null/gh';
 
+/**
+ * Pin the global configuration and state directories into a throwaway tree,
+ * the same hermetic move as the git and gh pins (design/0024-global-config-registry/):
+ * no test ever reads or writes the machine's real `$XDG_CONFIG_HOME` /
+ * `$XDG_STATE_HOME` — or the developer's own workspace registry — unless it
+ * points these at a directory of its own. Created once per test process and
+ * removed at exit.
+ */
+export const WARD_GLOBAL_ENV = ((): Readonly<Record<string, string>> => {
+  const dir = mkdtempSync(join(tmpdir(), 'ward-test-global-'));
+  process.on('exit', () => rmSync(dir, { recursive: true, force: true }));
+  return { WARD_CONFIG_DIR: join(dir, 'config'), WARD_STATE_DIR: join(dir, 'state') };
+})();
+
 export function applyGitTestEnv(): void {
-  Object.assign(process.env, GIT_ENV, { WARD_GH: NO_GH });
+  Object.assign(process.env, GIT_ENV, WARD_GLOBAL_ENV, { WARD_GH: NO_GH });
 }
 
 export function makeTempDir(): string {
@@ -48,7 +62,7 @@ export interface CliResult {
 export function runWard(argv: string[], cwd: string): CliResult {
   const result = Bun.spawnSync(['bun', cliPath, ...argv], {
     cwd,
-    env: { ...process.env, NO_COLOR: '1', WARD_GH: NO_GH, ...GIT_ENV },
+    env: { ...process.env, NO_COLOR: '1', WARD_GH: NO_GH, ...GIT_ENV, ...WARD_GLOBAL_ENV },
   });
   return {
     exitCode: result.exitCode,
@@ -66,7 +80,11 @@ export function runWard(argv: string[], cwd: string): CliResult {
  * absent or faked (design/0009-live-forge-state/).
  */
 export function runWardEnv(argv: string[], cwd: string, env: Record<string, string>): CliResult {
-  const merged: Record<string, string | undefined> = { ...process.env, ...GIT_ENV };
+  const merged: Record<string, string | undefined> = {
+    ...process.env,
+    ...GIT_ENV,
+    ...WARD_GLOBAL_ENV,
+  };
   delete merged.NO_COLOR;
   delete merged.FORCE_COLOR;
   delete merged.CI;

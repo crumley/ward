@@ -22,8 +22,18 @@ import { isCompletionCallback } from './suggest.ts';
  * unknown first word is recorded as itself (bounded), so nothing is guessed.
  */
 const VERB_TREE: Record<string, readonly string[]> = {
-  workspace: ['create', 'merge', 'restore', 'upgrade'],
-  repo: ['add', 'refresh', 'list'],
+  workspace: [
+    'create',
+    'merge',
+    'restore',
+    'upgrade',
+    'register',
+    'unregister',
+    'list',
+    'default',
+    'path',
+  ],
+  repo: ['add', 'refresh', 'list', 'path'],
   project: ['open', 'list'],
   task: ['open', 'list', 'pause', 'resume', 'pr', 'close'],
   worktree: ['create', 'rebase', 'list'],
