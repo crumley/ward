@@ -5,7 +5,7 @@
 // inside the human's shell, so the bar is the same as completion's: never
 // hang, never prompt, never fail cryptically, and never be counted as usage.
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { verbPath } from '../../src/cli/telemetry.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
@@ -264,6 +264,32 @@ test('wrcd and wwcd cd where ward says, and degrade to a listing without a picke
   const home = fish(`source ${script}; cd /; wwcd; and pwd`, `${wardBin}:${toolBin}`);
   expect(home.stderr).toContain('going to the default workspace');
   expect(home.stdout.trim()).toBe(alpha);
+});
+
+test('a picked candidate yields its NAME alone — the CUE never reaches the verb', () => {
+  if (!existsSync(FISH)) return;
+  register(alpha);
+  const script = join(scratch, 'layer.fish');
+  writeFileSync(script, ward(['shell', 'init', 'fish'], alpha).stdout);
+
+  // A picker that SELECTS, the half the exit-1 fake never exercises: real fzf
+  // prints the chosen input line in full — NAME, tab, CUE and all. `--with-nth`
+  // shapes only the display, so the layer must cut the name itself; this fake
+  // "picks" the first candidate exactly as fzf would hand it back.
+  // Builtins only (read/printf): this PATH holds exactly the three fixture
+  // dirs, so an external `head` would silently vanish and fake a cancel.
+  const pickBin = join(scratch, 'picking-fzf');
+  mkdirSync(pickBin, { recursive: true });
+  writeFileSync(join(pickBin, 'fzf'), '#!/bin/sh\nIFS= read -r line\nprintf \'%s\\n\' "$line"\n');
+  Bun.spawnSync(['chmod', '+x', join(pickBin, 'fzf')]);
+
+  const picked = fish(
+    `source ${script}; cd /; wwcd; and pwd; wrcd; and pwd`,
+    `${pickBin}:${wardBin}:${toolBin}`,
+  );
+  expect(picked.stderr).not.toContain('no registered workspace');
+  expect(picked.stderr).not.toContain('no repository named');
+  expect(picked.stdout.trim().split('\n')).toEqual([alpha, join(alpha, 'repos', 'shared')]);
 });
 
 test('wrr forwards its arguments to `ward repo refresh`, from outside any workspace', () => {
