@@ -361,11 +361,19 @@ function toListing(entry: RegistryEntry, defaultPath: string | undefined): Works
  * every time (§6).
  */
 function mruOrder<T extends RegistryEntry>(entries: readonly T[]): T[] {
-  return [...entries].sort((a, b) => {
-    const left = a.lastUsedAt ?? a.registeredAt;
-    const right = b.lastUsedAt ?? b.registeredAt;
-    return left === right ? a.path.localeCompare(b.path) : left < right ? 1 : -1;
-  });
+  return entries
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => {
+      const left = a.entry.lastUsedAt ?? a.entry.registeredAt;
+      const right = b.entry.lastUsedAt ?? b.entry.registeredAt;
+      if (left !== right) return left < right ? 1 : -1;
+      // Same instant — the stamp is millisecond-resolution and two acts can
+      // share one. The file's array order is the order they were recorded in,
+      // so the later-recorded entry is the more recent one: a tie-break that
+      // means something, where sorting by name would have been arbitrary.
+      return b.index - a.index;
+    })
+    .map((row) => row.entry);
 }
 
 /** Read → change → write, serialized, with the changed entry reported back. */

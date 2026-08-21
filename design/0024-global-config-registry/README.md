@@ -157,9 +157,10 @@ boundary in the intent — and most of the decisions below are that boundary, ap
     subtly different contention story in the same codebase. The global site takes a shorter bound
     (5s, and 1s for a recency touch): nothing here is worth stalling a command for.
   - **Recency is derived, not maintained.** Entries carry `lastUsedAt`; the order is computed from
-    it (falling back to `registeredAt`, ties broken by path). §17's first bias — derive shared state
-    rather than store it — applied to an ordering: two writers can never disagree about "the order",
-    because nobody writes it.
+    it (falling back to `registeredAt`, ties broken by the file's insertion order — the stamp is
+    millisecond-resolution, and later-recorded is the honest reading of a tie). §17's first bias —
+    derive shared state rather than store it — applied to an ordering: two writers can never
+    disagree about "the order", because nobody writes it.
   - **An explicit target is never resolved by the caller's location.** The walk-up that makes
     `discoverWorkspace` friendly is a hazard for an _argument_: walking up from a path that does not
     exist silently answers with the workspace enclosing the CWD. Every explicit target
@@ -356,6 +357,14 @@ the new signature); nothing else in either entry touched the other's ground, whi
 deliberate no-contact rule bought. `ward worktree rebase t7` refused first and reported the conflict
 with the worktree exactly as it was — the abort working as designed — and the manual rebase
 followed. `mise run check` green on the rebased branch.
+
+**And CI caught what a slower laptop hid.** The MRU ordering case failed once in Actions: the
+recorded stamp is millisecond-resolution, and two acts on a fast machine land in the same
+millisecond, at which point the tie-break decided the order — and the tie-break was the entry's
+**path**, which is deterministic but arbitrary. It now breaks on the file's array order instead:
+that array is insertion order, so the later-recorded entry is the more recent one — a tie-break that
+means something. The test separates its touches, because no tie-break can distinguish two touches
+inside one millisecond, and a test about ordering must not depend on sub-millisecond timing.
 
 **Next.** In dogfood order: the fish shell layer this entry exists for (`wcd`, `wrepo` and friends,
 built on the two path verbs); wiring `repo.refresh.stash` into `ward repo refresh` once its parallel
