@@ -14,6 +14,7 @@
 import type { PrForgeState } from '../forge/gh.ts';
 import type { RepoLocation } from '../global/locate.ts';
 import type { RegistryReport, WorkspaceListing } from '../global/registry.ts';
+import type { AdoptionReport } from '../shell/adopt.ts';
 import type {
   ProjectRecord,
   RepositoryRecord,
@@ -41,6 +42,7 @@ import type {
   RepoPathShape,
   RepoRefreshShape,
   SessionMutationShape,
+  ShellAdoptShape,
   StatusShape,
   StatusTaskShape,
   StatusWorktreeShape,
@@ -396,6 +398,30 @@ export function sessionMutationJson(record: SessionRecord): SessionMutationShape
     state: record.state,
     openedAt: record.openedAt,
     ...(record.closedAt === undefined ? {} : { closedAt: record.closedAt }),
+  };
+}
+
+/**
+ * `ward shell adopt <shell>` (design/0027-shell-adoption/). The offering and
+ * the write report share a document because they are one verb's two answers,
+ * and the difference is `offeredOnly` plus whether the file rows are there —
+ * so an agent reads "what is on offer and where it stands" and "what I just
+ * wrote" through one shape.
+ */
+export function shellAdoptJson(report: AdoptionReport): ShellAdoptShape {
+  return {
+    shell: report.shell,
+    dir: report.dir,
+    offeredOnly: report.offeredOnly,
+    shorthands: report.shorthands.map((shorthand) => ({
+      name: shorthand.name,
+      summary: shorthand.summary,
+      status: shorthand.status,
+      files: shorthand.files.map((file) => ({
+        path: file.relativePath,
+        outcome: file.outcome,
+      })),
+    })),
   };
 }
 

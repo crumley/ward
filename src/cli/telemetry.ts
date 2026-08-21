@@ -47,8 +47,10 @@ const VERB_TREE: Record<string, readonly string[]> = {
   completion: [],
   // `shell init` is the same deliberate once-per-install act and is recorded;
   // `shell candidates` is the emitted layer's own callback and is not — see
-  // isMachineryInvocation (design/0025-fish-shell-layer/).
-  shell: ['init', 'candidates'],
+  // isMachineryInvocation (design/0025-fish-shell-layer/). `shell adopt` and
+  // `shell diff` are deliberate human acts too — adopting is the install, and
+  // asking to see a diff is a decision being made (design/0027-shell-adoption/).
+  shell: ['init', 'candidates', 'adopt', 'diff'],
 };
 
 /**

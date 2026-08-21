@@ -25,8 +25,19 @@ import {
   unregisterWorkspace,
   viewRegistry,
 } from '../global/registry.ts';
+import {
+  type AdoptionReport,
+  adoptionDir,
+  adoptShorthands,
+  diffShorthand,
+  inspectAdoption,
+  inspectShorthand,
+  requireAdoptionShell,
+  type ShorthandInspection,
+} from '../shell/adopt.ts';
 import { CANDIDATE_KINDS, candidates, renderCandidates } from '../shell/candidates.ts';
 import { emitShellLayer } from '../shell/layer.ts';
+import { FISH_SHORTHAND_NAMES, findShorthand } from '../shell/shorthands.ts';
 import type { TaskRecord, WorkState } from '../store/types.ts';
 import { createWorkspace, type StepReport } from '../workspace/create.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
@@ -68,6 +79,7 @@ import {
   repoPathJson,
   repoRefreshJson,
   sessionMutationJson,
+  shellAdoptJson,
   statusJson,
   taskCloseJson,
   taskListJson,
@@ -338,7 +350,56 @@ const shellCandidates = command(
   },
 );
 
-const shell = command('shell', or(shellInit, shellCandidates), {
+// Adoption (design/0027-shell-adoption/): the other install style, where the
+// human takes a shorthand as a file they own rather than sourcing a layer
+// ward keeps fresh. `adopt` is the verb because that is the operation — the
+// human is taking ownership of a definition ward offered, not letting a
+// package manager put something under management (intent's "verbs read true
+// to the operation"). `diff` is its own verb rather than a flag on `adopt`
+// for the same reason: it writes nothing, and a flag that makes a verb not do
+// its verb reads false.
+const shellAdopt = command(
+  'adopt',
+  object({
+    action: constant('shell-adopt'),
+    shell: argument(string({ metavar: 'SHELL' })),
+    names: multiple(argument(choice([...FISH_SHORTHAND_NAMES], { metavar: 'NAME' }))),
+    all: option('--all', {
+      description: message`Adopt every shorthand ward offers.`,
+    }),
+    dir: optional(
+      option('--dir', string({ metavar: 'PATH' }), {
+        description: message`Write into this fish config root instead of the live one (for a dotfiles repo).`,
+      }),
+    ),
+    force: option('--force', {
+      description: message`Replace a file that carries no ward marker — one you wrote yourself.`,
+    }),
+    json: jsonFlag(),
+  }),
+  {
+    brief: message`Adopt ward's fish shorthands as files you own; name none to see what is offered.`,
+  },
+);
+
+const shellDiff = command(
+  'diff',
+  object({
+    action: constant('shell-diff'),
+    shell: argument(string({ metavar: 'SHELL' })),
+    names: multiple(argument(choice([...FISH_SHORTHAND_NAMES], { metavar: 'NAME' }))),
+    dir: optional(
+      option('--dir', string({ metavar: 'PATH' }), {
+        description: message`Read from this fish config root instead of the live one.`,
+      }),
+    ),
+  }),
+  {
+    brief: message`Show what an adopted shorthand holds against what this ward would write.`,
+  },
+);
+
+const shell = command('shell', or(shellInit, shellCandidates, shellAdopt, shellDiff), {
   brief: message`The interactive shell layer — mnemonic shorthands that work from any directory.`,
 });
 
@@ -629,6 +690,17 @@ try {
         if (found.length > 0) console.log(renderCandidates(found));
         break;
       }
+      case 'shell-adopt':
+        await cmdShellAdopt(result.shell, result.names, {
+          all: result.all,
+          force: result.force,
+          json: result.json,
+          ...(result.dir === undefined ? {} : { dir: result.dir }),
+        });
+        break;
+      case 'shell-diff':
+        await cmdShellDiff(result.shell, result.names, result.dir);
+        break;
       case 'repo-add':
         await cmdRepoAdd(result.source, result.name, result.json);
         break;
@@ -1078,6 +1150,149 @@ async function cmdRepoPath(
   }
   if (json) printJson(repoPathJson(location));
   else console.log(location.path);
+}
+
+/**
+ * `ward shell adopt <shell> [NAME…]` (design/0027-shell-adoption/) — the one
+ * verb in Ward that writes into the human's shell configuration, and it
+ * writes only what it was named.
+ *
+ * Naming nothing is the selection surface, not a default action: it prints
+ * the offering with each shorthand's standing and writes nothing at all. §18
+ * is the whole reason — Ward emits and the human installs, so the human's act
+ * of naming a shorthand IS the install, and a verb that adopted everything
+ * when asked for nothing would be taking that act for them.
+ */
+async function cmdShellAdopt(
+  shell: string,
+  names: readonly string[],
+  options: { all: boolean; force: boolean; json: boolean; dir?: string },
+): Promise<void> {
+  requireAdoptionShell(shell);
+  if (options.all && names.length > 0) {
+    throw new WardError(
+      '--all adopts every shorthand; naming some as well says two different things — ' +
+        'drop one (ward shell adopt fish with no names lists what is offered)',
+    );
+  }
+  const dir = adoptionDir(options.dir);
+  const wanted = options.all ? [...FISH_SHORTHAND_NAMES] : names;
+  const report: AdoptionReport =
+    wanted.length === 0
+      ? {
+          shell,
+          dir,
+          offeredOnly: true,
+          shorthands: (await inspectAdoption(dir)).map((seen) => ({
+            name: seen.name,
+            summary: seen.summary,
+            status: seen.status,
+            files: [],
+          })),
+        }
+      : {
+          shell,
+          dir,
+          offeredOnly: false,
+          shorthands: await adoptShorthands(wanted, dir, { force: options.force }),
+        };
+  if (options.json) {
+    printJson(shellAdoptJson(report));
+    return;
+  }
+  renderAdoption(report);
+}
+
+function renderAdoption(report: AdoptionReport): void {
+  console.log(`ward's ${report.shell} shorthands — ${pc.bold(report.dir)}`);
+  console.log();
+  for (const shorthand of report.shorthands) {
+    console.log(
+      `  ${renderShorthandStatus(shorthand.status)}  ${pc.bold(shorthand.name.padEnd(6))}${
+        shorthand.summary
+      }`,
+    );
+    for (const file of shorthand.files) {
+      console.log(`      ${renderFileOutcome(file.outcome)}  ${pc.dim(file.relativePath)}`);
+    }
+  }
+  console.log();
+  if (report.offeredOnly) {
+    // The selection surface says how to select — naming nothing wrote
+    // nothing, and the next step must not need the README.
+    console.log(
+      pc.dim(
+        `adopt one by name (ward shell adopt ${report.shell} ${
+          report.shorthands[0]?.name ?? 'NAME'
+        }) or every one (--all); ` + `see a changed one with ward shell diff ${report.shell} NAME`,
+      ),
+    );
+    return;
+  }
+  if (report.shorthands.some((shorthand) => shorthand.status === 'yours')) {
+    console.log(
+      pc.dim(
+        'a file carrying no ward marker is yours and was kept — --force replaces it, ' +
+          "if it was meant to be ward's",
+      ),
+    );
+    return;
+  }
+  console.log(
+    pc.dim(
+      'these files are yours now: track them, edit them, keep them. ' +
+        "ward doctor tells you when ward's own definition has moved on",
+    ),
+  );
+}
+
+function renderShorthandStatus(status: ShorthandInspection['status']): string {
+  switch (status) {
+    case 'current':
+      return pc.green('current  ');
+    case 'changed':
+      return pc.yellow('changed  ');
+    case 'yours':
+      return pc.cyan('yours    ');
+    case 'unreadable':
+      return pc.yellow('unreadable');
+    case 'available':
+      return pc.dim('available');
+  }
+}
+
+function renderFileOutcome(outcome: 'written' | 'unchanged' | 'kept' | 'replaced'): string {
+  switch (outcome) {
+    case 'written':
+      return pc.green('written  ');
+    case 'replaced':
+      return pc.green('replaced ');
+    case 'unchanged':
+      return pc.dim('unchanged');
+    case 'kept':
+      return pc.cyan('kept     ');
+  }
+}
+
+/**
+ * `ward shell diff <shell> [NAME…]` — the "here's the diff" choice, writing
+ * nothing. Silence when nothing differs, because an empty diff is exactly
+ * what `diff` prints when two files agree, and exit 0 either way: a shorthand
+ * that has moved on is news, not a failure.
+ */
+async function cmdShellDiff(
+  shell: string,
+  names: readonly string[],
+  dir: string | undefined,
+): Promise<void> {
+  requireAdoptionShell(shell);
+  const root = adoptionDir(dir);
+  const wanted = names.length === 0 ? FISH_SHORTHAND_NAMES : names;
+  for (const name of wanted) {
+    const shorthand = findShorthand(name);
+    if (shorthand === undefined) continue;
+    process.stdout.write(diffShorthand(await inspectShorthand(shorthand, root)));
+  }
 }
 
 /**

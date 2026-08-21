@@ -16,7 +16,17 @@ import {
   registryPath,
   resolutionOrder,
 } from '../global/registry.ts';
-import { type InstalledArtifact, inspectInstalledShellArtifacts } from '../shell/installed.ts';
+import {
+  adoptionDir,
+  fishConfigured,
+  inspectAdoption,
+  type ShorthandInspection,
+} from '../shell/adopt.ts';
+import {
+  fishArtifactSites,
+  type InstalledArtifact,
+  inspectInstalledShellArtifacts,
+} from '../shell/installed.ts';
 import { type DocumentType, readDocument } from '../store/document.ts';
 import { inspectLock, inspectStoreLock } from '../store/lock.ts';
 import {
@@ -92,7 +102,7 @@ async function machineChecks(cwd: string): Promise<Finding[]> {
     findings.push(ghAuthFinding(await probeForgeAuth()));
   }
   findings.push(pickerFinding());
-  findings.push(...(await shellArtifactFindings()));
+  findings.push(...(await shellFindings()));
   findings.push(await globalConfigFinding());
   findings.push(await workspaceRegistryFinding());
   findings.push(...registryLockFindings());
@@ -143,6 +153,146 @@ async function shellArtifactFindings(): Promise<Finding[]> {
   const { configured, artifacts } = await inspectInstalledShellArtifacts();
   if (!configured && artifacts.every((artifact) => artifact.state === 'absent')) return [];
   return artifacts.map(shellArtifactFinding);
+}
+
+/**
+ * Everything doctor says about the human's shell: the two whole-file
+ * artifacts 0026 checks, the adopted shorthands
+ * (design/0027-shell-adoption/), and the one condition that only exists
+ * because both install styles do.
+ *
+ * One function because the three readings are one subject and share a gate:
+ * a machine that keeps no fish configuration and has adopted nothing hears
+ * nothing at all.
+ */
+async function shellFindings(): Promise<Finding[]> {
+  const artifacts = await shellArtifactFindings();
+  const adoption = await inspectAdoption(adoptionDir(undefined));
+  return [...artifacts, ...adoptedShorthandFindings(adoption), ...shadowedFindings(adoption)];
+}
+
+/**
+ * One finding per **adopted** shorthand, plus at most one dim line for the
+ * rest (design/0027-shell-adoption/).
+ *
+ * Per alias, because that is the granularity the human adopted at: `wrr` can
+ * be a year old while `wrcd` is this morning's, they live in different files,
+ * and their remedies name different words. The alias that changed is the
+ * whole finding — it names the alias, the file, the command that shows the
+ * diff, and the command that takes ward's version — because those are exactly
+ * the human's three choices (ignore it, see it, take it) and a finding that
+ * offered fewer would be making one of them for them.
+ *
+ * A shorthand ward offers that nobody adopted is never a warning and never a
+ * line of its own: declining to adopt is a choice, and the whole point of
+ * adoption is that ward writes only what it was asked for. It gets one dim
+ * info naming the set, on the same terms 0026 gives an uninstalled layer.
+ */
+function adoptedShorthandFindings(adoption: readonly ShorthandInspection[]): Finding[] {
+  if (!fishConfigured() && adoption.every((seen) => seen.status === 'available')) return [];
+  const findings = adoption
+    .filter((seen) => seen.status !== 'available')
+    .map(adoptedShorthandFinding);
+  const available = adoption.filter((seen) => seen.status === 'available');
+  if (available.length > 0) {
+    findings.push({
+      check: 'fish shorthands',
+      severity: 'info',
+      message:
+        `${available.map((seen) => seen.name).join(', ')} not adopted — optional; ` +
+        '`ward shell adopt fish` lists what is offered and adopts what you name ' +
+        '(or use the always-fresh `ward shell init fish` layer instead)',
+    });
+  }
+  return findings;
+}
+
+function adoptedShorthandFinding(seen: ShorthandInspection): Finding {
+  const check = `fish shorthand ${seen.name}`;
+  const own = seen.files[0];
+  const path = own === undefined ? seen.name : own.path;
+  switch (seen.status) {
+    case 'current':
+      return { check, severity: 'ok', message: `${path} — matches what this ward defines` };
+    case 'changed': {
+      const drifted = seen.files.filter((file) => file.state !== 'current');
+      const kept = drifted.filter((file) => file.state === 'yours');
+      return {
+        check,
+        severity: 'warn',
+        message:
+          `${seen.name} has changed — ${listPaths(drifted)} ` +
+          `differ${drifted.length === 1 ? 's' : ''} from what this ward defines. ` +
+          `See it: ward shell diff fish ${seen.name}. Take it: ward shell adopt fish ` +
+          `${seen.name}. Or keep yours — nothing rewrites it but you` +
+          (kept.length === 0
+            ? ''
+            : ` (${listPaths(kept)} carries no ward marker; adopting leaves it alone)`),
+      };
+    }
+    case 'yours':
+      // The claude-guidance idiom (0017), and 0026's posture verbatim: a file
+      // ward did not write is somebody's arrangement, kept. Adoption is the
+      // one verb that writes, and it declines this file too (§18).
+      return {
+        check,
+        severity: 'info',
+        message:
+          `${path} is present but carries no ward marker — your own \`${seen.name}\`, kept; ` +
+          `ward will not overwrite what it did not write (ward shell adopt fish ${seen.name} ` +
+          "--force replaces it, if it was meant to be ward's)",
+      };
+    case 'unreadable':
+      return {
+        check,
+        severity: 'warn',
+        message:
+          `${path} could not be read — ${reasonFor(seen)}; whether the adopted copy still ` +
+          'matches this ward cannot be told from here',
+      };
+    // A shorthand nobody adopted is reported as part of the set, not alone.
+    case 'available':
+      return { check, severity: 'info', message: `${seen.name} not adopted` };
+  }
+}
+
+/**
+ * The one condition that exists only because both install styles do: fish
+ * sources `conf.d/ward.fish` at startup, which DEFINES `wrcd`, and an
+ * autoloaded `functions/wrcd.fish` is only ever consulted for a function that
+ * is not defined yet. So an installed layer silently wins over every adopted
+ * shorthand beside it.
+ *
+ * It is a warning rather than a note because the failure is invisible from
+ * the shell: the human's own tracked file does nothing, and the shorthand
+ * they are running is the layer's. §20's loop is explicit that a condition a
+ * surface can honestly report must be one doctor names — and this one no
+ * surface else can see. It is never an error: both files are conveniences.
+ */
+function shadowedFindings(adoption: readonly ShorthandInspection[]): Finding[] {
+  const adopted = adoption.filter((seen) => seen.status === 'current' || seen.status === 'changed');
+  const layer = fishArtifactSites()[0];
+  if (adopted.length === 0 || layer === undefined || !existsSync(layer.path)) return [];
+  const { path } = layer;
+  return [
+    {
+      check: 'fish shorthands shadowed',
+      severity: 'warn',
+      message:
+        `${path} defines ${adopted.map((seen) => seen.name).join(', ')} too, and wins — ` +
+        'fish sources conf.d at startup and only autoloads a function that is not already ' +
+        'defined, so the adopted files beside it never run. Keep one style: delete the layer ' +
+        'to run what you adopted, or the adopted files to run the always-fresh layer',
+    },
+  ];
+}
+
+function listPaths(files: readonly { readonly relativePath: string }[]): string {
+  return files.map((file) => file.relativePath).join(', ');
+}
+
+function reasonFor(seen: ShorthandInspection): string {
+  return seen.files.find((file) => file.reason !== undefined)?.reason ?? 'unknown';
 }
 
 function shellArtifactFinding(artifact: InstalledArtifact): Finding {
