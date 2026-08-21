@@ -37,21 +37,31 @@ for (const [verb, shape] of Object.entries(readVerbShapes)) {
 
 // -- the whole-contract document -------------------------------------------
 
-// One CLI spawn per registered verb, so this case's cost grows with the
-// contract — it crossed bun's 5s default the moment the registry did, on a
-// machine no slower than CI's. The timeout is stated rather than left implicit
-// because the growth is expected: every --json verb added here adds a spawn.
-test('ward schema: one document covering every --json verb, keyed by its CLI words', () => {
-  const result = runWard(['schema'], ws);
-  expect(result.exitCode).toBe(0);
-  const contract = JSON.parse(result.stdout);
-  expect(Object.keys(contract)).toEqual(Object.keys(jsonVerbShapes));
-  for (const verb of Object.keys(jsonVerbShapes)) {
-    // The slice invariant: the whole-contract entry is the one-verb document.
-    const single = JSON.parse(runWard(['schema', ...verb.split(' ')], ws).stdout);
-    expect(contract[verb]).toEqual(single);
-  }
-}, 30_000);
+// Spawn-bound, and deliberately so: proving the slice invariant means asking
+// the real CLI once per registered verb, so this case's wall time tracks the
+// contract's size and the machine's process startup — neither of which is what
+// it asserts. It crossed bun's 5s default the moment the registry did, on a
+// machine no slower than CI's (it lost the coin flip on one, at 30 spawns), and
+// a timeout here would report a shape mismatch that never happened — so the
+// deadline is pinned generously and named, because the growth is expected:
+// every --json verb added adds a spawn.
+const CONTRACT_CASE_TIMEOUT_MS = 30_000;
+
+test(
+  'ward schema: one document covering every --json verb, keyed by its CLI words',
+  () => {
+    const result = runWard(['schema'], ws);
+    expect(result.exitCode).toBe(0);
+    const contract = JSON.parse(result.stdout);
+    expect(Object.keys(contract)).toEqual(Object.keys(jsonVerbShapes));
+    for (const verb of Object.keys(jsonVerbShapes)) {
+      // The slice invariant: the whole-contract entry is the one-verb document.
+      const single = JSON.parse(runWard(['schema', ...verb.split(' ')], ws).stdout);
+      expect(contract[verb]).toEqual(single);
+    }
+  },
+  CONTRACT_CASE_TIMEOUT_MS,
+);
 
 test('ward schema is byte-identical across runs', () => {
   const first = runWard(['schema'], ws);
