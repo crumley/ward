@@ -114,6 +114,38 @@ lands with its own entry. `ward doctor` names the state of both files — includ
 not parse, or an entry whose workspace is gone. The design is in
 [`design/0024-global-config-registry/`](design/0024-global-config-registry/README.md).
 
+## The shell layer
+
+Beside the completions, Ward emits a layer of **shorthands** for the moves you make all day. Install
+it once — Ward prints, you redirect, the same contract completion has:
+
+```fish
+ward shell init fish > ~/.config/fish/conf.d/ward.fish
+```
+
+Three functions, each usable from any directory:
+
+| Shorthand     | What it does                                                                       |
+| ------------- | ---------------------------------------------------------------------------------- |
+| `wrr`         | `ward repo refresh`, arguments and all — from anywhere, via the default workspace. |
+| `wrcd NAME`   | `cd` to a repository's canonical checkout, searching across workspaces.            |
+| `wwcd [NAME]` | `cd` to a workspace root.                                                          |
+
+`wrcd` takes a shorthand for the name: exact wins, then a unique prefix, then a unique substring, so
+`wrcd dot` reaches `dotfiles` while nothing else could be meant — and Ward says on stderr which
+repository it landed on. Give either function no name (or one that resolves to nothing) and it opens
+a picker over the candidates, prefilled with what you typed. The picker is [fzf]; without it, both
+functions print the candidates and ask you to name one — no hang, no prompt — and `wwcd` with no
+name simply takes you to the default workspace. `ward doctor` tells you which of those two worlds
+you are in.
+
+Re-run the command after upgrading Ward — the shorthand set is expected to churn as usage shows what
+is worth one. Only fish today; other shells are unbuilt, not unsupported, and `ward shell init bash`
+says so and names what does exist. The design is in
+[`design/0025-fish-shell-layer/`](design/0025-fish-shell-layer/README.md).
+
+[fzf]: https://github.com/junegunn/fzf
+
 ## License
 
 [MIT](LICENSE).

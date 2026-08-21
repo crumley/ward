@@ -13,6 +13,7 @@ import picocolors from 'picocolors';
 import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
 import { type PrForgeState, probeForge } from '../forge/gh.ts';
+import { readConfig } from '../global/config.ts';
 import { locateRepo, locateWorkspace } from '../global/locate.ts';
 import {
   listWorkspaces,
@@ -24,6 +25,8 @@ import {
   unregisterWorkspace,
   viewRegistry,
 } from '../global/registry.ts';
+import { CANDIDATE_KINDS, candidates, renderCandidates } from '../shell/candidates.ts';
+import { renderShellLayer } from '../shell/layer.ts';
 import type { TaskRecord, WorkState } from '../store/types.ts';
 import { createWorkspace, type StepReport } from '../workspace/create.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
@@ -84,7 +87,6 @@ import { refreshDisplay } from './progress.ts';
 import { allSchemasJson, verbSchemaJson } from './schema.ts';
 import {
   anyRepoName,
-  isCompletionCallback,
   repoName,
   schemaVerb,
   sessionId,
@@ -92,7 +94,7 @@ import {
   workspaceBranch,
   workspaceIdentity,
 } from './suggest.ts';
-import { recordInvocation } from './telemetry.ts';
+import { isMachineryInvocation, recordInvocation } from './telemetry.ts';
 
 // Local usage telemetry, armed before anything can exit: one row per
 // invocation — read verbs included — appended at process exit so it carries
@@ -105,9 +107,10 @@ recordInvocation(process.argv.slice(2));
 // registered workspace is what makes it the most recently used one, which is
 // what `ward` falls back to from elsewhere. Awaited so nothing dangles, and
 // it is a single small read in the steady state — the write happens only when
-// the order actually changes. A completion callback is the shell's own
-// machinery, not usage (design/0022-shell-completion/, SF-002), so it never
-// churns the MRU.
+// the order actually changes. The interaction layer's own machinery — a
+// completion callback, a shell-layer candidate feed — is not usage
+// (design/0022-shell-completion/ SF-002, design/0025-fish-shell-layer/), so
+// it never churns the MRU.
 await touchInvokedWorkspace(process.argv.slice(2));
 
 // A declared agent gets deterministic output: no ANSI, whatever the terminal
@@ -274,10 +277,9 @@ const repoRefresh = command(
   object({
     action: constant('repo-refresh'),
     name: optional(argument(repoName())),
-    // Opt-in, and read from the flag alone: the parallel configuration work
-    // will supply a default for `repo.refresh.stash`, and substituting it
-    // where the flag is absent is that PR's one-line change here — nothing
-    // below this layer reads configuration (design/0023-refresh-concurrency-ux/).
+    // Opt-in at the flag; a human's `repo.refresh.stash: true` preference
+    // supplies the default where the flag is absent (cmdRepoRefresh) — nothing
+    // below the CLI layer reads configuration (design/0023-refresh-concurrency-ux/).
     stash: option('--stash', {
       description: message`Stash a dirty checkout, refresh it, then restore the stash (a conflicted pop is reported, never resolved).`,
     }),
@@ -310,6 +312,34 @@ const repoPath = command(
 
 const repo = command('repo', or(repoAdd, repoRefresh, repoList, repoPath), {
   brief: message`Operate on the workspace's registered repositories.`,
+});
+
+// The interactive shell layer (design/0025-fish-shell-layer/): `init` emits
+// the shorthands a human installs, `candidates` is the feed that emitted
+// script calls back into. Both live under one noun for the reason
+// `ward completion <shell>` holds both its halves — the script and the thing
+// the script asks — so the layer and its plumbing can never drift apart.
+const shellInit = command(
+  'init',
+  object({ action: constant('shell-init'), shell: argument(string({ metavar: 'SHELL' })) }),
+  {
+    brief: message`Emit the shell layer of shorthands (wrr, wrcd, wwcd) — redirect it into your shell config.`,
+  },
+);
+
+const shellCandidates = command(
+  'candidates',
+  object({
+    action: constant('shell-candidates'),
+    kind: argument(choice([...CANDIDATE_KINDS], { metavar: 'KIND' })),
+  }),
+  {
+    brief: message`Machinery: one NAME<TAB>CUE line per candidate, for the emitted shell layer to pick from.`,
+  },
+);
+
+const shell = command('shell', or(shellInit, shellCandidates), {
+  brief: message`The interactive shell layer — mnemonic shorthands that work from any directory.`,
 });
 
 const project = command(
@@ -509,7 +539,19 @@ if (process.argv.length === 2) {
   process.exit(0);
 }
 
-const cli = or(workspace, repo, project, task, worktree, session, status, doctor, schema, version);
+const cli = or(
+  workspace,
+  repo,
+  project,
+  task,
+  worktree,
+  session,
+  status,
+  doctor,
+  schema,
+  shell,
+  version,
+);
 // `completion: 'command'` adds `ward completion <shell>` — the script
 // generator AND the per-TAB callback the generated script calls back into, so
 // suggestions are derived from this very tree and can never drift from it
@@ -571,6 +613,20 @@ try {
       case 'repo-path':
         await cmdRepoPath(result.name, result.workspace, result.json);
         break;
+      case 'shell-init':
+        // stdout carries the script and nothing else — it is redirected into
+        // a file the shell will source (§18: Ward emits, the human installs).
+        console.log(renderShellLayer(result.shell));
+        break;
+      case 'shell-candidates': {
+        // Machinery, and shaped like it: one NAME<TAB>CUE line per candidate,
+        // no color, no header, and NOTHING on an empty set — a picker with no
+        // candidates is an empty picker, never an error in the human's shell
+        // mid-keystroke (§20).
+        const found = await candidates(result.kind, process.cwd());
+        if (found.length > 0) console.log(renderCandidates(found));
+        break;
+      }
       case 'repo-add':
         await cmdRepoAdd(result.source, result.name, result.json);
         break;
@@ -934,7 +990,7 @@ function renderUpgradeAction(action: 'upgraded' | 'installed' | 'current' | 'kep
 
 /** Note this invocation's workspace as the most recently used, if registered. */
 async function touchInvokedWorkspace(argv: readonly string[]): Promise<void> {
-  if (isCompletionCallback(argv)) return;
+  if (isMachineryInvocation(argv)) return;
   const root = discoverWorkspace(process.cwd());
   if (root !== null) await touchWorkspace(root);
 }
@@ -993,14 +1049,22 @@ async function cmdWorkspaceList(json: boolean): Promise<void> {
  * into a shell command. When the answer came from another workspace — the
  * registry resolved it, not the caller's location — that derivation is echoed
  * on stderr, the 0006 precedent: an implicit input is never silent, and
- * stderr keeps stdout to the one thing the caller asked for.
+ * stderr keeps stdout to the one thing the caller asked for. A name that
+ * resolved as a shorthand rather than as itself is the same kind of implicit
+ * input, and is echoed the same way (design/0025-fish-shell-layer/).
  */
 async function cmdRepoPath(
   name: string,
   workspaceTarget: string | undefined,
   json: boolean,
 ): Promise<void> {
-  const location = await locateRepo(name, process.cwd(), workspaceTarget);
+  // A human gets the shorthand rungs; a declared agent resolves exactly (§8).
+  const location = await locateRepo(name, process.cwd(), workspaceTarget, !callerIsAgent());
+  if (location.matched !== 'exact') {
+    console.error(
+      pc.dim(`repository ${location.repo} — '${name}' matched it by ${location.matched}`),
+    );
+  }
   if (location.workspace.source !== 'cwd') {
     console.error(
       pc.dim(
@@ -1140,9 +1204,14 @@ async function cmdRepoRefresh(
   stash: boolean,
 ): Promise<void> {
   const root = await requireMutableWorkspace();
+  // The `repo.refresh.stash` preference answers for a human who left the flag
+  // off; a declared agent is read from the flag alone, so its invocation means
+  // the same thing on every machine — the registry-fallback asymmetry (0024),
+  // applied to a preference instead of a place.
+  const stashing = stash || (!callerIsAgent() && (await readConfig()).repo.refresh.stash);
   const display = json ? null : refreshDisplay(pc);
   const reports = await refreshRepositories(root, name, {
-    stash,
+    stash: stashing,
     ...(display === null ? {} : { observe: display.observe }),
   });
   if (json) {

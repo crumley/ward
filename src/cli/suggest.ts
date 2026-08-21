@@ -25,11 +25,11 @@ import { message, text } from '@optique/core/message';
 import type { NonEmptyString } from '@optique/core/nonempty';
 import type { Suggestion } from '@optique/core/parser';
 import { string, type ValueParser } from '@optique/core/valueparser';
-import { searchOrder } from '../global/locate.ts';
 import { listWorkspaces } from '../global/registry.ts';
+import { repoCandidates } from '../shell/candidates.ts';
 import { git } from '../workspace/git.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
-import { listRepositories, listRepositoryNames } from '../workspace/repos.ts';
+import { listRepositories } from '../workspace/repos.ts';
 import { readTasks } from '../workspace/scan.ts';
 import { readOpenSessions } from '../workspace/sessions.ts';
 import { resolveWorkspaceMainLine } from '../workspace/steward.ts';
@@ -191,17 +191,19 @@ export function workspaceIdentity(): ValueParser<'async', string> {
  * only the current workspace's names would hide exactly the cross-workspace
  * lookups this verb exists for, and suggesting names from a workspace the
  * search never reaches would offer what the verb then refuses.
+ *
+ * The set is `repoCandidates` — the same reader the emitted shell layer's
+ * picker asks (design/0025-fish-shell-layer/). Two surfaces answering "which
+ * repository did you mean?" from two readers is exactly the drift this file's
+ * opening comment refuses.
  */
 export function anyRepoName(): ValueParser<'async', string> {
-  return suggesting('NAME', async () => {
-    const candidates = new Map<string, string>();
-    for (const workspace of await searchOrder(process.cwd())) {
-      for (const name of listRepositoryNames(workspace.path)) {
-        if (!candidates.has(name)) candidates.set(name, workspace.name);
-      }
-    }
-    return [...candidates].map(([text, workspace]) => ({ text, description: workspace }));
-  });
+  return suggesting('NAME', async () =>
+    (await repoCandidates(process.cwd())).map((candidate) => ({
+      text: candidate.name,
+      description: candidate.cue,
+    })),
+  );
 }
 
 /**

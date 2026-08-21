@@ -55,8 +55,12 @@ boundary in the intent — and most of the decisions below are that boundary, ap
     uses, so no test reads or writes the machine's real `$HOME`.
   - **Global configuration** (`src/global/config.ts`): `config.md`, front matter as the settings
     tree, so a dotted key is its path through the document. Ships with `repo.refresh.stash`
-    (boolean) validated and defaulted; **not wired into `ward repo refresh`** — that verb belonged
-    to a parallel entry, and this one deliberately does not touch its code path (Deferred, below).
+    (boolean) validated and defaulted; the entry itself did **not** wire it into `ward repo refresh`
+    — that verb belonged to a parallel entry, and this one deliberately did not touch its code path.
+    A follow-up landed the wiring once both entries existed: the preference answers for a **human**
+    who left `--stash` off, while a declared agent is read from the flag alone, so an agent's
+    invocation means the same thing on every machine — the registry-fallback asymmetry (§8), applied
+    to a preference instead of a place.
   - **The workspace registry** (`src/global/registry.ts`): `workspaces.md` — entries of
     `{name, path, registeredAt, lastUsedAt?}`, a `default` pointer, MRU order derived from the
     timestamps. Verbs: `ward workspace register [PATH]` (idempotent; the first registered becomes
@@ -367,9 +371,9 @@ means something. The test separates its touches, because no tie-break can distin
 inside one millisecond, and a test about ordering must not depend on sub-millisecond timing.
 
 **Next.** In dogfood order: the fish shell layer this entry exists for (`wcd`, `wrepo` and friends,
-built on the two path verbs); wiring `repo.refresh.stash` into `ward repo refresh` once its parallel
-entry lands; the workspace-local configuration axis and the precedence rule between the two; and the
-guided `ward setup` that edits both.
+built on the two path verbs); the workspace-local configuration axis and the precedence rule between
+the two; and the guided `ward setup` that edits both. (Wiring `repo.refresh.stash` into
+`ward repo refresh` was on this list and has since landed — see the configuration bullet in Scope.)
 
 ## Spec-feedback
 
