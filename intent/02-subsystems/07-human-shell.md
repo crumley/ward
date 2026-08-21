@@ -19,7 +19,13 @@ principle (§8) and feeds the compounding loop
   open, close, resume, dispatch…). _Why:_ a noun/verb structure is discoverable and predictable for
   both audiences and stays coherent as it grows.
 - **The interactive layer adds mnemonic shorthands** for common operations — thin plumbing,
-  **evolvable** as telemetry reveals real usage.
+  **evolvable** as telemetry reveals real usage. And because churn is expected, churn must be
+  **deliverable**: whatever installed form the shorthands take in the human's shell configuration,
+  that form is **cheaply re-obtainable** from the tool, and its **staleness is visible** — surfaced
+  with the same posture as version skew (below): through the surfaces where the human looks for what
+  needs them, never as chatter on every invocation. _Why:_ an evolvable set that quietly fossilizes
+  in the human's shell configuration is worse than a fixed one — the human keeps yesterday's
+  shorthands while believing they hold today's.
 - **Supply nouns by recognition, never by recall — and make it delightful.** Making the human recall
   an exact handle, or re-run a command with the right flag, is precisely the friction Ward exists to
   remove; a verb that needs a noun (a command that needs a **room**, say) must offer a low-ceremony
@@ -39,14 +45,22 @@ principle (§8) and feeds the compounding loop
     half — every noun it fills in is a picker session that never needs to happen — and it must be
     shippable and judgeable on its own, not read as a partial build of the picker.
   - **Interactive resolution (the picker)** — a mode the human **enters deliberately**, by
-    explicitly asking Ward to run interactively; it is **independent of shell completion**, not a
-    side effect of omitting an argument. In it, Ward **prompts the human to quickly pick what they
-    meant** from the valid candidates, shown with the cues the human already holds — identity handle
-    plus **accent color and type glyph** ([`05-visual-theming.md`](05-visual-theming.md)) — so "the
-    blue 🗂️ one" is selectable, not just `4A12`. It runs **in the process**, owns its rendering, and
-    **branches on caller identity**. _Why explicit entry:_ a prompt that springs from a missing
-    argument makes the same invocation blocking or failing depending on who typed it; a deliberately
-    entered mode keeps every non-interactive invocation deterministic for both audiences.
+    explicitly asking for a pick; it is **independent of shell completion**, not a side effect of
+    omitting an argument. In it, the human is **prompted to quickly pick what they meant** from the
+    valid candidates, shown with the richest cues the picking surface can carry — at best the full
+    set the human already holds, identity handle plus **accent color and type glyph**
+    ([`05-visual-theming.md`](05-visual-theming.md)), so "the blue 🗂️ one" is selectable, not just
+    `4A12`. The constraints are three: **deliberate entry**, a **deterministic result for every
+    non-interactive invocation**, and **unreachable by an agent caller**. **Where** the picking runs
+    is an implementation choice with a stated consequence: a picker at the shell layer is cheap and
+    agent-safe but limited to the text cues that surface can carry; a picker Ward runs in its own
+    process, owning its rendering and branching on caller identity, is what unlocks accent and
+    glyph. _Why explicit entry:_ a prompt that springs from a missing argument makes the same
+    invocation blocking or failing depending on who typed it; a deliberately entered mode keeps
+    every non-interactive invocation deterministic for both audiences. _Why the venue is free:_
+    everything this mode protects is held by those three constraints; pinning where it runs would
+    only forbid a cheaper surface that delivers the same deliberately-chosen pick — the constraint
+    serves the human's delight, and must never argue against a surface that delivers it.
 
   _Asymmetry (§8):_ both mechanisms are **human-audience** affordances; an **agent** caller (which
   declares itself, below) passes explicit context and gets **deterministic** handling — a missing
