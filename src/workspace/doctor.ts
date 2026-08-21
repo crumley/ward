@@ -311,6 +311,14 @@ function shellArtifactFinding(artifact: InstalledArtifact): Finding {
         severity: 'ok',
         message: `${artifact.path} — matches what this ward emits`,
       };
+    case 'bootstrap':
+      return {
+        check,
+        severity: 'ok',
+        message:
+          `${artifact.path} — a lazy bootstrap: it runs ${artifact.command} and sources ` +
+          'the result, so every shell gets what its ward emits — nothing here to go stale',
+      };
     case 'stale':
       return {
         check,

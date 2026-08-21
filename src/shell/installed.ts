@@ -29,6 +29,13 @@ export type InstalledState =
   | 'absent'
   /** Byte-identical to what this ward emits. */
   | 'current'
+  /**
+   * Not the emission but the lazy-bootstrap idiom: the file pipes this very
+   * command into `source`, so each shell regenerates from whatever ward it
+   * finds. Nothing installed here can go stale — the opposite of a snapshot,
+   * and worth saying so instead of calling it somebody's mystery file.
+   */
+  | 'bootstrap'
   /** Ward's emission, from an older ward — the one state worth a warning. */
   | 'stale'
   /** A file at the path that ward did not write; ward reports it, never overwrites it. */
@@ -122,10 +129,33 @@ async function inspectSite(site: Site): Promise<InstalledArtifact> {
   if (installed.equals(Buffer.from(site.emit(), 'utf8'))) {
     return { what, path, command, state: 'current' };
   }
+  if (isBootstrapOf(site.command, installed.toString('utf8'))) {
+    return { what, path, command, state: 'bootstrap' };
+  }
   return {
     what,
     path,
     command,
     state: installed.includes(site.marker) ? 'stale' : 'foreign',
   };
+}
+
+/**
+ * Whether the file carries the lazy-bootstrap idiom for exactly this site's
+ * command: some line runs the command and pipes its output into `source`
+ * (`ward completion fish 2>/dev/null | source`). The match is per line and
+ * ties the command's own words to the pipe, so a file that merely *mentions*
+ * the command — a comment, a redirect into a snapshot — is not a bootstrap,
+ * and the layer's command never vouches for the completions' site or vice
+ * versa. Guards and comments around the line are the human's framing and
+ * change nothing about what the line does.
+ */
+export function isBootstrapOf(command: string, content: string): boolean {
+  const words = command.split(/\s+/).map(escapeRegExp).join('\\s+');
+  const line = new RegExp(`^\\s*${words}(?:\\s[^|#]*)?\\|\\s*source\\s*$`, 'm');
+  return line.test(content);
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

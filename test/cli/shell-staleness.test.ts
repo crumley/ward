@@ -101,6 +101,38 @@ const rows: ReadonlyArray<{
     ],
   },
   {
+    name: "lazy bootstraps: recognized as always-fresh, ok, never called somebody else's file",
+    install: () => {
+      installLayer(
+        '# regenerate per shell\ncommand -q ward; or exit\nward shell init fish | source\n',
+      );
+      installCompletions(
+        '# the dotfiles idiom\ncommand -q ward; or return\nward completion fish 2>/dev/null | source\n',
+      );
+    },
+    expected: () => [
+      { check: LAYER, severity: 'ok', message: expect.stringContaining('lazy bootstrap') },
+      { check: COMPLETIONS, severity: 'ok', message: expect.stringContaining('lazy bootstrap') },
+    ],
+  },
+  {
+    name: "mentioning the command is not bootstrapping it: a redirect or the wrong site's command stays foreign",
+    install: () => {
+      // A redirect writes a snapshot; only a pipe into `source` regenerates.
+      installLayer('ward shell init fish > ~/.config/fish/conf.d/ward.fish\n');
+      // The layer's bootstrap line cannot vouch for the completions site.
+      installCompletions('ward shell init fish | source\n');
+    },
+    expected: () => [
+      { check: LAYER, severity: 'info', message: expect.stringContaining("not ward's emission") },
+      {
+        check: COMPLETIONS,
+        severity: 'info',
+        message: expect.stringContaining("not ward's emission"),
+      },
+    ],
+  },
+  {
     name: 'a path that cannot be read: warn carrying the reason, never a guess about its contents',
     install: () => {
       mkdirSync(layerPath(), { recursive: true }); // a directory where the file belongs
