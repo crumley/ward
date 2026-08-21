@@ -51,7 +51,7 @@ export function inspectClaudeGuidance(root: string): ClaudeGuidance {
 /**
  * Whether a directory IS a workspace root — it carries the marker directory.
  * One test, so everything that asks the question (discovery below, the
- * registry's staleness check in design/0023-global-config-registry/) can never
+ * registry's staleness check in design/0024-global-config-registry/) can never
  * disagree about what counts: a `.ward` FILE is not a marker.
  */
 export function isWorkspaceRoot(dir: string): boolean {

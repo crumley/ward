@@ -13,7 +13,7 @@
 //
 // The primitive is site-parameterized (`LockSite`), because the same three
 // properties are what the machine-level global state needs
-// (design/0023-global-config-registry/): one implementation, so a second
+// (design/0024-global-config-registry/): one implementation, so a second
 // shared file can never grow a second, subtly different contention story.
 import {
   linkSync,
@@ -53,7 +53,7 @@ export interface LockInspection {
 
 /**
  * A lock and the words that describe it. One primitive serves the workspace
- * store and the machine-level global state (design/0023-global-config-registry/):
+ * store and the machine-level global state (design/0024-global-config-registry/):
  * both are shared files a concurrent invocation could clobber, and both want
  * the same legible-contention, fail-safe-takeover behavior. The staging
  * directory must share a filesystem with the lock — the acquire is a link(2).
@@ -70,7 +70,7 @@ export interface LockSite {
    * invisible to the caller — the registry's recency touch rides every
    * invocation, and a lock note out of it would be noise on an unrelated
    * command's stderr, from a write nobody asked for
-   * (design/0023-global-config-registry/).
+   * (design/0024-global-config-registry/).
    */
   readonly quiet?: boolean;
 }

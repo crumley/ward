@@ -59,7 +59,7 @@ test('the verb path is the command words, never the arguments', () => {
     [['task', 'open', 'my-secret-slug'], 'task open'],
     [['task', 'nonsense'], 'task'],
     [['session', 'open', 't1', '--purpose', 'long private text'], 'session open'],
-    // The registry verbs (design/0023-global-config-registry/) — the path
+    // The registry verbs (design/0024-global-config-registry/) — the path
     // verbs' argument is an identity, never part of the verb.
     [['workspace', 'register'], 'workspace register'],
     [['workspace', 'path', 'main'], 'workspace path'],

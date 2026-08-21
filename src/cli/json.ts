@@ -187,7 +187,7 @@ export function worktreeListJson(listings: readonly WorktreeListing[]): Worktree
 
 /**
  * The registry read verbs and the path verbs
- * (design/0023-global-config-registry/). `default` and `stale` are always
+ * (design/0024-global-config-registry/). `default` and `stale` are always
  * present booleans, not optional flags: "is this the default?" and "is this
  * entry still real?" have an answer for every row, and an omitted field would
  * read as unknown rather than false.

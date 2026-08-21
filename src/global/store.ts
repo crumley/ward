@@ -1,4 +1,4 @@
-// The global documents' read/write seam (design/0023-global-config-registry/).
+// The global documents' read/write seam (design/0024-global-config-registry/).
 // They are ordinary store documents — markdown with typed, zod-validated YAML
 // front matter, written atomically (ADR 0005) — living outside any workspace,
 // so they stage their writes beside themselves rather than in a `.ward/tmp/`.

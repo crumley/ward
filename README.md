@@ -112,7 +112,7 @@ repo:
 That key is validated and reported today; the `ward repo refresh --stash` flag that consumes it
 lands with its own entry. `ward doctor` names the state of both files — including a config that will
 not parse, or an entry whose workspace is gone. The design is in
-[`design/0023-global-config-registry/`](design/0023-global-config-registry/README.md).
+[`design/0024-global-config-registry/`](design/0024-global-config-registry/README.md).
 
 ## License
 

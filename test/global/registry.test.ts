@@ -1,5 +1,5 @@
 // The machine-level workspace registry and the global config
-// (design/0023-global-config-registry/): registration is idempotent and keyed
+// (design/0024-global-config-registry/): registration is idempotent and keyed
 // by location, order is derived from recency, the default is a pointer into
 // the entry set, and every failure mode — a stale entry, a corrupt file, an
 // unwritable directory — degrades to "no registry" rather than to a broken

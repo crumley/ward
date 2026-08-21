@@ -34,7 +34,7 @@ function runWard(argv: string[]): { exitCode: number; stdout: string } {
   // directories: this is the one suite whose cwd is the repo root, which on a
   // contributor's machine may well be inside a REGISTERED workspace — and
   // every invocation, `--version` included, notes registry recency
-  // (design/0023-global-config-registry/). Without the pin, running this file
+  // (design/0024-global-config-registry/). Without the pin, running this file
   // would touch the developer's own registry.
   const result = Bun.spawnSync(['bun', 'src/cli/index.ts', ...argv], {
     cwd: repoRoot,

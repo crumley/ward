@@ -1,4 +1,4 @@
-# 0023 — Global configuration and the machine-level workspace registry
+# 0024 — Global configuration and the machine-level workspace registry
 
 > Ward grows a per-user axis: preferences under `$XDG_CONFIG_HOME/ward/`, and a registry of the
 > machine's workspaces under `$XDG_STATE_HOME/ward/` with a default and most-recently-used ordering
@@ -55,8 +55,8 @@ boundary in the intent — and most of the decisions below are that boundary, ap
     uses, so no test reads or writes the machine's real `$HOME`.
   - **Global configuration** (`src/global/config.ts`): `config.md`, front matter as the settings
     tree, so a dotted key is its path through the document. Ships with `repo.refresh.stash`
-    (boolean) validated and defaulted; **not wired into `ward repo refresh`** — the flag that reads
-    it is a parallel task's, and this entry deliberately does not touch that code path.
+    (boolean) validated and defaulted; **not wired into `ward repo refresh`** — that verb belonged
+    to a parallel entry, and this one deliberately does not touch its code path (Deferred, below).
   - **The workspace registry** (`src/global/registry.ts`): `workspaces.md` — entries of
     `{name, path, registeredAt, lastUsedAt?}`, a `default` pointer, MRU order derived from the
     timestamps. Verbs: `ward workspace register [PATH]` (idempotent; the first registered becomes
@@ -97,9 +97,12 @@ boundary in the intent — and most of the decisions below are that boundary, ap
     and hand-editable, every key resolves to a default without it, and the write path already exists
     (`writeGlobal`) for the setup verb that will own it. Inventing a second configuration-editing
     surface before the guided one would be the drift the four-leg discipline warns about.
-  - **Wiring `repo.refresh.stash` into `ward repo refresh`.** _Why safe:_ a parallel task is
-    changing that verb's internals; the key exists and validates, and the one-line read is a
-    follow-up PR with no schema change.
+  - **Wiring `repo.refresh.stash` into `ward repo refresh`.** The parallel entry
+    ([0023](../0023-refresh-concurrency-ux/README.md)) landed while this one was in review and
+    already marks the site: the `--stash` option in `src/cli/index.ts` reads the flag alone, with a
+    comment naming the substitution. _Why safe:_ the key exists, validates, and has a stated
+    default; the change is one expression at one site, with no schema change and no new decision —
+    and keeping it out of this PR keeps the two entries' diffs about their own subjects.
   - **Auto-registering on `ward workspace create`.** _Why safe:_ creation is a located, deliberate
     act on a directory; making it write machine-level state as a side effect would put a global
     write inside a workspace-local verb, and `ward workspace register` is one line of the same
@@ -341,6 +344,18 @@ now uses the same `isWorkspaceRoot` test as discovery (a `.ward` _file_ is not a
 **Proof after the fixes:** `bun test` → `386 pass, 0 fail, 1575 expect() calls` across 37 files;
 `mise run check` → exit 0. The five new cases are the four defects plus the silent-takeover
 regression.
+
+### 2026-08-21 — Rebased onto the refreshed main line, and renumbered
+
+The parallel refresh entry landed on `main` while this was in review, taking the number `0023` with
+it — so this entry became **0024**, and every reference in code, tests, and docs moved with it. The
+rebase itself was one conflict, in `src/cli/index.ts`: the same line, from two directions —
+`cmdRepoRefresh` gained the concurrency and `--stash` arguments there, while this entry made
+`requireMutableWorkspace()` async. Resolved by taking both (`await requireMutableWorkspace()` inside
+the new signature); nothing else in either entry touched the other's ground, which is what the
+deliberate no-contact rule bought. `ward worktree rebase t7` refused first and reported the conflict
+with the worktree exactly as it was — the abort working as designed — and the manual rebase
+followed. `mise run check` green on the rebased branch.
 
 **Next.** In dogfood order: the fish shell layer this entry exists for (`wcd`, `wrepo` and friends,
 built on the two path verbs); wiring `repo.refresh.stash` into `ward repo refresh` once its parallel

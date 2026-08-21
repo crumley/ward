@@ -1,4 +1,4 @@
-// Working from anywhere (design/0023-global-config-registry/), through the
+// Working from anywhere (design/0024-global-config-registry/), through the
 // spawned CLI: the registry verbs and their idempotency, the two path verbs
 // whose stdout is nothing but a path, the registry-backed fallback for a
 // human standing outside any workspace — echoed on stderr, refused to a

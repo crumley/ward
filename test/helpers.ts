@@ -22,7 +22,7 @@ export const NO_GH = '/dev/null/gh';
 
 /**
  * Pin the global configuration and state directories into a throwaway tree,
- * the same hermetic move as the git and gh pins (design/0023-global-config-registry/):
+ * the same hermetic move as the git and gh pins (design/0024-global-config-registry/):
  * no test ever reads or writes the machine's real `$XDG_CONFIG_HOME` /
  * `$XDG_STATE_HOME` — or the developer's own workspace registry — unless it
  * points these at a directory of its own. Created once per test process and

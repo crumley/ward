@@ -151,7 +151,7 @@ export const repoListShape = z.array(
 export type RepoListShape = z.infer<typeof repoListShape>;
 
 /**
- * One registered workspace (design/0023-global-config-registry/), as
+ * One registered workspace (design/0024-global-config-registry/), as
  * `workspace list` reports it: MRU-ordered rows, the default marked, and
  * `stale` telling the truth about an entry whose path no longer holds a
  * workspace — reported, never hidden and never silently resolved to (§20).
@@ -423,7 +423,7 @@ export type WorkspaceUpgradeShape = z.infer<typeof workspaceUpgradeShape>;
 
 /**
  * The three registry mutations share one shape
- * (design/0023-global-config-registry/): each acts on exactly one entry and
+ * (design/0024-global-config-registry/): each acts on exactly one entry and
  * reports it as it now reads, with `outcome` carrying how the run converged —
  * `satisfied` is what makes the idempotency visible (§6). An unregistered
  * entry reports `default: false`: it is out of the registry, so it is not the
@@ -471,7 +471,7 @@ export const readVerbShapes: Readonly<Record<string, z.ZodType>> = {
 
 /**
  * Read verbs whose argv is NOT derivable from the key alone
- * (design/0023-global-config-registry/): the path verbs take an identity, and
+ * (design/0024-global-config-registry/): the path verbs take an identity, and
  * their answer depends on the machine's registry rather than the workspace
  * the caller stands in. They are read verbs in every other sense — no
  * mutation, one document on stdout — so they are registered here and proven

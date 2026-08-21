@@ -101,7 +101,7 @@ import { recordInvocation } from './telemetry.ts';
 recordInvocation(process.argv.slice(2));
 
 // The registry's recency, kept current before anything can exit
-// (design/0023-global-config-registry/): an invocation from inside a
+// (design/0024-global-config-registry/): an invocation from inside a
 // registered workspace is what makes it the most recently used one, which is
 // what `ward` falls back to from elsewhere. Awaited so nothing dangles, and
 // it is a single small read in the steady state — the write happens only when
@@ -189,7 +189,7 @@ const workspaceUpgrade = command(
   },
 );
 
-// The machine-level registry (design/0023-global-config-registry/): which
+// The machine-level registry (design/0024-global-config-registry/): which
 // workspaces exist on this machine, which is the default, which was used
 // last. Convenience only — the boundary in
 // intent/01-concepts/06-workspace-lifecycle.md — so every one of these verbs
@@ -290,7 +290,7 @@ const repoList = command('list', object({ action: constant('repo-list'), json: j
   brief: message`List the registered repositories.`,
 });
 
-// Works from any directory (design/0023-global-config-registry/): without
+// Works from any directory (design/0024-global-config-registry/): without
 // --workspace the search runs current → default → most recently used, and the
 // first workspace whose record registers the name answers.
 const repoPath = command(

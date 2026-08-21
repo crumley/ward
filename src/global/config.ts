@@ -1,4 +1,4 @@
-// Global configuration (design/0023-global-config-registry/): the preferences
+// Global configuration (design/0024-global-config-registry/): the preferences
 // axis of "opinionated configuration, global and workspace-local"
 // (intent/02-subsystems/07-human-shell.md). One document,
 // `$XDG_CONFIG_HOME/ward/config.md`, whose front matter is the settings tree —

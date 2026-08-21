@@ -1,4 +1,4 @@
-// Where Ward's per-user state lives (design/0023-global-config-registry/).
+// Where Ward's per-user state lives (design/0024-global-config-registry/).
 // Two directories, because the two kinds of file have different lifetimes and
 // different owners:
 //

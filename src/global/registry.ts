@@ -1,4 +1,4 @@
-// The machine-level workspace registry (design/0023-global-config-registry/):
+// The machine-level workspace registry (design/0024-global-config-registry/):
 // which workspaces exist on this machine, which one is the default, and which
 // was used most recently — so `ward` can answer from any directory instead of
 // only from inside a workspace.

@@ -167,7 +167,7 @@ export function workspaceBranch(): ValueParser<'async', string> {
 }
 
 /**
- * Registered workspace names (design/0023-global-config-registry/) — bound to
+ * Registered workspace names (design/0024-global-config-registry/) — bound to
  * `workspace unregister|default|path` and `repo path --workspace`. The one
  * suggester family that ignores contract 3: the registry is machine-level, so
  * these verbs answer from anywhere and the candidates must too. Stale entries

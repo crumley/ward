@@ -133,7 +133,7 @@ function registryLockFindings(): Finding[] {
 
 /**
  * The global state is machine-level, so it is checked with the machine
- * (design/0023-global-config-registry/) — and it is checked at all because of
+ * (design/0024-global-config-registry/) — and it is checked at all because of
  * §20's loop: both files degrade silently to "no preferences" / "no registry"
  * at the point of use, and a degradation the diagnostic surface cannot
  * explain trains the human to distrust both. Nothing here is ever an error:

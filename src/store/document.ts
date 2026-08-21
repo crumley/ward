@@ -57,7 +57,7 @@ export function renderDocument<T>(type: DocumentType<T>, document: Document<T>):
 /**
  * Write a document atomically. `stageIn` names the staging directory — it
  * defaults to the workspace's own `.ward/tmp/`, and is overridden by the
- * global documents (design/0023-global-config-registry/), which live outside
+ * global documents (design/0024-global-config-registry/), which live outside
  * any workspace and stage beside themselves. The only requirement is the one
  * ADR 0005 rests on: the staging directory and the destination share a
  * filesystem, so the rename is atomic.

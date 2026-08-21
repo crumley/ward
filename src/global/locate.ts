@@ -1,4 +1,4 @@
-// Path resolution across workspaces (design/0023-global-config-registry/):
+// Path resolution across workspaces (design/0024-global-config-registry/):
 // answering "where is workspace X?" and "where is repository Y's canonical
 // checkout?" from any directory on the machine — the backbone the shell layer
 // stands on, since a shell function cannot cd anywhere Ward cannot name.
