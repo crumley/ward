@@ -29,6 +29,13 @@ handle to re-attach, exactly as a task carries a remote-work-item link without t
 identity (`03-work-lifecycle.md`). **Why the indirection:** it lets Ward span a mix of harnesses
 without assuming any one of them (`05-context-loading.md`).
 
+Recording the handle does not wait on the run. Where a harness accepts an externally-supplied run
+id, Ward **assigns** the handle and starts the run under it, so the record precedes the process;
+only where a harness insists on minting its own is the handle written immediately after start
+(`../02-subsystems/03-agent-harness.md`, which owns that ordering rule). **Why it matters here:** a
+session recorded with no handle is a thread nothing can locate, resume, or reflect over — so the
+minimum below is complete from the first moment there is anything live to be complete about.
+
 ## Open vs. running — a load-bearing distinction
 
 **Open** and **running** are not the same:
