@@ -5,9 +5,20 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
+import {
+  type AgentProvenance,
+  type Resolved,
+  type ResolvedAgentConfig,
+  resolveAgentConfig,
+} from '../agent/settings.ts';
 import { WardError } from '../errors.ts';
 import { type ForgeAuth, ghExecutable, probeForgeAuth } from '../forge/gh.ts';
-import { globalConfigType, inspectConfig } from '../global/config.ts';
+import {
+  type GlobalConfig,
+  type GlobalConfigRecord,
+  globalConfigType,
+  inspectConfig,
+} from '../global/config.ts';
 import { configDir } from '../global/paths.ts';
 import {
   listWorkspaces,
@@ -16,6 +27,7 @@ import {
   registryPath,
   resolutionOrder,
 } from '../global/registry.ts';
+import type { GlobalRead } from '../global/store.ts';
 import {
   adoptionDir,
   fishConfigured,
@@ -57,20 +69,40 @@ export interface DoctorReport {
   /** Null when no workspace encloses the working directory. */
   readonly workspaceRoot: string | null;
   readonly workspace: readonly Finding[];
+  /**
+   * The agent configuration as it resolves HERE, per key with its provenance
+   * (design/0027-agent-configuration/) — null outside a workspace, where only
+   * half the resolution exists and the answer would be a guess about a
+   * workspace the caller is not standing in. Carried as structure alongside
+   * the finding that renders it, because the two audiences want different
+   * things from the same read: a human wants one line, an agent wants the
+   * values keyed and machine-readable (§8) — and one resolution feeds both, so
+   * they cannot disagree.
+   */
+  readonly agent: ResolvedAgentConfig | null;
   readonly healthy: boolean;
 }
 
 export async function runDoctor(cwd: string): Promise<DoctorReport> {
-  const machine = await machineChecks(cwd);
+  // Read once, use twice: the machine section names the config file's own
+  // state, and the workspace section resolves the agent block out of it
+  // against the workspace record. Two reads could disagree; one cannot.
+  const config = await inspectConfig(configDir());
+  const machine = await machineChecks(cwd, config);
   const workspaceRoot = discoverWorkspace(cwd);
-  const workspace = workspaceRoot === null ? [] : await workspaceChecks(workspaceRoot);
+  const inside =
+    workspaceRoot === null ? null : await workspaceChecks(workspaceRoot, config.config);
+  const workspace = inside?.findings ?? [];
   const healthy = [...machine, ...workspace].every((finding) => finding.severity !== 'error');
-  return { machine, workspaceRoot, workspace, healthy };
+  return { machine, workspaceRoot, workspace, agent: inside?.agent ?? null, healthy };
 }
+
+/** The global config as doctor read it: the resolved settings and the file's own state. */
+type ConfigInspection = { config: GlobalConfig; read: GlobalRead<GlobalConfigRecord> };
 
 // -- machine preconditions ------------------------------------------------
 
-async function machineChecks(cwd: string): Promise<Finding[]> {
+async function machineChecks(cwd: string, config: ConfigInspection): Promise<Finding[]> {
   const findings: Finding[] = [];
   if (gitAvailable()) {
     const version = git(cwd, '--version')
@@ -103,7 +135,7 @@ async function machineChecks(cwd: string): Promise<Finding[]> {
   }
   findings.push(pickerFinding());
   findings.push(...(await shellFindings()));
-  findings.push(await globalConfigFinding());
+  findings.push(globalConfigFinding(config));
   findings.push(await workspaceRegistryFinding());
   findings.push(...registryLockFindings());
   return findings;
@@ -394,11 +426,9 @@ function registryLockFindings(): Finding[] {
  * explain trains the human to distrust both. Nothing here is ever an error:
  * global state holds conveniences only, so its worst state costs a shortcut.
  */
-async function globalConfigFinding(): Promise<Finding> {
+function globalConfigFinding({ config, read }: ConfigInspection): Finding {
   const check = 'global config';
-  const dir = configDir();
-  const { config, read } = await inspectConfig(dir);
-  const file = join(dir, globalConfigType.relPath);
+  const file = globalConfigPath();
   if (read.state === 'absent') {
     return { check, severity: 'info', message: `none at ${file} — Ward's defaults apply` };
   }
@@ -414,6 +444,10 @@ async function globalConfigFinding(): Promise<Finding> {
     severity: 'ok',
     message: `${file} — repo.refresh.stash ${config.repo.refresh.stash}`,
   };
+}
+
+function globalConfigPath(): string {
+  return join(configDir(), globalConfigType.relPath);
 }
 
 /**
@@ -503,7 +537,10 @@ function ghAuthFinding(auth: ForgeAuth): Finding {
 
 // -- workspace integrity --------------------------------------------------
 
-async function workspaceChecks(root: string): Promise<Finding[]> {
+async function workspaceChecks(
+  root: string,
+  config: GlobalConfig,
+): Promise<{ findings: Finding[]; agent: ResolvedAgentConfig }> {
   const findings: Finding[] = [];
 
   const record = await checkDocument(findings, root, workspaceRecordType, 'workspace record');
@@ -537,6 +574,15 @@ async function workspaceChecks(root: string): Promise<Finding[]> {
   findings.push(...(await baselineChecks(root)));
   findings.push(claudeGuidanceFinding(root));
   findings.push(await standingProjectFinding(root));
+
+  // The agent configuration, resolved from the record just validated above
+  // and the global config already read — never from a second read of either.
+  // A record that would not parse is already an error finding, and its agent
+  // block is simply not there: the workspace layer drops out and the global
+  // one answers, which is the honest resolution rather than a second complaint
+  // about the same broken file.
+  const agent = resolveAgentConfig({ workspace: record?.agent, global: config.agent });
+  findings.push(agentConfigFinding(agent));
 
   const ignoreFile = join(root, '.gitignore');
   const ignoreLines = existsSync(ignoreFile)
@@ -576,7 +622,71 @@ async function workspaceChecks(root: string): Promise<Finding[]> {
 
   findings.push(...(await worktreeChecks(root)));
 
-  return findings;
+  return { findings, agent };
+}
+
+/**
+ * The agent configuration as it resolves in THIS workspace, per key with the
+ * layer that answered (design/0027-agent-configuration/). It is a finding at
+ * all because the resolution is the one thing a two-axis configuration makes
+ * hard to see: the value lives in one of two files, and "which model will
+ * actually run here?" is otherwise a question a human answers by opening both
+ * and applying the precedence rule in their head. Doctor is where Ward already
+ * answers questions about the caller's own setup, so it answers this one too —
+ * reported, never repaired, and never an error: an unconfigured agent is the
+ * ordinary state, not a fault.
+ *
+ * Info when nothing is configured on either axis, ok when something is — the
+ * same distinction the global-config finding draws, for the same reason: `ok`
+ * says "you have this and it is fine", `info` says "you have none of this, and
+ * here is where it would go".
+ */
+function agentConfigFinding(agent: ResolvedAgentConfig): Finding {
+  const check = 'agent configuration';
+  const configured = [agent.harness, agent.model, agent.effort, agent.args].some(
+    (key) => key.provenance === 'workspace' || key.provenance === 'global',
+  );
+  const summary = [
+    describeKey('harness', agent.harness),
+    describeKey('model', agent.model),
+    describeKey('effort', agent.effort),
+    describeKey('args', agent.args, renderArgs),
+  ].join(' · ');
+  return configured
+    ? { check, severity: 'ok', message: summary }
+    : {
+        check,
+        severity: 'info',
+        message:
+          `${summary} — nothing configured; set your defaults in ${globalConfigPath()} ` +
+          `(agent.model, agent.effort, agent.args) and override them per workspace in ` +
+          `${workspaceRecordType.relPath}`,
+      };
+}
+
+/**
+ * One resolved key, for the human. An absent key reads as "not set" and
+ * carries no provenance, because there is nothing to attribute — which is also
+ * the point the whole entry turns on: absent is not a default, and the launch
+ * will pass no flag for it.
+ */
+function describeKey<T>(
+  name: string,
+  resolved: Resolved<T>,
+  render: (value: T) => string = String,
+): string {
+  if (resolved.provenance === 'absent') return `${name} not set`;
+  return `${name} ${render(resolved.value)} (${sourceWord(resolved.provenance)})`;
+}
+
+function sourceWord(provenance: Exclude<AgentProvenance, 'absent'>): string {
+  return { workspace: 'this workspace', global: 'global config', default: "ward's default" }[
+    provenance
+  ];
+}
+
+function renderArgs(args: readonly string[]): string {
+  return args.length === 0 ? 'none' : args.join(' ');
 }
 
 /**

@@ -15,12 +15,21 @@
 // point of use (§20): a preference file is not something a workspace command
 // may die on.
 import { z } from 'zod';
+import { type AgentSettings, agentSettingsSchema } from '../agent/settings.ts';
 import type { DocumentType } from '../store/document.ts';
 import { configDir } from './paths.ts';
 import { type GlobalRead, readGlobal } from './store.ts';
 
 export const globalConfigSchema = z.object({
   type: z.literal('ward-config'),
+  /**
+   * `agent.*` — the user-level defaults for every agent Ward starts: harness,
+   * model, effort, and extra launch flags (design/0027-agent-configuration/).
+   * The same block is accepted in a workspace record, which overrides this one
+   * per key — the two axes the human-shell contract names, with this one as
+   * the broad default ("every session I want … my default model to be Fable").
+   */
+  agent: agentSettingsSchema.optional(),
   repo: z
     .object({
       refresh: z
@@ -48,15 +57,26 @@ export const globalConfigType: DocumentType<GlobalConfigRecord> = {
 
 /** The resolved settings: every key answered, whatever the file says or lacks. */
 export interface GlobalConfig {
+  /**
+   * The agent block AS WRITTEN — the one subtree this file does NOT resolve to
+   * defaults, because it is only one of two layers: the workspace record
+   * overrides it per key, and the merge (and with it the defaulting) belongs to
+   * where both layers are in hand (src/agent/settings.ts). Resolving here would
+   * mean a global default beating a workspace value, which is precedence
+   * exactly backwards. An unset block reads as `{}`: nothing configured.
+   */
+  readonly agent: AgentSettings;
   readonly repo: { readonly refresh: { readonly stash: boolean } };
 }
 
 /**
  * Ward's opinions, in one place. A key's default is stated here and nowhere
  * else, so "what does Ward do when nothing is configured?" has one answer that
- * cannot drift from what the code does.
+ * cannot drift from what the code does. The agent block's own defaults are
+ * stated in the same spirit one layer up (AGENT_DEFAULTS), for the reason
+ * above; `{}` here is "no agent preferences", not "the agent defaults".
  */
-export const CONFIG_DEFAULTS: GlobalConfig = { repo: { refresh: { stash: false } } };
+export const CONFIG_DEFAULTS: GlobalConfig = { agent: {}, repo: { refresh: { stash: false } } };
 
 /** The settings as resolved for this invocation — never throws (§20). */
 export async function readConfig(dir: string = configDir()): Promise<GlobalConfig> {
@@ -79,6 +99,7 @@ function resolveConfig(read: GlobalRead<GlobalConfigRecord>): GlobalConfig {
   if (read.state !== 'read') return CONFIG_DEFAULTS;
   const record = read.document.data;
   return {
+    agent: record.agent ?? CONFIG_DEFAULTS.agent,
     repo: {
       refresh: { stash: record.repo?.refresh?.stash ?? CONFIG_DEFAULTS.repo.refresh.stash },
     },

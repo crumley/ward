@@ -195,9 +195,34 @@ const findingShape = z.strictObject({
   message: z.string(),
 });
 
+/**
+ * One resolved agent-configuration key (design/0027-agent-configuration/):
+ * the value and the layer that answered for it. `value` is present exactly
+ * when `provenance` is anything but `absent` — an absent key has no value to
+ * carry, and the omission is the contract: a caller assembling a launch
+ * command leaves that flag off entirely rather than passing a Ward-invented
+ * default. Optional-omitted rather than null, the shape convention here.
+ */
+function resolvedAgentKey<T extends z.ZodType>(value: T) {
+  return z.strictObject({
+    provenance: z.enum(['workspace', 'global', 'default', 'absent']),
+    value: value.optional(),
+  });
+}
+
+/** The agent configuration as it resolves where doctor is standing. */
+export const doctorAgentShape = z.strictObject({
+  harness: resolvedAgentKey(z.string()),
+  model: resolvedAgentKey(z.string()),
+  effort: resolvedAgentKey(z.string()),
+  args: resolvedAgentKey(z.array(z.string())),
+});
+
 export const doctorShape = z.strictObject({
   healthy: z.boolean(),
   workspaceRoot: z.string().nullable(),
+  /** Null outside a workspace, where only half the resolution exists. */
+  agent: doctorAgentShape.nullable(),
   machine: z.array(findingShape),
   workspace: z.array(findingShape),
 });

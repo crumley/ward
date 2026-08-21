@@ -11,6 +11,7 @@
 // truth, and a builder drifting from it is a compile error before it is a
 // failing test. The builders stay hand-written because they are what pin key
 // order — the byte-determinism (§6) a schema alone cannot promise.
+import type { AgentProvenance, Resolved } from '../agent/settings.ts';
 import type { PrForgeState } from '../forge/gh.ts';
 import type { RepoLocation } from '../global/locate.ts';
 import type { RegistryReport, WorkspaceListing } from '../global/registry.ts';
@@ -434,7 +435,38 @@ export function doctorJson(report: DoctorReport): DoctorShape {
   return {
     healthy: report.healthy,
     workspaceRoot: report.workspaceRoot,
+    agent: report.agent === null ? null : agentConfigJson(report.agent),
     machine: report.machine.map(finding),
     workspace: report.workspace.map(finding),
   };
+}
+
+/**
+ * The resolved agent configuration as data (design/0027-agent-configuration/):
+ * the same resolution the human reads as one doctor line, keyed so an agent
+ * can act on it without parsing prose (§8). An `absent` key carries no
+ * `value` — omitted, never null, and never a stand-in default: the omission
+ * IS the answer, and a caller building a launch command passes no flag for it.
+ */
+function agentConfigJson(agent: NonNullable<DoctorReport['agent']>): DoctorShape['agent'] {
+  return {
+    harness: resolvedKeyJson(agent.harness),
+    model: resolvedKeyJson(agent.model),
+    effort: resolvedKeyJson(agent.effort),
+    // Copied, not aliased: the report's array is readonly, and the JSON
+    // document is the caller's to keep.
+    args:
+      agent.args.provenance === 'absent'
+        ? { provenance: 'absent' }
+        : { provenance: agent.args.provenance, value: [...agent.args.value] },
+  };
+}
+
+function resolvedKeyJson(resolved: Resolved<string>): {
+  provenance: AgentProvenance;
+  value?: string;
+} {
+  return resolved.provenance === 'absent'
+    ? { provenance: 'absent' }
+    : { provenance: resolved.provenance, value: resolved.value };
 }

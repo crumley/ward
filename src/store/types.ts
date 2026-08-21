@@ -2,6 +2,7 @@
 // seeded artifact-type catalog. Adding a type is additive — define its schema
 // and DocumentType here; the document layer does the rest.
 import { z } from 'zod';
+import { agentSettingsSchema } from '../agent/settings.ts';
 import type { DocumentType } from './document.ts';
 
 export const workspaceRecordSchema = z.object({
@@ -20,6 +21,18 @@ export const workspaceRecordSchema = z.object({
    * the absence at the upgrade that records it.
    */
   mainLine: z.string().min(1).optional(),
+  /**
+   * The workspace-local agent configuration — the narrower of the two axes
+   * (design/0027-agent-configuration/): the same block the global config
+   * carries, overriding it per key for agents started in THIS workspace ("in
+   * this workspace, the model is Sonnet"). The workspace record is the
+   * workspace's configuration home, so the override needs no new file and no
+   * new resolution order — a workspace either carries the block or does not.
+   * Optional, and therefore additive: every record written before this entry
+   * stays valid unchanged, and no workspace upgrade is needed to keep working
+   * — an unconfigured workspace simply inherits the global layer.
+   */
+  agent: agentSettingsSchema.optional(),
   createdAt: z.string().min(1),
 });
 export type WorkspaceRecord = z.infer<typeof workspaceRecordSchema>;
