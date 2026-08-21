@@ -13,6 +13,7 @@ import picocolors from 'picocolors';
 import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
 import { type PrForgeState, probeForge } from '../forge/gh.ts';
+import { readConfig } from '../global/config.ts';
 import { locateRepo, locateWorkspace } from '../global/locate.ts';
 import {
   listWorkspaces,
@@ -274,10 +275,9 @@ const repoRefresh = command(
   object({
     action: constant('repo-refresh'),
     name: optional(argument(repoName())),
-    // Opt-in, and read from the flag alone: the parallel configuration work
-    // will supply a default for `repo.refresh.stash`, and substituting it
-    // where the flag is absent is that PR's one-line change here — nothing
-    // below this layer reads configuration (design/0023-refresh-concurrency-ux/).
+    // Opt-in at the flag; a human's `repo.refresh.stash: true` preference
+    // supplies the default where the flag is absent (cmdRepoRefresh) — nothing
+    // below the CLI layer reads configuration (design/0023-refresh-concurrency-ux/).
     stash: option('--stash', {
       description: message`Stash a dirty checkout, refresh it, then restore the stash (a conflicted pop is reported, never resolved).`,
     }),
@@ -1140,9 +1140,14 @@ async function cmdRepoRefresh(
   stash: boolean,
 ): Promise<void> {
   const root = await requireMutableWorkspace();
+  // The `repo.refresh.stash` preference answers for a human who left the flag
+  // off; a declared agent is read from the flag alone, so its invocation means
+  // the same thing on every machine — the registry-fallback asymmetry (0024),
+  // applied to a preference instead of a place.
+  const stashing = stash || (!callerIsAgent() && (await readConfig()).repo.refresh.stash);
   const display = json ? null : refreshDisplay(pc);
   const reports = await refreshRepositories(root, name, {
-    stash,
+    stash: stashing,
     ...(display === null ? {} : { observe: display.observe }),
   });
   if (json) {

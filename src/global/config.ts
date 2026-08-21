@@ -27,10 +27,10 @@ export const globalConfigSchema = z.object({
         .object({
           /**
            * `repo.refresh.stash` — whether `ward repo refresh` stashes a
-           * dirty canonical checkout instead of refusing to touch it. The key
-           * and its validation land here; the flag that reads it is a
-           * separate, parallel piece of work, so today this is a preference
-           * Ward records and does not yet act on.
+           * dirty canonical checkout instead of refusing to touch it. The
+           * default for a human who left `--stash` off; a declared agent is
+           * read from the flag alone (§8 — its invocation means the same
+           * thing on every machine).
            */
           stash: z.boolean().optional(),
         })
