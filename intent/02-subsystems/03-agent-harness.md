@@ -36,7 +36,14 @@ binding the concepts to any one of them_ (§5).
   own handle pointing at the branched run.
 - **Accept an externally-chosen model and thinking depth**
   ([`04-model-selection.md`](04-model-selection.md)) and pass them through; this seam does not
-  decide which model runs, only honors the decision.
+  decide which model runs, only honors the decision. **An unmade choice is passed through as
+  unmade:** where no model or thinking depth was chosen at any level of that ladder, Ward passes
+  none and the harness's own default applies — Ward never substitutes a default for a choice the
+  human did not make. _Why:_ the unconfigured session is the ordinary case, and the alternative is
+  Ward's opinion silently overriding the harness's, so the day a harness changes its default an
+  unconfigured session would not follow it. Honoring somebody else's defaults is what keeps this
+  seam harness-agnostic (§5); it also means "unchosen" must stay distinguishable from every value a
+  default could take, rather than collapsing into one on the way through.
 - **Optionally report resource usage.** Where the harness exposes what a run consumed (tokens,
   cost), surface it so Ward can record it on the session
   ([`../01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md));
@@ -59,7 +66,8 @@ binding the concepts to any one of them_ (§5).
 ## Canonical home for
 
 - The **agent-harness contract**: a thin, swappable adapter exposing start / handle / resume /
-  locate, with optional fork, honoring an externally-chosen model.
+  locate, with optional fork, honoring an externally-chosen model — and passing an **unmade** choice
+  through as unmade, so the harness's own default stands.
 
 ## Left to implementation
 
