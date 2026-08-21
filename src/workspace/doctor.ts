@@ -7,6 +7,9 @@ import { join } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
 import { type ForgeAuth, ghExecutable, probeForgeAuth } from '../forge/gh.ts';
+import { globalConfigType, inspectConfig } from '../global/config.ts';
+import { configDir } from '../global/paths.ts';
+import { listWorkspaces, readRegistry, registryPath, resolutionOrder } from '../global/registry.ts';
 import { type DocumentType, readDocument } from '../store/document.ts';
 import { inspectStoreLock } from '../store/lock.ts';
 import {
@@ -81,7 +84,89 @@ async function machineChecks(cwd: string): Promise<Finding[]> {
     findings.push({ check: 'gh', severity: 'ok', message: 'GitHub CLI available' });
     findings.push(ghAuthFinding(await probeForgeAuth()));
   }
+  findings.push(await globalConfigFinding());
+  findings.push(await workspaceRegistryFinding());
   return findings;
+}
+
+/**
+ * The global state is machine-level, so it is checked with the machine
+ * (design/0023-global-config-registry/) — and it is checked at all because of
+ * §20's loop: both files degrade silently to "no preferences" / "no registry"
+ * at the point of use, and a degradation the diagnostic surface cannot
+ * explain trains the human to distrust both. Nothing here is ever an error:
+ * global state holds conveniences only, so its worst state costs a shortcut.
+ */
+async function globalConfigFinding(): Promise<Finding> {
+  const check = 'global config';
+  const dir = configDir();
+  const { config, read } = await inspectConfig(dir);
+  const file = join(dir, globalConfigType.relPath);
+  if (read.state === 'absent') {
+    return { check, severity: 'info', message: `none at ${file} — Ward's defaults apply` };
+  }
+  if (read.state === 'unreadable') {
+    return {
+      check,
+      severity: 'warn',
+      message: `${file} could not be read — ${read.reason}; Ward's defaults apply meanwhile`,
+    };
+  }
+  return {
+    check,
+    severity: 'ok',
+    message: `${file} — repo.refresh.stash ${config.repo.refresh.stash}`,
+  };
+}
+
+/**
+ * The registry's own health: how many workspaces answer from anywhere, which
+ * is the default, and how many entries point at a path that no longer holds a
+ * workspace. Stale entries are warn — nothing is blocked (resolution skips
+ * them), but they are the one state a human should act on, and the remedy is
+ * one verb.
+ */
+async function workspaceRegistryFinding(): Promise<Finding> {
+  const check = 'workspace registry';
+  const file = registryPath();
+  const read = await readRegistry();
+  if (read.state === 'absent') {
+    return {
+      check,
+      severity: 'info',
+      message:
+        `no registry at ${file} — ward answers from inside a workspace; register one to be ` +
+        'answerable from anywhere: ward workspace register [PATH]',
+    };
+  }
+  if (read.state === 'unreadable') {
+    return {
+      check,
+      severity: 'warn',
+      message:
+        `${file} could not be read — ${read.reason}; ward still works from inside a workspace, ` +
+        'and deleting the file loses only the shortcuts',
+    };
+  }
+  const listings = await listWorkspaces();
+  const stale = listings.filter((entry) => entry.stale);
+  const fallback = resolutionOrder(listings)[0];
+  const answer =
+    fallback === undefined
+      ? 'none can answer from outside a workspace'
+      : `'${fallback.name}' answers from outside a workspace`;
+  if (stale.length > 0) {
+    return {
+      check,
+      severity: 'warn',
+      message:
+        `${listings.length} registered, ${stale.length} stale (${stale
+          .map((entry) => entry.name)
+          .join(', ')}) — no workspace at their paths; drop one: ` +
+        `ward workspace unregister ${stale[0]?.name}`,
+    };
+  }
+  return { check, severity: 'ok', message: `${listings.length} registered — ${answer}` };
 }
 
 /**

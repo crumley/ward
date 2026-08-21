@@ -25,9 +25,11 @@ import { message, text } from '@optique/core/message';
 import type { NonEmptyString } from '@optique/core/nonempty';
 import type { Suggestion } from '@optique/core/parser';
 import { string, type ValueParser } from '@optique/core/valueparser';
+import { searchOrder } from '../global/locate.ts';
+import { listWorkspaces } from '../global/registry.ts';
 import { git } from '../workspace/git.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
-import { listRepositories } from '../workspace/repos.ts';
+import { listRepositories, listRepositoryNames } from '../workspace/repos.ts';
 import { readTasks } from '../workspace/scan.ts';
 import { readOpenSessions } from '../workspace/sessions.ts';
 import { resolveWorkspaceMainLine } from '../workspace/steward.ts';
@@ -162,6 +164,44 @@ export function workspaceBranch(): ValueParser<'async', string> {
         .map((name) => ({ text: name }));
     }),
   );
+}
+
+/**
+ * Registered workspace names (design/0023-global-config-registry/) — bound to
+ * `workspace unregister|default|path` and `repo path --workspace`. The one
+ * suggester family that ignores contract 3: the registry is machine-level, so
+ * these verbs answer from anywhere and the candidates must too. Stale entries
+ * are still offered, with the reason as their cue: `unregister` is exactly
+ * the verb a human reaches for when an entry has gone stale, so hiding them
+ * would hide the candidates the menu is most needed for.
+ */
+export function workspaceIdentity(): ValueParser<'async', string> {
+  return suggesting('NAME', async () =>
+    (await listWorkspaces()).map((entry) => ({
+      text: entry.name,
+      description: entry.stale ? `${entry.path} (stale)` : entry.path,
+    })),
+  );
+}
+
+/**
+ * Repository names for `repo path` — the union across every workspace the
+ * verb would search (current, default, most recently used), deduplicated in
+ * search order, with the workspace that would answer as the cue. Suggesting
+ * only the current workspace's names would hide exactly the cross-workspace
+ * lookups this verb exists for, and suggesting names from a workspace the
+ * search never reaches would offer what the verb then refuses.
+ */
+export function anyRepoName(): ValueParser<'async', string> {
+  return suggesting('NAME', async () => {
+    const candidates = new Map<string, string>();
+    for (const workspace of await searchOrder(process.cwd())) {
+      for (const name of listRepositoryNames(workspace.path)) {
+        if (!candidates.has(name)) candidates.set(name, workspace.name);
+      }
+    }
+    return [...candidates].map(([text, workspace]) => ({ text, description: workspace }));
+  });
 }
 
 /**

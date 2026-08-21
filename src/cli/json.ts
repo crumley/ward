@@ -12,6 +12,8 @@
 // failing test. The builders stay hand-written because they are what pin key
 // order — the byte-determinism (§6) a schema alone cannot promise.
 import type { PrForgeState } from '../forge/gh.ts';
+import type { RepoLocation } from '../global/locate.ts';
+import type { RegistryReport, WorkspaceListing } from '../global/registry.ts';
 import type {
   ProjectRecord,
   RepositoryRecord,
@@ -36,6 +38,7 @@ import type {
   ProjectOpenShape,
   RepoAddShape,
   RepoListShape,
+  RepoPathShape,
   RepoRefreshShape,
   SessionMutationShape,
   StatusShape,
@@ -46,7 +49,10 @@ import type {
   TaskMutationShape,
   TaskShape,
   WorkspaceCreateShape,
+  WorkspaceListShape,
   WorkspaceMergeShape,
+  WorkspacePathShape,
+  WorkspaceRegistryShape,
   WorkspaceRestoreShape,
   WorkspaceUpgradeShape,
   WorktreeCreateShape,
@@ -177,6 +183,47 @@ export function worktreeListJson(listings: readonly WorktreeListing[]): Worktree
     present: listing.present,
     createdAt: listing.record.createdAt,
   }));
+}
+
+/**
+ * The registry read verbs and the path verbs
+ * (design/0023-global-config-registry/). `default` and `stale` are always
+ * present booleans, not optional flags: "is this the default?" and "is this
+ * entry still real?" have an answer for every row, and an omitted field would
+ * read as unknown rather than false.
+ */
+export function workspaceListJson(listings: readonly WorkspaceListing[]): WorkspaceListShape {
+  return listings.map((entry) => ({
+    name: entry.name,
+    path: entry.path,
+    default: entry.isDefault,
+    stale: entry.stale,
+    registeredAt: entry.registeredAt,
+    ...(entry.lastUsedAt === undefined ? {} : { lastUsedAt: entry.lastUsedAt }),
+  }));
+}
+
+export function workspacePathJson(listing: WorkspaceListing): WorkspacePathShape {
+  return { name: listing.name, path: listing.path };
+}
+
+export function repoPathJson(location: RepoLocation): RepoPathShape {
+  return {
+    repo: location.repo,
+    workspace: location.workspace.name,
+    workspacePath: location.workspace.path,
+    path: location.path,
+  };
+}
+
+/** One shape for the three registry mutations — the entry as it now reads. */
+export function workspaceRegistryJson(report: RegistryReport): WorkspaceRegistryShape {
+  return {
+    name: report.entry.name,
+    path: report.entry.path,
+    default: report.entry.isDefault,
+    outcome: report.outcome,
+  };
 }
 
 export function repoListJson(records: readonly RepositoryRecord[]): RepoListShape {

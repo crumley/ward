@@ -13,6 +13,17 @@ import picocolors from 'picocolors';
 import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
 import { type PrForgeState, probeForge } from '../forge/gh.ts';
+import { locateRepo, locateWorkspace } from '../global/locate.ts';
+import {
+  listWorkspaces,
+  type RegistryReport,
+  registerWorkspace,
+  resolutionOrder,
+  setDefaultWorkspace,
+  touchWorkspace,
+  unregisterWorkspace,
+  viewRegistry,
+} from '../global/registry.ts';
 import type { TaskRecord, WorkState } from '../store/types.ts';
 import { createWorkspace, type StepReport } from '../workspace/create.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
@@ -51,6 +62,7 @@ import {
   projectOpenJson,
   repoAddJson,
   repoListJson,
+  repoPathJson,
   repoRefreshJson,
   sessionMutationJson,
   statusJson,
@@ -58,7 +70,10 @@ import {
   taskListJson,
   taskMutationJson,
   workspaceCreateJson,
+  workspaceListJson,
   workspaceMergeJson,
+  workspacePathJson,
+  workspaceRegistryJson,
   workspaceRestoreJson,
   workspaceUpgradeJson,
   worktreeCreateJson,
@@ -67,7 +82,16 @@ import {
 } from './json.ts';
 import { refreshDisplay } from './progress.ts';
 import { allSchemasJson, verbSchemaJson } from './schema.ts';
-import { repoName, schemaVerb, sessionId, taskCode, workspaceBranch } from './suggest.ts';
+import {
+  anyRepoName,
+  isCompletionCallback,
+  repoName,
+  schemaVerb,
+  sessionId,
+  taskCode,
+  workspaceBranch,
+  workspaceIdentity,
+} from './suggest.ts';
 import { recordInvocation } from './telemetry.ts';
 
 // Local usage telemetry, armed before anything can exit: one row per
@@ -75,6 +99,16 @@ import { recordInvocation } from './telemetry.ts';
 // the outcome, covers optique's own help/usage exits, and costs the command
 // nothing while it runs (design/0013-telemetry-and-serialized-writes/).
 recordInvocation(process.argv.slice(2));
+
+// The registry's recency, kept current before anything can exit
+// (design/0023-global-config-registry/): an invocation from inside a
+// registered workspace is what makes it the most recently used one, which is
+// what `ward` falls back to from elsewhere. Awaited so nothing dangles, and
+// it is a single small read in the steady state — the write happens only when
+// the order actually changes. A completion callback is the shell's own
+// machinery, not usage (design/0022-shell-completion/, SF-002), so it never
+// churns the MRU.
+await touchInvokedWorkspace(process.argv.slice(2));
 
 // A declared agent gets deterministic output: no ANSI, whatever the terminal
 // or CI environment would otherwise negotiate (the §8 asymmetry — color is a
@@ -155,9 +189,72 @@ const workspaceUpgrade = command(
   },
 );
 
+// The machine-level registry (design/0023-global-config-registry/): which
+// workspaces exist on this machine, which is the default, which was used
+// last. Convenience only — the boundary in
+// intent/01-concepts/06-workspace-lifecycle.md — so every one of these verbs
+// touches global state and nothing else.
+const workspaceRegister = command(
+  'register',
+  object({
+    action: constant('workspace-register'),
+    path: optional(argument(string({ metavar: 'PATH' }))),
+    json: jsonFlag(),
+  }),
+  {
+    brief: message`Register a workspace on this machine (default: the one containing this directory).`,
+  },
+);
+
+const workspaceUnregister = command(
+  'unregister',
+  object({
+    action: constant('workspace-unregister'),
+    target: argument(workspaceIdentity()),
+    json: jsonFlag(),
+  }),
+  { brief: message`Drop a workspace from the registry — the registry only, nothing on disk.` },
+);
+
+const workspaceList = command(
+  'list',
+  object({ action: constant('workspace-list'), json: jsonFlag() }),
+  { brief: message`List the registered workspaces, most recently used first.` },
+);
+
+const workspaceDefault = command(
+  'default',
+  object({
+    action: constant('workspace-default'),
+    target: argument(workspaceIdentity()),
+    json: jsonFlag(),
+  }),
+  { brief: message`Set the default workspace — what ward answers from outside any workspace.` },
+);
+
+const workspacePath = command(
+  'path',
+  object({
+    action: constant('workspace-path'),
+    name: optional(argument(workspaceIdentity())),
+    json: jsonFlag(),
+  }),
+  { brief: message`Print a registered workspace's absolute path (the default when unnamed).` },
+);
+
 const workspace = command(
   'workspace',
-  or(workspaceCreate, workspaceMerge, workspaceRestore, workspaceUpgrade),
+  or(
+    workspaceCreate,
+    workspaceMerge,
+    workspaceRestore,
+    workspaceUpgrade,
+    workspaceRegister,
+    workspaceUnregister,
+    workspaceList,
+    workspaceDefault,
+    workspacePath,
+  ),
   { brief: message`Operate on a workspace.` },
 );
 
@@ -193,7 +290,25 @@ const repoList = command('list', object({ action: constant('repo-list'), json: j
   brief: message`List the registered repositories.`,
 });
 
-const repo = command('repo', or(repoAdd, repoRefresh, repoList), {
+// Works from any directory (design/0023-global-config-registry/): without
+// --workspace the search runs current → default → most recently used, and the
+// first workspace whose record registers the name answers.
+const repoPath = command(
+  'path',
+  object({
+    action: constant('repo-path'),
+    name: argument(anyRepoName()),
+    workspace: optional(
+      option('--workspace', workspaceIdentity(), {
+        description: message`Ask exactly this workspace (a registered name, or any workspace's path).`,
+      }),
+    ),
+    json: jsonFlag(),
+  }),
+  { brief: message`Print the absolute path of a repository's canonical checkout.` },
+);
+
+const repo = command('repo', or(repoAdd, repoRefresh, repoList, repoPath), {
   brief: message`Operate on the workspace's registered repositories.`,
 });
 
@@ -428,6 +543,34 @@ try {
         await cmdWorkspaceUpgrade(target.root, target.code, result.json);
         break;
       }
+      case 'workspace-register': {
+        const report = await registerWorkspace(result.path ?? process.cwd());
+        renderRegistry(report, result.json);
+        break;
+      }
+      case 'workspace-unregister': {
+        renderRegistry(await unregisterWorkspace(result.target), result.json);
+        break;
+      }
+      case 'workspace-default': {
+        renderRegistry(await setDefaultWorkspace(result.target), result.json);
+        break;
+      }
+      case 'workspace-list':
+        await cmdWorkspaceList(result.json);
+        break;
+      case 'workspace-path': {
+        // Nothing but the path on stdout: this verb exists to be substituted
+        // into a shell command (`cd (ward workspace path)`), so any extra
+        // line would land in the caller's argument.
+        const listing = await locateWorkspace(result.name);
+        if (result.json) printJson(workspacePathJson(listing));
+        else console.log(listing.path);
+        break;
+      }
+      case 'repo-path':
+        await cmdRepoPath(result.name, result.workspace, result.json);
+        break;
       case 'repo-add':
         await cmdRepoAdd(result.source, result.name, result.json);
         break;
@@ -438,7 +581,7 @@ try {
         await cmdRepoList(result.json);
         break;
       case 'project-open': {
-        const record = await openProject(requireMutableWorkspace(), result.slug);
+        const record = await openProject(await requireMutableWorkspace(), result.slug);
         if (result.json) {
           printJson(projectOpenJson(record));
           break;
@@ -452,7 +595,7 @@ try {
         await cmdProjectList(result.json);
         break;
       case 'task-open': {
-        const opened = await openTask(requireMutableWorkspace(), result.slug, {
+        const opened = await openTask(await requireMutableWorkspace(), result.slug, {
           ...(result.project === undefined ? {} : { floor: result.project }),
           ...(result.purpose === undefined ? {} : { purpose: result.purpose }),
         });
@@ -574,7 +717,7 @@ try {
         break;
       }
       case 'session-close': {
-        const closed = await closeSession(requireMutableWorkspace(), result.id);
+        const closed = await closeSession(await requireMutableWorkspace(), result.id);
         if (result.json) {
           printJson(sessionMutationJson(closed));
           break;
@@ -642,7 +785,7 @@ function renderOutcome(step: StepReport): string {
  * stderr + exit 1 with stdout empty, the 0015 posture.
  */
 async function cmdWorkspaceMerge(branch: string, preview: boolean, json: boolean): Promise<void> {
-  const report = await mergeWorkspaceBranch(requireMutableWorkspace(), branch, preview);
+  const report = await mergeWorkspaceBranch(await requireMutableWorkspace(), branch, preview);
   if (json) {
     printJson(workspaceMergeJson(report));
     return;
@@ -676,7 +819,7 @@ async function cmdWorkspaceMerge(branch: string, preview: boolean, json: boolean
  * lives in $?. Loud rows stay undimmed — a lost branch must not whisper.
  */
 async function cmdWorkspaceRestore(json: boolean): Promise<void> {
-  const report = await restoreWorkspace(requireMutableWorkspace());
+  const report = await restoreWorkspace(await requireMutableWorkspace());
   const converged = restoreConverged(report);
   if (json) {
     printJson(workspaceRestoreJson(report));
@@ -789,15 +932,121 @@ function renderUpgradeAction(action: 'upgraded' | 'installed' | 'current' | 'kep
   }[action];
 }
 
-/** Resolve the enclosing workspace or fail legibly — for verbs that need one. */
-function requireWorkspace(): string {
+/** Note this invocation's workspace as the most recently used, if registered. */
+async function touchInvokedWorkspace(argv: readonly string[]): Promise<void> {
+  if (isCompletionCallback(argv)) return;
   const root = discoverWorkspace(process.cwd());
-  if (root === null) {
-    throw new WardError(
-      'no Ward workspace encloses this directory — create one with: ward workspace create PATH',
+  if (root !== null) await touchWorkspace(root);
+}
+
+/**
+ * The three registry mutations, rendered alike: what happened, the entry it
+ * happened to, and whether it is the default — with `unchanged` making a
+ * repeated act legible as the no-op it was (§6).
+ */
+function renderRegistry(report: RegistryReport, json: boolean): void {
+  if (json) {
+    printJson(workspaceRegistryJson(report));
+    return;
+  }
+  const verb = {
+    registered: pc.green('registered'),
+    satisfied: pc.dim('unchanged'),
+    unregistered: pc.dim('unregistered'),
+    'default-set': pc.green('default set'),
+  }[report.outcome];
+  const mark = report.entry.isDefault ? pc.dim(' (default)') : '';
+  console.log(`${verb} ${pc.bold(report.entry.name)} ${pc.dim(report.entry.path)}${mark}`);
+}
+
+/**
+ * The registered workspaces, most recently used first, the default marked
+ * with a star. A stale entry — its path no longer holds a workspace — is
+ * shown and named rather than hidden: the registry is a convenience, and the
+ * honest report is what lets the human drop it (§20).
+ */
+async function cmdWorkspaceList(json: boolean): Promise<void> {
+  const { listings, unreadable } = await viewRegistry();
+  if (json) {
+    printJson(workspaceListJson(listings));
+    return;
+  }
+  if (listings.length === 0) {
+    console.log(
+      pc.dim(
+        unreadable
+          ? 'the registry could not be read — ward doctor names the file and the reason'
+          : 'no workspaces registered — register one with: ward workspace register [PATH]',
+      ),
+    );
+    return;
+  }
+  for (const entry of listings) {
+    const mark = entry.isDefault ? pc.green('*') : ' ';
+    const stale = entry.stale ? pc.yellow(' (stale — no workspace at that path)') : '';
+    console.log(`  ${mark} ${pc.bold(entry.name)} ${pc.dim(entry.path)}${stale}`);
+  }
+}
+
+/**
+ * The canonical checkout's path, alone on stdout so it can be substituted
+ * into a shell command. When the answer came from another workspace — the
+ * registry resolved it, not the caller's location — that derivation is echoed
+ * on stderr, the 0006 precedent: an implicit input is never silent, and
+ * stderr keeps stdout to the one thing the caller asked for.
+ */
+async function cmdRepoPath(
+  name: string,
+  workspaceTarget: string | undefined,
+  json: boolean,
+): Promise<void> {
+  const location = await locateRepo(name, process.cwd(), workspaceTarget);
+  if (location.workspace.source !== 'cwd') {
+    console.error(
+      pc.dim(
+        `workspace ${location.workspace.name} — ${location.workspace.path} (${
+          location.workspace.source === 'named' ? 'named' : 'from the registry'
+        })`,
+      ),
     );
   }
-  return root;
+  if (json) printJson(repoPathJson(location));
+  else console.log(location.path);
+}
+
+/**
+ * Resolve the workspace a verb operates on. The walk up from the working
+ * directory always wins (design/0002-store-and-workspace/): standing inside a
+ * workspace means that workspace, always, for both audiences.
+ *
+ * Standing nowhere, a HUMAN gets the registry's answer — the default
+ * workspace, else the most recently used — echoed on stderr so the implicit
+ * input is visible, exactly as an inferred task code is (0006). A declared
+ * agent is refused it, for 0006's reason: an agent's cwd is incidental state
+ * its harness manages, and resolving a mutation against a machine-level
+ * preference would turn that incidental state into a target. The two `path`
+ * verbs are the deliberate exception — they are registry queries by
+ * construction, so both audiences may ask them from anywhere.
+ */
+async function requireWorkspace(): Promise<string> {
+  const root = discoverWorkspace(process.cwd());
+  if (root !== null) return root;
+  if (callerIsAgent()) {
+    throw new WardError(
+      'no Ward workspace encloses this directory — a declared agent stands in one explicitly: ' +
+        'run from inside it (ward workspace list names the registered ones), or create one: ' +
+        'ward workspace create PATH',
+    );
+  }
+  const fallback = resolutionOrder(await listWorkspaces())[0];
+  if (fallback === undefined) {
+    throw new WardError(
+      'no Ward workspace encloses this directory — create one with: ward workspace create PATH ' +
+        '(or register an existing one: ward workspace register PATH)',
+    );
+  }
+  console.error(pc.dim(`workspace ${fallback.name} — ${fallback.path} (from the registry)`));
+  return fallback.path;
 }
 
 /**
@@ -808,8 +1057,8 @@ function requireWorkspace(): string {
  * through this instead: a record written in a copy would merge back into the
  * main line as false history, so the refusal names the enclosing workspace.
  */
-function requireMutableWorkspace(): string {
-  const root = requireWorkspace();
+async function requireMutableWorkspace(): Promise<string> {
+  const root = await requireWorkspace();
   refuseStewardshipCopy(root);
   return root;
 }
@@ -836,7 +1085,7 @@ async function resolveTaskTarget(
 ): Promise<TaskTarget> {
   // Every caller of this resolver is a mutation, so the stewardship-copy
   // guard rides the workspace resolution (design/0019-stewardship-worktrees/).
-  const root = requireMutableWorkspace();
+  const root = await requireMutableWorkspace();
   if (explicit !== undefined) return { root, code: explicit };
   if (callerIsAgent()) {
     throw new WardError(
@@ -859,7 +1108,7 @@ async function resolveTaskTarget(
 }
 
 async function cmdRepoAdd(source: string, name: string | undefined, json: boolean): Promise<void> {
-  const root = requireMutableWorkspace();
+  const root = await requireMutableWorkspace();
   const report = await addRepository(root, source, name);
   if (json) {
     printJson(repoAddJson(report));
@@ -890,7 +1139,7 @@ async function cmdRepoRefresh(
   json: boolean,
   stash: boolean,
 ): Promise<void> {
-  const root = requireMutableWorkspace();
+  const root = await requireMutableWorkspace();
   const display = json ? null : refreshDisplay(pc);
   const reports = await refreshRepositories(root, name, {
     stash,
@@ -914,7 +1163,7 @@ async function cmdRepoRefresh(
 }
 
 async function cmdRepoList(json: boolean): Promise<void> {
-  const root = requireWorkspace();
+  const root = await requireWorkspace();
   const records = await listRepositories(root);
   if (json) {
     printJson(repoListJson(records));
@@ -938,7 +1187,7 @@ function renderState(state: WorkState): string {
 }
 
 async function cmdProjectList(json: boolean): Promise<void> {
-  const root = requireWorkspace();
+  const root = await requireWorkspace();
   const projects = await readProjects(root);
   const tasks = await readTasks(root);
   const entries = projects.map((project) => {
@@ -966,7 +1215,7 @@ async function cmdProjectList(json: boolean): Promise<void> {
 }
 
 async function cmdTaskList(json: boolean): Promise<void> {
-  const root = requireWorkspace();
+  const root = await requireWorkspace();
   const tasks = await readTasks(root);
   const probe = await probeForge(openPrUrls(tasks.map((task) => task.record)));
   const entries = tasks.map(({ record }) => {
@@ -1006,7 +1255,7 @@ async function cmdTaskClose(
   outcome: 'delivered' | 'abandoned',
   json: boolean,
 ): Promise<void> {
-  const report = await closeTask(requireMutableWorkspace(), code, outcome);
+  const report = await closeTask(await requireMutableWorkspace(), code, outcome);
   if (json) {
     printJson(taskCloseJson(report));
     return;
@@ -1056,7 +1305,7 @@ function renderRebase(report: RebaseReport): string {
 }
 
 async function cmdWorktreeList(json: boolean): Promise<void> {
-  const listings = await listWorktrees(requireWorkspace());
+  const listings = await listWorktrees(await requireWorkspace());
   if (json) {
     printJson(worktreeListJson(listings));
     return;
@@ -1078,7 +1327,7 @@ async function cmdWorktreeList(json: boolean): Promise<void> {
 }
 
 async function cmdStatus(json: boolean): Promise<void> {
-  const report = await statusReport(requireWorkspace());
+  const report = await statusReport(await requireWorkspace());
   if (json) {
     printJson(statusJson(report));
     return;

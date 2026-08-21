@@ -54,15 +54,24 @@ export function renderDocument<T>(type: DocumentType<T>, document: Document<T>):
   return joinFrontMatter(Bun.YAML.stringify(data, null, 2), document.body);
 }
 
+/**
+ * Write a document atomically. `stageIn` names the staging directory — it
+ * defaults to the workspace's own `.ward/tmp/`, and is overridden by the
+ * global documents (design/0023-global-config-registry/), which live outside
+ * any workspace and stage beside themselves. The only requirement is the one
+ * ADR 0005 rests on: the staging directory and the destination share a
+ * filesystem, so the rename is atomic.
+ */
 export async function writeDocument<T>(
   root: string,
   type: DocumentType<T>,
   document: Document<T>,
+  options: { readonly stageIn?: string } = {},
 ): Promise<void> {
   const text = renderDocument(type, document);
   const file = join(root, type.relPath);
   await mkdir(dirname(file), { recursive: true });
-  const tmpDir = join(root, '.ward', 'tmp');
+  const tmpDir = options.stageIn ?? join(root, '.ward', 'tmp');
   await mkdir(tmpDir, { recursive: true });
   const tmp = join(tmpDir, `${basename(file)}.${process.pid}.${nextWrite++}`);
   await Bun.write(tmp, text);
