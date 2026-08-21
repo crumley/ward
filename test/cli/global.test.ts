@@ -132,6 +132,45 @@ test('repo path: the checkout, found by search order, with the crossing echoed o
   expect(missed.stderr).toContain(`no repository named 'beta-only' is registered in 'alpha'`);
 });
 
+test('an explicit target that names nothing is refused — never answered by where the caller stands', () => {
+  ward(['workspace', 'register'], alpha);
+  ward(['workspace', 'register', beta], scratch);
+
+  // Standing in beta, an unknown --workspace must not quietly become beta.
+  const ghost = ward(['repo', 'path', 'shared', '--workspace', 'ghost'], beta);
+  expect(ghost.exitCode).toBe(1);
+  expect(ghost.stdout).toBe('');
+  expect(ghost.stderr).toContain("no registered workspace named 'ghost'");
+
+  // Same class: a typo'd path must not register the workspace it sits under.
+  const typo = ward(['workspace', 'register', './typpo'], beta);
+  expect(typo.exitCode).toBe(1);
+  expect(typo.stderr).toContain('no Ward workspace encloses');
+  expect(names(ward(['workspace', 'list', '--json'], scratch).stdout)).toEqual(['beta', 'alpha']);
+});
+
+test('a stale registry lock is taken over silently — a convenience never noises up a command', () => {
+  ward(['workspace', 'register'], alpha);
+  ward(['workspace', 'register', beta], scratch); // beta leads; alpha will want a write
+  const holder = {
+    pid: 999_999,
+    host: 'somewhere-else',
+    verb: 'workspace register',
+    caller: 'human',
+    startedAt: new Date(Date.now() - 120_000).toISOString(),
+    nonce: 'abandoned',
+  };
+  writeFileSync(join(state, 'workspace-registry.lock'), `${JSON.stringify(holder)}\n`);
+
+  const result = ward(['task', 'list'], alpha);
+  expect(result.exitCode).toBe(0);
+  expect(result.stderr).toBe(''); // no takeover note out of an invisible write
+  expect(names(ward(['workspace', 'list', '--json'], scratch).stdout)).toEqual(['alpha', 'beta']);
+  // But doctor names it while it is there — the lock's own refusal promises so.
+  writeFileSync(join(state, 'workspace-registry.lock'), `${JSON.stringify(holder)}\n`);
+  expect(ward(['doctor'], scratch).stdout).toContain('! workspace registry lock — stale');
+});
+
 test('both path verbs serve an agent too: they are registry queries, not inferences', () => {
   ward(['workspace', 'register'], alpha);
   const asAgent = { WARD_AGENT: 'sess-1' };

@@ -27,6 +27,8 @@ import {
 } from '../../src/global/registry.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
+import { openTask } from '../../src/workspace/tasks.ts';
+import { createWorkspaceWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, GIT_ENV, makeTempDir, removeDir } from '../helpers.ts';
 
 // -- registration ----------------------------------------------------------
@@ -48,6 +50,30 @@ test('register refuses a path that no workspace encloses, naming the fix', async
   await expect(registerWorkspace(scratch, state)).rejects.toThrow(
     /no Ward workspace encloses .* ward workspace create PATH/s,
   );
+});
+
+test('a path that does not exist is refused, never resolved by walking up past it', async () => {
+  // The hazard the existence check exists for: without it, the walk up from a
+  // typo'd path lands on whatever workspace encloses the caller, and an
+  // explicit argument is silently answered by the caller's location.
+  await expect(registerWorkspace(join(alpha, 'typpo'), state)).rejects.toThrow(
+    /no Ward workspace encloses/,
+  );
+  expect(await listWorkspaces(state)).toEqual([]);
+  await withState(state, async () => {
+    await expect(locateRepo('anything', alpha, 'ghost')).rejects.toThrow(
+      /no registered workspace named 'ghost', and no workspace at that path/,
+    );
+  });
+});
+
+test('a stewardship copy is not a second workspace, so it cannot be registered', async () => {
+  await openTask(alpha, 'steward-thing', {});
+  const { record } = await createWorkspaceWorktree(alpha, 't1');
+  await expect(registerWorkspace(join(alpha, record.path), state)).rejects.toThrow(
+    /this directory is a stewardship copy/,
+  );
+  expect(await listWorkspaces(state)).toEqual([]);
 });
 
 test('names are labels: a second workspace with the same basename is suffixed, not refused', async () => {
@@ -222,6 +248,17 @@ test("a registered repo whose checkout is gone names the remedy, never a path th
     await expect(locateRepo('vanished', alpha)).rejects.toThrow(
       /canonical checkout is missing.*ward workspace restore/s,
     );
+  });
+});
+
+test('a claimed-but-missing checkout does not end the search — a later workspace still answers', async () => {
+  await registerWorkspace(alpha, state); // the default, asked first
+  await registerWorkspace(beta, state);
+  await addRepository(alpha, remote, 'shared');
+  await addRepository(beta, remote, 'shared');
+  rmSync(join(alpha, 'repos', 'shared'), { recursive: true });
+  await withState(state, async () => {
+    expect((await locateRepo('shared', scratch)).workspace.path).toBe(beta);
   });
 });
 

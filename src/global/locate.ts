@@ -19,6 +19,7 @@ import {
   samePath,
   viewRegistry,
   type WorkspaceListing,
+  workspaceAt,
 } from './registry.ts';
 
 /**
@@ -96,18 +97,26 @@ export async function locateRepo(
   workspaceTarget?: string,
 ): Promise<RepoLocation> {
   const order = await searchOrder(from, workspaceTarget);
+  // A record that claims the name but has no checkout on disk does not end the
+  // search — a later workspace may hold a real one, and answering with a path
+  // that is not there would be the wrong kind of honesty. It is remembered,
+  // so that if nothing else answers, the report is the drift and its remedy
+  // rather than a bare "not found" (§20).
+  let claimed: { workspace: WorkspaceRef; path: string } | undefined;
   for (const workspace of order) {
     if (!listRepositoryNames(workspace.path).includes(name)) continue;
     const path = checkoutPath(workspace.path, name);
     if (!existsSync(path)) {
-      // The record claims it; the world does not have it. Naming the remedy
-      // beats printing a path that is not there (§20).
-      throw new WardError(
-        `'${name}' is registered in workspace '${workspace.name}' but its canonical checkout ` +
-          `is missing at ${path} — re-materialize it: ward workspace restore`,
-      );
+      claimed ??= { workspace, path };
+      continue;
     }
     return { repo: name, workspace, path };
+  }
+  if (claimed !== undefined) {
+    throw new WardError(
+      `'${name}' is registered in workspace '${claimed.workspace.name}' but its canonical ` +
+        `checkout is missing at ${claimed.path} — re-materialize it: ward workspace restore`,
+    );
   }
   if (order.length === 0) {
     throw new WardError(
@@ -148,7 +157,11 @@ async function namedWorkspace(target: string): Promise<WorkspaceRef> {
   if (listing !== undefined && !listing.stale) {
     return { name: listing.name, path: listing.path, source: 'named' };
   }
-  const root = discoverWorkspace(resolve(target));
+  // `workspaceAt`, not a bare walk-up: an unknown NAME is not a path, and
+  // walking up from a path that does not exist would quietly answer with
+  // whatever workspace encloses the caller — an explicit selector resolved by
+  // the caller's location is worse than a refusal.
+  const root = workspaceAt(target);
   if (root !== null) return { name: nameOfPath(root), path: root, source: 'named' };
   throw new WardError(
     `no registered workspace named '${target}', and no workspace at that path — ` +

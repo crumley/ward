@@ -21,9 +21,17 @@ import { z } from 'zod';
 import { WardError } from '../errors.ts';
 import { type DocumentType, readDocument } from '../store/document.ts';
 import { workspaceRecordType } from '../store/types.ts';
-import { discoverWorkspace, MARKER_DIR } from '../workspace/layout.ts';
+import { discoverWorkspace, isWorkspaceRoot } from '../workspace/layout.ts';
+import { refuseStewardshipCopy } from '../workspace/steward.ts';
 import { stateDir } from './paths.ts';
-import { type GlobalRead, readGlobal, reasonOf, withGlobalLock, writeGlobal } from './store.ts';
+import {
+  type GlobalRead,
+  globalLockPath,
+  readGlobal,
+  reasonOf,
+  withGlobalLock,
+  writeGlobal,
+} from './store.ts';
 
 export const registryRecordSchema = z.object({
   type: z.literal('ward-registry'),
@@ -39,7 +47,13 @@ export const registryRecordSchema = z.object({
       name: z.string().min(1),
       path: z.string().min(1),
       registeredAt: z.string().min(1),
-      /** Last invocation from inside it — the recency MRU order derives from. */
+      /**
+       * When this workspace last BECAME the most recently used one — not the
+       * last invocation inside it. Ordering is all recency is for, and an
+       * invocation in the workspace already at the head changes no order, so
+       * it is not written (see `touchWorkspace`). Reading it as "last used"
+       * would overstate what is recorded.
+       */
       lastUsedAt: z.string().min(1).optional(),
     }),
   ),
@@ -75,6 +89,13 @@ export interface RegistryReport {
 
 export function registryPath(dir: string = stateDir()): string {
   return join(dir, registryRecordType.relPath);
+}
+
+/** What the registry's writes serialize on — named here so doctor can read it. */
+const REGISTRY_LOCK = 'workspace registry';
+
+export function registryLockPath(dir: string = stateDir()): string {
+  return globalLockPath(dir, REGISTRY_LOCK);
 }
 
 /**
@@ -120,13 +141,18 @@ export async function registerWorkspace(
   from: string,
   dir: string = stateDir(),
 ): Promise<RegistryReport> {
-  const root = discoverWorkspace(resolve(from));
+  const root = workspaceAt(from);
   if (root === null) {
     throw new WardError(
       `no Ward workspace encloses ${resolve(from)} — name one, or create it: ` +
         'ward workspace create PATH',
     );
   }
+  // A stewardship copy is not a second workspace
+  // (intent/01-concepts/06-workspace-lifecycle.md): it materializes the
+  // enclosing workspace's record, so registering it would put a candidate copy
+  // in the machine's fallback order and let a verb resolve to a preview.
+  refuseStewardshipCopy(root);
   const name = await workspaceName(root);
   return mutate(dir, `workspace register ${name}`, (record) => {
     const existing = record.workspaces.find((entry) => samePath(entry.path, root));
@@ -166,8 +192,9 @@ export async function unregisterWorkspace(
     // it to the next-most-recent keeps `ward workspace path` answering, which
     // is the whole point of having a default. The record is rebuilt rather
     // than spread, so dropping the last workspace really drops the default.
-    const nextDefault =
-      record.default === entry.path ? mruOrder(remaining)[0]?.path : record.default;
+    const nextDefault = isDefaultPath(record, entry)
+      ? mruOrder(remaining)[0]?.path
+      : record.default;
     return {
       record: {
         type: record.type,
@@ -190,7 +217,7 @@ export async function setDefaultWorkspace(
     return {
       record: { ...record, default: entry.path },
       entry,
-      outcome: record.default === entry.path ? 'satisfied' : 'default-set',
+      outcome: isDefaultPath(record, entry) ? 'satisfied' : 'default-set',
     };
   });
 }
@@ -211,15 +238,19 @@ export async function touchWorkspace(root: string, dir: string = stateDir()): Pr
   try {
     const read = await readRegistry(dir);
     if (read.state !== 'read') return;
-    const listings = listingsOf(read);
-    const mine = listings.find((entry) => samePath(entry.path, root));
+    // Deliberately off the listings: staleness would stat every registered
+    // path on every invocation — including one on a dead network mount — for
+    // an answer only the ordering needs.
+    const mine = leadIfBehind(read.document.data.workspaces, root);
     if (mine === undefined) return;
-    if (listings[0]?.path === mine.path) return; // rule 1: already most recent
     await mutate(
       dir,
       'workspace use',
       (record) => {
-        const entry = record.workspaces.find((other) => other.path === mine.path);
+        // Re-checked under the lock: the workspace may have been touched
+        // between the read above and the acquire, and N concurrent
+        // invocations in the same workspace should produce one write, not N.
+        const entry = leadIfBehind(record.workspaces, mine.path);
         if (entry === undefined) return { record, entry: mine, outcome: 'satisfied' };
         const touched = { ...entry, lastUsedAt: new Date().toISOString() };
         return {
@@ -233,11 +264,18 @@ export async function touchWorkspace(root: string, dir: string = stateDir()): Pr
           outcome: 'satisfied',
         };
       },
-      1_000,
+      250,
     );
   } catch {
     // Rule 2: a recency note is never worth a failed command.
   }
+}
+
+/** The entry for `root`, unless it already leads the order (rule 1) or is unregistered. */
+function leadIfBehind(entries: readonly RegistryEntry[], root: string): RegistryEntry | undefined {
+  const mine = entries.find((entry) => samePath(entry.path, root));
+  if (mine === undefined) return undefined;
+  return mruOrder(entries)[0]?.path === mine.path ? undefined : mine;
 }
 
 // -- resolution -----------------------------------------------------------
@@ -265,6 +303,20 @@ export function findListing(
   );
 }
 
+/**
+ * The workspace a caller MEANT by a path: the walk up from it, but only when
+ * the path itself exists. Without the existence check, a typo'd or bogus path
+ * (`ward workspace register ./typpo`, `--workspace ghost`) resolves by walking
+ * up past a directory that was never there and lands on whatever workspace
+ * encloses the CWD — an explicit argument silently answered by the caller's
+ * location, which is precisely the mis-targeting this codebase refuses
+ * everywhere else.
+ */
+export function workspaceAt(target: string): string | null {
+  const path = resolve(target);
+  return existsSync(path) ? discoverWorkspace(path) : null;
+}
+
 /** Whether two paths name the same directory, symlinks and all. */
 export function samePath(a: string, b: string): boolean {
   if (a === b) return true;
@@ -279,6 +331,15 @@ function listingsOf(read: GlobalRead<RegistryRecord>): WorkspaceListing[] {
   return mruOrder(record.workspaces).map((entry) => toListing(entry, record.default));
 }
 
+/**
+ * Whether an entry is the recorded default — through `samePath`, the same
+ * test the listings use, so a hand-edited registry naming the default by a
+ * symlink alias cannot read as the default in one place and not the other.
+ */
+function isDefaultPath(record: RegistryRecord, entry: RegistryEntry): boolean {
+  return record.default !== undefined && samePath(record.default, entry.path);
+}
+
 /** One entry as it reads: the default marked, staleness checked against disk. */
 function toListing(entry: RegistryEntry, defaultPath: string | undefined): WorkspaceListing {
   return {
@@ -287,7 +348,7 @@ function toListing(entry: RegistryEntry, defaultPath: string | undefined): Works
     registeredAt: entry.registeredAt,
     ...(entry.lastUsedAt === undefined ? {} : { lastUsedAt: entry.lastUsedAt }),
     isDefault: defaultPath !== undefined && samePath(defaultPath, entry.path),
-    stale: !existsSync(join(entry.path, MARKER_DIR)),
+    stale: !isWorkspaceRoot(entry.path),
   };
 }
 
@@ -344,7 +405,7 @@ async function locked(
 ): Promise<RegistryReport> {
   return withGlobalLock(
     dir,
-    'workspace registry',
+    REGISTRY_LOCK,
     verb,
     async () => {
       // Re-read inside the lock: the copy a caller decided on may be stale by

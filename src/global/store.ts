@@ -43,16 +43,6 @@ export async function readGlobal<T>(dir: string, type: DocumentType<T>): Promise
   }
 }
 
-/** The data alone, with a caller-supplied fallback for every non-read state. */
-export async function readGlobalData<T>(
-  dir: string,
-  type: DocumentType<T>,
-  fallback: T,
-): Promise<T> {
-  const read = await readGlobal(dir, type);
-  return read.state === 'read' ? read.document.data : fallback;
-}
-
 /**
  * Write one global document atomically, staging beside it (same filesystem,
  * so the rename is atomic) and reporting failure rather than swallowing it —
@@ -82,6 +72,11 @@ export async function writeGlobal<T>(
  * do. The wait is short by default: nothing here is worth stalling a command
  * for, and the caller decides what a refusal means.
  */
+/** Where a global lock file lives — doctor reads it, so it is named once. */
+export function globalLockPath(dir: string, subject: string): string {
+  return join(dir, `${subject.replaceAll(' ', '-')}.lock`);
+}
+
 export async function withGlobalLock<T>(
   dir: string,
   subject: string,
@@ -90,10 +85,14 @@ export async function withGlobalLock<T>(
   timeoutMs = 5_000,
 ): Promise<T> {
   const site: LockSite = {
-    path: join(dir, `${subject.replaceAll(' ', '-')}.lock`),
+    path: globalLockPath(dir, subject),
     tmpDir: join(dir, 'tmp'),
     subject,
     timeoutMs,
+    // Quiet: the loudest global write is the recency touch, which rides every
+    // invocation and which no caller asked for — a takeover note out of it
+    // would be noise on an unrelated command's stderr. Doctor names the lock.
+    quiet: true,
   };
   return withLock(site, verb, fn);
 }

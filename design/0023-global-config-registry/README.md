@@ -80,10 +80,11 @@ boundary in the intent — and most of the decisions below are that boundary, ap
   - **Completion** for the new nouns (`src/cli/suggest.ts`): registered workspace names (with their
     paths, and `(stale)` where that is true), and repository names unioned across exactly the
     workspaces `repo path` would search, cued by the workspace that would answer.
-  - **Doctor**, two machine-level findings: the global config's state (absent → defaults, unreadable
-    → warn with the reason, present → the resolved values) and the registry's (absent, unreadable,
-    or the count with the stale entries named and the remedy). Never `error`: a convenience cannot
-    make a machine unhealthy.
+  - **Doctor**, machine-level findings for the global state: the config's (absent → defaults,
+    unreadable → warn with the reason, present → the resolved values), the registry's (absent,
+    unreadable, or the count with the stale entries named and the remedy), and — only while one
+    exists — the registry lock's, because the lock's own refusal promises doctor names it. Never
+    `error`: a convenience cannot make a machine unhealthy.
   - **Serialized, atomic, non-fatal writes**: the store's own lock primitive, parameterized by site
     (`src/store/lock.ts`), and `writeDocument`'s staging directory made overridable
     (`src/store/document.ts`) so a document outside a workspace can still be written atomically.
@@ -156,6 +157,15 @@ boundary in the intent — and most of the decisions below are that boundary, ap
     it (falling back to `registeredAt`, ties broken by path). §17's first bias — derive shared state
     rather than store it — applied to an ordering: two writers can never disagree about "the order",
     because nobody writes it.
+  - **An explicit target is never resolved by the caller's location.** The walk-up that makes
+    `discoverWorkspace` friendly is a hazard for an _argument_: walking up from a path that does not
+    exist silently answers with the workspace enclosing the CWD. Every explicit target
+    (`register PATH`, `--workspace`) resolves through `workspaceAt`, which walks up only from a path
+    that exists, and refuses otherwise.
+  - **A stewardship copy cannot be registered.** `registerWorkspace` carries the same
+    `refuseStewardshipCopy` guard every mutating verb has: a copy materializes the enclosing
+    workspace's record, so an entry pointing at one would put a candidate preview into the machine's
+    fallback order.
   - **The head-of-order touch writes nothing.** Recency exists to order the list, so re-touching the
     workspace already at the head changes no answer. A day of work in one workspace writes the
     registry once; the steady state is one small read per invocation. This is what makes an
@@ -280,6 +290,57 @@ _remove_ a key, so unregistering the last workspace left a dangling `default` �
 rebuilt explicitly rather than spread; (2) a raw `EACCES` out of the lock's `mkdir` escaped as a
 stack trace from a convenience, which is exactly the failure §20 forbids, so every non-`WardError`
 from a registry write is now converted at one seam.
+
+### 2026-08-21 — Adversarial review, and what it found
+
+**Goal.** Probe the entry against its own claims — specifically the one that must hold absolutely
+("a global-state failure can never fail a workspace-local command") and the resolution paths. **What
+was done.** A reviewer with no stake in the design ran the degraded-state matrix (corrupt, mode-000,
+unwritable, state dir replaced by a file, held and stale locks), concurrent registration, symlinked
+paths, stewardship copies, and every `--workspace`/`PATH` spelling. The absolute claim held
+everywhere; four real defects and several sharp edges did not.
+
+**Fixed here, each with a regression case:**
+
+- **An explicit path argument could be answered by the caller's location.** `discoverWorkspace`
+  walks **up**, so `ward workspace register ./typpo` (or `repo path X --workspace ghost`) walked
+  past a path that never existed and landed on the workspace enclosing the CWD — registering, or
+  searching, something the caller never named. Resolution of an explicit target now goes through
+  `workspaceAt`, which walks up only from a path that **exists**. This is the same mis-targeting
+  class the whole entry refuses elsewhere, and it had slipped in through a helper.
+- **A stewardship copy could be registered — and made the default.** Nothing stopped
+  `ward workspace register` inside a `worktree create --workspace` copy, after which the machine's
+  fallback resolved to a candidate record and mutating verbs refused with a message about a
+  directory the caller was not standing in. `registerWorkspace` now calls `refuseStewardshipCopy`,
+  the same guard every mutating verb uses: a stewardship copy is not a second workspace
+  (intent/01-concepts/06-workspace-lifecycle.md), and the registry is where that could have been
+  quietly forgotten.
+- **A test could reach the developer's own registry.** `test/cli/version.test.ts` spawns the CLI at
+  the **repo root** — which on a contributor's machine is inside a real workspace — and was the one
+  suite not importing `test/helpers.ts`, so the global pin never ran. Since the recency touch
+  happens before the `--version` early exit, running that file alone would have written a registered
+  developer's registry. Pinned, and `test/workspace/concurrency.test.ts`'s spawn made explicit so it
+  no longer depends on another file having mutated `process.env` first.
+- **The borrowed lock leaked its takeover note onto unrelated commands.** A stale registry lock made
+  an ordinary `ward task list` print `ward: took over a stale workspace registry lock …` — noise on
+  stderr out of a write nobody asked for. `LockSite` gained `quiet`, set for every global site; and
+  because the lock's own refusal promises "ward doctor names the lock's state", doctor now names the
+  **registry** lock too, which closes a promise the primitive was making on a site that could not
+  keep it.
+
+**Sharpened at the same time:** the recency touch no longer stats every registered path on the hot
+path (a workspace on a dead mount would have blocked an unrelated local command inside `stat(2)`),
+re-checks the head rule **inside** the lock (so N concurrent invocations in one workspace produce
+one write, not N), and waits 250 ms rather than 1 s; `lastUsedAt` is documented as what it actually
+records ("when this workspace became most recent", which the head-skip makes precise); `locateRepo`
+continues past a workspace whose record claims a name but whose checkout is gone, reporting the
+drift only if nothing else answers; the default is compared with `samePath` everywhere; staleness
+now uses the same `isWorkspaceRoot` test as discovery (a `.ward` _file_ is not a marker); and
+`readGlobalData` went, unused.
+
+**Proof after the fixes:** `bun test` → `386 pass, 0 fail, 1575 expect() calls` across 37 files;
+`mise run check` → exit 0. The five new cases are the four defects plus the silent-takeover
+regression.
 
 **Next.** In dogfood order: the fish shell layer this entry exists for (`wcd`, `wrepo` and friends,
 built on the two path verbs); wiring `repo.refresh.stash` into `ward repo refresh` once its parallel

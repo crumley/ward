@@ -65,6 +65,14 @@ export interface LockSite {
   readonly subject: string;
   /** Bounded wait before an honest refusal; the site default when absent. */
   readonly timeoutMs?: number;
+  /**
+   * Suppress the takeover note on stderr. Set at a site whose writes are
+   * invisible to the caller — the registry's recency touch rides every
+   * invocation, and a lock note out of it would be noise on an unrelated
+   * command's stderr, from a write nobody asked for
+   * (design/0023-global-config-registry/).
+   */
+  readonly quiet?: boolean;
 }
 
 export function storeLockPath(root: string): string {
@@ -154,7 +162,7 @@ export function inspectLock(path: string): LockInspection {
 }
 
 /** One line naming the holder — the contention refusal and takeover note share it. */
-export function describeHolder(seen: LockInspection, lockPath = '.ward/store.lock'): string {
+export function describeHolder(seen: LockInspection, lockPath: string): string {
   const held = seen.heldMs === undefined ? '' : `, held ${Math.round(seen.heldMs / 1000)}s`;
   if (seen.holder === undefined) return `an unreadable holder (${lockPath}${held})`;
   const h = seen.holder;
@@ -173,10 +181,13 @@ async function acquire(site: LockSite, holder: LockHolder): Promise<void> {
     if (!seen.present) continue; // released between attempts — try again now
     if (seen.verdict === 'stale' && seen.raw !== undefined && breakStale(site, seen.raw)) {
       // Announced on stderr so the takeover is visible in the transcript
-      // that performed it, not only inferable from the record afterward.
-      console.error(
-        `ward: took over a stale ${site.subject} lock left by ${describeHolder(seen, site.path)}`,
-      );
+      // that performed it, not only inferable from the record afterward —
+      // unless the site is quiet, where the write itself is invisible.
+      if (site.quiet !== true) {
+        console.error(
+          `ward: took over a stale ${site.subject} lock left by ${describeHolder(seen, site.path)}`,
+        );
+      }
       continue;
     }
     if (Date.now() >= deadline) {

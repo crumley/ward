@@ -9,9 +9,15 @@ import { WardError } from '../errors.ts';
 import { type ForgeAuth, ghExecutable, probeForgeAuth } from '../forge/gh.ts';
 import { globalConfigType, inspectConfig } from '../global/config.ts';
 import { configDir } from '../global/paths.ts';
-import { listWorkspaces, readRegistry, registryPath, resolutionOrder } from '../global/registry.ts';
+import {
+  listWorkspaces,
+  readRegistry,
+  registryLockPath,
+  registryPath,
+  resolutionOrder,
+} from '../global/registry.ts';
 import { type DocumentType, readDocument } from '../store/document.ts';
-import { inspectStoreLock } from '../store/lock.ts';
+import { inspectLock, inspectStoreLock } from '../store/lock.ts';
 import {
   baselinesType,
   catalogType,
@@ -86,7 +92,43 @@ async function machineChecks(cwd: string): Promise<Finding[]> {
   }
   findings.push(await globalConfigFinding());
   findings.push(await workspaceRegistryFinding());
+  findings.push(...registryLockFindings());
   return findings;
+}
+
+/**
+ * The registry's own write lock, on the same terms as the store's: a held
+ * lock is normal and brief, a stale one is the wedged-looking condition
+ * doctor exists to explain. It is named here because the lock's own refusal
+ * says "ward doctor names the lock's state" — a promise that must be true at
+ * every site that borrows the primitive (§20's loop). Nothing is reported
+ * when no lock file exists, which is almost always.
+ */
+function registryLockFindings(): Finding[] {
+  const check = 'workspace registry lock';
+  const path = registryLockPath();
+  const seen = inspectLock(path);
+  if (!seen.present) return [];
+  const held = seen.heldMs === undefined ? '' : ` for ${Math.round(seen.heldMs / 1000)}s`;
+  const holder =
+    seen.holder === undefined
+      ? 'an unreadable holder'
+      : `pid ${seen.holder.pid} (ward ${seen.holder.verb}, ${seen.holder.caller})`;
+  return [
+    seen.verdict === 'live'
+      ? {
+          check,
+          severity: 'info',
+          message: `held by ${holder}${held} — a concurrent registry write is in flight`,
+        }
+      : {
+          check,
+          severity: 'warn',
+          message:
+            `stale — left by ${holder}${held}; the next registry write takes it over, ` +
+            `and deleting ${path} is also safe`,
+        },
+  ];
 }
 
 /**
