@@ -20,7 +20,7 @@ import {
   type RefreshRow,
   refreshRepositories,
 } from '../../src/workspace/repos.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { applyGitTestEnv, makeTempDir, removeDir, runWard, runWardEnv } from '../helpers.ts';
 
 // -- the streamed report (not a terminal) ---------------------------------
 
@@ -116,6 +116,38 @@ test('--stash refreshes a dirty checkout end to end; without it the checkout is 
   expect(stashed.stdout).toContain('stashed and restored');
   expect(git(checkout, 'stash', 'list').stdout.trim()).toBe('');
   expect(runWard(['status'], ws).exitCode).toBe(0);
+});
+
+// -- the `repo.refresh.stash` preference -----------------------------------
+
+test('the preference answers for a human who left the flag off; an agent is read from the flag alone', () => {
+  const confDir = join(scratch, `config-${caseId}`);
+  mkdirSync(confDir, { recursive: true });
+  writeFileSync(
+    join(confDir, 'config.md'),
+    '---\ntype: ward-config\nrepo:\n  refresh:\n    stash: true\n---\n',
+  );
+  const checkout = checkoutPath(ws, 'alpha');
+  writeFileSync(join(checkout, 'notes.txt'), 'unrecorded work\n');
+  advance('alpha', 'moved.txt');
+
+  // A declared agent's invocation means the same thing on every machine: the
+  // preference is a human affordance, so no flag means no stash.
+  const agent = runWardEnv(['repo', 'refresh', 'alpha'], ws, {
+    NO_COLOR: '1',
+    WARD_AGENT: '1',
+    WARD_CONFIG_DIR: confDir,
+  });
+  expect(verbsAndNames(agent.stdout)).toEqual([['dirty', 'alpha']]);
+
+  // The human's standing preference supplies the default they asked for.
+  const human = runWardEnv(['repo', 'refresh', 'alpha'], ws, {
+    NO_COLOR: '1',
+    WARD_CONFIG_DIR: confDir,
+  });
+  expect(verbsAndNames(human.stdout)).toEqual([['refreshed', 'alpha']]);
+  expect(human.stdout).toContain('stashed and restored');
+  expect(git(checkout, 'stash', 'list').stdout.trim()).toBe('');
 });
 
 // -- the display seam ------------------------------------------------------
