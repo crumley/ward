@@ -396,7 +396,7 @@ export function workspaceUpgradeJson(report: UpgradeReport): WorkspaceUpgradeSha
 export function sessionMutationJson(record: SessionRecord): SessionMutationShape {
   return {
     id: record.id,
-    // Always present, including for a record written before 0028: the scope a
+    // Always present, including for a record written before 0029: the scope a
     // record states, or the one a carried task implies. An agent reading this
     // never has to infer the level from which fields happen to be here.
     scope: sessionScopeOf(record),
@@ -445,7 +445,7 @@ export function shellAdoptJson(report: AdoptionReport): ShellAdoptShape {
   };
 }
 
-/** `session locate` (0028): the handle resolved, found or gone, with the path either way. */
+/** `session locate` (0029): the handle resolved, found or gone, with the path either way. */
 export function sessionLocateJson(location: SessionLocation): SessionLocateShape {
   return {
     id: location.record.id,

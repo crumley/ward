@@ -24,11 +24,11 @@ import {
 const PR_URL = 'https://example.com/pr/6';
 
 // `session open` no longer infers a task from the working directory: since
-// design/0028-launched-sessions/ a missing TASK means WORKSPACE scope
+// design/0029-launched-sessions/ a missing TASK means WORKSPACE scope
 // explicitly — the same bare invocation cannot mean both "the task I am
 // standing in" and "the workspace". The rest of 0006's inference is untouched,
 // which the cases below still prove.
-test('session open with no TASK is workspace scope, even inside a worktree (0028)', async () => {
+test('session open with no TASK is workspace scope, even inside a worktree (0029)', async () => {
   const result = runWardEnv(['session', 'open', '--purpose', 'drive the workspace'], wtDir, {
     NO_COLOR: '1',
     WARD_CLAUDE_BIN: writeFakeClaude(scratch, `claude-scope-${caseId}`),

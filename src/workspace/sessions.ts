@@ -1,5 +1,5 @@
 // Session records (design/0004-work-spine/, extended by
-// design/0028-launched-sessions/): the record side of a session — allocation,
+// design/0029-launched-sessions/): the record side of a session — allocation,
 // the scope it belongs to, and the append-only lifecycle trail. Ward now
 // LAUNCHES the agent for a workspace-scope session (src/agent/run.ts drives
 // that), but the record is still the authority: it is written BEFORE any
@@ -171,7 +171,7 @@ export interface OpenSessionListing {
  * design/0022-shell-completion/, so `session close ID` completes from the
  * very listing `closeSession` resolves against — one reader, so what the
  * shell offers and what the verb accepts cannot disagree. Since
- * design/0028-launched-sessions/ it also carries the workspace's own sessions,
+ * design/0029-launched-sessions/ it also carries the workspace's own sessions,
  * which is why ids remain unique among OPEN sessions workspace-wide.
  */
 export async function readOpenSessions(root: string): Promise<OpenSessionListing[]> {

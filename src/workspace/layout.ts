@@ -9,7 +9,7 @@ export const MARKER_DIR = '.ward';
 /**
  * Directories reserved by the layout. `tasks/` holds bare tasks and
  * `sessions/` holds the workspace's OWN sessions
- * (design/0028-launched-sessions/) — both are the same move: a scope's records
+ * (design/0029-launched-sessions/) — both are the same move: a scope's records
  * live at that scope's level, because levels are elided, not faked.
  */
 export const SCOPE_DIRS = [

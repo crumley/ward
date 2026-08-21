@@ -41,8 +41,8 @@ test('the lineage covers the live workspace: both stale originals are known defa
   expect(lineageOf('.ward/README.md').history.map((v) => v.sha256)).toContain(LIVE_WARD_README_SHA);
 });
 
-test('the AGENTS.md 0028 supersedes is in history — every workspace still on it upgrades', () => {
-  // design/0028-launched-sessions/ rewrote the manifest's session guidance.
+test('the AGENTS.md 0029 supersedes is in history — every workspace still on it upgrades', () => {
+  // design/0029-launched-sessions/ rewrote the manifest's session guidance.
   // The outgoing default must be a KNOWN default, or a workspace carrying it
   // untouched would read as customized and never be brought forward.
   expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
@@ -57,7 +57,7 @@ test('the AGENTS.md 0028 supersedes is in history — every workspace still on i
 // exactly the bookkeeping that keeps every shipped default recognizable.
 test('the current defaults are pinned; changing one must move its old hash into history', () => {
   expect(sha256OfText(AGENTS_MD)).toBe(
-    'ef5ffe607886ca2fea68c54f7cf72a138c5058316116b49a78d664ffa58ac510', // since design 0028
+    'ef5ffe607886ca2fea68c54f7cf72a138c5058316116b49a78d664ffa58ac510', // since design 0029
   );
   expect(sha256OfText(WARD_INTERNAL_README)).toBe(
     '6f10845611635508f006727f83bdc2222d840a9da972393781662c9f6ff04ac4', // since 65f1e8b (0013)

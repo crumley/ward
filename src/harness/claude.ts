@@ -1,4 +1,4 @@
-// The Claude Code adapter (design/0028-launched-sessions/): the thin seam
+// The Claude Code adapter (design/0029-launched-sessions/): the thin seam
 // intent/02-subsystems/03-agent-harness.md names — START a run, expose its
 // HANDLE, RESUME it, and LOCATE its history — and nothing else. Everything
 // Ward-specific (which session record, which purpose, which environment
@@ -48,9 +48,9 @@ export function claudeNativeId(handle: string): string | null {
 
 /**
  * What Ward hands the adapter to start a run. `model` and `effort` are
- * optional in the strict sense 0027 built: absent means the flag is omitted
+ * optional in the strict sense 0028 built: absent means the flag is omitted
  * ENTIRELY, never passed empty and never defaulted here — the harness's own
- * default then stands (design/0027-agent-configuration/, SF-002).
+ * default then stands (design/0028-agent-configuration/, SF-002).
  */
 export interface StartRequest {
   /** The session id Ward assigns BEFORE the process exists — the handle's native half. */

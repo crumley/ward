@@ -1,9 +1,9 @@
 // The agent configuration, resolved from a workspace root alone
-// (design/0028-launched-sessions/). Entry 0027 deliberately shipped no reader:
+// (design/0029-launched-sessions/). Entry 0027 deliberately shipped no reader:
 // its resolution is pure and takes the two layers, because its only caller
 // (doctor) already held both. The launch is the caller that does not — it
 // starts from a root and a session record — so the reader lands here, with it,
-// and the precedence rule stays exactly where 0027 put it.
+// and the precedence rule stays exactly where 0028 put it.
 //
 // It lives beside `settings.ts` rather than inside it because `settings.ts`
 // imports nothing but zod: the workspace record's schema embeds the agent
@@ -18,7 +18,7 @@ import { type ResolvedAgentConfig, resolveAgentConfig } from './settings.ts';
 /**
  * What Ward would start an agent with, here. Both layers are read and merged
  * per key — workspace over global over Ward's own defaults, `absent` where
- * nobody chose (design/0027-agent-configuration/).
+ * nobody chose (design/0028-agent-configuration/).
  *
  * A workspace record that will not parse degrades to "no workspace layer"
  * rather than failing the launch (§20, and doctor's own posture on the same

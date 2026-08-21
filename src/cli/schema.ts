@@ -465,10 +465,10 @@ export type WorkspaceRegistryShape = z.infer<typeof workspaceRegistryShape>;
 /**
  * The session record as written — shared by `session open`, `session resume`,
  * and `session close`. `scope` names the level the session works at
- * (design/0028-launched-sessions/) and `task` is present exactly when that
+ * (design/0029-launched-sessions/) and `task` is present exactly when that
  * scope is a task: a workspace-scope session addresses the workspace, which is
  * identified by location and has no code to carry. `events` is the append-only
- * lifecycle trail, absent on a record written before 0028 and never
+ * lifecycle trail, absent on a record written before 0029 and never
  * fabricated.
  */
 export const sessionMutationShape = z.strictObject({
@@ -530,7 +530,7 @@ export const shellAdoptShape = z.strictObject({
 export type ShellAdoptShape = z.infer<typeof shellAdoptShape>;
 
 /**
- * `session locate` (design/0028-launched-sessions/): the recorded handle
+ * `session locate` (design/0029-launched-sessions/): the recorded handle
  * resolved to the harness's history. `outcome` carries the seam's required
  * distinction — `found` or `gone`, both exit 0, because retention belongs to
  * the harness and a discarded transcript is a fact reflection must be able to
@@ -576,7 +576,7 @@ export const readVerbShapes: Readonly<Record<string, z.ZodType>> = {
  * Read verbs whose argv is NOT derivable from the key alone: each takes an
  * identity. The path verbs (design/0024-global-config-registry/) answer from
  * the machine's registry rather than the workspace the caller stands in;
- * `session locate` (design/0028-launched-sessions/) takes a session id. They
+ * `session locate` (design/0029-launched-sessions/) takes a session id. They
  * are read verbs in every other sense — no mutation, one document on stdout —
  * so they are registered here and proven live in their own entry's suite, the
  * same split the mutation verbs use.

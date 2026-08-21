@@ -1,5 +1,5 @@
 // Launched sessions, end to end through the spawned CLI
-// (design/0028-launched-sessions/): `ward session open --purpose TEXT` opens a
+// (design/0029-launched-sessions/): `ward session open --purpose TEXT` opens a
 // WORKSPACE-scope session, writes its record, and only then runs the agent —
 // which the stub harness proves by looking for its own session document from
 // inside the launch. Then resume (with its events, failure included) and
@@ -61,7 +61,7 @@ test('open with no TASK: the record first, then the agent, in the workspace root
 
 test('the resolved configuration becomes the argv — absent keys omit their flags', async () => {
   // Global: model + effort + one arg. Workspace: the model alone, overriding
-  // per key (design/0027-agent-configuration/) — so the launch must carry the
+  // per key (design/0028-agent-configuration/) — so the launch must carry the
   // workspace's model, the global's effort, and the global's args.
   writeGlobalConfig({ model: 'fable', effort: 'high', args: ['--dangerously-skip-permissions'] });
   await writeWorkspaceAgent({ model: 'sonnet' });
@@ -252,9 +252,9 @@ test('--handle at workspace scope records without launching', async () => {
   expect((await readSessions(ws, ''))[0]?.handle).toBe('claude:existing');
 });
 
-test('a session record written before 0028 still parses, closes, and locates', async () => {
+test('a session record written before 0029 still parses, closes, and locates', async () => {
   await openTask(ws, 'feature', {});
-  // Exactly the front matter a pre-0028 ward wrote: a task, no scope, no events.
+  // Exactly the front matter a pre-0029 ward wrote: a task, no scope, no events.
   const dir = join(ws, 'tasks', 't1-feature', 'sessions');
   mkdirSync(dir, { recursive: true });
   writeFileSync(
@@ -264,7 +264,7 @@ test('a session record written before 0028 still parses, closes, and locates', a
     ),
   );
   gitOrThrow(ws, 'add', '-A');
-  gitOrThrow(ws, 'commit', '-m', 'a pre-0028 session record');
+  gitOrThrow(ws, 'commit', '-m', 'a pre-0029 session record');
 
   // It reads as a task session, and `--json` says so without inventing fields.
   const located = sessionLocateShape.parse(

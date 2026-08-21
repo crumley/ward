@@ -1,7 +1,7 @@
-// The Claude Code adapter (design/0028-launched-sessions/): argv construction,
+// The Claude Code adapter (design/0029-launched-sessions/): argv construction,
 // the handle, and transcript resolution — the whole seam, proven without ever
 // spawning the real CLI. The argv table is the entry's central promise made
-// checkable: an absent key omits its flag ENTIRELY (0027's "omitted means
+// checkable: an absent key omits its flag ENTIRELY (0028's "omitted means
 // omitted"), `agent.args` rides last so a human's flags get the final word,
 // and a resume passes no model or effort at all.
 import { expect, test } from 'bun:test';

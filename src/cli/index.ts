@@ -541,7 +541,7 @@ const worktree = command(
   { brief: message`Operate on task worktrees.` },
 );
 
-// Sessions (design/0028-launched-sessions/): with no TASK, `session open`
+// Sessions (design/0029-launched-sessions/): with no TASK, `session open`
 // opens a session at WORKSPACE scope and LAUNCHES the agent in it — Ward
 // assigns the handle before the process starts, so nothing is ever hand-copied
 // and nothing of Ward's lands in the agent's context. With a TASK it stays the
@@ -1632,7 +1632,7 @@ async function cmdWorktreeList(json: boolean): Promise<void> {
 }
 
 /**
- * `session open` (design/0028-launched-sessions/), three paths through one
+ * `session open` (design/0029-launched-sessions/), three paths through one
  * verb:
  *
  * - **TASK given** — the record-only session 0004 built, unchanged.

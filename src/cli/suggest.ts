@@ -122,7 +122,7 @@ export function repoName(): ValueParser<'async', string> {
 
 /**
  * Session ids, with the scope each works at as the cue
- * (design/0028-launched-sessions/). `session close` and `session resume` are
+ * (design/0029-launched-sessions/). `session close` and `session resume` are
  * offered only OPEN ids — closed stays closed, and a closed session has no run
  * to re-attach to — while `session locate` takes `'any'`, because reading a
  * finished session's history is exactly what reflection does.

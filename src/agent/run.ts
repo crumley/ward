@@ -1,5 +1,5 @@
 // Starting, resuming, and locating the agent RUN behind a recorded session
-// (design/0028-launched-sessions/) — the Ward-shaped half of the agent-harness
+// (design/0029-launched-sessions/) — the Ward-shaped half of the agent-harness
 // seam. The adapter (src/harness/claude.ts) knows how to build an argv, spawn
 // a process, and find a transcript; this module knows what Ward wants done:
 // which record to write first, what environment declares the agent, which
@@ -183,7 +183,7 @@ function nativeIdOf(record: SessionRecord): string {
 /**
  * A resolved key as an optional field: present when a layer answered, ABSENT
  * when nobody did — so the spread contributes nothing and the flag is omitted
- * from the command entirely (design/0027-agent-configuration/, its whole
+ * from the command entirely (design/0028-agent-configuration/, its whole
  * point). Ward never invents a model or an effort.
  */
 function chosenFlag<K extends string>(

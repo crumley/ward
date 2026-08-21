@@ -163,7 +163,7 @@ export async function closeTask(
       const closedAt = new Date().toISOString();
       // The cascade closes like `session close` does, event and all: a session
       // swept up by its task's close is still a session that closed, and the
-      // trail must say so (design/0028-launched-sessions/).
+      // trail must say so (design/0029-launched-sessions/).
       const closed: SessionRecord = withEvent(
         { ...session, state: 'closed', closedAt },
         { event: 'closed', at: closedAt },

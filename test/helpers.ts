@@ -119,7 +119,7 @@ export interface FakeClaudeBehavior {
 
 /**
  * Write an executable stub for `WARD_CLAUDE_BIN` to point at
- * (design/0028-launched-sessions/): the same hermetic move as the fake `gh`,
+ * (design/0029-launched-sessions/): the same hermetic move as the fake `gh`,
  * for the same reason — no test may spawn the real Claude Code, and what the
  * suite actually needs to observe is the argv Ward built, the directory it
  * launched in, and the environment it declared. The stub records exactly that

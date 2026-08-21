@@ -84,7 +84,7 @@ export async function restoreWorkspace(root: string): Promise<RestoreReport> {
 
   const worktrees: RestoreWorktreeItem[] = [];
   // Every scope's open sessions, the workspace's own included since
-  // design/0028-launched-sessions/ — one reader, so a launched workspace
+  // design/0029-launched-sessions/ — one reader, so a launched workspace
   // session is named here exactly as a task session is.
   const open = (await readOpenSessions(root)).length;
   for (const task of await readTasks(root)) {

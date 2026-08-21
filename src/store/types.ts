@@ -155,7 +155,7 @@ export function worktreeRecordType(
 }
 
 /**
- * The level a session is responsible for (design/0028-launched-sessions/;
+ * The level a session is responsible for (design/0029-launched-sessions/;
  * intent/01-concepts/00-domain-model.md — a session's scope is workspace /
  * project / task / room). Two values today: every session recorded before this
  * entry is a task session, and workspace scope is the one this entry launches.
@@ -188,7 +188,7 @@ export const sessionSchema = z
     id: z.string().min(1),
     /**
      * The scope this session works at. Optional ONLY so every record written
-     * before design/0028 stays valid unchanged — those carry a `task` and
+     * before design/0029 stays valid unchanged — those carry a `task` and
      * nothing else, which reads as `task` scope and always did. Every record
      * written from now on says its scope outright.
      */
@@ -201,18 +201,18 @@ export const sessionSchema = z
     handle: z.string().min(1).optional(),
     /**
      * What the agent was actually STARTED with, recorded at launch
-     * (design/0028-launched-sessions/) — present exactly when the resolution
+     * (design/0029-launched-sessions/) — present exactly when the resolution
      * supplied one, absent when Ward passed no flag at all. The intent's
      * session-log minimum names the model
      * (intent/01-concepts/02-sessions-and-lifecycle.md), and recording it here
      * is what keeps the workspace self-sufficient once a per-user
      * configuration layer exists: reproduction reads the session, not the
-     * machine that happened to launch it (0027's SF-001, its thin half).
+     * machine that happened to launch it (0028's SF-001, its thin half).
      */
     model: z.string().min(1).optional(),
     effort: z.string().min(1).optional(),
     state: z.enum(['open', 'closed']),
-    /** The append-only lifecycle trail; absent on records written before 0028. */
+    /** The append-only lifecycle trail; absent on records written before 0029. */
     events: z.array(sessionEventSchema).optional(),
     openedAt: z.string().min(1),
     closedAt: z.string().min(1).optional(),
@@ -226,7 +226,7 @@ export const sessionSchema = z
   });
 export type SessionRecord = z.infer<typeof sessionSchema>;
 
-/** The scope a record states, or the one a pre-0028 record implies by carrying a task. */
+/** The scope a record states, or the one a pre-0029 record implies by carrying a task. */
 export function sessionScopeOf(record: SessionRecord): SessionScope {
   return record.scope ?? 'task';
 }

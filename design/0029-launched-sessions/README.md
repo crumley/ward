@@ -1,4 +1,4 @@
-# 0028 — Launched sessions
+# 0029 — Launched sessions
 
 > `ward session open --purpose TEXT` opens a session at **workspace scope** and **starts the agent
 > in it**: Ward mints the harness handle, writes the record, and only then runs the harness under
@@ -36,9 +36,9 @@ not _discover_ the handle after the fact (a hook, a prompt, a transcript scrape,
 cost context or arrive too late); Ward **assigns** it and the run is born under it. Nothing is asked
 of the agent, so nothing enters its window.
 
-[0027](../0027-agent-configuration/README.md) built the configuration this launch consumes and
+[0028](../0028-agent-configuration/README.md) built the configuration this launch consumes and
 deferred "actually launching an agent" to this entry, stacked on it; its numbering note explains why
-these two are 0027 and 0028.
+these two are 0028 and 0029.
 
 ## Serves intent
 
@@ -47,7 +47,7 @@ these two are 0027 and 0028.
   everything Ward-specific stays outside it. _Make the run's history locatable from the recorded
   handle_ — with **found and gone as distinct outcomes**, because the harness owns retention — is
   `ward session locate`. _Accept an externally-chosen model and thinking depth and pass them
-  through_ is where 0027's resolution meets an actual command line, absent keys and all.
+  through_ is where 0028's resolution meets an actual command line, absent keys and all.
 - [`sessions-and-lifecycle`](../../intent/01-concepts/02-sessions-and-lifecycle.md) — **open ≠
   running**, made behavioral: the agent exiting leaves the session `open`, and Ward says so and
   names the resume. _Resume_ re-establishes the live attachment without changing the stored state.
@@ -89,7 +89,7 @@ these two are 0027 and 0028.
     selects the binary — the hermeticity seam, `WARD_CONFIG_DIR`'s pattern.
   - **Workspace-scope sessions.** `ward session open --purpose TEXT` with **no TASK** opens at
     workspace scope; the record lands in `sessions/` at the root. The session record gains a
-    **scope** (`workspace | task`, optional so every pre-0028 record stays valid) with `task`
+    **scope** (`workspace | task`, optional so every pre-0029 record stays valid) with `task`
     present exactly when the scope is a task.
   - **The launched open.** No `--handle` ⇒ Ward generates a UUID, **writes and commits the record
     first** (state `open`, handle, working directory, purpose, and what it will be started with),
@@ -104,7 +104,7 @@ these two are 0027 and 0028.
   - **Lifecycle events** on the record, append-only, including the `closed` event from
     `session close` and from the task-close cascade.
   - **What the run was started with**, recorded on a launched session (`model`, `effort`) — the
-    intent's session-log minimum, and the half of 0027's SF-001 that entry called thin.
+    intent's session-log minimum, and the half of 0028's SF-001 that entry called thin.
   - **The manifest refresh** — `AGENTS.md` gains a **Sessions** section (Ward opens sessions and the
     open starts the agent; exit ≠ close; resume; locate; where the agent configuration lives; the
     manual `--handle` path) plus a `sessions/` layout bullet, reaching existing workspaces through
@@ -142,7 +142,7 @@ these two are 0027 and 0028.
   their flags, args last, resume passes no model); the stub observing its own record before it runs;
   `WARD_AGENT` set to the session id; the session still open after an exit, with the run's exit code
   propagated; a spawn failure refused legibly with the record standing; `resumed` and
-  `resume-failed` with cause; locate found and gone; a pre-0028 session record still parsing,
+  `resume-failed` with cause; locate found and gone; a pre-0029 session record still parsing,
   closing, and locating; and the outgoing `AGENTS.md` recognized as a known default so upgrade
   brings it forward.
 
@@ -184,7 +184,7 @@ these two are 0027 and 0028.
     with `task` present exactly when the scope is a task — the refine is the worktree record's
     `repo`-vs-`source` idiom, absence of a referent over a fabricated one. A workspace has no code
     to carry: it is identified by location. Both `scope` and the trail are optional in the schema
-    **only** so pre-0028 records stay valid; every record written from now on states its scope
+    **only** so pre-0029 records stay valid; every record written from now on states its scope
     outright, and `sessionScopeOf` reads the one implied by a carried task for the rest.
   - **The lifecycle trail lives on the session document.** The intent asks for append-only events;
     the store's discipline is typed front matter written atomically (ADR 0005), with one writer at a
@@ -219,10 +219,10 @@ these two are 0027 and 0028.
     be able to read — and "we looked _here_ and it is not there" is what makes it actionable. The
     lookup uses the **recorded** working directory, because the transcript's address includes the
     directory the run stood in, not wherever the caller is asking from.
-  - **`src/harness/`, not `src/agent/`.** 0027 expected the adapter beside its settings. It landed
+  - **`src/harness/`, not `src/agent/`.** 0028 expected the adapter beside its settings. It landed
     in its own tree instead, because the boundary is the point: `src/harness/claude.ts` knows the
     CLI's flags and file layout and knows nothing about Ward, while `src/agent/` holds the
-    Ward-shaped half — the configuration vocabulary (0027), the reader, and `run.ts`, which decides
+    Ward-shaped half — the configuration vocabulary (0028), the reader, and `run.ts`, which decides
     what gets recorded and when. A second harness is then a second file in `src/harness/`, which is
     the seam's whole promise. The directory boundary is cheaper to keep honest than a convention
     inside one file.
@@ -239,7 +239,7 @@ these two are 0027 and 0028.
   - **An unreadable workspace record degrades the launch to the global layer.** §20 at the point of
     use: doctor already names a broken record precisely, and a preference file must never be the
     reason an agent cannot be started.
-- **Layout:** new `src/harness/claude.ts` (the adapter), `src/agent/config.ts` (the reader 0027
+- **Layout:** new `src/harness/claude.ts` (the adapter), `src/agent/config.ts` (the reader 0028
   deferred until it had a caller that starts from a root), `src/agent/run.ts` (launch / resume /
   locate — the Ward-shaped half). Changed: `src/store/types.ts` (scope, events, model/effort, and
   `sessionRecordType` taking a scope directory), `src/workspace/sessions.ts` (the workspace-scope
@@ -272,7 +272,7 @@ these two are 0027 and 0028.
 ### 2026-08-21 — The seam, the scope, the launch, the manifest
 
 **Goal.** Everything in Scope. **What was done.** Read the governing intent (`03-agent-harness`,
-`02-sessions-and-lifecycle`, `01-scopes-and-personas`, `00-domain-model`) and the layer below (0027)
+`02-sessions-and-lifecycle`, `01-scopes-and-personas`, `00-domain-model`) and the layer below (0028)
 before designing; then, in four commits: the adapter and its tables; the record's scope and trail,
 the workspace-scope open, the launch/resume/locate orchestration and its CLI; the manifest's
 Sessions section with its lineage entry; and the recorded model/effort.
@@ -308,7 +308,7 @@ before the process exists.
 - `ward schema session locate` emits the new shape as JSON Schema — the contract ships in the
   binary.
 - `bun test test/agent/harness.test.ts test/agent/launch.test.ts` → `22 pass, 0 fail` (this entry's
-  two suites); `bun test test/agent` → `52 pass`, with 0027's thirty untouched beside them.
+  two suites); `bun test test/agent` → `52 pass`, with 0028's thirty untouched beside them.
 - `bun test` → `492 pass, 0 fail, 1924 expect() calls` across 44 files, from `466 / 1806 / 42` at
   this branch's base. **One existing case changed**, deliberately: 0006's `session open, inferred`
   became `session open with no TASK is workspace scope, even inside a worktree`, plus a new case
@@ -316,7 +316,7 @@ before the process exists.
 - `mise run fmt` then `mise run check` → exit 0 (Biome + dprint + `tsc --noEmit` + `bun test` +
   lychee).
 
-**Shared surfaces this entry touches** — with 0027: the resolver in `src/agent/settings.ts`
+**Shared surfaces this entry touches** — with 0028: the resolver in `src/agent/settings.ts`
 (consumed, unchanged) and the workspace record's `agent` block (read by the new
 `src/agent/config.ts`). With main: `src/cli/index.ts` (the session verbs),
 `src/workspace/sessions.ts` (rewritten around scope), `src/workspace/templates.ts` +
@@ -325,10 +325,43 @@ schema), and the mechanical rename of `pathVerbShapes` → `argumentReadVerbShap
 `src/cli/schema.ts` and `test/cli/global.test.ts`.
 
 **One addition beyond the commissioned scope, named because it is one.** A launched session records
-the `model` and `effort` it was started with. 0027 deferred exactly this to "the launch that knows
+the `model` and `effort` it was started with. 0028 deferred exactly this to "the launch that knows
 what it actually ran" (its SF-001, the half that entry called thin), and the intent's session-log
 minimum names the model; it is four optional fields and it is what keeps a per-user configuration
 layer from making a workspace unreproducible. Everything else here is the commission as written.
+
+### 2026-08-21 — Rebased onto the moved main line, and renumbered
+
+The shell-adoption entry landed on `main` while this stack was in review and took `0027`, which the
+layer below was using. That entry became **0028** and this one became **0029** — the directory, and
+every reference to it and to the layer below in code, tests, and prose. No behavior changed with the
+number.
+
+Three conflicts, all in the surfaces adoption and this entry extend from opposite ends:
+
+- `src/cli/index.ts` — one import line. Adoption added `FISH_SHORTHAND_NAMES` / `findShorthand` from
+  `src/shell/shorthands.ts` where this entry added `SessionRecord` to the `store/types.ts` import.
+  Resolved by taking both.
+- `src/cli/json.ts` — the same import line (adoption's `AdoptionReport`, this entry's
+  `CLAUDE_HARNESS` and `sessionScopeOf`), and then the builder list, where `shellAdoptJson` and
+  `sessionLocateJson` were appended at the same place. Both kept, side by side.
+- `src/cli/schema.ts` — the shape list, the same way: `shellAdoptShape` and `sessionLocateShape`
+  were both appended after `sessionMutationShape`. Both kept.
+
+Nothing was dropped and nothing was loosened. Both of the surfaces that could have needed a pin
+adjusted are table-driven off their registries instead — the whole-contract case in
+`test/cli/schema.test.ts` derives its argv from `jsonVerbShapes`, and the completion suite reads the
+parser tree — so they cover the union of the two verb sets by construction, adoption's `shell adopt`
+beside this entry's `session locate`. The one deliberate tripwire that did move is the
+whole-contract case's pinned 30s deadline, which both branches raised for the same reason (one CLI
+spawn per registered verb, and the registry grew from both sides); it stayed at 30s, named, rather
+than being loosened further.
+
+`main` then moved twice more while the renumber was being pushed — the doctor bootstrap-idiom entry
+(`0026`, PR #57) and a picker fix (`0025`, PR #58) — and the cascade replayed onto both with **no
+conflicts at all**: they change `src/shell/`, which neither layer of this stack touches. Rebased
+last onto `main` at `72fde54`, where `bun test` → `530 pass, 0 fail, 2182 expect() calls` across 45
+files and `mise run fmt` + `mise run check` → exit 0.
 
 **Next.** Task- and project-scope launches (the records are ready); usage at close; and the first
 real question this entry raises rather than answers — what a workspace does with sessions that are
