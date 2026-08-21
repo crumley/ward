@@ -18,12 +18,7 @@ import { createWorkspace, type StepReport } from '../workspace/create.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
 import { openProject, readProjects } from '../workspace/projects.ts';
-import {
-  addRepository,
-  listRepositories,
-  type RefreshReport,
-  refreshRepositories,
-} from '../workspace/repos.ts';
+import { addRepository, listRepositories, refreshRepositories } from '../workspace/repos.ts';
 import { restoreConverged, restoreWorkspace } from '../workspace/restore.ts';
 import { readTasks } from '../workspace/scan.ts';
 import { scopeFromCwd } from '../workspace/scope.ts';
@@ -70,6 +65,7 @@ import {
   worktreeListJson,
   worktreeRebaseJson,
 } from './json.ts';
+import { refreshDisplay } from './progress.ts';
 import { allSchemasJson, verbSchemaJson } from './schema.ts';
 import { repoName, schemaVerb, sessionId, taskCode, workspaceBranch } from './suggest.ts';
 import { recordInvocation } from './telemetry.ts';
@@ -181,6 +177,13 @@ const repoRefresh = command(
   object({
     action: constant('repo-refresh'),
     name: optional(argument(repoName())),
+    // Opt-in, and read from the flag alone: the parallel configuration work
+    // will supply a default for `repo.refresh.stash`, and substituting it
+    // where the flag is absent is that PR's one-line change here — nothing
+    // below this layer reads configuration (design/0023-refresh-concurrency-ux/).
+    stash: option('--stash', {
+      description: message`Stash a dirty checkout, refresh it, then restore the stash (a conflicted pop is reported, never resolved).`,
+    }),
     json: jsonFlag(),
   }),
   { brief: message`Fetch and fast-forward canonical checkouts to their main lines.` },
@@ -429,7 +432,7 @@ try {
         await cmdRepoAdd(result.source, result.name, result.json);
         break;
       case 'repo-refresh':
-        await cmdRepoRefresh(result.name, result.json);
+        await cmdRepoRefresh(result.name, result.json, result.stash);
         break;
       case 'repo-list':
         await cmdRepoList(result.json);
@@ -873,9 +876,26 @@ async function cmdRepoAdd(source: string, name: string | undefined, json: boolea
   console.log(`  checkout  ${pc.dim(`repos/${report.record.name}/`)}`);
 }
 
-async function cmdRepoRefresh(name: string | undefined, json: boolean): Promise<void> {
+/**
+ * Refresh (design/0023-refresh-concurrency-ux/): the repositories run
+ * concurrently and the rows are rendered as they settle, so the display is
+ * the verb's own progress rather than a report printed after the fact. Under
+ * `--json` there is no display at all — exactly one document on stdout,
+ * unchanged in shape and in exit posture. `conflicted` joins `dirty` on the
+ * informational side of that posture: the checkout was skipped, which is the
+ * fail-safe working, not the verb failing. Only `failed` exits 1.
+ */
+async function cmdRepoRefresh(
+  name: string | undefined,
+  json: boolean,
+  stash: boolean,
+): Promise<void> {
   const root = requireMutableWorkspace();
-  const reports = await refreshRepositories(root, name);
+  const display = json ? null : refreshDisplay(pc);
+  const reports = await refreshRepositories(root, name, {
+    stash,
+    ...(display === null ? {} : { observe: display.observe }),
+  });
   if (json) {
     // The document is emitted whatever the rows say; a failed row keeps the
     // human path's exit-1 verdict — the caller reads the outcome from the
@@ -885,23 +905,12 @@ async function cmdRepoRefresh(name: string | undefined, json: boolean): Promise<
     if (reports.some((report) => report.outcome === 'failed')) process.exit(1);
     return;
   }
+  display?.settle();
   if (reports.length === 0) {
     console.log(pc.dim('no repositories registered — add one with: ward repo add SOURCE'));
     return;
   }
-  for (const report of reports) {
-    console.log(`  ${renderRefresh(report)}  ${report.name} ${pc.dim(`(${report.detail})`)}`);
-  }
   if (reports.some((report) => report.outcome === 'failed')) process.exit(1);
-}
-
-function renderRefresh(report: RefreshReport): string {
-  return {
-    refreshed: pc.green('refreshed'),
-    current: pc.dim('  current'),
-    dirty: pc.yellow('    dirty'),
-    failed: pc.red('   failed'),
-  }[report.outcome];
 }
 
 async function cmdRepoList(json: boolean): Promise<void> {

@@ -195,11 +195,16 @@ export const repoAddShape = z.strictObject({
 });
 export type RepoAddShape = z.infer<typeof repoAddShape>;
 
-/** `repo refresh`: one row per repository; a `failed` row keeps the exit-1 posture. */
+/**
+ * `repo refresh`: one row per repository, in registration order whatever
+ * order they finished in; a `failed` row keeps the exit-1 posture. `dirty`
+ * and `conflicted` are the two skipped-on-purpose outcomes — informational,
+ * exit 0 (design/0023-refresh-concurrency-ux/).
+ */
 export const repoRefreshShape = z.array(
   z.strictObject({
     name: z.string(),
-    outcome: z.enum(['refreshed', 'current', 'dirty', 'failed']),
+    outcome: z.enum(['refreshed', 'current', 'dirty', 'conflicted', 'failed']),
     detail: z.string(),
   }),
 );

@@ -223,11 +223,20 @@ async function rebaseOne(
     target = resolveWorkspaceMainLine(root);
   } else {
     const refresh = await refreshRepo(root, record.repo, refreshed);
-    if (refresh.outcome === 'dirty' || refresh.outcome === 'failed') {
+    if (
+      refresh.outcome === 'dirty' ||
+      refresh.outcome === 'conflicted' ||
+      refresh.outcome === 'failed'
+    ) {
+      // A conflicted canonical checkout refuses its own refresh exactly as a
+      // dirty one does (design/0023-refresh-concurrency-ux/), so its tip may
+      // be stale — rebasing onto it would be rebasing onto yesterday.
       const why =
         refresh.outcome === 'dirty'
           ? `repos/${record.repo} is dirty — the canonical checkout is never worked in directly; clean it first`
-          : `cannot refresh repos/${record.repo}: ${refresh.detail}`;
+          : refresh.outcome === 'conflicted'
+            ? `repos/${record.repo} has unresolved conflicts — resolve them there first (${refresh.detail})`
+            : `cannot refresh repos/${record.repo}: ${refresh.detail}`;
       return { record, outcome: 'failed', detail: why };
     }
     const mainLine = (await readDocument(root, repositoryRecordType(record.repo))).data.mainLine;
