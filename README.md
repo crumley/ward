@@ -74,8 +74,11 @@ ward completion pwsh >> $PROFILE
 ward completion nu | save ward-completion.nu; source ./ward-completion.nu
 ```
 
-Re-run the command after upgrading Ward. The design and its mechanics are in
-[`design/0022-shell-completion/`](design/0022-shell-completion/README.md).
+Re-run the command after upgrading Ward — and you no longer have to remember when: `ward doctor`
+compares the installed fish script against what the running `ward` would emit and says so when they
+differ, with the exact line to re-run. The design and its mechanics are in
+[`design/0022-shell-completion/`](design/0022-shell-completion/README.md), the staleness check in
+[`design/0026-shell-staleness-doctor/`](design/0026-shell-staleness-doctor/README.md).
 
 ## Working from anywhere
 
@@ -140,9 +143,12 @@ name simply takes you to the default workspace. `ward doctor` tells you which of
 you are in.
 
 Re-run the command after upgrading Ward — the shorthand set is expected to churn as usage shows what
-is worth one. Only fish today; other shells are unbuilt, not unsupported, and `ward shell init bash`
-says so and names what does exist. The design is in
-[`design/0025-fish-shell-layer/`](design/0025-fish-shell-layer/README.md).
+is worth one, and `ward doctor` tells you when your installed copy has fallen behind (byte-compared
+against what this `ward` emits, with the re-run to fix it — a file you wrote yourself is left alone
+and reported as yours). Only fish today; other shells are unbuilt, not unsupported, and
+`ward shell init bash` says so and names what does exist. The design is in
+[`design/0025-fish-shell-layer/`](design/0025-fish-shell-layer/README.md), the staleness check in
+[`design/0026-shell-staleness-doctor/`](design/0026-shell-staleness-doctor/README.md).
 
 [fzf]: https://github.com/junegunn/fzf
 

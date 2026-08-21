@@ -308,7 +308,8 @@ concrete reason it can stay that way.
   that **where** it runs is an implementation choice with a stated consequence — a shell-level
   picker is cheap and agent-safe but limited to text cues, while an in-process one is what unlocks
   accent and glyph. That would let this entry and a future in-process picker both read as builds of
-  the same constraint rather than one superseding the other.
+  the same constraint rather than one superseding the other. _Disposition:_ adjudicated —
+  [crumley/ward#50](https://github.com/crumley/ward/pull/50).
 - **SF-002** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _The interactive layer
   adds mnemonic shorthands for common operations_. _Friction:_ the slice says the alias set is
   expected to churn ("Not a fixed alias set — aliases are expected to churn as telemetry reveals
@@ -325,4 +326,5 @@ concrete reason it can stay that way.
   its staleness visible** — either by the shell re-running the generator at startup (the
   `starship init` convention) or by the version-skew surface naming an out-of-date shell layer among
   the things that need the human. Either way, the constraint that churn is expected should carry the
-  obligation that churn is **deliverable**.
+  obligation that churn is **deliverable**. _Disposition:_ adjudicated —
+  [crumley/ward#50](https://github.com/crumley/ward/pull/50).
