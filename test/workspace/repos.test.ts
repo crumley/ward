@@ -2,9 +2,13 @@
 // adopts into the contained canonical checkout with the main line read from
 // the repository, re-running converges, refresh fast-forwards but never
 // touches a dirty tree, and doctor reports record↔disk drift. Remotes are
-// local bare repositories — no network.
+// local bare repositories — no network. Plus, from
+// design/0023-refresh-concurrency-ux/: the set refreshes concurrently and
+// still reports in the registered order, `--stash` is the human's explicit
+// exception to the dirty-tree fail-safe, and `conflicted` is derived off the
+// checkout on every refresh rather than remembered anywhere.
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
@@ -13,6 +17,7 @@ import {
   addRepository,
   checkoutPath,
   listRepositories,
+  type RefreshRow,
   refreshRepositories,
 } from '../../src/workspace/repos.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
@@ -96,28 +101,170 @@ test('doctor reports a deleted checkout as drift, with the converging command', 
 });
 
 test('list returns the registered set', async () => {
-  await addRepository(ws, remote);
   const records = await listRepositories(ws);
-  expect(records.map((r) => r.name)).toEqual(['origin-repo']);
+  expect(records.map((r) => r.name)).toEqual([]);
+  await addRepository(ws, remote);
+  expect((await listRepositories(ws)).map((r) => r.name)).toEqual(['origin-repo']);
+});
+
+// -- concurrency (design/0023-refresh-concurrency-ux/) ---------------------
+
+test('the set refreshes concurrently and still reports in the registered order', async () => {
+  for (const name of ['alpha', 'beta', 'gamma']) await addRepository(ws, seedRemote(name), name);
+
+  const snapshots: RefreshRow[][] = [];
+  const reports = await refreshRepositories(ws, undefined, {
+    observe: (rows) => snapshots.push([...rows]),
+  });
+
+  // Registration order, not completion order — the same set always produces
+  // the same document, whatever the network did (§6).
+  expect(reports.map((r) => r.name)).toEqual(['alpha', 'beta', 'gamma']);
+  expect(reports.map((r) => r.outcome)).toEqual(['current', 'current', 'current']);
+  // The first snapshot is the whole roster, pending, before any work starts.
+  expect(snapshots[0]).toEqual([
+    { name: 'alpha', state: 'pending' },
+    { name: 'beta', state: 'pending' },
+    { name: 'gamma', state: 'pending' },
+  ]);
+  // Concurrency, asserted by evidence rather than by timing: more than one
+  // repository was in flight in the same snapshot.
+  const inFlight = snapshots.map((rows) => rows.filter((row) => row.state === 'fetching').length);
+  expect(Math.max(...inFlight)).toBeGreaterThan(1);
+  // Every snapshot is the complete roster in the same order — the contract a
+  // renderer holds no state to satisfy.
+  expect(snapshots.every((rows) => rows.map((r) => r.name).join() === 'alpha,beta,gamma')).toBe(
+    true,
+  );
+  expect(snapshots.at(-1)?.map((row) => row.state)).toEqual(['current', 'current', 'current']);
+});
+
+test('one conflicted repository never stops the rest of the set', async () => {
+  const alpha = seedRemote('alpha');
+  const beta = seedRemote('beta');
+  await addRepository(ws, alpha, 'alpha');
+  await addRepository(ws, beta, 'beta');
+  await makeConflicted('alpha', alpha);
+  commitToRemote('advance.txt', '', beta);
+
+  const reports = await refreshRepositories(ws);
+  expect(reports.map((r) => [r.name, r.outcome])).toEqual([
+    ['alpha', 'conflicted'],
+    ['beta', 'refreshed'],
+  ]);
+});
+
+// -- the stash cycle (design/0023-refresh-concurrency-ux/) -----------------
+
+test('--stash refreshes a dirty checkout and puts the work back', async () => {
+  await addRepository(ws, remote);
+  const checkout = checkoutPath(ws, 'origin-repo');
+  await Bun.write(join(checkout, 'notes.txt'), 'unrecorded work\n');
+  commitToRemote('advance.txt');
+
+  const [report] = await refreshRepositories(ws, undefined, { stash: true });
+  expect(report?.outcome).toBe('refreshed');
+  expect(report?.detail).toContain('stashed and restored');
+  expect(existsSync(join(checkout, 'advance.txt'))).toBe(true); // the refresh landed
+  expect(await Bun.file(join(checkout, 'notes.txt')).text()).toBe('unrecorded work\n'); // and so did the work
+  expect(git(checkout, 'stash', 'list').stdout.trim()).toBe(''); // nothing left parked
+});
+
+test('--stash on a clean checkout is the plain refresh — no stash cycle claimed', async () => {
+  await addRepository(ws, remote);
+  commitToRemote('advance.txt');
+  const [report] = await refreshRepositories(ws, undefined, { stash: true });
+  expect(report?.outcome).toBe('refreshed');
+  expect(report?.detail).not.toContain('stash');
+});
+
+test('--stash: a pop that conflicts reports conflicted and leaves the tree as git left it', async () => {
+  await addRepository(ws, remote);
+  const checkout = checkoutPath(ws, 'origin-repo');
+  await Bun.write(join(checkout, 'seed.txt'), 'my local edit\n');
+  commitToRemote('seed.txt', 'the remote edit\n');
+
+  const [report] = await refreshRepositories(ws, undefined, { stash: true });
+  expect(report?.outcome).toBe('conflicted');
+  expect(report?.detail).toContain('repos/origin-repo');
+  expect(report?.detail).toContain('git stash');
+  // Exactly as git left it: markers in the tree, the path unmerged, and the
+  // entry still on the stack — nothing resolved, nothing discarded.
+  expect(git(checkout, 'status', '--porcelain').stdout).toContain('UU seed.txt');
+  expect(await Bun.file(join(checkout, 'seed.txt')).text()).toContain('<<<<<<<');
+  expect(git(checkout, 'stash', 'list').stdout.trim()).not.toBe('');
+});
+
+test('a conflicted checkout is derived on every later refresh and skipped, --stash or not', async () => {
+  await addRepository(ws, remote);
+  const checkout = checkoutPath(ws, 'origin-repo');
+  await makeConflicted('origin-repo', remote);
+  commitToRemote('later.txt');
+
+  expect((await refreshRepositories(ws)).map((r) => r.outcome)).toEqual(['conflicted']);
+  expect((await refreshRepositories(ws, undefined, { stash: true })).map((r) => r.outcome)).toEqual(
+    ['conflicted'],
+  );
+  expect(existsSync(join(checkout, 'later.txt'))).toBe(false); // skipped, not refreshed
+
+  // Derived, never stored: resolving the conflict is all it takes for the
+  // very next refresh to proceed — no Ward state to clear.
+  gitOrThrow(checkout, 'checkout', '--theirs', '--', 'seed.txt');
+  gitOrThrow(checkout, 'add', '--', 'seed.txt');
+  gitOrThrow(checkout, 'stash', 'drop');
+  gitOrThrow(checkout, 'reset', '--hard');
+  expect((await refreshRepositories(ws)).map((r) => r.outcome)).toEqual(['refreshed']);
+  expect(existsSync(join(checkout, 'later.txt'))).toBe(true);
 });
 
 // -- setup ----------------------------------------------------------------
 // Each test gets a fresh workspace and a fresh bare "remote" seeded with one
 // commit on branch `trunk` (deliberately not `main`, proving the main line is
-// read from the repository rather than assumed).
+// read from the repository rather than assumed). Cases needing more than one
+// repository seed extra remotes with `seedRemote`.
 
 let scratch: string;
 let ws: string;
 let remote: string;
 let caseId = 0;
+let remoteId = 0;
 
-function commitToRemote(file: string): void {
-  const stage = join(scratch, `stage-${caseId}-${file}`);
-  gitOrThrow('.', 'clone', remote, stage);
-  Bun.spawnSync(['touch', join(stage, file)]);
+function commitToRemote(file: string, content = '', target = remote): void {
+  remoteId += 1;
+  const stage = join(scratch, `stage-${caseId}-${remoteId}`);
+  gitOrThrow('.', 'clone', target, stage);
+  writeFileSync(join(stage, file), content);
   gitOrThrow(stage, 'add', '-A');
   gitOrThrow(stage, 'commit', '-m', `add ${file}`);
   gitOrThrow(stage, 'push', 'origin', 'trunk');
+}
+
+/** A fresh bare remote seeded like the default one, for multi-repository cases. */
+function seedRemote(name: string): string {
+  const path = join(scratch, `remote-${caseId}`, `${name}.git`);
+  mkdirSync(path, { recursive: true });
+  gitOrThrow('.', 'init', '--bare', '--initial-branch=trunk', path);
+  const seed = join(scratch, `seed-${caseId}-${name}`);
+  gitOrThrow('.', 'clone', path, seed);
+  writeFileSync(join(seed, 'seed.txt'), '');
+  gitOrThrow(seed, 'checkout', '-b', 'trunk');
+  gitOrThrow(seed, 'add', '-A');
+  gitOrThrow(seed, 'commit', '-m', 'seed');
+  gitOrThrow(seed, 'push', '-u', 'origin', 'trunk');
+  return path;
+}
+
+/**
+ * Drive a registered repository into the conflicted state the honest way —
+ * through a real `--stash` cycle whose pop conflicts — so what the later
+ * cases read off the checkout is what git actually produces, not a fixture
+ * imitating it.
+ */
+async function makeConflicted(name: string, target: string): Promise<void> {
+  await Bun.write(join(checkoutPath(ws, name), 'seed.txt'), 'my local edit\n');
+  commitToRemote('seed.txt', 'the remote edit\n', target);
+  const [report] = await refreshRepositories(ws, name, { stash: true });
+  expect(report?.outcome).toBe('conflicted'); // the premise of every case that calls this
 }
 
 async function doctorRepoFindings() {
