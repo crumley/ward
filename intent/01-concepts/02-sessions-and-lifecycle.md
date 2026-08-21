@@ -109,20 +109,29 @@ clean it looked.
 
 Each scope keeps a **session log**: an append-only record of the sessions that have run at that
 scope, with enough metadata per entry to support recovery, resumption, and reflection. At minimum an
-entry captures: the identity, the persona (name + role), the working directory, the **harness
-handle**, the model, when it opened/closed, its current stored state (`open` or `closed`), its
-**purpose** — a link to the brief or dispatch that opened it, or a one-line goal when neither exists
-— and, where the harness exposes it, the **resources the session consumed** (tokens, cost). **Why
-purpose is part of the minimum:** "what was this thread trying to do" must be answerable from the
-record alone — the harness history says it at length, but the record must not depend on a transcript
-that may no longer resolve (`../02-subsystems/03-agent-harness.md`). **Why usage is recorded:**
-token economy (`../00-foundation/01-principles.md` §12) treats spend as a managed cost, and a cost
-is managed only where it is measured — recorded usage is the evidence model-selection tuning reads
-(`../02-subsystems/04-model-selection.md`); without it, fast-vs-deep routing is tuned on guesswork.
-Usage is best-effort by construction (an optional harness capability,
-`../02-subsystems/03-agent-harness.md`) — nothing may depend on its presence. Sub-scopes nest within
-their parents, so reading a scope's record also reveals the threads beneath it. (Store is a _how_ —
-`../02-subsystems/00-metadata-store.md`.)
+entry captures: the identity, the working directory, the **harness handle**, the model, when it
+opened/closed, its current stored state (`open` or `closed`), and its **purpose** — a link to the
+brief or dispatch that opened it, or a one-line goal when neither exists. **Why purpose is part of
+the minimum:** "what was this thread trying to do" must be answerable from the record alone — the
+harness history says it at length, but the record must not depend on a transcript that may no longer
+resolve (`../02-subsystems/03-agent-harness.md`).
+
+Two further fields belong to the minimum but are **conditioned on a source existing**: the
+**persona** (name + role), once the workspace has a persona cast to name one from
+(`01-scopes-and-personas.md`), and the **resources the session consumed** (tokens, cost), where the
+harness exposes them. **Why usage is recorded:** token economy (`../00-foundation/01-principles.md`
+§12) treats spend as a managed cost, and a cost is managed only where it is measured — recorded
+usage is the evidence model-selection tuning reads (`../02-subsystems/04-model-selection.md`);
+without it, fast-vs-deep routing is tuned on guesswork. It is best-effort by construction (an
+optional harness capability, `../02-subsystems/03-agent-harness.md`) — nothing may depend on its
+presence, and the same holds for the persona until a cast exists. **Why the conditions are stated
+rather than assumed:** the minimum is a **target** every build is measured against, and a field
+whose source does not exist yet reads as a contract the build silently fails instead of as the next
+thing to reach. Naming the condition keeps both errors out — the field is never quietly dropped from
+the target, and never invented out of nothing to satisfy it.
+
+Sub-scopes nest within their parents, so reading a scope's record also reveals the threads beneath
+it. (Store is a _how_ — `../02-subsystems/00-metadata-store.md`.)
 
 The log records **lifecycle events, not just sessions**: per session, append-only entries for
 opened, resumed, **resume-failed (with its cause)**, and closed. Events are not states — the stored
@@ -229,8 +238,9 @@ remember it.
 - **The lifecycle guarantees** — resume is idempotent, closed stays closed, the record (not the
   process) is authoritative, and the record is kept current.
 - **The per-scope session log** (append-only; "enough metadata" to recover, including each session's
-  **purpose** and — best-effort — its **usage**; **lifecycle events** — opened / resumed /
-  resume-failed with cause / closed — so failure is a recorded fact, never a silent retry).
+  **purpose**, and — conditioned on a source existing — its **persona** once a cast exists and its
+  **usage** where the harness exposes it; **lifecycle events** — opened / resumed / resume-failed
+  with cause / closed — so failure is a recorded fact, never a silent retry).
 - **Recovery** — the cold-start orchestration that restores the in-flight threads (re-validating
   setup for **live** anchors only; addressing sessions by their workspace-unique bare id) — itself a
   **recorded episode** (wakes re-armed/fired, the rounds' conclusions) — and its **three per-thread
