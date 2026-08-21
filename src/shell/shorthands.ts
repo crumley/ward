@@ -63,8 +63,11 @@ const picker: ShellHelper = {
     # candidate standing, so a near-miss Ward could not resolve still costs no
     # keystroke. No --exit-0: a query that matches nothing should leave the
     # human in the picker, editing, not drop them back with silence.
+    # --with-nth shapes only what fzf DISPLAYS; what it prints on selection is
+    # the whole input line, so the NAME this function promises is cut here —
+    # never hand the CUE to a verb expecting a name.
     command fzf --prompt "$prompt> " --query "$query" --select-1 --no-multi \\
-        --delimiter \\t --with-nth 1,2
+        --delimiter \\t --with-nth 1,2 | string split -m1 -f1 -- \\t
 end`,
 };
 
