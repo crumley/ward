@@ -90,10 +90,33 @@ async function machineChecks(cwd: string): Promise<Finding[]> {
     findings.push({ check: 'gh', severity: 'ok', message: 'GitHub CLI available' });
     findings.push(ghAuthFinding(await probeForgeAuth()));
   }
+  findings.push(pickerFinding());
   findings.push(await globalConfigFinding());
   findings.push(await workspaceRegistryFinding());
   findings.push(...registryLockFindings());
   return findings;
+}
+
+/**
+ * The picker the emitted shell layer reaches for
+ * (design/0025-fish-shell-layer/). Named here because §20's loop demands it:
+ * `wrcd` with no argument and no fzf degrades to "no picker installed — name
+ * one of these", and an unavailability another surface reports honestly must
+ * be a condition doctor can name and explain. Never worse than `info` — the
+ * shorthands all work by name without it, and choosing not to install a
+ * fuzzy finder is a choice, not a fault.
+ */
+function pickerFinding(): Finding {
+  const check = 'picker';
+  return Bun.which('fzf') === null
+    ? {
+        check,
+        severity: 'info',
+        message:
+          'fzf not found — optional; the shell layer picks a repo or workspace with it ' +
+          '(without it, wrcd/wwcd list the candidates and ask you to name one)',
+      }
+    : { check, severity: 'ok', message: 'fzf available — the shell layer can pick interactively' };
 }
 
 /**
