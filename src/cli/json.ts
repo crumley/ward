@@ -404,6 +404,8 @@ export function sessionMutationJson(record: SessionRecord): SessionMutationShape
     purpose: record.purpose,
     workingDirectory: record.workingDirectory,
     ...(record.handle === undefined ? {} : { handle: record.handle }),
+    ...(record.model === undefined ? {} : { model: record.model }),
+    ...(record.effort === undefined ? {} : { effort: record.effort }),
     state: record.state,
     ...(record.events === undefined
       ? {}

@@ -199,6 +199,18 @@ export const sessionSchema = z
     workingDirectory: z.string().min(1),
     /** Free-form harness handle (which harness, which native run), when known. */
     handle: z.string().min(1).optional(),
+    /**
+     * What the agent was actually STARTED with, recorded at launch
+     * (design/0028-launched-sessions/) — present exactly when the resolution
+     * supplied one, absent when Ward passed no flag at all. The intent's
+     * session-log minimum names the model
+     * (intent/01-concepts/02-sessions-and-lifecycle.md), and recording it here
+     * is what keeps the workspace self-sufficient once a per-user
+     * configuration layer exists: reproduction reads the session, not the
+     * machine that happened to launch it (0027's SF-001, its thin half).
+     */
+    model: z.string().min(1).optional(),
+    effort: z.string().min(1).optional(),
     state: z.enum(['open', 'closed']),
     /** The append-only lifecycle trail; absent on records written before 0028. */
     events: z.array(sessionEventSchema).optional(),

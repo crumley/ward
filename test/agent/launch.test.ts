@@ -75,12 +75,18 @@ test('the resolved configuration becomes the argv — absent keys omit their fla
     'high',
     '--dangerously-skip-permissions',
   ]);
+  // …and what it was started with is ON the record: reproduction reads the
+  // session, not the machine that happened to launch it.
+  expect((await readSessions(ws, ''))[0]).toMatchObject({ model: 'sonnet', effort: 'high' });
 
   // Nothing configured at all: the id and nothing else — no flag is invented.
   writeGlobalConfig(undefined);
   await writeWorkspaceAgent(undefined);
   expect(ward(['session', 'open', '--purpose', 'unconfigured']).exitCode).toBe(0);
   expect(runs()[1]?.argv.length).toBe(2);
+  const unconfigured = (await readSessions(ws, ''))[1];
+  expect(unconfigured?.model).toBeUndefined(); // nothing chosen, nothing recorded
+  expect(unconfigured?.effort).toBeUndefined();
 });
 
 test('--json: one document, emitted before the run takes the terminal', () => {

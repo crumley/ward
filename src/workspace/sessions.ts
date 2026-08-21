@@ -22,6 +22,9 @@ import { readTaskWorktrees } from './worktrees.ts';
 export interface OpenSessionOptions {
   readonly handle?: string;
   readonly workingDirectory?: string;
+  /** What the agent was started with — recorded only where Ward did the starting. */
+  readonly model?: string;
+  readonly effort?: string;
 }
 
 /**
@@ -79,6 +82,8 @@ export async function openWorkspaceSession(
       purpose,
       workingDirectory: options.workingDirectory ?? '.',
       ...(options.handle === undefined ? {} : { handle: options.handle }),
+      ...(options.model === undefined ? {} : { model: options.model }),
+      ...(options.effort === undefined ? {} : { effort: options.effort }),
       subject: `Open session ${id} at workspace scope`,
     });
   });
@@ -243,6 +248,8 @@ interface OpenedFields {
   readonly purpose: string;
   readonly workingDirectory: string;
   readonly handle?: string;
+  readonly model?: string;
+  readonly effort?: string;
   readonly subject: string;
 }
 
@@ -261,6 +268,8 @@ async function writeOpened(
     purpose: fields.purpose,
     workingDirectory: fields.workingDirectory,
     ...(fields.handle === undefined ? {} : { handle: fields.handle }),
+    ...(fields.model === undefined ? {} : { model: fields.model }),
+    ...(fields.effort === undefined ? {} : { effort: fields.effort }),
     state: 'open',
     events: [{ event: 'opened', at: openedAt }],
     openedAt,

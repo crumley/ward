@@ -73,19 +73,22 @@ export async function launchWorkspaceSession(
   onRecorded: Recorded = () => {},
 ): Promise<LaunchedSession> {
   const nativeId = randomUUID();
+  // Resolved BEFORE the record is written, because what the run is started
+  // with is part of what the record says (the session-log minimum names the
+  // model): the record must be complete the moment it exists, not patched
+  // after the process is up.
+  const agent = await readAgentConfig(root);
+  const model = chosenFlag('model', agent.model);
+  const effort = chosenFlag('effort', agent.effort);
   const record = await openWorkspaceSession(root, purpose, {
     handle: claudeHandle(nativeId),
+    ...model,
+    ...effort,
     ...(workingDirectory === undefined ? {} : { workingDirectory }),
   });
-  const agent = await readAgentConfig(root);
   onRecorded(record);
   const run = await runClaude({
-    argv: startArgv({
-      nativeId,
-      ...chosenFlag('model', agent.model),
-      ...chosenFlag('effort', agent.effort),
-      args: argsOf(agent.args),
-    }),
+    argv: startArgv({ nativeId, ...model, ...effort, args: argsOf(agent.args) }),
     cwd: resolve(root, record.workingDirectory),
     env: { WARD_AGENT: record.id },
   });
