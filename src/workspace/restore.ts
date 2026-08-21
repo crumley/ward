@@ -21,7 +21,7 @@ import { repositoryRecordType, type WorktreeRecord } from '../store/types.ts';
 import { git } from './git.ts';
 import { addRepository, checkoutPath, listRepositoryNames } from './repos.ts';
 import { readTasks } from './scan.ts';
-import { readSessions } from './sessions.ts';
+import { readOpenSessions } from './sessions.ts';
 import { refuseStewardshipCopy } from './steward.ts';
 import { readTaskWorktrees } from './worktrees.ts';
 
@@ -83,11 +83,11 @@ export async function restoreWorkspace(root: string): Promise<RestoreReport> {
   }
 
   const worktrees: RestoreWorktreeItem[] = [];
-  let open = 0;
+  // Every scope's open sessions, the workspace's own included since
+  // design/0028-launched-sessions/ — one reader, so a launched workspace
+  // session is named here exactly as a task session is.
+  const open = (await readOpenSessions(root)).length;
   for (const task of await readTasks(root)) {
-    for (const session of await readSessions(root, task.dir)) {
-      if (session.state === 'open') open += 1;
-    }
     // Closed tasks are not asked: their worktrees settled at the gated close,
     // and re-materializing one would undo a correct teardown (the 0016 posture).
     if (task.record.state === 'closed') continue;

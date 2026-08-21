@@ -11,7 +11,7 @@ import { verbPath } from '../../src/cli/telemetry.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
-import { closeSession, openSession } from '../../src/workspace/sessions.ts';
+import { closeSession, openSession, openWorkspaceSession } from '../../src/workspace/sessions.ts';
 import { closeTask, openTask } from '../../src/workspace/tasks.ts';
 import { createWorkspaceWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
@@ -100,11 +100,21 @@ test('repository arguments complete to registered names, the main line as the cu
   ]);
 });
 
-test('`session close ID` completes to OPEN session ids — closed stays closed', () => {
-  expect(offers(['session', 'close', ''])).toEqual(
-    expect.arrayContaining([{ text: 'alpha-task-1', description: 'task t1' }]),
-  );
-  expect(words(['session', 'close', ''])).not.toContain('beta-task-1');
+test('`session close|resume ID` complete to OPEN session ids — closed stays closed', () => {
+  for (const verb of ['close', 'resume']) {
+    expect(offers(['session', verb, ''])).toEqual(
+      expect.arrayContaining([
+        { text: 'alpha-task-1', description: 'task t1' },
+        // A workspace-scope session says so instead of naming a task it has not got.
+        { text: 'workspace-1', description: 'workspace scope' },
+      ]),
+    );
+    expect(words(['session', verb, ''])).not.toContain('beta-task-1');
+  }
+});
+
+test('`session locate ID` offers closed ids too — reflection reads finished work', () => {
+  expect(words(['session', 'locate', ''])).toContain('beta-task-1');
 });
 
 test('`workspace merge BRANCH` completes to branches the main line does not hold', () => {
@@ -253,10 +263,12 @@ beforeAll(async () => {
   await openTask(ws, 'gone-task', {});
   await closeTask(ws, 't3', 'abandoned');
 
-  // One open session and one closed, so `session close` has both to sort.
+  // One open session and one closed, so `session close` has both to sort —
+  // plus one at workspace scope, whose cue is its scope rather than a task.
   await openSession(ws, 't1', 'suggest the open one', {});
   await openSession(ws, 't2', 'and not this one', {});
   await closeSession(ws, 'beta-task-1');
+  await openWorkspaceSession(ws, 'the workspace itself', { handle: 'claude:ws-run' });
 
   // A stewardship branch carrying a commit the main line lacks — the only
   // kind `workspace merge` can act on.

@@ -37,7 +37,7 @@ const VERB_TREE: Record<string, readonly string[]> = {
   project: ['open', 'list'],
   task: ['open', 'list', 'pause', 'resume', 'pr', 'close'],
   worktree: ['create', 'rebase', 'list'],
-  session: ['open', 'close'],
+  session: ['open', 'resume', 'locate', 'close'],
   status: [],
   doctor: [],
   schema: [],

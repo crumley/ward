@@ -31,7 +31,7 @@ import { git } from '../workspace/git.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
 import { listRepositories } from '../workspace/repos.ts';
 import { readTasks } from '../workspace/scan.ts';
-import { readOpenSessions } from '../workspace/sessions.ts';
+import { describeScope, readAllSessions, readOpenSessions } from '../workspace/sessions.ts';
 import { resolveWorkspaceMainLine } from '../workspace/steward.ts';
 import { jsonVerbShapes } from './schema.ts';
 
@@ -120,15 +120,20 @@ export function repoName(): ValueParser<'async', string> {
   );
 }
 
-/** Open session ids — `session close ID`; closed stays closed, so closed ids are not offered. */
-export function sessionId(): ValueParser<'async', string> {
+/**
+ * Session ids, with the scope each works at as the cue
+ * (design/0028-launched-sessions/). `session close` and `session resume` are
+ * offered only OPEN ids — closed stays closed, and a closed session has no run
+ * to re-attach to — while `session locate` takes `'any'`, because reading a
+ * finished session's history is exactly what reflection does.
+ */
+export function sessionId(include: 'open' | 'any' = 'open'): ValueParser<'async', string> {
   return suggesting(
     'ID',
     inWorkspace(async (root) =>
-      (await readOpenSessions(root)).map((session) => ({
-        text: session.record.id,
-        description: `task ${session.record.task}`,
-      })),
+      (include === 'any' ? await readAllSessions(root) : await readOpenSessions(root)).map(
+        (session) => ({ text: session.record.id, description: describeScope(session.record) }),
+      ),
     ),
   );
 }

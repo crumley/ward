@@ -9,7 +9,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { pathVerbShapes, repoPathShape, workspacePathShape } from '../../src/cli/schema.ts';
+import { argumentReadVerbShapes, repoPathShape, workspacePathShape } from '../../src/cli/schema.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
@@ -265,11 +265,11 @@ test('completion offers registered workspace names, and repo names across the se
 test('the path verbs validate against their registered shapes, and ward schema emits them', () => {
   ward(['workspace', 'register'], alpha);
   const workspacePath = JSON.parse(ward(['workspace', 'path', '--json'], scratch).stdout);
-  expect(pathVerbShapes['workspace path']).toBe(workspacePathShape);
+  expect(argumentReadVerbShapes['workspace path']).toBe(workspacePathShape);
   expect(workspacePathShape.parse(workspacePath)).toEqual({ name: 'alpha', path: alpha });
 
   const repoPath = JSON.parse(ward(['repo', 'path', 'shared', '--json'], scratch).stdout);
-  expect(pathVerbShapes['repo path']).toBe(repoPathShape);
+  expect(argumentReadVerbShapes['repo path']).toBe(repoPathShape);
   expect(repoPathShape.parse(repoPath)).toEqual({
     repo: 'shared',
     workspace: 'alpha',
@@ -277,7 +277,7 @@ test('the path verbs validate against their registered shapes, and ward schema e
     path: join(alpha, 'repos', 'shared'),
   });
 
-  for (const [verb, shape] of Object.entries(pathVerbShapes)) {
+  for (const [verb, shape] of Object.entries(argumentReadVerbShapes)) {
     const emitted = ward(['schema', ...verb.split(' ')], scratch);
     expect(emitted.exitCode).toBe(0);
     expect(JSON.parse(emitted.stdout)).toEqual(JSON.parse(JSON.stringify(z.toJSONSchema(shape))));

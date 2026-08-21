@@ -11,18 +11,21 @@
 // truth, and a builder drifting from it is a compile error before it is a
 // failing test. The builders stay hand-written because they are what pin key
 // order — the byte-determinism (§6) a schema alone cannot promise.
+import type { SessionLocation } from '../agent/run.ts';
 import type { AgentProvenance, Resolved } from '../agent/settings.ts';
 import type { PrForgeState } from '../forge/gh.ts';
 import type { RepoLocation } from '../global/locate.ts';
 import type { RegistryReport, WorkspaceListing } from '../global/registry.ts';
+import { CLAUDE_HARNESS } from '../harness/claude.ts';
 import type { AdoptionReport } from '../shell/adopt.ts';
-import type {
-  ProjectRecord,
-  RepositoryRecord,
-  SessionRecord,
-  TaskRecord,
-  WorkState,
-  WorktreeRecord,
+import {
+  type ProjectRecord,
+  type RepositoryRecord,
+  type SessionRecord,
+  sessionScopeOf,
+  type TaskRecord,
+  type WorkState,
+  type WorktreeRecord,
 } from '../store/types.ts';
 import type { CreateReport } from '../workspace/create.ts';
 import type { DoctorReport } from '../workspace/doctor.ts';
@@ -42,6 +45,7 @@ import type {
   RepoListShape,
   RepoPathShape,
   RepoRefreshShape,
+  SessionLocateShape,
   SessionMutationShape,
   ShellAdoptShape,
   StatusShape,
@@ -392,11 +396,24 @@ export function workspaceUpgradeJson(report: UpgradeReport): WorkspaceUpgradeSha
 export function sessionMutationJson(record: SessionRecord): SessionMutationShape {
   return {
     id: record.id,
-    task: record.task,
+    // Always present, including for a record written before 0028: the scope a
+    // record states, or the one a carried task implies. An agent reading this
+    // never has to infer the level from which fields happen to be here.
+    scope: sessionScopeOf(record),
+    ...(record.task === undefined ? {} : { task: record.task }),
     purpose: record.purpose,
     workingDirectory: record.workingDirectory,
     ...(record.handle === undefined ? {} : { handle: record.handle }),
     state: record.state,
+    ...(record.events === undefined
+      ? {}
+      : {
+          events: record.events.map((event) => ({
+            event: event.event,
+            at: event.at,
+            ...(event.cause === undefined ? {} : { cause: event.cause }),
+          })),
+        }),
     openedAt: record.openedAt,
     ...(record.closedAt === undefined ? {} : { closedAt: record.closedAt }),
   };
@@ -423,6 +440,22 @@ export function shellAdoptJson(report: AdoptionReport): ShellAdoptShape {
         outcome: file.outcome,
       })),
     })),
+  };
+}
+
+/** `session locate` (0028): the handle resolved, found or gone, with the path either way. */
+export function sessionLocateJson(location: SessionLocation): SessionLocateShape {
+  return {
+    id: location.record.id,
+    scope: sessionScopeOf(location.record),
+    ...(location.record.task === undefined ? {} : { task: location.record.task }),
+    state: location.record.state,
+    handle: location.handle,
+    harness: CLAUDE_HARNESS,
+    nativeId: location.nativeId,
+    workingDirectory: location.record.workingDirectory,
+    outcome: location.outcome,
+    path: location.path,
   };
 }
 

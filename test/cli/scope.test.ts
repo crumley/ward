@@ -12,14 +12,38 @@ import { addRepository } from '../../src/workspace/repos.ts';
 import { readSessions } from '../../src/workspace/sessions.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { createWorktree } from '../../src/workspace/worktrees.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard, runWardEnv } from '../helpers.ts';
+import {
+  applyGitTestEnv,
+  makeTempDir,
+  removeDir,
+  runWard,
+  runWardEnv,
+  writeFakeClaude,
+} from '../helpers.ts';
 
 const PR_URL = 'https://example.com/pr/6';
 
-test('session open, inferred: the echoed task, and the worktree as the recorded directory', async () => {
-  const result = runWard(['session', 'open', '--purpose', 'drive the feature'], wtDir);
+// `session open` no longer infers a task from the working directory: since
+// design/0028-launched-sessions/ a missing TASK means WORKSPACE scope
+// explicitly — the same bare invocation cannot mean both "the task I am
+// standing in" and "the workspace". The rest of 0006's inference is untouched,
+// which the cases below still prove.
+test('session open with no TASK is workspace scope, even inside a worktree (0028)', async () => {
+  const result = runWardEnv(['session', 'open', '--purpose', 'drive the workspace'], wtDir, {
+    NO_COLOR: '1',
+    WARD_CLAUDE_BIN: writeFakeClaude(scratch, `claude-scope-${caseId}`),
+  });
   expect(result.exitCode).toBe(0);
-  expect(result.stdout).toContain('task t1 — from the working directory');
+  expect(result.stdout).not.toContain('from the working directory');
+  expect(result.stdout).toContain('opened session workspace-1');
+  const workspaceSessions = await readSessions(ws, '');
+  expect(workspaceSessions[0]).toMatchObject({ scope: 'workspace', workingDirectory: '.' });
+  expect(await readSessions(ws, 'tasks/t1-feature')).toEqual([]);
+});
+
+test('session open TASK records the task session, the worktree as its directory', async () => {
+  const result = runWard(['session', 'open', 't1', '--purpose', 'drive the feature'], wtDir);
+  expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('opened session feature-1');
   const sessions = await readSessions(ws, 'tasks/t1-feature');
   expect(sessions[0]?.workingDirectory).toBe('worktrees/t1-feature');
