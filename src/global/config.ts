@@ -24,7 +24,7 @@ export const globalConfigSchema = z.object({
   type: z.literal('ward-config'),
   /**
    * `agent.*` — the user-level defaults for every agent Ward starts: harness,
-   * model, effort, and extra launch flags (design/0027-agent-configuration/).
+   * model, effort, and extra launch flags (design/0028-agent-configuration/).
    * The same block is accepted in a workspace record, which overrides this one
    * per key — the two axes the human-shell contract names, with this one as
    * the broad default ("every session I want … my default model to be Fable").

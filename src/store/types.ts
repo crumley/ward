@@ -23,7 +23,7 @@ export const workspaceRecordSchema = z.object({
   mainLine: z.string().min(1).optional(),
   /**
    * The workspace-local agent configuration — the narrower of the two axes
-   * (design/0027-agent-configuration/): the same block the global config
+   * (design/0028-agent-configuration/): the same block the global config
    * carries, overriding it per key for agents started in THIS workspace ("in
    * this workspace, the model is Sonnet"). The workspace record is the
    * workspace's configuration home, so the override needs no new file and no

@@ -1,5 +1,5 @@
 // What Ward hands the harness when it starts an agent
-// (design/0027-agent-configuration/): which harness, which model, how much
+// (design/0028-agent-configuration/): which harness, which model, how much
 // thinking effort, and any extra flags. Two axes carry it — the pair the
 // human-shell contract names (intent/02-subsystems/07-human-shell.md,
 // "Opinionated configuration, global and workspace-local"): a human's
@@ -90,7 +90,7 @@ export type AgentProvenance = 'workspace' | 'global' | 'default' | 'absent';
  * One key's answer. A union rather than `{ value?: T }` so that "set nowhere"
  * is structurally distinct from "set to a default": there is no value to read
  * on an `absent` key, and a consumer that forgets to branch does not compile.
- * That is the whole contract entry 0028's launch rests on.
+ * That is the whole contract entry 0029's launch rests on.
  */
 export type Resolved<T> =
   | { readonly provenance: 'absent' }

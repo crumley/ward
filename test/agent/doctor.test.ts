@@ -1,5 +1,5 @@
 // The agent configuration where a caller can see it
-// (design/0027-agent-configuration/): doctor resolves the two axes in the
+// (design/0028-agent-configuration/): doctor resolves the two axes in the
 // workspace the caller is standing in and shows the answer per key with the
 // layer that gave it — one line for the human, keyed structure under `--json`
 // for an agent (§8), both from the same single resolution so they cannot
@@ -99,7 +99,7 @@ test('doctor --json carries the resolution as data, an absent key without a valu
   });
 
   // The whole point, in one document: with nothing configured on either axis,
-  // model and effort carry no value — entry 0028's launch has no flag to pass.
+  // model and effort carry no value — entry 0029's launch has no flag to pass.
   const bare = doctorShape.parse(
     JSON.parse(ward(['doctor', '--json'], bareRoot, emptyConfigHome).stdout),
   );

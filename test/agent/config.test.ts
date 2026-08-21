@@ -1,11 +1,11 @@
 // The agent's configuration vocabulary and its precedence rule
-// (design/0027-agent-configuration/): one block, accepted on two axes — a
+// (design/0028-agent-configuration/): one block, accepted on two axes — a
 // human's defaults in the global config, overridden PER KEY by the workspace
 // record — merged into one answer that reports which layer gave it.
 //
 // The invariant every case here is really about: OMITTED MEANS OMITTED. A key
 // set nowhere resolves to `absent` carrying no value at all, so the launch
-// that follows (entry 0028) omits the flag rather than passing a Ward-invented
+// that follows (entry 0029) omits the flag rather than passing a Ward-invented
 // default. Hermetic by construction: the merge is pure, and the file cases
 // take their own directory — nothing reads the machine's real `$HOME`.
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';

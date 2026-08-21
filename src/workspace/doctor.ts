@@ -71,7 +71,7 @@ export interface DoctorReport {
   readonly workspace: readonly Finding[];
   /**
    * The agent configuration as it resolves HERE, per key with its provenance
-   * (design/0027-agent-configuration/) — null outside a workspace, where only
+   * (design/0028-agent-configuration/) — null outside a workspace, where only
    * half the resolution exists and the answer would be a guess about a
    * workspace the caller is not standing in. Carried as structure alongside
    * the finding that renders it, because the two audiences want different
@@ -627,7 +627,7 @@ async function workspaceChecks(
 
 /**
  * The agent configuration as it resolves in THIS workspace, per key with the
- * layer that answered (design/0027-agent-configuration/). It is a finding at
+ * layer that answered (design/0028-agent-configuration/). It is a finding at
  * all because the resolution is the one thing a two-axis configuration makes
  * hard to see: the value lives in one of two files, and "which model will
  * actually run here?" is otherwise a question a human answers by opening both

@@ -196,7 +196,7 @@ const findingShape = z.strictObject({
 });
 
 /**
- * One resolved agent-configuration key (design/0027-agent-configuration/):
+ * One resolved agent-configuration key (design/0028-agent-configuration/):
  * the value and the layer that answered for it. `value` is present exactly
  * when `provenance` is anything but `absent` — an absent key has no value to
  * carry, and the omission is the contract: a caller assembling a launch

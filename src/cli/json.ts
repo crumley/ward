@@ -442,7 +442,7 @@ export function doctorJson(report: DoctorReport): DoctorShape {
 }
 
 /**
- * The resolved agent configuration as data (design/0027-agent-configuration/):
+ * The resolved agent configuration as data (design/0028-agent-configuration/):
  * the same resolution the human reads as one doctor line, keyed so an agent
  * can act on it without parsing prose (§8). An `absent` key carries no
  * `value` — omitted, never null, and never a stand-in default: the omission

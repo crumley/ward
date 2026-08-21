@@ -1,4 +1,4 @@
-# 0027 — Agent configuration, hierarchical
+# 0028 — Agent configuration, hierarchical
 
 > The `agent.*` settings an agent is started with — harness, model, effort, and extra launch flags —
 > configured on two axes: a human's defaults in the global config, overridden **per key** by the
@@ -34,12 +34,13 @@ explicitly deferred — "workspace-local configuration (the other half of the in
 precedence between the two layers … answering it needs a second axis with real keys in it." This is
 that second axis, and these are the real keys.
 
-**On the entry number.** This entry was commissioned as `0026`, which
-[`0026-shell-staleness-doctor/`](../0026-shell-staleness-doctor/README.md) had already taken on the
-main line by the time the work started — the same collision
-[0024](../0024-global-config-registry/README.md) hit from the other direction. It is `0027`, and the
-launch entry it is stacked under is therefore **0028**; every reference in code, tests, and prose
-here says so.
+**On the entry number.** This entry has now lost the same race twice. It was commissioned as `0026`,
+which [`0026-shell-staleness-doctor/`](../0026-shell-staleness-doctor/README.md) had already taken
+on the main line by the time the work started — the same collision
+[0024](../0024-global-config-registry/README.md) hit from the other direction — so it was built as
+`0027`. Then [`0027-shell-adoption/`](../0027-shell-adoption/README.md) landed on `main` while this
+was in review and took that number too. It is `0028`, and the launch entry stacked on top of it is
+therefore **0029**; every reference in code, tests, and prose here says so.
 
 ## Serves intent
 
@@ -96,14 +97,14 @@ here says so.
     and the empty-list escape hatch, what each file accepts and rejects, the additive record, and
     doctor's finding and JSON — all on the `WARD_CONFIG_DIR` hermeticity seam 0024 built.
 - **Deferred:**
-  - **Actually launching an agent** — entry 0028, stacked on this one. _Why safe:_ this entry's
+  - **Actually launching an agent** — entry 0029, stacked on this one. _Why safe:_ this entry's
     whole output is a resolved value with an explicit "absent", which is exactly what a launch needs
     and nothing it does not; building the two together would have mixed a configuration question
     with a process-spawning one and made both harder to review.
   - **A reader that resolves from a workspace root alone.** The resolution is pure and takes the two
     layers its caller already holds. _Why safe:_ the one caller today (doctor) has just validated
     the workspace record and read the global config, so a reader would have made it read both twice;
-    0028 adds one the moment it has a caller that does not, and the precedence rule stays where it
+    0029 adds one the moment it has a caller that does not, and the precedence rule stays where it
     is.
   - **Any level narrower than the workspace** — per-project, per-task, per-room/session
     ([`model-selection`](../../intent/02-subsystems/04-model-selection.md)'s full hierarchy). _Why
@@ -124,11 +125,11 @@ here says so.
     is unknown — and `status` reports the state of the work, not the caller's preferences.
   - **A README section for the feature.** _Why safe:_ nothing consumes the configuration yet, and
     documenting a knob before the thing it turns would promise behavior that does not exist. It
-    lands with 0028.
+    lands with 0029.
 - **Acceptance:** `mise run check` green, and the two new suites proving: every key resolved from
   every level and from nowhere; args replaced rather than concatenated, and an explicit `[]` in a
   workspace erasing a global flag; an absent key carrying no value in-process and no `value` field
-  in JSON; a pre-0027 workspace record still valid; an unknown harness rejected while an unknown
+  in JSON; a pre-0028 workspace record still valid; an unknown harness rejected while an unknown
   effort passes through; doctor's finding text, its severities, and its `--json` block, including
   `null` outside a workspace.
 
@@ -145,7 +146,7 @@ here says so.
     neither existing home is honest: a function in `src/global/` that reads workspace records would
     put the narrower layer inside the module about machine-level state, and one in `src/workspace/`
     would say the opposite. `src/agent/` is the subsystem this configuration is _about_ — and it is
-    where 0028's harness adapter lands, so the seam and its settings sit together. The file imports
+    where 0029's harness adapter lands, so the seam and its settings sit together. The file imports
     nothing but zod, which is also what keeps the two document schemas free of an import cycle.
   - **The resolution is pure; the reads are the caller's.** `resolveAgentConfig` takes the two
     layers rather than a workspace root. That is what lets doctor resolve from the record it has
@@ -154,7 +155,7 @@ here says so.
   - **Absent is a shape, not a sentinel.** `Resolved<T>` is a union: `{provenance: 'absent'}` has no
     `value` field. A consumer that forgets to branch does not compile, and the JSON document omits
     the field entirely rather than emitting `null` or an empty string — the omission _is_ the
-    answer, and 0028's launch has nothing to pass. This is the directive's second quote made
+    answer, and 0029's launch has nothing to pass. This is the directive's second quote made
     structural: Ward cannot accidentally invent a default for a key nobody set, because there is no
     place to put one.
   - **Ward states defaults only where it has an opinion.** `AGENT_DEFAULTS` holds `harness` (Ward
@@ -264,7 +265,7 @@ is one line and the comment explaining it is longer than the code, deliberately.
   this branch's base. **No existing case changed:** all 30 new cases are this entry's two suites.
 - `mise run check` → exit 0 (Biome + dprint + `tsc --noEmit` + `bun test` + lychee).
 
-**Shared surfaces this entry touches** — named because 0028 builds on the first two:
+**Shared surfaces this entry touches** — named because 0029 builds on the first two:
 `src/global/config.ts` (the `agent` subtree), the workspace record schema in `src/store/types.ts`
 (the `agent` block), and `src/workspace/doctor.ts` (the report shape gained a field and
 `workspaceChecks` now returns a pair). Nothing else in the CLI changed.
@@ -276,7 +277,39 @@ above is `435 pass, 1 fail`, that case). It is spawn-bound, not assertion-bound:
 reports a shape mismatch that never happened. Its deadline is now pinned at 30s with the reasoning
 in place. No assertion changed.
 
-**Next.** Entry 0028: start an agent from this configuration — the harness adapter, the launch
+### 2026-08-21 — Rebased onto the moved main line, and renumbered a second time
+
+The shell-adoption entry landed on `main` while this was in review and took `0027` with it, so this
+entry became **0028** — the directory, and every reference to it in code, tests, and prose — and the
+launch entry stacked above became **0029**. No behavior changed with the number.
+
+The rebase onto the moved main line was two conflicts, both where adoption and this entry reach for
+the same lines:
+
+- `src/workspace/doctor.ts`, twice, and the same shape both times. Adoption added its
+  `shell/adopt.ts` imports and renamed `shellArtifactFindings()` to `shellFindings()` in
+  `machineChecks`, while this entry added the `GlobalRead` import and changed
+  `globalConfigFinding()` to take the already-read config. Resolved by taking both: adoption's
+  imports and its `shellFindings()` call, this entry's `GlobalRead` import and
+  `globalConfigFinding(config)`.
+- `test/cli/schema.test.ts` — the same fix arriving from two directions. Adoption's verbs pushed the
+  whole-contract case past bun's 5s default too, and it pinned the deadline inline; this entry had
+  pinned it as a named `CONTRACT_CASE_TIMEOUT_MS`. Kept the named constant, with both rationales
+  merged into its comment. No assertion changed, and nothing was loosened — the deadline is the same
+  30s from either side.
+
+Nothing else touched: the `agent` subtree, the workspace record's block, and the resolution are
+untouched by adoption's ground, which is what the deliberate no-contact rule bought again.
+
+`main` then moved twice more while the renumber was being pushed — the doctor bootstrap-idiom entry
+(`0026` again, PR #57) and a picker fix (`0025`, PR #58) — and the cascade replayed onto both with
+**no conflicts at all**: they change `src/shell/`, and a doctor classification this entry does not
+touch. Rebased last onto `main` at `72fde54`, where `bun test` →
+`504 pass, 0 fail, 2064 expect() calls` across 43 files and `mise run fmt` + `mise run check` →
+exit 0. The shell line is moving fast enough that the number is a timestamp, not a promise; the gate
+is what holds.
+
+**Next.** Entry 0029: start an agent from this configuration — the harness adapter, the launch
 command assembled with absent keys omitted, and the resolved model and effort recorded on the
 session (SF-001's missing half). After that, the narrower scope levels if real use asks for them.
 
@@ -293,7 +326,7 @@ session (SF-001's missing half). After that, the narrower scope levels if real u
   workspace default in precedence** (it only supplies what the workspace has not chosen), bounded by
   the global-state rule — nothing may depend on it, and deleting it costs a default and never a
   recovery. The workspace's self-sufficiency is preserved not by forbidding the layer but by
-  **recording what actually ran on the session**, which is 0028's job and does not exist yet; until
+  **recording what actually ran on the session**, which is 0029's job and does not exist yet; until
   it does, this is the one place the assumption is genuinely thin. _Proposed revision:_ extend the
   hierarchy clause to name the full ladder — user/machine default, then workspace, project, task,
   room/session, narrower always winning — with the bound that the user layer may hold **only**
