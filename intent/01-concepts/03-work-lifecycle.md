@@ -141,6 +141,34 @@ changes as occupancy**: a dirty tree is never rebased or refreshed, whatever the
 record" from becoming "trust the record over the work in front of you" — a lost update is silent
 corruption (§17) whether or not the writer announced itself.
 
+**The human may lift the fail-safe for one act, explicitly — never Ward, and never by default.** The
+fail-safe protects work whose owner has not been asked; when the owner _is_ the one asking, refusing
+serves nobody. So the toil offers an **opt-in** form in which uncommitted changes are **set aside,
+the anchor is updated, and the changes are put back** — and it holds to three conditions that keep
+it a fail-safe and not a loophole:
+
+1. **Never the default, never inferred.** The exception is taken only when the caller asks for it in
+   that invocation (or has configured it as their standing answer); silence always means refuse.
+2. **Preserve, never discard.** The set-aside work is kept in the repository's own durable holding
+   (never a Ward-side copy, per §3's self-sufficiency and §17's one-owner bias) and restored
+   afterward. If the update cannot proceed, the work still comes back — a fail-safe that strands
+   work on a network error is the fail-safe inverted.
+3. **Stop at judgement, and say where.** If restoring cannot be done mechanically, the anchor is
+   left exactly as the merge left it, the set-aside work is still held, and the anchor is **reported
+   as conflicted with what to fix and where**. Ward never resolves the conflict: that is a judgement
+   about the human's own unrecorded work, so it is theirs (§18), and until it is made the anchor is
+   **skipped by the toil exactly as a dirty one is** — one conflicted anchor never stops the others.
+
+**Why an exception at all:** the common case is a human with a small local edit who wants current
+code underneath it, and Ward's answer being a permanent "no" makes them do the same three steps by
+hand — which is the toil this concept exists to absorb (the prime directive,
+`../00-foundation/00-vision.md`). **Why so hedged:** every condition is there so the exception costs
+nothing when it is not asked for. Asked-for is a decision; inferred would be Ward deciding that
+somebody else's uncommitted work is safe to move, which is exactly what the fail-safe exists to
+prevent. And **conflicted is a state of the anchor, not a record Ward keeps** — it is read from the
+anchor whenever the toil looks (§17: derive shared state rather than store it), so an anchor left
+conflicted by anything at all, Ward or not, is recognized and skipped.
+
 **What is durable here is the intent, not the catalog.** Ward **owns the toil**: it performs what it
 safely can autonomously (local, reversible work — §18) and **surfaces only what needs a human** —
 what is behind, what is conflicted, what is blocked, what is ready. **Why:** which worktrees are
@@ -272,8 +300,9 @@ Local↔remote linkage is an **orthogonal attribute** that can change in any non
 - **Ward absorbing the recurring maintenance toil** (refresh, rebase + conflict handling, PR/CI
   status-watching, …) and surfacing only what needs a human — the durable intent, not the catalog —
   including that the **toil yields to occupancy** and to **evidence of unrecorded work** (a dirty
-  tree is treated as occupied, whatever the record says), and the delivery toil serves `deliverable`
-  worktrees only.
+  tree is treated as occupied, whatever the record says), **the human's explicit, opt-in exception**
+  to that fail-safe — set aside, update, put back, and report **conflicted** where restoring needs
+  judgement — and the delivery toil serves `deliverable` worktrees only.
 - **Lifecycle hooks** — that they exist and must be **idempotent / validate-on-resume** (build
   planned in [`design/`](../../design/)).
 - **Workflow policy** — opinionated-but-evolvable, as the worked instance of the general default →
