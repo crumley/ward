@@ -240,9 +240,22 @@ export function prBelongsToRemote(prUrl: string, remote: string): boolean {
   return pr !== null && repo !== null && pr.host === repo.host && pr.path === repo.path;
 }
 
-interface RepoLocator {
+export interface RepoLocator {
   readonly host: string;
   readonly path: string;
+}
+
+/**
+ * The forge a git remote names — host plus repository path — or null when the
+ * remote names no forge at all (a filesystem path, an unparseable string).
+ * The self-service upgrade asks this of the workspace's own `origin` before it
+ * considers a pull request at all (design/0030-upgrade-self-service/): a
+ * workspace repository commonly has no remote and needs none
+ * (intent/01-concepts/06-workspace-lifecycle.md), so "there is no forge here"
+ * is an ordinary answer to degrade on, never a failure.
+ */
+export function forgeRemote(remote: string): RepoLocator | null {
+  return remoteLocator(remote);
 }
 
 function prLocator(prUrl: string): RepoLocator | null {
@@ -284,4 +297,137 @@ function repoPath(path: string): string {
     .replace(/^\/+|\/+$/g, '')
     .replace(/\.git$/, '')
     .toLowerCase();
+}
+
+// -- opening a pull request (design/0030-upgrade-self-service/) -------------
+
+/**
+ * The forge's answer about one pull request Ward wanted to exist. `existing`
+ * is the convergent re-run (§6): the branch already has a PR, so the second
+ * invocation reuses its URL instead of asking the forge for a duplicate.
+ * `unavailable` is §20's honest bit — no gh, no auth, no network — and
+ * `failed` is the forge answering "no"; both carry the reason, and neither is
+ * ever thrown: the upgrade that asked for the PR has already committed, and
+ * its task, worktree, and commit must stand and be named regardless.
+ */
+export interface PullRequestResult {
+  readonly outcome: 'opened' | 'existing' | 'unavailable' | 'failed';
+  /** Present exactly when the outcome is `opened` or `existing`. */
+  readonly url?: string;
+  readonly detail: string;
+}
+
+export interface PullRequestSpec {
+  /** The branch the PR merges into, on the forge. */
+  readonly base: string;
+  /** The branch under review — already pushed by the caller. */
+  readonly head: string;
+  readonly title: string;
+  readonly body: string;
+}
+
+const PR_TIMEOUT_MS = 30_000;
+
+/**
+ * Make sure `head` has a pull request on the forge, and say which way that
+ * came true. Run with `dir` inside the repository, so gh resolves the
+ * repository from its remotes exactly as a human's own `gh pr create` would —
+ * Ward names no forge API of its own (the remote-provider seam,
+ * intent/02-subsystems/06-remote-provider.md).
+ *
+ * The deadline is generous (30 s, WARD_GH_TIMEOUT_MS overrides): this is a
+ * once-per-upgrade act whose answer changes what the human does next, the §20
+ * case where precision is affordable — unlike the 3 s status probe.
+ */
+export async function ensurePullRequest(
+  dir: string,
+  spec: PullRequestSpec,
+): Promise<PullRequestResult> {
+  const gh = ghExecutable();
+  if (gh === null) {
+    return {
+      outcome: 'unavailable',
+      detail: 'gh is not installed (or WARD_GH names nothing spawnable); ward doctor names it',
+    };
+  }
+  const timeout = timeoutMs(PR_TIMEOUT_MS);
+  const existing = await runGh(gh, dir, timeout, ['pr', 'view', spec.head, '--json', 'url']);
+  if (existing.exitCode === 0) {
+    const url = pullRequestUrl(existing.stdout);
+    if (url !== null) return { outcome: 'existing', url, detail: `already open for ${spec.head}` };
+  }
+  const created = await runGh(gh, dir, timeout, [
+    'pr',
+    'create',
+    '--base',
+    spec.base,
+    '--head',
+    spec.head,
+    '--title',
+    spec.title,
+    '--body',
+    spec.body,
+  ]);
+  if (created.exitCode !== 0) {
+    const said = created.stderr.trim() === '' ? created.stdout.trim() : created.stderr.trim();
+    return { outcome: 'failed', detail: said === '' ? 'gh pr create failed' : firstLine(said) };
+  }
+  // gh prints the new PR's URL, and nothing else, on stdout.
+  const url = created.stdout.trim().split('\n').filter(isForgeUrl).pop();
+  if (url === undefined) {
+    return { outcome: 'failed', detail: 'gh pr create reported no pull-request URL' };
+  }
+  return { outcome: 'opened', url, detail: `opened against ${spec.base}` };
+}
+
+function pullRequestUrl(json: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(json);
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    const url = 'url' in parsed ? parsed.url : undefined;
+    return typeof url === 'string' && url !== '' ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+function isForgeUrl(line: string): boolean {
+  return line.startsWith('http://') || line.startsWith('https://');
+}
+
+function firstLine(text: string): string {
+  return text.split('\n')[0] ?? text;
+}
+
+/** One gh invocation, both streams captured, cut at the deadline. */
+async function runGh(
+  gh: string,
+  cwd: string,
+  timeout: number,
+  args: readonly string[],
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  try {
+    const proc = Bun.spawn([gh, ...args], {
+      cwd,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      stdin: 'ignore',
+      env: { ...process.env },
+    });
+    let cut = false;
+    const deadline = setTimeout(() => {
+      cut = true;
+      proc.kill();
+    }, timeout);
+    const [stdout, stderr] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    await proc.exited;
+    clearTimeout(deadline);
+    if (cut) return { exitCode: 1, stdout, stderr: `gh did not answer within ${timeout} ms` };
+    return { exitCode: proc.exitCode ?? 1, stdout, stderr };
+  } catch (error) {
+    return { exitCode: 1, stdout: '', stderr: (error as Error).message };
+  }
 }

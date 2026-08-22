@@ -108,6 +108,18 @@ export const taskSchema = z.object({
   state: workStateSchema,
   floor: z.number().int().positive().optional(),
   purpose: z.string().min(1).optional(),
+  /**
+   * The stewardship act this task exists to carry
+   * (design/0030-upgrade-self-service/): present exactly on a task **Ward
+   * derived** to act on the workspace itself, absent on every task a human or
+   * an agent opened. Today's one value is `upgrade`, and it is what makes "is
+   * an upgrade already in flight here?" a question the RECORD answers (§16)
+   * rather than a guess at a slug string — a slug is free text a human may
+   * spell any way, and matching one would both miss a renamed upgrade task
+   * and collide with unrelated work that happens to say "upgrade". Optional,
+   * so every record written before this entry stays valid unchanged.
+   */
+  stewardship: z.enum(['upgrade']).optional(),
   /** The PR-link set: URLs only — review state is the forge's truth, read live. */
   prs: z.array(z.string().min(1)),
   outcome: z.enum(['delivered', 'abandoned']).optional(),

@@ -191,6 +191,19 @@ export interface FakeGhBehavior {
   >;
   /** `gh auth status` verdict — 'ok' exits 0, 'error' exits 1 (unset: 1). */
   readonly auth?: 'ok' | 'error';
+  /**
+   * `gh pr view <BRANCH> --json url` answers, keyed by head branch — the
+   * "a pull request is already open for this branch" case
+   * (design/0030-upgrade-self-service/). A branch not listed here answers the
+   * way gh does when there is none: exit 1.
+   */
+  readonly prs?: Record<string, string>;
+  /**
+   * What `gh pr create` does: a URL to print (gh prints the new PR's URL and
+   * nothing else), or 'error' to exit 1 — the forge-failure degradation case.
+   * Unset means 'error'.
+   */
+  readonly create?: string | 'error';
   /** Sleep before answering — the timeout tests hang the forge with this. */
   readonly delayMs?: number;
   /** Append each asked URL here, one per line — for call-count assertions. */
@@ -215,6 +228,24 @@ const behavior = ${JSON.stringify(behavior)};
 if (process.argv[2] === 'auth') {
   if (behavior.delayMs) await Bun.sleep(behavior.delayMs);
   process.exit(behavior.auth === 'ok' ? 0 : 1);
+}
+if (process.argv[3] === 'create') {
+  if (behavior.logFile) appendFileSync(behavior.logFile, process.argv.slice(2).join(' ') + '\\n');
+  if (!behavior.create || behavior.create === 'error') {
+    console.error('pull request create failed: the forge said no');
+    process.exit(1);
+  }
+  console.log(behavior.create);
+  process.exit(0);
+}
+const known = (behavior.prs ?? {})[process.argv[4] ?? ''];
+if (known !== undefined) {
+  console.log(JSON.stringify({ url: known }));
+  process.exit(0);
+}
+if (!(process.argv[4] ?? '').startsWith('http')) {
+  console.error('no pull requests found for branch');
+  process.exit(1);
 }
 const url = process.argv[4] ?? '';
 if (behavior.logFile) appendFileSync(behavior.logFile, url + '\\n');

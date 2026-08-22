@@ -416,12 +416,31 @@ export type WorkspaceRestoreShape = z.infer<typeof workspaceRestoreShape>;
  * byte-untouched, named for a human or agent to merge), the recorded
  * main-line name, the stamp, and the commit landed on the stewardship branch.
  * A refusal (no workspace worktree, dirty copy) emits no document (0015).
+ *
+ * `vehicle` (design/0030-upgrade-self-service/) says where the stewardship
+ * task, branch, and worktree came from, and governs which optional fields are
+ * present — the same outcome-conditional convention `workspace merge` uses:
+ *
+ * - `given` — the caller named the task. `task`/`branch`/`path` present.
+ * - `derived` — the bare-human path built the vehicle. Adds `derived` (the
+ *   steps it echoed) and `pullRequest` (the forge review surface, or its
+ *   absence with the reason).
+ * - `none` — the workspace was already current, so nothing was manufactured:
+ *   `task`, `branch`, and `path` are all absent, and `outcome` is `current`.
+ *
+ * `task`/`branch`/`path` leaving the required set is the one non-additive
+ * evolution here, taken now while the only consumers are this repository's own
+ * tests, with `vehicle` arriving beside them so their presence is always
+ * derivable from one field (0019's `repo`/`source` precedent).
  */
 export const workspaceUpgradeShape = z.strictObject({
-  task: z.string(),
-  branch: z.string(),
-  /** Workspace-relative path of the stewardship worktree written into. */
-  path: z.string(),
+  vehicle: z.enum(['given', 'derived', 'none']),
+  /** Present exactly when `vehicle` is not `none`. */
+  task: z.string().optional(),
+  /** Present exactly when `vehicle` is not `none`. */
+  branch: z.string().optional(),
+  /** Workspace-relative path of the stewardship worktree written into — with the task. */
+  path: z.string().optional(),
   outcome: z.enum(['upgraded', 'current']),
   mainLine: z.strictObject({
     name: z.string(),
@@ -443,6 +462,51 @@ export const workspaceUpgradeShape = z.strictObject({
   residue: z.array(z.string()),
   /** The upgrade commit on the stewardship branch (short) — when one landed. */
   commit: z.string().optional(),
+  /** The vehicle Ward derived, step by step — present exactly when `vehicle` is `derived`. */
+  derived: z
+    .array(
+      z.strictObject({
+        step: z.enum(['task', 'worktree']),
+        outcome: z.enum(['derived', 'reused']),
+        detail: z.string(),
+      }),
+    )
+    .optional(),
+  /**
+   * The forge review surface — present exactly when `vehicle` is `derived`.
+   * `url` is present exactly for `opened`/`existing`; `skipped` means there
+   * was no forge to ask and nothing outward was attempted; `failed` means the
+   * forge said no. `base` reports the fast-forward publish of the main line
+   * that makes the pull request diff the upgrade alone, and is present
+   * whenever a forge was found.
+   */
+  pullRequest: z
+    .strictObject({
+      outcome: z.enum(['opened', 'existing', 'skipped', 'failed']),
+      url: z.string().optional(),
+      detail: z.string(),
+      base: z
+        .strictObject({
+          ref: z.string(),
+          outcome: z.enum(['published', 'current', 'unpublished']),
+          detail: z.string(),
+        })
+        .optional(),
+    })
+    .optional(),
+  /**
+   * What the verb deliberately left to the human, in the order they do it —
+   * review, merge, publish, close — each with the exact command where there is
+   * one. Empty when nothing remains. Merging is never Ward's act (§18), so
+   * this array is how the verb ends rather than trailing off.
+   */
+  remaining: z.array(
+    z.strictObject({
+      step: z.string(),
+      detail: z.string(),
+      command: z.string().optional(),
+    }),
+  ),
 });
 export type WorkspaceUpgradeShape = z.infer<typeof workspaceUpgradeShape>;
 

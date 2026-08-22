@@ -44,6 +44,7 @@ import { createWorkspace, type StepReport } from '../workspace/create.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
 import { openProject, readProjects } from '../workspace/projects.ts';
+import type { Publication } from '../workspace/publish.ts';
 import { addRepository, listRepositories, refreshRepositories } from '../workspace/repos.ts';
 import { restoreConverged, restoreWorkspace } from '../workspace/restore.ts';
 import { readTasks } from '../workspace/scan.ts';
@@ -65,7 +66,7 @@ import {
 } from '../workspace/status.ts';
 import { mergeWorkspaceBranch, refuseStewardshipCopy } from '../workspace/steward.ts';
 import { addTaskPr, closeTask, openTask, setTaskState } from '../workspace/tasks.ts';
-import { upgradeWorkspace } from '../workspace/upgrade.ts';
+import { selfServiceUpgrade, type UpgradeReport, upgradeWorkspace } from '../workspace/upgrade.ts';
 import {
   createWorkspaceWorktree,
   createWorktree,
@@ -670,15 +671,9 @@ try {
       case 'workspace-restore':
         await cmdWorkspaceRestore(result.json);
         break;
-      case 'workspace-upgrade': {
-        const target = await resolveTaskTarget(
-          result.task,
-          'ward workspace upgrade TASK',
-          result.json,
-        );
-        await cmdWorkspaceUpgrade(target.root, target.code, result.json);
+      case 'workspace-upgrade':
+        await cmdWorkspaceUpgrade(result.task, result.json);
         break;
-      }
       case 'workspace-register': {
         const report = await registerWorkspace(result.path ?? process.cwd());
         renderRegistry(report, result.json);
@@ -1026,21 +1021,74 @@ function renderRestore(outcome: 'restored' | 'satisfied' | 'lost' | 'failed'): s
 }
 
 /**
- * The deterministic upgrade's rendering: one row per installed artifact with
- * the mechanical action taken, then the record lines, then — set apart — the
- * reconciliation residue and the next verbs (preview, merge): the tool's part
- * ends at naming what only a human or agent can merge (0020).
+ * The upgrade verb's two paths (design/0030-upgrade-self-service/), resolved
+ * here because they differ in what the caller supplied, not in what the
+ * upgrade does:
+ *
+ * - **A task, named or derived from the working directory** — 0020's path,
+ *   unchanged: write into that task's stewardship worktree and stop.
+ * - **Nothing at all, typed by a human standing outside any task worktree** —
+ *   the self-service path: derive the vehicle, upgrade, publish for review,
+ *   and name what remains. A **declared agent** is refused it and passes the
+ *   task explicitly, exactly as it is refused every other derivation (§8,
+ *   0006, 0024): the affordance is the human's.
  */
-async function cmdWorkspaceUpgrade(root: string, code: string, json: boolean): Promise<void> {
-  const report = await upgradeWorkspace(root, code);
+async function cmdWorkspaceUpgrade(task: string | undefined, json: boolean): Promise<void> {
+  const root = await requireMutableWorkspace();
+  // Under --json every echo moves to stderr: stdout carries one document,
+  // alone (0005), and a derivation echo is a human affordance, not data.
+  const echo = json ? console.error : console.log;
+  const code = task ?? (await impliedUpgradeTask(root, echo));
+  const report =
+    code === undefined
+      ? await selfServiceUpgrade(root, {
+          echo: (step) => echo(pc.dim(`${step.step} ${step.detail}`)),
+        })
+      : await upgradeWorkspace(root, code);
+  renderUpgrade(report, json);
+}
+
+/**
+ * The task a bare `ward workspace upgrade` addresses, or undefined when the
+ * caller supplied nothing the verb can build on — the self-service case. The
+ * agent refusal and the cwd derivation are `resolveTaskTarget`'s, kept
+ * word-for-word: only the "nothing here either" ending differs, because for
+ * this one verb standing at the workspace root is not a missing argument, it
+ * is where the act belongs.
+ */
+async function impliedUpgradeTask(
+  root: string,
+  echo: (line: string) => void,
+): Promise<string | undefined> {
+  if (callerIsAgent()) {
+    throw new WardError(
+      'no task given — a declared agent passes scope explicitly: ward workspace upgrade TASK ' +
+        '(see: ward task list --json)',
+    );
+  }
+  const scope = await scopeFromCwd(root, process.cwd());
+  if (scope === null) return undefined;
+  echo(pc.dim(`task ${scope.task.record.code} — from the working directory`));
+  return scope.task.record.code;
+}
+
+/**
+ * The upgrade's rendering: one row per installed artifact with the mechanical
+ * action taken, then the record lines, then — set apart — the reconciliation
+ * residue, the forge review surface, and **what remains**: the tool's part
+ * ends at naming what only the human can decide and land (0020, 0030).
+ */
+function renderUpgrade(report: UpgradeReport, json: boolean): void {
   if (json) {
     printJson(workspaceUpgradeJson(report));
     return;
   }
   console.log(
-    `Upgrading workspace via task ${pc.bold(report.task)} ` +
-      pc.dim(`(branch ${report.branch}, in ${report.path})`) +
-      '\n',
+    report.task === undefined
+      ? `Checking the workspace against ward ${pc.cyan(report.stamp.wardVersion)}'s defaults\n`
+      : `Upgrading workspace via task ${pc.bold(report.task)} ` +
+          pc.dim(`(branch ${report.branch}, in ${report.path})`) +
+          '\n',
   );
   for (const artifact of report.artifacts) {
     console.log(
@@ -1063,13 +1111,48 @@ async function cmdWorkspaceUpgrade(root: string, code: string, json: boolean): P
   }
   if (report.outcome === 'current') {
     console.log(`\n${pc.dim('nothing to upgrade — everything already current')}`);
-    return;
+  } else {
+    console.log(`\ncommitted ${pc.bold(report.commit ?? '?')} on ${report.branch}`);
   }
-  console.log(
-    `\ncommitted ${pc.bold(report.commit ?? '?')} on ${report.branch} — preview and land it:` +
-      `\n  ward workspace merge ${report.branch} --preview` +
-      `\n  ward workspace merge ${report.branch}`,
-  );
+  if (report.pullRequest !== undefined) renderPublication(report.pullRequest);
+  if (report.remaining.length === 0) return;
+  // The verb ends by handing the rest back, in the order the human does it:
+  // reviewing, landing, and closing are theirs, and this is the whole of what
+  // Ward owes them at the end — the acts, named, with the exact commands.
+  console.log(`\n${pc.bold('what remains is yours')}:`);
+  report.remaining.forEach((act, index) => {
+    console.log(`  ${index + 1}. ${pc.bold(act.step)} — ${act.detail}`);
+    if (act.command !== undefined) console.log(`     ${pc.cyan(act.command)}`);
+  });
+}
+
+/**
+ * The forge half, reported whether or not it worked (§20): a pull request that
+ * exists is named with its URL, and one that does not is named with the reason
+ * — the task, the worktree, and the commit stand either way, and the remaining
+ * acts below already point at the local review surface instead.
+ */
+function renderPublication(publication: Publication): void {
+  const base = publication.base;
+  if (base !== undefined && base.outcome === 'unpublished') {
+    console.log(`  ${pc.yellow('!')} ${base.detail}`);
+  }
+  switch (publication.outcome) {
+    case 'opened':
+      console.log(`  ${pc.green('pull request')} ${publication.url ?? '?'}`);
+      break;
+    case 'existing':
+      console.log(
+        `  ${pc.dim('pull request')} ${publication.url ?? '?'} ${pc.dim('(already open)')}`,
+      );
+      break;
+    case 'skipped':
+      console.log(`  ${pc.dim(`no pull request — ${publication.detail}`)}`);
+      break;
+    case 'failed':
+      console.log(`  ${pc.yellow('!')} no pull request — ${publication.detail}`);
+      break;
+  }
 }
 
 function renderUpgradeAction(action: 'upgraded' | 'installed' | 'current' | 'kept'): string {
