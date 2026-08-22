@@ -331,7 +331,8 @@ session (SF-001's missing half). After that, the narrower scope levels if real u
   hierarchy clause to name the full ladder — user/machine default, then workspace, project, task,
   room/session, narrower always winning — with the bound that the user layer may hold **only**
   preferences and that the resolved choice is recorded on the session, so reproduction reads the
-  record rather than the machine.
+  record rather than the machine. _Disposition:_ **adjudicated** — the revision landed as
+  [`a957cec`](https://github.com/crumley/ward/commit/a957cec) (PR #56, merged 2026-08-22).
 - **SF-002** — [`agent-harness`](../../intent/02-subsystems/03-agent-harness.md), _Accept an
   externally-chosen model and thinking depth … and pass them through_. _Friction:_ the seam says it
   honors a choice, and says nothing about what happens when **no choice was made** — which is the
@@ -346,7 +347,9 @@ session (SF-001's missing half). After that, the narrower scope levels if real u
   chosen at any level, Ward passes none and the harness's own default applies; Ward never
   substitutes a default for a choice the human did not make." _Why it belongs in intent:_ it holds
   no matter how the launch is built, and it is the difference between a harness-agnostic tool and
-  one with opinions about somebody else's defaults (§5).
+  one with opinions about somebody else's defaults (§5). _Disposition:_ **adjudicated** — the
+  revision landed as [`e63946b`](https://github.com/crumley/ward/commit/e63946b) (PR #56, merged
+  2026-08-22).
 - **SF-003** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Opinionated
   configuration, global and workspace-local_. _Friction:_ the clause names both axes and never says
   **which wins**, nor at what granularity. Two questions had to be settled to build anything: does a
@@ -362,4 +365,5 @@ session (SF-001's missing half). After that, the narrower scope levels if real u
   either" and "a collection-valued setting **replaces** at the level that sets it, so the narrower
   layer can remove what the broader one added" — and a pointer from the lifecycle slice's _Deletion,
   not just shadowing_ question noting that configuration has an answer even while context
-  composition does not.
+  composition does not. _Disposition:_ **adjudicated** — the revision landed as
+  [`e5b6928`](https://github.com/crumley/ward/commit/e5b6928) (PR #56, merged 2026-08-22).
