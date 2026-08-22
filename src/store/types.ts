@@ -154,22 +154,93 @@ export function worktreeRecordType(
   };
 }
 
-export const sessionSchema = z.object({
-  type: z.literal('session'),
-  id: z.string().min(1),
-  task: z.string().min(1),
-  purpose: z.string().min(1),
-  workingDirectory: z.string().min(1),
-  /** Free-form harness handle (which harness, which native run), when known. */
-  handle: z.string().min(1).optional(),
-  state: z.enum(['open', 'closed']),
-  openedAt: z.string().min(1),
-  closedAt: z.string().min(1).optional(),
+/**
+ * The level a session is responsible for (design/0029-launched-sessions/;
+ * intent/01-concepts/00-domain-model.md — a session's scope is workspace /
+ * project / task / room). Two values today: every session recorded before this
+ * entry is a task session, and workspace scope is the one this entry launches.
+ * `project` and `room` arrive as new values with the verbs that open them —
+ * data, not a migration, because no existing record changes when the enum
+ * grows.
+ */
+export const sessionScopeSchema = z.enum(['workspace', 'task']);
+export type SessionScope = z.infer<typeof sessionScopeSchema>;
+
+/**
+ * One lifecycle event on a session (intent/01-concepts/02-sessions-and-lifecycle.md,
+ * the session log): append-only entries for opened / resumed / resume-failed /
+ * closed. Events are not states — the stored state stays `open | closed` — but
+ * they make FAILURE a recorded fact: without a resume-failed event a session
+ * whose re-attach keeps failing is indistinguishable from one that is open and
+ * healthy.
+ */
+export const sessionEventSchema = z.object({
+  event: z.enum(['opened', 'resumed', 'resume-failed', 'closed']),
+  at: z.string().min(1),
+  /** Why it failed — present exactly on `resume-failed`, per the intent's "with its cause". */
+  cause: z.string().min(1).optional(),
 });
+export type SessionEvent = z.infer<typeof sessionEventSchema>;
+
+export const sessionSchema = z
+  .object({
+    type: z.literal('session'),
+    id: z.string().min(1),
+    /**
+     * The scope this session works at. Optional ONLY so every record written
+     * before design/0029 stays valid unchanged — those carry a `task` and
+     * nothing else, which reads as `task` scope and always did. Every record
+     * written from now on says its scope outright.
+     */
+    scope: sessionScopeSchema.optional(),
+    /** The task addressed — present exactly when the scope is a task. */
+    task: z.string().min(1).optional(),
+    purpose: z.string().min(1),
+    workingDirectory: z.string().min(1),
+    /** Free-form harness handle (which harness, which native run), when known. */
+    handle: z.string().min(1).optional(),
+    /**
+     * What the agent was actually STARTED with, recorded at launch
+     * (design/0029-launched-sessions/) — present exactly when the resolution
+     * supplied one, absent when Ward passed no flag at all. The intent's
+     * session-log minimum names the model
+     * (intent/01-concepts/02-sessions-and-lifecycle.md), and recording it here
+     * is what keeps the workspace self-sufficient once a per-user
+     * configuration layer exists: reproduction reads the session, not the
+     * machine that happened to launch it (0028's SF-001, its thin half).
+     */
+    model: z.string().min(1).optional(),
+    effort: z.string().min(1).optional(),
+    state: z.enum(['open', 'closed']),
+    /** The append-only lifecycle trail; absent on records written before 0029. */
+    events: z.array(sessionEventSchema).optional(),
+    openedAt: z.string().min(1),
+    closedAt: z.string().min(1).optional(),
+  })
+  // The scope and its referent must agree — the same shape the worktree record
+  // uses for `repo` vs `source: workspace`: absence of a referent, never a
+  // fabricated one. A workspace-scope session addresses the workspace, which
+  // is identified by location and has no code to carry.
+  .refine((record) => ((record.scope ?? 'task') === 'task') === (record.task !== undefined), {
+    message: "a task session names its task; a workspace session names none — 'task' must match",
+  });
 export type SessionRecord = z.infer<typeof sessionSchema>;
 
-export function sessionRecordType(taskDir: string, id: string): DocumentType<SessionRecord> {
-  return { name: 'session', relPath: `${taskDir}/sessions/${id}.md`, schema: sessionSchema };
+/** The scope a record states, or the one a pre-0029 record implies by carrying a task. */
+export function sessionScopeOf(record: SessionRecord): SessionScope {
+  return record.scope ?? 'task';
+}
+
+/**
+ * Session records live under the scope they belong to: a task's beside its
+ * task record, and a workspace-scope session's in `sessions/` at the root —
+ * the workspace's own level, exactly as `tasks/` holds the bare tasks that
+ * elide the project level (levels are elided, not faked). `scopeDir` is the
+ * empty string for the workspace itself.
+ */
+export function sessionRecordType(scopeDir: string, id: string): DocumentType<SessionRecord> {
+  const dir = scopeDir === '' ? 'sessions' : `${scopeDir}/sessions`;
+  return { name: 'session', relPath: `${dir}/${id}.md`, schema: sessionSchema };
 }
 
 export const baselinesSchema = z.object({

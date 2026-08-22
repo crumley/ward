@@ -110,6 +110,71 @@ export function runWardEnv(argv: string[], cwd: string, env: Record<string, stri
   };
 }
 
+export interface FakeClaudeBehavior {
+  /** Append one JSON line per invocation here: argv, cwd, and the env Ward set. */
+  readonly logFile?: string;
+  /** What the stub exits with — the run's own verdict, which ward propagates. */
+  readonly exitCode?: number;
+}
+
+/**
+ * Write an executable stub for `WARD_CLAUDE_BIN` to point at
+ * (design/0029-launched-sessions/): the same hermetic move as the fake `gh`,
+ * for the same reason — no test may spawn the real Claude Code, and what the
+ * suite actually needs to observe is the argv Ward built, the directory it
+ * launched in, and the environment it declared. The stub records exactly that
+ * and exits, so a "record then launch" assertion can read the session document
+ * from inside the launched process's own run.
+ */
+export function writeFakeClaude(
+  dir: string,
+  name: string,
+  behavior: FakeClaudeBehavior = {},
+): string {
+  const path = join(dir, name);
+  const script = `#!/usr/bin/env bun
+// Fake claude (test scaffolding) — see test/helpers.ts writeFakeClaude.
+import { existsSync, appendFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+const behavior = ${JSON.stringify(behavior)};
+
+/** The workspace root above wherever ward launched us. */
+function findRoot(from) {
+  let dir = resolve(from);
+  while (true) {
+    if (existsSync(join(dir, '.ward'))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/** Whether OUR session's record is already on disk — record-then-launch, observed. */
+function recordSeen(id) {
+  const root = findRoot(process.cwd());
+  if (root === null || !id) return false;
+  const containers = ['', 'tasks/*', 'projects/*/tasks/*'];
+  return containers.some((container) =>
+    [...new Bun.Glob(join(container, 'sessions', id + '.md')).scanSync({ cwd: root })].length > 0,
+  );
+}
+
+const id = process.env.WARD_AGENT ?? null;
+if (behavior.logFile) {
+  appendFileSync(behavior.logFile, JSON.stringify({
+    argv: process.argv.slice(2),
+    cwd: process.cwd(),
+    wardAgent: id,
+    recordSeen: recordSeen(id),
+  }) + '\\n');
+}
+process.exit(behavior.exitCode ?? 0);
+`;
+  writeFileSync(path, script);
+  chmodSync(path, 0o755);
+  return path;
+}
+
 export interface FakeGhBehavior {
   /** Canned `pr view` answer per URL; 'error' exits 1. `mergeCommit` is the oid. */
   readonly responses: Record<

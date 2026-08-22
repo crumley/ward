@@ -139,7 +139,14 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: 'fe28bfc7710be5046edd1c8711e6d9d87f73ef0f08722b5898ecb5529430a1c1',
         era: 'f8cb17b (design 0015)',
       },
-      // Current since 94e6890 (design 0018): the standing-project bullet.
+      {
+        sha256: 'de4ee8439b3a8eab3851e7109b22a2542d41337b46efb0d0e16be7a36fc7b24b',
+        era: '94e6890 (design 0018)',
+      },
+      // Current since design 0029: the Sessions section — sessions are opened
+      // BY ward, which launches the agent, assigns the handle, and sets
+      // WARD_AGENT; resume, locate, where the agent configuration lives, and
+      // the manual --handle path for a session ward did not start.
     ],
   },
 ];

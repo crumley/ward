@@ -76,7 +76,7 @@ export type AgentSettings = z.infer<typeof agentSettingsSchema>;
  * has one because "no extra flags" is the honest empty case. `model` and
  * `effort` are ABSENT from this object, and that absence is the design: Ward
  * states no default for either, so a key nobody set resolves to `absent` and
- * the launch passes no flag (the directive's first quote, made structural).
+ * the launch passes no flag (the directive's omitted-means-omitted ask, made structural).
  */
 export const AGENT_DEFAULTS: {
   readonly harness: AgentHarness;

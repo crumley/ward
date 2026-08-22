@@ -462,14 +462,36 @@ export const workspaceRegistryShape = z.strictObject({
 });
 export type WorkspaceRegistryShape = z.infer<typeof workspaceRegistryShape>;
 
-/** The session record as written — shared by `session open` and `session close`. */
+/**
+ * The session record as written — shared by `session open`, `session resume`,
+ * and `session close`. `scope` names the level the session works at
+ * (design/0029-launched-sessions/) and `task` is present exactly when that
+ * scope is a task: a workspace-scope session addresses the workspace, which is
+ * identified by location and has no code to carry. `events` is the append-only
+ * lifecycle trail, absent on a record written before 0029 and never
+ * fabricated.
+ */
 export const sessionMutationShape = z.strictObject({
   id: z.string(),
-  task: z.string(),
+  scope: z.enum(['workspace', 'task']),
+  task: z.string().optional(),
   purpose: z.string(),
   workingDirectory: z.string(),
   handle: z.string().optional(),
+  /** What the agent was started with — present only where Ward did the starting. */
+  model: z.string().optional(),
+  effort: z.string().optional(),
   state: z.enum(['open', 'closed']),
+  events: z
+    .array(
+      z.strictObject({
+        event: z.enum(['opened', 'resumed', 'resume-failed', 'closed']),
+        at: z.string(),
+        /** Why it failed — present exactly on `resume-failed`. */
+        cause: z.string().optional(),
+      }),
+    )
+    .optional(),
   openedAt: z.string(),
   closedAt: z.string().optional(),
 });
@@ -508,6 +530,30 @@ export const shellAdoptShape = z.strictObject({
 export type ShellAdoptShape = z.infer<typeof shellAdoptShape>;
 
 /**
+ * `session locate` (design/0029-launched-sessions/): the recorded handle
+ * resolved to the harness's history. `outcome` carries the seam's required
+ * distinction — `found` or `gone`, both exit 0, because retention belongs to
+ * the harness and a discarded transcript is a fact reflection must be able to
+ * read. `path` is reported either way: "we looked HERE" is what makes a gone
+ * answer actionable.
+ */
+export const sessionLocateShape = z.strictObject({
+  id: z.string(),
+  scope: z.enum(['workspace', 'task']),
+  task: z.string().optional(),
+  state: z.enum(['open', 'closed']),
+  handle: z.string(),
+  harness: z.string(),
+  /** The harness's own run id, out of the handle — what `--resume` takes. */
+  nativeId: z.string(),
+  /** The directory the run stood in; part of the transcript's address. */
+  workingDirectory: z.string(),
+  outcome: z.enum(['found', 'gone']),
+  path: z.string(),
+});
+export type SessionLocateShape = z.infer<typeof sessionLocateShape>;
+
+/**
  * The registry: each key is exactly what the caller types after `ward` (minus
  * `--json`), so discovering a shape and invoking its verb agree by
  * construction. Order matches the documented verb list; JSON.stringify
@@ -527,16 +573,18 @@ export const readVerbShapes: Readonly<Record<string, z.ZodType>> = {
 };
 
 /**
- * Read verbs whose argv is NOT derivable from the key alone
- * (design/0024-global-config-registry/): the path verbs take an identity, and
- * their answer depends on the machine's registry rather than the workspace
- * the caller stands in. They are read verbs in every other sense — no
- * mutation, one document on stdout — so they are registered here and proven
- * live in the entry's own suite, the same split the mutation verbs use.
+ * Read verbs whose argv is NOT derivable from the key alone: each takes an
+ * identity. The path verbs (design/0024-global-config-registry/) answer from
+ * the machine's registry rather than the workspace the caller stands in;
+ * `session locate` (design/0029-launched-sessions/) takes a session id. They
+ * are read verbs in every other sense — no mutation, one document on stdout —
+ * so they are registered here and proven live in their own entry's suite, the
+ * same split the mutation verbs use.
  */
-export const pathVerbShapes: Readonly<Record<string, z.ZodType>> = {
+export const argumentReadVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'workspace path': workspacePathShape,
   'repo path': repoPathShape,
+  'session locate': sessionLocateShape,
 };
 
 /**
@@ -558,6 +606,7 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'worktree create': worktreeCreateShape,
   'worktree rebase': worktreeRebaseShape,
   'session open': sessionMutationShape,
+  'session resume': sessionMutationShape,
   'session close': sessionMutationShape,
   'workspace merge': workspaceMergeShape,
   'workspace restore': workspaceRestoreShape,
@@ -568,10 +617,10 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'shell adopt': shellAdoptShape,
 };
 
-/** The whole `--json` contract: read verbs, the path verbs, then the mutations. */
+/** The whole `--json` contract: read verbs, the identity-taking reads, then the mutations. */
 export const jsonVerbShapes: Readonly<Record<string, z.ZodType>> = {
   ...readVerbShapes,
-  ...pathVerbShapes,
+  ...argumentReadVerbShapes,
   ...mutationVerbShapes,
 };
 

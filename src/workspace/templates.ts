@@ -21,6 +21,8 @@ operated with the \`ward\` CLI and tracked in git.
   home for work on the workspace itself — upgrades, migrations, reflections — and the one
   project that never closes.
 - \`tasks/\` — bare tasks opened directly under the workspace (levels are elided, not faked).
+- \`sessions/\` — sessions opened at **workspace scope**: the ones responsible for the workspace
+  itself rather than for any one task. A task's sessions live beside its task record instead.
 - \`repositories/\` — the records of registered repositories (one document each).
 - \`repos/\` — canonical checkouts of registered repositories, kept fresh and never worked in
   directly.
@@ -34,14 +36,40 @@ operated with the \`ward\` CLI and tracked in git.
 - Run \`ward doctor\` to check machine preconditions and the record's integrity.
 - Records are markdown with typed front matter — read them directly; that is what they are for.
 - Standing inside a task's worktree, task-addressed verbs need no code — Ward derives the task
-  from the working directory (\`ward session open --purpose TEXT\`, \`ward task pr URL\`) and
-  echoes what it derived. An explicit code always works, and \`ward task close\` always takes
-  one.
+  from the working directory (\`ward task pr URL\`, \`ward worktree rebase\`) and echoes what it
+  derived. An explicit code always works, and \`ward task close\` always takes one.
 - Work is never committed to a repository's main line directly; changes travel through a worktree
   and a pull request.
 - When a main line moves under work in progress, \`ward worktree rebase\` replays the task's
   worktrees onto the refreshed tip — never through a dirty tree, and a conflict aborts cleanly,
   leaving the worktree exactly as it was.
+
+## Sessions — Ward opens them, and starts the agent
+
+A session is one bounded episode of an agent working at a scope. **Ward opens sessions, and the
+open is what starts the agent** — there is no id to copy by hand:
+
+- \`ward session open --purpose TEXT\` opens a session at **workspace scope** (the workspace
+  itself is what it is responsible for), records it, and **launches the agent in it**, in the
+  workspace root. Ward assigns the harness handle before the process starts and sets
+  \`WARD_AGENT\` in its environment, so the new session is declared from its first command and
+  nothing about Ward has to be explained to it.
+- **When the agent exits, the session stays open.** An exit is not a close: open and running are
+  different things. Pick it back up with \`ward session resume ID\` — same conversation, same
+  handle, in the directory it ran in — or end it with \`ward session close ID\`.
+- \`ward session locate ID\` resolves a session's handle to the harness's own history, reporting
+  **found** (with the path) or **gone**. Gone is a normal answer: retention belongs to the
+  harness, not to Ward, and the session record is what survives it.
+- **What the agent is started with** is configuration on two axes: your defaults in
+  \`~/.config/ward/config.md\` (\`agent.model\`, \`agent.effort\`, \`agent.args\`, \`agent.harness\`)
+  overridden **per key** by an \`agent:\` block in \`workspace.md\`. A key set nowhere is passed
+  as nothing at all — the harness's own default then applies. \`ward doctor\` prints the resolved
+  answer with the layer each key came from.
+- **Sessions Ward did not launch record themselves.** \`ward session open --purpose TEXT --handle
+  HANDLE\` (and \`ward session open TASK --purpose TEXT\` for a task) records without launching —
+  the path for an agent that is already running, like the one reading this file. Put your
+  harness's own run id in \`--handle\` (for Claude Code: \`claude:<session-id>\`) so the run can
+  be located again.
 
 ## Driving \`ward\` as an agent
 
@@ -50,8 +78,9 @@ You may be reading this from the workspace root or from inside a task worktree u
 \`ward\`:
 
 - **Declare yourself.** Set \`WARD_AGENT=1\` in the environment before calling \`ward\` — or,
-  better, set it to your session id once you have one. A declared agent gets plain,
-  deterministic output and is never given an interactive prompt.
+  better, set it to your session id once you have one. (A session Ward launched is born with it
+  already set.) A declared agent gets plain, deterministic output and is never given an
+  interactive prompt.
 - **Run \`ward\` commands concurrently when it helps.** Store writes serialize on a lock
   (\`.ward/store.lock\`) that names its holder; a write that cannot get it in time refuses
   legibly — rerun it. A lock left by a crashed process is taken over automatically, and
@@ -66,8 +95,9 @@ You may be reading this from the workspace root or from inside a task worktree u
 - **Discover the contract from the tool.** \`ward schema\` emits the JSON Schema of every
   \`--json\` verb's output (one verb: \`ward schema task list\`). The shapes ship inside the
   binary, so they are always current for the \`ward\` you are running — no repo reading needed.
-- **Record your session.** \`ward session open TASK --purpose TEXT --handle HANDLE\` before you
-  start work; put your harness's own run id in \`--handle\` so the run can be located again.
+- **Record your session.** If Ward launched you, it is already recorded and \`WARD_AGENT\` holds
+  its id — nothing to do. If it did not, record yourself before you start work:
+  \`ward session open TASK --purpose TEXT --handle HANDLE\` (see **Sessions**, above).
 - **Name the task explicitly.** Deriving the task from the working directory is a human
   affordance; a declared agent is refused it and passes the task code on every task-addressed
   verb (\`ward task list --json\` says what exists).

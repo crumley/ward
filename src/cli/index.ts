@@ -11,6 +11,7 @@ import { choice, integer, string } from '@optique/core/valueparser';
 import { run } from '@optique/run';
 import picocolors from 'picocolors';
 import pkg from '../../package.json' with { type: 'json' };
+import { launchWorkspaceSession, locateSession, resumeSession } from '../agent/run.ts';
 import { WardError } from '../errors.ts';
 import { type PrForgeState, probeForge } from '../forge/gh.ts';
 import { readConfig } from '../global/config.ts';
@@ -38,7 +39,7 @@ import {
 import { CANDIDATE_KINDS, candidates, renderCandidates } from '../shell/candidates.ts';
 import { emitShellLayer } from '../shell/layer.ts';
 import { FISH_SHORTHAND_NAMES, findShorthand } from '../shell/shorthands.ts';
-import type { TaskRecord, WorkState } from '../store/types.ts';
+import type { SessionRecord, TaskRecord, WorkState } from '../store/types.ts';
 import { createWorkspace, type StepReport } from '../workspace/create.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
@@ -47,7 +48,12 @@ import { addRepository, listRepositories, refreshRepositories } from '../workspa
 import { restoreConverged, restoreWorkspace } from '../workspace/restore.ts';
 import { readTasks } from '../workspace/scan.ts';
 import { scopeFromCwd } from '../workspace/scope.ts';
-import { closeSession, openSession } from '../workspace/sessions.ts';
+import {
+  closeSession,
+  describeScope,
+  openSession,
+  openWorkspaceSession,
+} from '../workspace/sessions.ts';
 import {
   deriveStatus,
   forgeStates,
@@ -78,6 +84,7 @@ import {
   repoListJson,
   repoPathJson,
   repoRefreshJson,
+  sessionLocateJson,
   sessionMutationJson,
   shellAdoptJson,
   statusJson,
@@ -534,6 +541,12 @@ const worktree = command(
   { brief: message`Operate on task worktrees.` },
 );
 
+// Sessions (design/0029-launched-sessions/): with no TASK, `session open`
+// opens a session at WORKSPACE scope and LAUNCHES the agent in it — Ward
+// assigns the handle before the process starts, so nothing is ever hand-copied
+// and nothing of Ward's lands in the agent's context. With a TASK it stays the
+// record-only verb 0004 built; `--handle` is the record-only path at either
+// scope, for a session Ward did not start.
 const session = command(
   'session',
   or(
@@ -547,7 +560,27 @@ const session = command(
         dir: optional(option('--dir', string({ metavar: 'PATH' }))),
         json: jsonFlag(),
       }),
-      { brief: message`Record a session on a task (you run the agent yourself).` },
+      {
+        brief: message`Open a session: with no TASK, at workspace scope, launching the agent.`,
+      },
+    ),
+    command(
+      'resume',
+      object({
+        action: constant('session-resume'),
+        id: argument(sessionId()),
+        json: jsonFlag(),
+      }),
+      { brief: message`Re-attach to a session's agent run, in the directory it ran in.` },
+    ),
+    command(
+      'locate',
+      object({
+        action: constant('session-locate'),
+        id: argument(sessionId('any')),
+        json: jsonFlag(),
+      }),
+      { brief: message`Resolve a session's handle to its harness history — found, or gone.` },
     ),
     command(
       'close',
@@ -559,7 +592,7 @@ const session = command(
       { brief: message`Close a session record; closed stays closed.` },
     ),
   ),
-  { brief: message`Record agent sessions.` },
+  { brief: message`Open, resume, locate, and close agent sessions.` },
 );
 
 const status = command('status', object({ action: constant('status'), json: jsonFlag() }), {
@@ -823,29 +856,15 @@ try {
       case 'worktree-list':
         await cmdWorktreeList(result.json);
         break;
-      case 'session-open': {
-        const target = await resolveTaskTarget(
-          result.task,
-          'ward session open TASK --purpose TEXT',
-          result.json,
-        );
-        // An inferred task pins the working directory too: the caller stands
-        // in the very worktree the record should name (unless --dir overrides).
-        const dir = result.dir ?? target.worktreePath;
-        const opened = await openSession(target.root, target.code, result.purpose, {
-          ...(result.handle === undefined ? {} : { handle: result.handle }),
-          ...(dir === undefined ? {} : { workingDirectory: dir }),
-        });
-        if (result.json) {
-          printJson(sessionMutationJson(opened));
-          break;
-        }
-        console.log(
-          `${pc.green('opened')} session ${pc.bold(opened.id)} ` +
-            pc.dim(`(in ${opened.workingDirectory})`),
-        );
+      case 'session-open':
+        await cmdSessionOpen(result.task, result.purpose, result.handle, result.dir, result.json);
         break;
-      }
+      case 'session-resume':
+        await cmdSessionResume(result.id, result.json);
+        break;
+      case 'session-locate':
+        await cmdSessionLocate(result.id, result.json);
+        break;
       case 'session-close': {
         const closed = await closeSession(await requireMutableWorkspace(), result.id);
         if (result.json) {
@@ -1610,6 +1629,159 @@ async function cmdWorktreeList(json: boolean): Promise<void> {
         `${pc.dim(`(${record.disposition})`)} ${where}`,
     );
   }
+}
+
+/**
+ * `session open` (design/0029-launched-sessions/), three paths through one
+ * verb:
+ *
+ * - **TASK given** — the record-only session 0004 built, unchanged.
+ * - **no TASK, `--handle` given** — a record-only session at workspace scope,
+ *   for a run Ward did not start (the agent reading the manifest is the
+ *   motivating case: it is already running and records itself).
+ * - **no TASK, no `--handle`** — the launched path: Ward assigns the handle,
+ *   writes the record, and runs the agent in the foreground.
+ *
+ * Omitting TASK means workspace scope EXPLICITLY, which is why this verb no
+ * longer infers a task from the working directory as 0006 gave it: the same
+ * bare invocation cannot mean both "the task I am standing in" and "the
+ * workspace". A task session names its task, which is also what a declared
+ * agent was always required to do.
+ */
+async function cmdSessionOpen(
+  task: string | undefined,
+  purpose: string,
+  handle: string | undefined,
+  dir: string | undefined,
+  json: boolean,
+): Promise<void> {
+  const root = await requireMutableWorkspace();
+  if (task !== undefined) {
+    renderSessionOpened(
+      await openSession(root, task, purpose, {
+        ...(handle === undefined ? {} : { handle }),
+        ...(dir === undefined ? {} : { workingDirectory: dir }),
+      }),
+      json,
+    );
+    return;
+  }
+  if (handle !== undefined) {
+    renderSessionOpened(
+      await openWorkspaceSession(root, purpose, {
+        handle,
+        ...(dir === undefined ? {} : { workingDirectory: dir }),
+      }),
+      json,
+    );
+    return;
+  }
+  // Record, then launch. The document (or the human's line) is emitted from
+  // the callback, so what the caller reads is the record as it stood BEFORE
+  // any process existed — the ordering the whole design rests on, made
+  // visible rather than merely promised.
+  const { record, run } = await launchWorkspaceSession(root, purpose, dir, (opened) => {
+    if (json) printJson(sessionMutationJson(opened));
+    else {
+      console.log(
+        `${pc.green('opened')} session ${pc.bold(opened.id)} ` +
+          pc.dim(`(workspace scope, handle ${opened.handle ?? '?'})`),
+      );
+      console.log(pc.dim(`launching the agent in ${opened.workingDirectory} — WARD_AGENT is set`));
+    }
+  });
+  if (run.outcome === 'failed') {
+    throw new WardError(
+      `the agent did not start — ${run.cause}. Session ${record.id} is recorded and open: ` +
+        `fix the harness (WARD_CLAUDE_BIN overrides the binary) and resume it with ` +
+        `ward session resume ${record.id}`,
+    );
+  }
+  renderStillOpen(record.id, json);
+  // The run's verdict is the invocation's: ward wrapped it, and swallowing a
+  // nonzero exit would tell a script the agent succeeded when it did not.
+  if (run.exitCode !== 0) process.exit(run.exitCode);
+}
+
+/**
+ * `session resume` — re-attach to the recorded run. The `resumed` event is on
+ * the record before the process starts, and a spawn that never gets off the
+ * ground has already appended `resume-failed` with its cause by the time this
+ * refuses, so the trail says what happened either way.
+ */
+async function cmdSessionResume(id: string, json: boolean): Promise<void> {
+  const root = await requireMutableWorkspace();
+  const { record, run } = await resumeSession(root, id, (resumed) => {
+    if (json) printJson(sessionMutationJson(resumed));
+    else {
+      console.log(
+        `${pc.green('resuming')} session ${pc.bold(resumed.id)} ` +
+          pc.dim(`(${resumed.handle ?? '?'}, in ${resumed.workingDirectory})`),
+      );
+    }
+  });
+  if (run.outcome === 'failed') {
+    throw new WardError(
+      `the agent did not start — ${run.cause}. Session ${record.id} is still open and the ` +
+        'failure is recorded on it (resume-failed); locate its history with: ' +
+        `ward session locate ${record.id}`,
+    );
+  }
+  renderStillOpen(record.id, json);
+  if (run.exitCode !== 0) process.exit(run.exitCode);
+}
+
+/**
+ * `session locate` — the handle resolved to its harness history. Found and
+ * gone are DISTINCT OUTCOMES and both exit 0: retention belongs to the
+ * harness, so a discarded transcript is an ordinary fact reflection must be
+ * able to read, not a failure of this verb
+ * (intent/02-subsystems/03-agent-harness.md).
+ */
+async function cmdSessionLocate(id: string, json: boolean): Promise<void> {
+  const location = await locateSession(await requireWorkspace(), id);
+  if (json) {
+    printJson(sessionLocateJson(location));
+    return;
+  }
+  const where = pc.dim(`(${location.handle}, ran in ${location.record.workingDirectory})`);
+  if (location.outcome === 'found') {
+    console.log(`${pc.green('found')} ${location.path} ${where}`);
+    return;
+  }
+  console.log(`${pc.yellow('gone')} — ${pc.dim(`no transcript at ${location.path}`)} ${where}`);
+  console.log(
+    pc.dim(
+      'the harness owns retention (claude discards transcripts after cleanupPeriodDays, 30 by ' +
+        "default) — the session's own record is what survives",
+    ),
+  );
+}
+
+function renderSessionOpened(record: SessionRecord, json: boolean): void {
+  if (json) {
+    printJson(sessionMutationJson(record));
+    return;
+  }
+  console.log(
+    `${pc.green('opened')} session ${pc.bold(record.id)} ` +
+      pc.dim(`(${describeScope(record)}, in ${record.workingDirectory})`),
+  );
+}
+
+/**
+ * The affordance after a run exits: the session is STILL OPEN. An exit is not
+ * a close — open ≠ running — and the one-line resume is what turns the record
+ * back into a run without the human remembering an id format.
+ */
+function renderStillOpen(id: string, json: boolean): void {
+  if (json) return; // stdout already carries the one document (0005)
+  console.log(
+    pc.dim(
+      `\nsession ${id} is still open — an exit is not a close. ` +
+        `Resume it: ward session resume ${id}`,
+    ),
+  );
 }
 
 async function cmdStatus(json: boolean): Promise<void> {

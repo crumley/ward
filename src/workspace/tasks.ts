@@ -33,7 +33,7 @@ import {
   resolveOpenTask,
   smallestFree,
 } from './scan.ts';
-import { readSessions } from './sessions.ts';
+import { readSessions, withEvent } from './sessions.ts';
 import { resolveWorkspaceMainLine } from './steward.ts';
 import { readTaskWorktrees } from './worktrees.ts';
 
@@ -160,11 +160,14 @@ export async function closeTask(
     const sessions = await readSessions(root, task.dir);
     const open = sessions.filter((session) => session.state === 'open');
     for (const session of open) {
-      const closed: SessionRecord = {
-        ...session,
-        state: 'closed',
-        closedAt: new Date().toISOString(),
-      };
+      const closedAt = new Date().toISOString();
+      // The cascade closes like `session close` does, event and all: a session
+      // swept up by its task's close is still a session that closed, and the
+      // trail must say so (design/0029-launched-sessions/).
+      const closed: SessionRecord = withEvent(
+        { ...session, state: 'closed', closedAt },
+        { event: 'closed', at: closedAt },
+      );
       await writeDocument(root, sessionRecordType(task.dir, session.id), {
         data: closed,
         body: `Session \`${session.id}\` of task \`${task.record.code}\`.`,
