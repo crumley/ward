@@ -1,7 +1,7 @@
 # Ward toolchain + tasks (mise). One file pins the tool versions AND defines the
 # tasks, so local dev and CI provision the same versions and run the same commands.
 #
-#   mise install     # provision the pinned toolchain (bun, dprint, lychee)
+#   mise install     # provision the pinned toolchain (bun, dprint, lychee, actionlint)
 #   mise run fmt     # format/fix everything in place as you write
 #   mise run check   # the full no-writes gate — exactly what CI runs
 #
@@ -13,6 +13,9 @@
 bun = "1.3.14"
 dprint = "0.54.0"
 lychee = "0.24.2"
+# One YAML file in the tree (the CI workflow), but that file is the thing that
+# runs the gate — worth linting. No shell scripts, so no shellcheck/shfmt.
+actionlint = "1.7.12"
 
 [tasks.deps]
 description = "Install JS dependencies exactly as locked (bun.lock)"
@@ -56,6 +59,12 @@ run = "bun test"
 description = "Check Markdown links offline (lychee)"
 run = "lychee ."
 
+# No `depends = ["deps"]`: actionlint is a pinned binary and reads only the
+# workflow files — it needs none of the JS dependencies.
+[tasks.actions]
+description = "Lint the GitHub Actions workflows (actionlint)"
+run = "actionlint"
+
 [tasks.check]
-description = "The full gate, no writes: lint + typecheck + test + links (CI runs exactly this)"
-depends = ["lint", "typecheck", "test", "links"]
+description = "The full gate, no writes: lint + typecheck + test + links + actions (CI runs exactly this)"
+depends = ["lint", "typecheck", "test", "links", "actions"]
