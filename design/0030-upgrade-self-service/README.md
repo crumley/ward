@@ -11,23 +11,17 @@
 >
 > **Status:** built — awaiting review · **Started:** 2026-08-22
 
-The owner's commissioning directive, verbatim:
+The owner's commissioning directive made three asks — restated here in the entry's words, not the
+owner's:
 
-> "open a subagent to work on the task that we just spoke about, about ward, workspace, upgrade,
-> creating the task, doing the upgrade, creating the PR, and then telling the user what they need to
-> do in order to complete the upgrade, which is review the PR, merge it, and close the task."
-
-And on idempotency, verbatim:
-
-> "if you run workspace upgrade and there's an open task already existing for an upgrade, maybe you
-> should refuse to do it. You either […] need to close that upgrade and create a new one or merge it
-> and then create a new one. but that we don't allow to upgrade tasks to exist for the same
-> workspace at the same time. I'm also open to other ideas."
-
-And, left open on purpose:
-
-> "That may not be the case for Reflect. […] can you have two open reflect tasks at the same time.
-> But we don't need to resolve that to get to work on this."
+1. **The verb carries the whole arc.** `ward workspace upgrade` creates the task, runs the upgrade,
+   opens the pull request — and then tells the human exactly what remains to complete it: review the
+   pull request, merge it, close the task.
+2. **One open upgrade task per workspace.** A standing open upgrade task makes the verb refuse;
+   close or merge the standing one before starting another. The owner left room for other
+   arrangements, but two open upgrade tasks for the same workspace at once are not one of them.
+3. **Reflect is deliberately unresolved.** Whether the same singleton rule fits reflect tasks — can
+   two be open at once? — was explicitly set aside as not needed to start this work.
 
 **The motivating incident.** The owner, standing at the workspace root, ran `ward workspace upgrade`
 and was refused: _"no task given and no task worktree encloses this directory — name one"_. Adopting
