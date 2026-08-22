@@ -1,9 +1,10 @@
 # Ward toolchain + tasks (mise). One file pins the tool versions AND defines the
 # tasks, so local dev and CI provision the same versions and run the same commands.
 #
-#   mise install     # provision the pinned toolchain (bun, dprint, lychee)
-#   mise run fmt     # format/fix everything in place as you write
-#   mise run check   # the full no-writes gate — exactly what CI runs
+#   mise install         # provision the pinned toolchain (bun, dprint, lychee, actionlint)
+#   mise run fmt         # format/fix everything in place as you write
+#   mise run check       # the full no-writes gate — exactly what CI runs
+#   mise run link-status # show which checkout the global `ward` resolves to
 #
 # JS dependencies (optique, picocolors) and JS dev tools (Biome, TypeScript) are
 # pinned in package.json + bun.lock and installed by the `deps` task; every task
@@ -13,6 +14,9 @@
 bun = "1.3.14"
 dprint = "0.54.0"
 lychee = "0.24.2"
+# One YAML file in the tree (the CI workflow), but that file is the thing that
+# runs the gate — worth linting. No shell scripts, so no shellcheck/shfmt.
+actionlint = "1.7.12"
 
 [tasks.deps]
 description = "Install JS dependencies exactly as locked (bun.lock)"
@@ -31,6 +35,27 @@ run = "bun link"
 [tasks.unlink]
 description = "Remove the global `ward` registration"
 run = "bun unlink"
+
+# Ward is developed across many worktrees at once, and `bun link` is global:
+# only one checkout owns the `ward` on PATH. This answers "which one?" before
+# you trust what the global `ward` just told you.
+[tasks.link-status]
+description = "Show which checkout the global `ward` currently resolves to"
+run = """
+target=$(readlink -f "$(command -v ward 2>/dev/null)" 2>/dev/null)
+if [ -z "$target" ]; then
+  echo "ward is not on PATH — run 'mise run link' in the checkout you want."
+  exit 1
+fi
+echo "ward -> $target"
+case "$target" in
+  {{config_root}}/*) echo "linked to THIS checkout ({{config_root}})" ;;
+  *)                 echo "linked to a DIFFERENT checkout — 'mise run link' here to switch" ;;
+esac
+shadowed=$(which -a ward 2>/dev/null | tail -n +2)
+[ -n "$shadowed" ] && printf '\\nalso on PATH but shadowed (consider removing):\\n%s\\n' "$shadowed"
+exit 0
+"""
 
 [tasks.fmt]
 description = "Format + fix in place: code (Biome) and Markdown (dprint)"
@@ -56,6 +81,12 @@ run = "bun test"
 description = "Check Markdown links offline (lychee)"
 run = "lychee ."
 
+# No `depends = ["deps"]`: actionlint is a pinned binary and reads only the
+# workflow files — it needs none of the JS dependencies.
+[tasks.actions]
+description = "Lint the GitHub Actions workflows (actionlint)"
+run = "actionlint"
+
 [tasks.check]
-description = "The full gate, no writes: lint + typecheck + test + links (CI runs exactly this)"
-depends = ["lint", "typecheck", "test", "links"]
+description = "The full gate, no writes: lint + typecheck + test + links + actions (CI runs exactly this)"
+depends = ["lint", "typecheck", "test", "links", "actions"]

@@ -18,14 +18,21 @@ over time. So Ward is **deliberately opinionated** and pushes every check into t
   closes the gap this file used to record ("only markdown is covered, because no code exists yet") —
   wired in by [`design/0001-dev-foundation/`](design/0001-dev-foundation/README.md), before
   significant code, exactly as mandated.
+- **The CI workflow** is linted by **actionlint**. There is only one YAML file in the tree, but it
+  is the file that runs the gate — so it is held to the same bar as everything else.
 - **One command each way** ([`mise.toml`](mise.toml)): run `mise run fmt` as you write (fixes code
   and markdown in place) and `mise run check` before you push — the no-writes gate covering code
-  **and** markdown (Biome + dprint + `tsc` + `bun test` + lychee). CI runs the **same**
-  `mise run check`, nothing else.
-- **The toolchain is pinned.** `mise.toml` pins the tools (bun, dprint, lychee); `bun.lock` pins the
-  JS dependencies (Biome, TypeScript among them). `mise install` provisions everything, identically
-  on a laptop and in CI. Optional sugar: with **direnv**, [`.envrc`](.envrc) puts the pinned
-  toolchain on PATH the moment you enter the directory (`direnv allow` once).
+  **and** markdown (Biome + dprint + `tsc` + `bun test` + lychee + actionlint). CI runs the **same**
+  `mise run check`, nothing else, on **ubuntu and macOS** — Ward is a CLI developed on macOS and run
+  on Linux, so both platforms have to stay green.
+- **The toolchain is pinned.** `mise.toml` pins the tools (bun, dprint, lychee, actionlint);
+  `bun.lock` pins the JS dependencies (Biome, TypeScript among them). `mise install` provisions
+  everything, identically on a laptop and in CI. Optional sugar: with **direnv**, [`.envrc`](.envrc)
+  puts the pinned toolchain on PATH the moment you enter the directory (`direnv allow` once).
+- **Pins are kept moving.** [`.github/dependabot.yml`](.github/dependabot.yml) opens weekly, grouped
+  PRs for the two machine-updatable pinning homes — the GitHub Actions and the JS dependencies in
+  `bun.lock`. The binaries in `mise.toml` are outside Dependabot's reach and stay a deliberate
+  hand-reviewed bump.
 
 **Why so strict:** an automated check is feedback an agent gets in seconds, on every iteration; a
 convention enforced only by review is feedback it gets late, inconsistently, or never. Strong

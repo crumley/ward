@@ -1,0 +1,32 @@
+# Dependabot — keep the pinned edges of the repo moving.
+#
+# Two of Ward's three pinning homes are machine-updatable, and both are here:
+# the GitHub Actions used by the CI workflow, and the JS dependencies locked in
+# package.json + bun.lock. The third — the binaries pinned in mise.toml's
+# `[tools]` (bun, dprint, lychee, actionlint) — Dependabot cannot see; those
+# stay a deliberate, hand-reviewed one-line bump (see
+# design/decisions/0002-mise-tasks-and-pinning.md).
+#
+# PR volume is kept civil on purpose: weekly, and minor/patch updates are
+# grouped into a single PR per ecosystem. Majors still arrive one at a time —
+# those are the ones worth reading.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        update-types: [minor, patch]
+
+  # `bun` (not `npm`): Dependabot has understood bun.lock since Feb 2025, so it
+  # updates the lockfile Ward actually commits rather than leaving it stale.
+  - package-ecosystem: bun
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      js:
+        update-types: [minor, patch]
