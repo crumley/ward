@@ -376,9 +376,10 @@ export function workspaceRestoreJson(report: RestoreReport): WorkspaceRestoreSha
 /** The deterministic upgrade's report (design/0020-deterministic-upgrade/). */
 export function workspaceUpgradeJson(report: UpgradeReport): WorkspaceUpgradeShape {
   return {
-    task: report.task,
-    branch: report.branch,
-    path: report.path,
+    vehicle: report.vehicle,
+    ...(report.task === undefined ? {} : { task: report.task }),
+    ...(report.branch === undefined ? {} : { branch: report.branch }),
+    ...(report.path === undefined ? {} : { path: report.path }),
     outcome: report.outcome,
     mainLine: { name: report.mainLine.name, action: report.mainLine.action },
     stamp: { wardVersion: report.stamp.wardVersion, action: report.stamp.action },
@@ -390,6 +391,38 @@ export function workspaceUpgradeJson(report: UpgradeReport): WorkspaceUpgradeSha
     })),
     residue: [...report.residue],
     ...(report.commit === undefined ? {} : { commit: report.commit }),
+    ...(report.derived === undefined
+      ? {}
+      : {
+          derived: report.derived.map((step) => ({
+            step: step.step,
+            outcome: step.outcome,
+            detail: step.detail,
+          })),
+        }),
+    ...(report.pullRequest === undefined
+      ? {}
+      : {
+          pullRequest: {
+            outcome: report.pullRequest.outcome,
+            ...(report.pullRequest.url === undefined ? {} : { url: report.pullRequest.url }),
+            detail: report.pullRequest.detail,
+            ...(report.pullRequest.base === undefined
+              ? {}
+              : {
+                  base: {
+                    ref: report.pullRequest.base.ref,
+                    outcome: report.pullRequest.base.outcome,
+                    detail: report.pullRequest.base.detail,
+                  },
+                }),
+          },
+        }),
+    remaining: report.remaining.map((act) => ({
+      step: act.step,
+      detail: act.detail,
+      ...(act.command === undefined ? {} : { command: act.command }),
+    })),
   };
 }
 

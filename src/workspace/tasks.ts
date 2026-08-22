@@ -40,6 +40,13 @@ import { readTaskWorktrees } from './worktrees.ts';
 export interface OpenTaskOptions {
   readonly floor?: number;
   readonly purpose?: string;
+  /**
+   * The stewardship act this task carries, when Ward derived the task itself
+   * (design/0030-upgrade-self-service/). Never set from the CLI's `task open`:
+   * the marker means "Ward built this vehicle", and only Ward's own derivation
+   * may say so.
+   */
+  readonly stewardship?: 'upgrade';
 }
 
 export async function openTask(
@@ -57,7 +64,18 @@ export async function openTask(
       .filter((task) => task.record.state !== 'closed')
       .map((task) => Number.parseInt(task.record.code.replace(/^t/, ''), 10))
       .filter((code) => !Number.isNaN(code));
-    const code = `t${smallestFree(openCodes)}`;
+    // Codes are reused once a task closes, but a closed task's records SURVIVE
+    // at `<code>-<slug>/` — so a code that is free can still name a directory
+    // that is occupied, and writing there would overwrite a closed task's
+    // record with a new one (§17, and the record is the truth, §16). Only ever
+    // reachable when the same slug comes round again, which is exactly what a
+    // DERIVED slug does (design/0030-upgrade-self-service/). Skip such a code.
+    let number = smallestFree(openCodes);
+    while (existsSync(join(root, `${container}/t${number}-${slug}`))) {
+      openCodes.push(number);
+      number = smallestFree(openCodes);
+    }
+    const code = `t${number}`;
     const dir = `${container}/${code}-${slug}`;
     const record: TaskRecord = {
       type: 'task',
@@ -66,6 +84,7 @@ export async function openTask(
       state: 'active',
       ...(options.floor === undefined ? {} : { floor: options.floor }),
       ...(options.purpose === undefined ? {} : { purpose: options.purpose }),
+      ...(options.stewardship === undefined ? {} : { stewardship: options.stewardship }),
       prs: [],
       openedAt: new Date().toISOString(),
     };
