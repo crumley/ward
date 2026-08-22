@@ -198,6 +198,24 @@ where no decision exists ([`../00-foundation/00-vision.md`](../00-foundation/00-
 scopes the cardinal rule ([`03-work-lifecycle.md`](03-work-lifecycle.md)) without softening it: what
 may never reach a main line directly is _work_, and the journal is the record of work happening.
 
+**Publishing that main line is backup, not delivery.** Where the workspace's repository has a
+remote, sending the workspace's own main line to it — a **fast-forward**, never forced — is **not**
+the gated "pushing to a main line"
+([`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §18). An unforced push is
+mechanically incapable of anything but adding commits the local main line already holds, so it
+delivers no work and decides nothing: it copies a record that has already been written, which is
+§15's recoverability pointed off the machine. What stays gated is untouched — the **merge** that
+puts stewardship work onto this main line is the human's act, and pushing a **repository's** main
+line (the shared kind in the repository set, that other people read and work from) is gated exactly
+as §18 says, because there a push is how work reaches other people. **Why the line falls here:** §18
+gates an act because it is hard to undo and because it makes a local decision someone else's; a
+fast-forward of one's own journal is neither — every commit in it was authorized at the verb that
+wrote it, and none of it is proposed to anyone. **Why this is not a technicality:** a workspace kept
+locally-first accumulates journal commits its remote has never seen, and the forge review technique
+below cannot show a truthful diff until they are published — a stewardship branch read against a
+stale base buries the change under the record's own recent history. Gating the backup would cost the
+review surface and buy no safety.
+
 **Stewardship: deliberate change travels like work, because it is work.** Change to what the
 workspace _is_ — an upgrade's reconciliation, a structural migration, the adoption of a reflection's
 proposals ([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)) — is work product
@@ -623,15 +641,17 @@ read as an omission rather than a decision.
 - **Workspace integrity** — the classes of drift between record and world, and the **repair
   posture** (report all, repair only the local and reversible, gate the rest).
 - **The workspace's own main line** — the **journal** (Ward's bookkeeping landing directly: the
-  record advancing, not work product) versus **stewardship** (deliberate change to the workspace
-  itself, traveling as work: a branch in a worktree of the workspace's own repository, the root
-  checkout never leaving its main line, previewed, landed by the human's gated Ward-managed merge —
-  a pull request only where a remote exists; the branch-and-merge boundary is the invariant); the
-  **stewardship copy** rule (reads serve preview; the journal never writes there); the **main line's
-  name recorded at creation** — a root standing elsewhere is drift doctor names, and a journal write
-  landing off the recorded line proceeds loudly, never silently; **completion verified on the
-  workspace's own history**; and the **migration record-keeping carve-out** (the record writes that
-  open and run a migration's own task are never blocked by the skew that task fixes).
+  record advancing, not work product), and that **fast-forward-publishing that main line to a remote
+  is backup, not §18's gated push** — the gate staying on the merge onto it and on any repository's
+  main line; versus **stewardship** (deliberate change to the workspace itself, traveling as work: a
+  branch in a worktree of the workspace's own repository, the root checkout never leaving its main
+  line, previewed, landed by the human's gated Ward-managed merge — a pull request only where a
+  remote exists; the branch-and-merge boundary is the invariant); the **stewardship copy** rule
+  (reads serve preview; the journal never writes there); the **main line's name recorded at
+  creation** — a root standing elsewhere is drift doctor names, and a journal write landing off the
+  recorded line proceeds loudly, never silently; **completion verified on the workspace's own
+  history**; and the **migration record-keeping carve-out** (the record writes that open and run a
+  migration's own task are never blocked by the skew that task fixes).
 - **The standing workspace project** — one per workspace, established at creation, home of
   stewardship work, the guaranteed instance of an ongoing project — never closes, and the
   workspace-level rollup reading `active` over it while empty is **blessed**: a workspace is never
