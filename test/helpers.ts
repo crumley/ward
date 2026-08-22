@@ -1,6 +1,6 @@
 // Shared test scaffolding: hermetic git + forge environment, temp workspaces,
 // and the fake `gh` the forge-probe tests point WARD_GH at.
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -48,8 +48,16 @@ export function applyGitTestEnv(): void {
   Object.assign(process.env, GIT_ENV, WARD_GLOBAL_ENV, { WARD_GH: NO_GH });
 }
 
+/**
+ * A throwaway directory, resolved to its real path. The realpath matters: on
+ * macOS `tmpdir()` is `/var/folders/…`, a symlink to `/private/var/folders/…`,
+ * and Ward resolves the paths it records and prints. Without this every
+ * assertion comparing a fixture path to Ward's own output fails on macOS and
+ * passes on Linux — a whole class of false reds the two-OS gate would report
+ * forever.
+ */
 export function makeTempDir(): string {
-  return mkdtempSync(join(tmpdir(), 'ward-test-'));
+  return realpathSync(mkdtempSync(join(tmpdir(), 'ward-test-')));
 }
 
 export function removeDir(dir: string): void {
