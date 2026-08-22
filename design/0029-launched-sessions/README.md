@@ -386,7 +386,8 @@ open, unresumable, and never coming back (SF-003).
   it, so the record always precedes the process; where it does not, the adapter surfaces the id the
   run minted and Ward records it as its first act after start." _Why it belongs in intent:_ it holds
   however the launch is built, and it is the difference between a record that can always be trusted
-  and one with a hole at the moment of starting.
+  and one with a hole at the moment of starting. _Disposition:_ **adjudicated** — the revision
+  landed as [`bb96572`](https://github.com/crumley/ward/commit/bb96572) (PR #56, merged 2026-08-22).
 - **SF-002** — [`session-multiplexer`](../../intent/02-subsystems/01-session-multiplexer.md),
   _Constraints_ (**Start** … and **keep it alive when detached**). _Friction:_ that seam owns
   "hosting live sessions", and its first constraint pairs starting with surviving detachment. This
@@ -404,7 +405,9 @@ open, unresumable, and never coming back (SF-003).
   constraint in two — "**Start** a session for a given scope/identity" as the baseline any design
   must offer, and "**Keep it alive when detached**" as the capability the multiplexer adds — and say
   plainly that a session may be hosted in the caller's terminal, with the consequence named (it ends
-  when the terminal does; the record and resume are what survive).
+  when the terminal does; the record and resume are what survive). _Disposition:_ **adjudicated** —
+  the revision landed as [`bf12fab`](https://github.com/crumley/ward/commit/bf12fab) (PR #56, merged
+  2026-08-22).
 - **SF-003** — [`sessions-and-lifecycle`](../../intent/01-concepts/02-sessions-and-lifecycle.md),
   _Open vs. running_ and _Recovery_. _Friction:_ "an exit is not a close" is exactly right and this
   entry implements it — and it creates a population the intent has no answer for: sessions that are
@@ -421,7 +424,9 @@ open, unresumable, and never coming back (SF-003).
   resolves — recorded on the recovery episode with its cause, surfaced to the human as something
   that needs them (`../02-subsystems/07-human-shell.md`), and never closed automatically.
   Optionally, a note that a session whose harness history is gone may still be resumed _as a fresh
-  run under a new handle_, which is a different act and deserves a different word.
+  run under a new handle_, which is a different act and deserves a different word. _Disposition:_
+  **adjudicated** — the revision (optional note included) landed as
+  [`661c913`](https://github.com/crumley/ward/commit/661c913) (PR #56, merged 2026-08-22).
 - **SF-004** — [`sessions-and-lifecycle`](../../intent/01-concepts/02-sessions-and-lifecycle.md),
   _Recording per scope_ (the minimum entry). _Friction:_ the minimum names **the persona (name +
   role)** among the fields every session entry captures, and Ward has no persona machinery at all —
@@ -434,3 +439,5 @@ open, unresumable, and never coming back (SF-003).
   minimum's fields with what each depends on — persona once the cast exists, usage where the harness
   exposes it (already marked best-effort) — or state that the minimum is "everything the build can
   supply", so an entry can be complete against it without inventing a field it has no source for.
+  _Disposition:_ **adjudicated** — the first formulation (fields conditioned on a source existing)
+  landed as [`89436b9`](https://github.com/crumley/ward/commit/89436b9) (PR #56, merged 2026-08-22).
