@@ -29,6 +29,13 @@ handle to re-attach, exactly as a task carries a remote-work-item link without t
 identity (`03-work-lifecycle.md`). **Why the indirection:** it lets Ward span a mix of harnesses
 without assuming any one of them (`05-context-loading.md`).
 
+Recording the handle does not wait on the run. Where a harness accepts an externally-supplied run
+id, Ward **assigns** the handle and starts the run under it, so the record precedes the process;
+only where a harness insists on minting its own is the handle written immediately after start
+(`../02-subsystems/03-agent-harness.md`, which owns that ordering rule). **Why it matters here:** a
+session recorded with no handle is a thread nothing can locate, resume, or reflect over — so the
+minimum below is complete from the first moment there is anything live to be complete about.
+
 ## Open vs. running — a load-bearing distinction
 
 **Open** and **running** are not the same:
@@ -89,7 +96,9 @@ clean it looked.
 - **Resume is idempotent.** Resuming a thread already resumed must not create a second, conflicting
   session or otherwise break the rules. Forgetting you resumed something thirty minutes ago and
   resuming it again is harmless.
-- **Closed stays closed.** No reboot or sweep ever revives a closed session.
+- **Closed stays closed — and closing stays deliberate.** No reboot or sweep ever revives a closed
+  session, and nothing closes an open one on the session's behalf: a thread Ward can no longer
+  resume stays **open and visible** (_Recovery_, the three outcomes) rather than being tidied away.
 - **Open ≠ running.** A session can be open without a process attached; resume is what
   (re-)attaches. Stored state is `open` or `closed` only — _running_ is derived from the live
   attachment, never persisted. The record, not the process, is authoritative.
@@ -100,20 +109,29 @@ clean it looked.
 
 Each scope keeps a **session log**: an append-only record of the sessions that have run at that
 scope, with enough metadata per entry to support recovery, resumption, and reflection. At minimum an
-entry captures: the identity, the persona (name + role), the working directory, the **harness
-handle**, the model, when it opened/closed, its current stored state (`open` or `closed`), its
-**purpose** — a link to the brief or dispatch that opened it, or a one-line goal when neither exists
-— and, where the harness exposes it, the **resources the session consumed** (tokens, cost). **Why
-purpose is part of the minimum:** "what was this thread trying to do" must be answerable from the
-record alone — the harness history says it at length, but the record must not depend on a transcript
-that may no longer resolve (`../02-subsystems/03-agent-harness.md`). **Why usage is recorded:**
-token economy (`../00-foundation/01-principles.md` §12) treats spend as a managed cost, and a cost
-is managed only where it is measured — recorded usage is the evidence model-selection tuning reads
-(`../02-subsystems/04-model-selection.md`); without it, fast-vs-deep routing is tuned on guesswork.
-Usage is best-effort by construction (an optional harness capability,
-`../02-subsystems/03-agent-harness.md`) — nothing may depend on its presence. Sub-scopes nest within
-their parents, so reading a scope's record also reveals the threads beneath it. (Store is a _how_ —
-`../02-subsystems/00-metadata-store.md`.)
+entry captures: the identity, the working directory, the **harness handle**, the model, when it
+opened/closed, its current stored state (`open` or `closed`), and its **purpose** — a link to the
+brief or dispatch that opened it, or a one-line goal when neither exists. **Why purpose is part of
+the minimum:** "what was this thread trying to do" must be answerable from the record alone — the
+harness history says it at length, but the record must not depend on a transcript that may no longer
+resolve (`../02-subsystems/03-agent-harness.md`).
+
+Two further fields belong to the minimum but are **conditioned on a source existing**: the
+**persona** (name + role), once the workspace has a persona cast to name one from
+(`01-scopes-and-personas.md`), and the **resources the session consumed** (tokens, cost), where the
+harness exposes them. **Why usage is recorded:** token economy (`../00-foundation/01-principles.md`
+§12) treats spend as a managed cost, and a cost is managed only where it is measured — recorded
+usage is the evidence model-selection tuning reads (`../02-subsystems/04-model-selection.md`);
+without it, fast-vs-deep routing is tuned on guesswork. It is best-effort by construction (an
+optional harness capability, `../02-subsystems/03-agent-harness.md`) — nothing may depend on its
+presence, and the same holds for the persona until a cast exists. **Why the conditions are stated
+rather than assumed:** the minimum is a **target** every build is measured against, and a field
+whose source does not exist yet reads as a contract the build silently fails instead of as the next
+thing to reach. Naming the condition keeps both errors out — the field is never quietly dropped from
+the target, and never invented out of nothing to satisfy it.
+
+Sub-scopes nest within their parents, so reading a scope's record also reveals the threads beneath
+it. (Store is a _how_ — `../02-subsystems/00-metadata-store.md`.)
 
 The log records **lifecycle events, not just sessions**: per session, append-only entries for
 opened, resumed, **resume-failed (with its cause)**, and closed. Events are not states — the stored
@@ -138,7 +156,8 @@ After a cold start, Ward reconstructs the working state from the record. Recover
 
 1. Enumerate sessions across all scopes.
 2. Filter to those that are **open and not closed** — the live threads.
-3. For each, read its harness handle and re-attach (resume).
+3. For each, read its harness handle and re-attach (resume) — with **three** possible outcomes per
+   thread, not two (below).
 4. **Re-arm pending wakes.** A "wake me when X" condition recorded before the reboot is re-armed
    from the record, so detached waiters are still notified
    (`../02-subsystems/02-messaging-coordination.md`).
@@ -169,15 +188,39 @@ After a cold start, Ward reconstructs the working state from the record. Recover
    as the work itself. (How a nudge is issued and a condition evaluated is a _how_ —
    `../02-subsystems/02-messaging-coordination.md`, `design/`.)
 
+**The three outcomes per thread.** Re-attaching an open thread does not always succeed, and the
+failure is not an error to retry past. Beside **re-attached** and **skipped as closed**, a thread
+may be **unresumable**: still open, but its **harness handle no longer resolves** — the harness
+discarded the run's history, retention being the harness's and not Ward's
+(`../02-subsystems/03-agent-harness.md`, locate distinguishes found from gone). An unresumable
+thread is **recorded on the recovery episode with its cause**, beside the session's own
+resume-failed event, and **surfaced to the human as something that needs them**
+(`../02-subsystems/07-human-shell.md`, "what needs me?"). Ward **never closes it on the session's
+behalf**.
+
+**Why it is never swept:** _closed stays closed_ is a guarantee strong enough that only a human or
+an agent doing the work may invoke it; a heuristic that closed threads for looking doomed would
+spend that guarantee on a guess, and would erase exactly the evidence reflection reads
+(`04-reflection-and-evolution.md`). **Why it is surfaced rather than retried quietly:** left
+nameless, these threads become a growing set of doomed re-attachments every recovery repeats and
+nobody reads — the honest accumulation of resume-failed events is only useful if something acts on
+it, and the only thing that can decide is the human.
+
+A session whose harness history is gone may still be continued **as a fresh run under a new handle**
+— but that is a **different act and deserves a different word**: it starts an episode with none of
+the old one's memory, and calling it _resume_ would quietly falsify what resume promises, that a
+thread continues where it left off. (Which word, at the surface, is
+`../02-subsystems/07-human-shell.md`'s — verbs read true to the operation.)
+
 Recovery is itself a **recorded episode**, not an invisible pass. Every recovery writes its own
 durable record as it runs: when it started, what it enumerated, the outcome per thread —
-re-attached, **failed with its cause** (a stale handle, a missing worktree, a harness error), or
-skipped as closed — the wakes re-armed and fired, and the conclusions the rounds reported. **Why:**
-recorded-state-is-truth (`../00-foundation/01-principles.md` §16) applies to Ward's own actions too
-— a recovery that struggles and leaves no trace can neither be debugged by the human nor improved by
-reflection, and a struggling recovery is concentrated evidence of exactly the frictions reflection
-exists to find (`04-reflection-and-evolution.md`, which treats a completed recovery as a trigger).
-(The record's form is a _how_ — `../02-subsystems/00-metadata-store.md`.)
+re-attached, **unresumable with its cause** (a stale handle, a missing worktree, a harness error),
+or skipped as closed — the wakes re-armed and fired, and the conclusions the rounds reported.
+**Why:** recorded-state-is-truth (`../00-foundation/01-principles.md` §16) applies to Ward's own
+actions too — a recovery that struggles and leaves no trace can neither be debugged by the human nor
+improved by reflection, and a struggling recovery is concentrated evidence of exactly the frictions
+reflection exists to find (`04-reflection-and-evolution.md`, which treats a completed recovery as a
+trigger). (The record's form is a _how_ — `../02-subsystems/00-metadata-store.md`.)
 
 Because session ids are **unique among open sessions workspace-wide** (`00-domain-model.md`,
 Identity), recovery addresses each session by its **bare id** — no scope qualifier is needed to tell
@@ -195,11 +238,14 @@ remember it.
 - **The lifecycle guarantees** — resume is idempotent, closed stays closed, the record (not the
   process) is authoritative, and the record is kept current.
 - **The per-scope session log** (append-only; "enough metadata" to recover, including each session's
-  **purpose** and — best-effort — its **usage**; **lifecycle events** — opened / resumed /
-  resume-failed with cause / closed — so failure is a recorded fact, never a silent retry).
+  **purpose**, and — conditioned on a source existing — its **persona** once a cast exists and its
+  **usage** where the harness exposes it; **lifecycle events** — opened / resumed / resume-failed
+  with cause / closed — so failure is a recorded fact, never a silent retry).
 - **Recovery** — the cold-start orchestration that restores the in-flight threads (re-validating
   setup for **live** anchors only; addressing sessions by their workspace-unique bare id) — itself a
-  **recorded episode** (per-thread outcomes, wakes re-armed/fired, the rounds' conclusions).
+  **recorded episode** (wakes re-armed/fired, the rounds' conclusions) — and its **three per-thread
+  outcomes**: re-attached, **unresumable** (open but its handle no longer resolves — recorded with
+  its cause, surfaced to the human, never auto-closed), or skipped as closed.
 - **Recovery rounds** — the judgment pass that ends recovery: the status personas, top-down
   (supervisor → charge nurses), each taking stock of its own span and driving it back into good
   order. Mechanical re-arm restores what the record can decide; rounds decide the rest. Rounds run

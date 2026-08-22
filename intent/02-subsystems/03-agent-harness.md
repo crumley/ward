@@ -16,6 +16,15 @@ binding the concepts to any one of them_ (§5).
   _attribute_, **not a second identity**: Ward addresses a session by its own identity and _uses_
   the handle to re-attach
   ([`../01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md)).
+- **The handle is recorded before the run exists, wherever the harness allows it.** Where a harness
+  accepts an **externally-supplied** run id, Ward assigns the handle and starts the run under it, so
+  the record always precedes the process; where it does not, the adapter **surfaces the id the run
+  minted** and Ward records it as its **first act after start**. _Why:_ the losing order leaves a
+  window in which a live agent exists that the record has never heard of — a crash inside it strands
+  a run nothing can locate, resume, or reflect over, which is precisely the loss §16 exists to
+  prevent. Assignment also costs the run no context, since nothing has to be read back out of it.
+  Where the window is unavoidable it is accepted knowingly and kept as short as an adapter can make
+  it, never widened for convenience.
 - **Be selectable per scope** (default per workspace, overridable per scope), so different scopes
   can use different harnesses, and two can be mixed in one workspace.
 - **Make the run's history locatable from the recorded handle** — for resume after a reboot and for
@@ -36,7 +45,14 @@ binding the concepts to any one of them_ (§5).
   own handle pointing at the branched run.
 - **Accept an externally-chosen model and thinking depth**
   ([`04-model-selection.md`](04-model-selection.md)) and pass them through; this seam does not
-  decide which model runs, only honors the decision.
+  decide which model runs, only honors the decision. **An unmade choice is passed through as
+  unmade:** where no model or thinking depth was chosen at any level of that ladder, Ward passes
+  none and the harness's own default applies — Ward never substitutes a default for a choice the
+  human did not make. _Why:_ the unconfigured session is the ordinary case, and the alternative is
+  Ward's opinion silently overriding the harness's, so the day a harness changes its default an
+  unconfigured session would not follow it. Honoring somebody else's defaults is what keeps this
+  seam harness-agnostic (§5); it also means "unchosen" must stay distinguishable from every value a
+  default could take, rather than collapsing into one on the way through.
 - **Optionally report resource usage.** Where the harness exposes what a run consumed (tokens,
   cost), surface it so Ward can record it on the session
   ([`../01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md));
@@ -59,7 +75,10 @@ binding the concepts to any one of them_ (§5).
 ## Canonical home for
 
 - The **agent-harness contract**: a thin, swappable adapter exposing start / handle / resume /
-  locate, with optional fork, honoring an externally-chosen model.
+  locate, with optional fork, honoring an externally-chosen model — and passing an **unmade** choice
+  through as unmade, so the harness's own default stands.
+- The **ordering of handle and run**: assigned before start wherever the harness accepts a supplied
+  run id, recorded as the first act after start where it does not.
 
 ## Left to implementation
 

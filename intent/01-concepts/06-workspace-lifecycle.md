@@ -698,7 +698,11 @@ read as an omission rather than a decision.
   human's layer contradicts Ward's, beyond ordering, is unsettled.
 - **Deletion, not just shadowing.** Composition lets a human override by appending but never
   _un-say_ a default. Whether removing one of Ward's defaults outright is supported, and what an
-  upgrade then proposes about it.
+  upgrade then proposes about it. (**Configuration** now has an answer — a narrower layer replaces a
+  collection-valued setting rather than merging into it
+  ([`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md), _Opinionated
+  configuration_) — but it does not carry over: keys have identity and a last-writer, and composed
+  instruction layers have neither, so the question stands for context composition.)
 - **Semantic drift across an upgrade.** When Ward's layer renames or reframes something the human's
   layer builds on, their content is stale without having been touched. Whether that is detectable at
   all, or only surfaced as a recap for the human to judge.

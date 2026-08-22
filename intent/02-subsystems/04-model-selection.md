@@ -10,20 +10,32 @@ bookkeeping, deep where the job is hard — and keep that choice **model-agnosti
 
 ## Constraints any design must honor
 
-- **Resolution through the scope hierarchy** — a default at the workspace level, overridable at
-  project, task, and room/session levels, with **narrower overriding broader**. _Why:_ a sensible
+- **Resolution through the scope hierarchy** — the full ladder is **user/machine → workspace →
+  project → task → room/session**, with **narrower always overriding broader**. _Why:_ a sensible
   workspace default covers most sessions; a specific room or status persona overrides locally
   without re-deciding everywhere. One knob, applied at the narrowest scope that cares.
+  - The **user/machine layer is the broadest and therefore the weakest rung**: it supplies only what
+    the workspace has not chosen, so a human's own taste travels with them between workspaces
+    without ever overriding one. It is bounded by the **global-state rule**
+    ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)) — it
+    may hold **preferences only**, never anything the understanding or resumption of work depends
+    on, so losing it costs a default and never a recovery.
+  - Whatever the ladder resolves to is **recorded on the session**
+    ([`../01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md)),
+    so reproduction reads the record rather than the machine. _Why both bounds:_ two humans opening
+    the same workspace would otherwise get different models from it with nothing in the workspace to
+    say why. Self-sufficiency (§3) is preserved not by forbidding the per-user layer but by keeping
+    it inessential and writing down what actually ran.
 - **Defaults follow the persona's job.** Fast/shallow where the work is status and routing (the
   **charge nurse**, the **house supervisor**); deep/high-thinking where it is hard reasoning or
   hands-on depth (a room, an attending). _Why:_ the persona already encodes how a scope attends to
   its work ([`../01-concepts/01-scopes-and-personas.md`](../01-concepts/01-scopes-and-personas.md)),
   so the right tier falls out of it and a new session usually needs no explicit choice.
 - **Model identifiers are configuration** that tracks the best available models over time, held in
-  the workspace, **never written into the concepts**. What is durable is the **override hierarchy**
-  and the **fast-vs-deep intent**; _which_ model is fast or deep this month is a value, not a design
-  commitment. _Why:_ models change faster than anything else; a concept that named one would be
-  stale within months.
+  the workspace — or, as a mere preference, on the human's own machine below it — and **never
+  written into the concepts**. What is durable is the **override hierarchy** and the **fast-vs-deep
+  intent**; _which_ model is fast or deep this month is a value, not a design commitment. _Why:_
+  models change faster than anything else; a concept that named one would be stale within months.
 - **Tuning reads recorded evidence.** The persona → tier defaults are a starting point; revising
   them is a reflection outcome
   ([`../01-concepts/04-reflection-and-evolution.md`](../01-concepts/04-reflection-and-evolution.md))
@@ -45,9 +57,10 @@ bookkeeping, deep where the job is hard — and keep that choice **model-agnosti
 
 ## Canonical home for
 
-- The **model-selection contract**: a per-scope override hierarchy whose defaults follow the
-  persona's job, with concrete model ids living in workspace configuration — and the **evidence
-  loop**: tuning the defaults is grounded in recorded usage, not taste.
+- The **model-selection contract**: an override ladder from the user's machine down to the
+  room/session, whose defaults follow the persona's job, with concrete model ids living in
+  configuration and the resolved choice recorded on the session — and the **evidence loop**: tuning
+  the defaults is grounded in recorded usage, not taste.
 
 ## Left to implementation
 

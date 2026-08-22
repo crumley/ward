@@ -151,7 +151,16 @@ principle (§8) and feeds the compounding loop
   is inside an initialized workspace. _Why:_ a delightful, predictable developer experience is a
   stated **quality bar**, not a nicety — a tool people reach for configures itself the way the best
   CLIs do, and a location-blind or surprising configuration model is friction the prime directive
-  rejects.
+  rejects. Which axis wins is settled, **per key**: the workspace-local axis overrides the global
+  one **key by key**, never as a whole block, and a key set at neither level is **unset** — not
+  defaulted by either. A **collection-valued** setting **replaces** at the level that sets it rather
+  than merging into what a broader level offered, so an empty collection is a value and means
+  "none". _Why:_ the narrower layer must be able to **un-say** what the broader one added, not only
+  add to it — merging leaves a human unable to remove a global entry from inside the workspace that
+  disagrees with it, and whole-block override would make setting one key silently discard every
+  other. (Composition into an agent's context is the same tension without the same answer —
+  [`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md), _Deletion,
+  not just shadowing_.)
 - **A guided setup, runnable at any time.** Ward offers a **guided, interactive setup** that walks
   the human through inspecting and changing that configuration — the **global** axis always, the
   **workspace-local** axis additionally when invoked inside a workspace — and the workspace choices
@@ -203,10 +212,11 @@ principle (§8) and feeds the compounding loop
   _surface_ — what it checks is
   [`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)'s),
   **surfacing version skew through the attention surface rather than as output chatter**,
-  **opinionated global + workspace-local configuration**, the **guided setup** capability (any-time,
-  convergent, current-values-first, human-audience; never a side-effect workspace creator), **verbs
-  that read true to the operation**, the **human-default caller identity** rule, and **local usage
-  telemetry**.
+  **opinionated global + workspace-local configuration** (workspace overrides global **per key**;
+  collection-valued settings **replace** at the level that sets them), the **guided setup**
+  capability (any-time, convergent, current-values-first, human-audience; never a side-effect
+  workspace creator), **verbs that read true to the operation**, the **human-default caller
+  identity** rule, and **local usage telemetry**.
 
 ## Left to implementation
 
