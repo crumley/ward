@@ -1,10 +1,15 @@
 # CI runs the same gate a developer runs locally: `mise run check`.
 #
 # mise-action installs mise, reads mise.toml, and provisions the exact pinned
-# toolchain (bun, dprint, lychee) that `mise install` provisions on a laptop.
-# The `check` task self-provisions its JS dependencies (bun install, frozen
-# lockfile), so the single source of truth for "is this green?" is one command,
-# byte-for-byte identical locally and here. See mise.toml / CONTRIBUTING.md.
+# toolchain (bun, dprint, lychee, actionlint) that `mise install` provisions on
+# a laptop. The `check` task self-provisions its JS dependencies (bun install,
+# frozen lockfile), so the single source of truth for "is this green?" is one
+# command, byte-for-byte identical locally and here. See mise.toml /
+# CONTRIBUTING.md.
+#
+# Ward is a Bun-native CLI developed on macOS and run on Linux, so the gate runs
+# on both. `fail-fast: false` keeps one platform's failure from hiding the
+# other's — an OS-specific break is exactly what this matrix exists to catch.
 name: check
 
 on:
@@ -14,7 +19,12 @@ on:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    name: check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
 
