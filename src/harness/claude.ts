@@ -67,8 +67,8 @@ export interface StartRequest {
  * conversation it is about to create, so WARD assigns the handle and the
  * process is born under it — no prompt, no hook, no token spent asking the
  * agent what its id turned out to be, and nothing of Ward's in the run's
- * context ("without polluting the session with context ... that isn't
- * beneficial just for tracking").
+ * context (the directive's zero-cost ask: tracking may not pollute the
+ * session with context that serves only the tracking).
  *
  * Order is deliberate: Ward's own flags first, then the human's `agent.args`
  * LAST, so a human can always override what Ward passed — the last word on a

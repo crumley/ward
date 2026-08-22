@@ -8,26 +8,21 @@
 >
 > **Status:** built — awaiting review · **Started:** 2026-08-21
 
-The owner commissioned this entry in these words:
+The owner's commissioning directive made three asks — restated here in the entry's words, not the
+owner's:
 
-> "for session tracking, like recording what session ID Claude is using. I don't want to use tokens
-> if we don't have to. […] we should lean into to Claude hooks or some other mechanism that Claude
-> provides from the CLI to integrate with it at a level that lets us get the session ID without
-> polluting the session with context, with ward context that isn't beneficial just for tracking."
+1. **Tracking must cost nothing.** Recording which native session id the harness runs under may not
+   spend tokens and may not put Ward bookkeeping into the agent's context — no "first, call this
+   ward command" prompt. Lean on hooks or whatever else the harness CLI offers to get the id at a
+   level below the conversation.
+2. **The installed manifest must teach the flow.** The `AGENTS.md` written into a workspace is
+   refreshed so that every session Ward starts already knows how to drive Ward well, without being
+   told.
+3. **One scope mode first, the rest planned for.** Sessions will eventually open at task, project,
+   and workspace scope; to keep the scope contained, build the no-task mode first — but shape the
+   work so the other scopes arrive later as additions, not migrations.
 
-> "we'll want to ensure that we consider updating and refreshing the agent's MD that gets written
-> into a workspace space so that it can really understand the flow. So that each time we use word to
-> start a session That session automatically has context of how to use it really well and how to go
-> through the flow."
-
-> "when we start a session, we might have several modes that we want to to do it in like starting a
-> session for a specific task where the task is already defined, but also we might want to start a
-> task at the project scope or start a task at the workspace scope. and all of those and we can in
-> the spirit of not boiling the ocean we could decide to just choose the like no scope at all and
-> then work our way to the others. but it's important to know that we do want the others eventually
-> and so we should plan accordingly."
-
-Three demands, and the design turns on each: **the id must cost nothing**, **the manifest must teach
+Three asks, and the design turns on each: **the id must cost nothing**, **the manifest must teach
 the flow**, and **the scopes must arrive one at a time without a migration between them**.
 
 The first is answered by a single verified fact about the harness — `claude --session-id <uuid>`
@@ -154,7 +149,7 @@ these two are 0028 and 0029.
     id of the conversation it creates, so the id exists before the process does. Everything else
     follows: the record can be complete and committed _before_ the launch, the handle in it is the
     id the run is actually under, and no hook, prompt, or transcript scrape is needed. This is the
-    directive's first quote satisfied structurally rather than economically — not "few tokens" but
+    directive's zero-cost ask satisfied structurally rather than economically — not "few tokens" but
     **zero**, because the agent is never asked anything. **The stated assumption:** passing a fresh
     UUID _creates_ the session under that id. It is implied by the CLI's help text and not
     documented explicitly; if it is wrong the launch fails visibly at first use, and the recorded
