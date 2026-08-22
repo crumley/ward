@@ -248,6 +248,20 @@ may be reviewed as a pull request instead (§19 — one contract, more than one 
 invariant is only this: **stewardship reaches the workspace's main line through a branch the human
 explicitly merges.**
 
+**Where the forge technique is used, the forge reviews and never lands.** The pull request is a
+**review surface only**; the landing act remains the local gated merge. **Why:** the workspace root
+is the authoritative checkout of this main line, so a merge performed on the forge creates a commit
+the root does not have — the record diverges from its own remote at the exact moment the human
+believes the change landed, and the next journal write extends the diverged history
+([`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §17). A merge button
+technically satisfies the invariant above — a human explicitly pressed it — and still produces the
+outcome that invariant exists to prevent, which is why it reads as the **local** merge rather than
+as any deliberate act. **And the consequence falls on the surface Ward opens:** a review surface
+must say this **on itself** — naming the local merge as the landing act — so a reviewer who has read
+no design entry is told the button is the wrong act rather than left to infer it. Ward does not
+control the forge's buttons, so the honesty has to travel with the request Ward does control
+([`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §20).
+
 **A stewardship copy is not a second workspace.** The worktree materializes the record — the
 workspace document and all — so a workspace-discovering command standing inside it finds what looks
 like a root. The rule: a root that is itself a worktree of an enclosing workspace is a **stewardship
@@ -646,10 +660,11 @@ read as an omission rather than a decision.
   main line; versus **stewardship** (deliberate change to the workspace itself, traveling as work: a
   branch in a worktree of the workspace's own repository, the root checkout never leaving its main
   line, previewed, landed by the human's gated Ward-managed merge — a pull request only where a
-  remote exists; the branch-and-merge boundary is the invariant); the **stewardship copy** rule
-  (reads serve preview; the journal never writes there); the **main line's name recorded at
-  creation** — a root standing elsewhere is drift doctor names, and a journal write landing off the
-  recorded line proceeds loudly, never silently; **completion verified on the workspace's own
+  remote exists, and then as a **review surface only**, the local merge still the landing act and
+  the surface obliged to say so; the branch-and-merge boundary is the invariant); the **stewardship
+  copy** rule (reads serve preview; the journal never writes there); the **main line's name recorded
+  at creation** — a root standing elsewhere is drift doctor names, and a journal write landing off
+  the recorded line proceeds loudly, never silently; **completion verified on the workspace's own
   history**; and the **migration record-keeping carve-out** (the record writes that open and run a
   migration's own task are never blocked by the skew that task fixes).
 - **The standing workspace project** — one per workspace, established at creation, home of
