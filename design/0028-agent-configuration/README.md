@@ -7,27 +7,21 @@
 >
 > **Status:** built — awaiting review · **Started:** 2026-08-21
 
-The owner commissioned this entry in these words:
+The owner's commissioning directive made three asks — restated here in the entry's words, not the
+owner's:
 
-> "I think it'd be great for the configuration to be for the agent to be hierarchical and so users
-> would put their defaults in the user level, like say every session I want to have the Claude
-> dangerously skip permissions. And I want my default model to be Fable and my effort to be High.
-> And that'd be the default. and then in a specific workspace, I might want to override that and
-> say, like in this workspace, the model is Sonnet. and so the configuration mechanism being at the
-> user level and the workspace level would be really helpful."
+1. **Two axes, the narrower winning.** Agent configuration is hierarchical: a human's defaults at
+   the user level (the motivating example: skip-permissions every session, a preferred model, a
+   preferred effort), overridden in a specific workspace (the same example: this workspace runs a
+   different model).
+2. **Omitted means omitted.** A key set at neither level is simply not passed to the underlying
+   harness — never defaulted by Ward.
+3. **A generic tail, not a permissions knob.** The extra-flags mechanism is a list of strings
+   appended to the end of the agent command. Named after what it does (`args`), not after its first
+   use: a `permissions` key would read as limited to permission-related settings, when the mechanism
+   really carries anything.
 
-> "let's say effort is omitted from the configuration, whether that be at the user level the
-> workspace level or or anywhere else. else, we just wouldn't specify it to the underlying"
-
-> "on agent.permissions, maybe we can can make this more generic and it's like extra flags or
-> something to that effect where these are just extra things that are gonna get appended to the end
-> of the agent command that runs it. Because if it's just dot permissions, then the user feels like
-> it's limited to only permission related settings. but if we're simply appending it to the end,
-> then it really could be anything so let's go ahead and make it more generic"
-
-Three sentences, three design commitments: **two axes with the narrower winning**, **omitted means
-omitted**, and **a generic tail of extra arguments instead of a permissions knob**. Everything below
-is those three, made structural.
+Three asks, three design commitments; everything below is those three, made structural.
 
 [0024](../0024-global-config-registry/README.md) built the global axis and left the second one
 explicitly deferred — "workspace-local configuration (the other half of the intent clause) and
@@ -155,9 +149,9 @@ therefore **0029**; every reference in code, tests, and prose here says so.
   - **Absent is a shape, not a sentinel.** `Resolved<T>` is a union: `{provenance: 'absent'}` has no
     `value` field. A consumer that forgets to branch does not compile, and the JSON document omits
     the field entirely rather than emitting `null` or an empty string — the omission _is_ the
-    answer, and 0029's launch has nothing to pass. This is the directive's second quote made
-    structural: Ward cannot accidentally invent a default for a key nobody set, because there is no
-    place to put one.
+    answer, and 0029's launch has nothing to pass. This is the directive's omitted-means-omitted ask
+    made structural: Ward cannot accidentally invent a default for a key nobody set, because there
+    is no place to put one.
   - **Ward states defaults only where it has an opinion.** `AGENT_DEFAULTS` holds `harness` (Ward
     must pick an adapter to run at all) and `args` (`[]` is the honest empty case) — and nothing
     else. The absence of `model` and `effort` from that object is the design, stated in one readable
@@ -175,8 +169,8 @@ therefore **0029**; every reference in code, tests, and prose here says so.
     schedule. A Ward-side enum would turn the day the harness adds a level into the day Ward rejects
     a valid configuration — gating a namespace we do not own buys no safety and breaks on someone
     else's release.
-  - **`agent.args`, not `agent.permissions`.** The directive's third quote, taken literally: the
-    mechanism is "these strings go on the end of the command", and naming it after the first use
+  - **`agent.args`, not `agent.permissions`.** The directive's generic-tail ask, taken literally:
+    the mechanism is "these strings go on the end of the command", and naming it after the first use
     (`--dangerously-skip-permissions`) would have made every other use feel illegitimate. Entries
     must be non-empty strings — an empty argv word is a live hazard on a command line and never a
     thing anyone means.
@@ -336,20 +330,20 @@ session (SF-001's missing half). After that, the narrower scope levels if real u
 - **SF-002** — [`agent-harness`](../../intent/02-subsystems/03-agent-harness.md), _Accept an
   externally-chosen model and thinking depth … and pass them through_. _Friction:_ the seam says it
   honors a choice, and says nothing about what happens when **no choice was made** — which is the
-  ordinary case and the directive's first quote. Two readings are available and they differ in
-  behavior: Ward substitutes its own default (making Ward's opinion silently override the harness's,
-  and changing what an unconfigured session does the day the harness changes its default), or Ward
-  passes nothing and the harness's own default stands. _Assumption to keep moving:_ the second —
-  **unchosen is passed through as unchosen**; Ward omits the flag entirely rather than inventing a
-  value, which is why the resolved shape here distinguishes `absent` from every default and refuses
-  to let a caller read a value that was never set. _Proposed revision:_ one clause in the seam:
-  "**An unmade choice is passed through as unmade.** Where no model or thinking depth has been
-  chosen at any level, Ward passes none and the harness's own default applies; Ward never
-  substitutes a default for a choice the human did not make." _Why it belongs in intent:_ it holds
-  no matter how the launch is built, and it is the difference between a harness-agnostic tool and
-  one with opinions about somebody else's defaults (§5). _Disposition:_ **adjudicated** — the
-  revision landed as [`e63946b`](https://github.com/crumley/ward/commit/e63946b) (PR #56, merged
-  2026-08-22).
+  ordinary case and the directive's omitted-means-omitted ask. Two readings are available and they
+  differ in behavior: Ward substitutes its own default (making Ward's opinion silently override the
+  harness's, and changing what an unconfigured session does the day the harness changes its
+  default), or Ward passes nothing and the harness's own default stands. _Assumption to keep
+  moving:_ the second — **unchosen is passed through as unchosen**; Ward omits the flag entirely
+  rather than inventing a value, which is why the resolved shape here distinguishes `absent` from
+  every default and refuses to let a caller read a value that was never set. _Proposed revision:_
+  one clause in the seam: "**An unmade choice is passed through as unmade.** Where no model or
+  thinking depth has been chosen at any level, Ward passes none and the harness's own default
+  applies; Ward never substitutes a default for a choice the human did not make." _Why it belongs in
+  intent:_ it holds no matter how the launch is built, and it is the difference between a
+  harness-agnostic tool and one with opinions about somebody else's defaults (§5). _Disposition:_
+  **adjudicated** — the revision landed as
+  [`e63946b`](https://github.com/crumley/ward/commit/e63946b) (PR #56, merged 2026-08-22).
 - **SF-003** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Opinionated
   configuration, global and workspace-local_. _Friction:_ the clause names both axes and never says
   **which wins**, nor at what granularity. Two questions had to be settled to build anything: does a
