@@ -143,10 +143,17 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: 'de4ee8439b3a8eab3851e7109b22a2542d41337b46efb0d0e16be7a36fc7b24b',
         era: '94e6890 (design 0018)',
       },
-      // Current since design 0029: the Sessions section — sessions are opened
-      // BY ward, which launches the agent, assigns the handle, and sets
+      // 7fa9656 (design 0029) — the Sessions section: sessions are opened BY
+      // ward, which launches the agent, assigns the handle, and sets
       // WARD_AGENT; resume, locate, where the agent configuration lives, and
       // the manual --handle path for a session ward did not start.
+      {
+        sha256: 'ef5ffe607886ca2fea68c54f7cf72a138c5058316116b49a78d664ffa58ac510',
+        era: '7fa9656 (design 0029)',
+      },
+      // Current since design 0032: task-scope launches — `session open TASK`
+      // starts the agent in the task's worktree (sole one, or --dir), and
+      // --handle is the record-only path at either scope.
     ],
   },
 ];
