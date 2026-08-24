@@ -1732,7 +1732,8 @@ async function cmdWorktreeList(json: boolean): Promise<void> {
  *   the record, and runs the agent in the foreground. With no TASK the scope
  *   is the workspace and the agent stands in the root; with a TASK the scope
  *   is that task and the agent stands in the task's worktree — its sole one,
- *   or the one `--dir` names when there are none or several.
+ *   or the one `--dir` names when there are none or several. A declared
+ *   agent is refused this path at both scopes (below).
  *
  * Omitting TASK means workspace scope EXPLICITLY, which is why this verb no
  * longer infers a task from the working directory as 0006 gave it: the same
@@ -1760,6 +1761,24 @@ async function cmdSessionOpen(
       json,
     );
     return;
+  }
+  // The launched open is a HUMAN'S verb: it hands this terminal to an
+  // interactive agent run, and a declared agent is never given an interactive
+  // affordance (design/0005-agent-audience/; src/cli/caller.ts). The hazard is
+  // concrete, not doctrinal: every pre-0032 manifest teaches a running agent
+  // to record its task work with exactly `session open TASK --purpose TEXT`,
+  // and manifests in the wild stay stale until their workspace upgrades — so
+  // that invocation arriving from an agent's shell must refuse, not block the
+  // agent on a TUI it cannot drive. Refused at BOTH scopes, before any
+  // record: one coherent rule until detached hosting exists (the Arc-2
+  // deferral 0029 named).
+  if (callerIsAgent()) {
+    throw new WardError(
+      'a declared agent is not given the launched open — it starts an interactive run in this ' +
+        'terminal. Record your own run instead: ward session open ' +
+        `${task === undefined ? '' : `${task} `}--purpose TEXT --handle HANDLE — ` +
+        'launching stays a human act until detached hosting exists',
+    );
   }
   // Record, then launch. The document (or the human's line) is emitted from
   // the callback, so what the caller reads is the record as it stood BEFORE

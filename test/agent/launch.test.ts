@@ -246,6 +246,49 @@ test('open TASK --handle stays record-only — a run Ward did not start', async 
   expect(record?.model).toBeUndefined(); // recorded only where Ward did the starting
 });
 
+test('a declared agent is refused the launched open at both scopes, nothing manufactured', async () => {
+  // The stale-manifest hazard made concrete: every pre-0032 AGENTS.md teaches
+  // a running agent to record its task work with exactly this invocation, so
+  // it must refuse — never hand the agent's shell an interactive TUI
+  // (design/0005-agent-audience/'s posture).
+  await openTask(ws, 'feature', {});
+  await fabricateWorktree('tasks/t1-feature', 't1-feature');
+  const agentEnv = { WARD_AGENT: 'sess-9' };
+
+  const taskScope = ward(['session', 'open', 't1', '--purpose', 'from an agent'], {
+    env: agentEnv,
+  });
+  expect(taskScope.exitCode).toBe(1);
+  expect(taskScope.stderr).toContain('a declared agent is not given the launched open');
+  expect(taskScope.stderr).toContain('ward session open t1 --purpose TEXT --handle HANDLE');
+
+  const workspaceScope = ward(['session', 'open', '--purpose', 'from an agent'], {
+    env: agentEnv,
+  });
+  expect(workspaceScope.exitCode).toBe(1);
+  expect(workspaceScope.stderr).toContain('ward session open --purpose TEXT --handle HANDLE');
+
+  // No record at either scope, no id spent, and no process ever started.
+  expect(await readSessions(ws, 'tasks/t1-feature')).toEqual([]);
+  expect(await readSessions(ws, '')).toEqual([]);
+  expect(runs()).toEqual([]);
+
+  // The path agents actually use stays open: --handle records fine, declared.
+  const recorded = ward(
+    ['session', 'open', 't1', '--purpose', 'recording myself', '--handle', 'claude:mine'],
+    { env: agentEnv },
+  );
+  expect(recorded.exitCode).toBe(0);
+  expect((await readSessions(ws, 'tasks/t1-feature'))[0]?.handle).toBe('claude:mine');
+  const atRoot = ward(
+    ['session', 'open', '--purpose', 'recording myself', '--handle', 'claude:mine-too'],
+    { env: agentEnv },
+  );
+  expect(atRoot.exitCode).toBe(0);
+  expect((await readSessions(ws, ''))[0]?.handle).toBe('claude:mine-too');
+  expect(runs()).toEqual([]); // still nothing spawned
+});
+
 test('resume of a launched task session re-attaches in the recorded worktree', async () => {
   await openTask(ws, 'feature', {});
   await fabricateWorktree('tasks/t1-feature', 't1-feature');
@@ -469,7 +512,10 @@ let stub: string;
 let caseId = 0;
 
 /** One CLI invocation with the stub harness wired in (a row may override it). */
-function ward(argv: string[], options: { bin?: string; exitCode?: number } = {}): CliResult {
+function ward(
+  argv: string[],
+  options: { bin?: string; exitCode?: number; env?: Record<string, string> } = {},
+): CliResult {
   const bin =
     options.bin ??
     (options.exitCode === undefined
@@ -483,6 +529,7 @@ function ward(argv: string[], options: { bin?: string; exitCode?: number } = {})
       WARD_CLAUDE_BIN: bin,
       CLAUDE_CONFIG_DIR: claudeHome,
       WARD_CONFIG_DIR: configHome,
+      ...options.env,
     },
   });
   return {

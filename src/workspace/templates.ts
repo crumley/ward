@@ -72,7 +72,8 @@ open is what starts the agent** — there is no id to copy by hand:
 - **Sessions Ward did not launch record themselves.** \`--handle HANDLE\` on \`ward session
   open\` (at either scope) records without launching — the path for an agent that is already
   running, like the one reading this file. Put your harness's own run id in \`--handle\` (for
-  Claude Code: \`claude:<session-id>\`) so the run can be located again.
+  Claude Code: \`claude:<session-id>\`) so the run can be located again. The launched open is
+  the human's path: a declared agent is refused it and always records with \`--handle\`.
 
 ## Driving \`ward\` as an agent
 

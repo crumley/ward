@@ -73,6 +73,12 @@ words, not the owner's:
     it; zero — refuse, naming `ward worktree create TASK --repo NAME` and `--dir PATH`; several —
     refuse, naming every worktree path and `--dir`. A refusal happens **before the record exists**:
     no session, no id spent, no trail for a launch that had nowhere to stand.
+  - **The launched open refuses a declared agent — at both scopes.** A caller with `WARD_AGENT` set
+    is refused the handle-less open before any work, with the refusal naming both ways through:
+    record your own run with `--handle`, and leave launching to a human until detached hosting
+    exists. The task-scope half is this entry's obligation (below, the stale-manifest hazard); the
+    workspace-scope half goes a hair beyond the commission and is named as an addition in the build
+    log, the way 0029 named its model/effort recording.
   - **The record-only path, unmoved.** `--handle` at either scope behaves exactly as before — same
     records, same output, no spawn — and the store-level `openSession` API keeps its record-only
     nature (it additionally records `model`/`effort` when the launch passes them, mirroring
@@ -82,8 +88,9 @@ words, not the owner's:
     changing them.
   - **The manifest refresh** — the Sessions section gains the task-scope bullet (launched, in the
     task's worktree, sole-or-`--dir`), and the record-only bullet now says `--handle` is what makes
-    an open record-only; the outgoing 0029-era default's sha256 joins `INSTALLED_ARTIFACT_LINEAGE`
-    so `ward workspace upgrade` brings an untouched manifest forward.
+    an open record-only and that the launched open is the human's path, refused to a declared agent;
+    the outgoing 0029-era default's sha256 joins `INSTALLED_ARTIFACT_LINEAGE` so
+    `ward workspace upgrade` brings an untouched manifest forward.
   - **Tests** — task-scope cases in the stub-harness end-to-end suite (record beside the task,
     launch cwd, `WARD_AGENT`, record seen from inside the run, model/effort recorded; both refusals
     with nothing manufactured; `--dir` at zero and at several; `--handle` record-only; resume in the
@@ -118,8 +125,10 @@ words, not the owner's:
   the record; the stub observes its own record from inside a run whose cwd is the worktree and whose
   `WARD_AGENT` is the session id; the zero- and multi-worktree refusals name their options and
   manufacture nothing; `--dir` launches exactly where it says at both edge cases; `--handle` at task
-  scope records without any spawn; resume of a launched task session re-attaches in the recorded
-  worktree; and the outgoing `AGENTS.md` is a known default so upgrade brings it forward.
+  scope records without any spawn; a declared agent is refused the handle-less open at both scopes
+  with nothing manufactured, while `--handle` still records for it at both; resume of a launched
+  task session re-attaches in the recorded worktree; and the outgoing `AGENTS.md` is a known default
+  so upgrade brings it forward.
 
 ## Design
 
@@ -149,6 +158,19 @@ words, not the owner's:
   - **`--dir` stays one thing.** It has always named the recorded working directory on this verb; on
     the launched path the recorded directory is also the launch directory, so `--dir` now steers the
     launch by meaning exactly what it always meant — not by gaining a second sense.
+  - **The launched open is a human's verb until detached hosting exists.** The refusal follows from
+    two facts. First, the standing posture since [0005](../0005-agent-audience/README.md): a
+    declared agent is never handed an interactive affordance, and a foreground `claude` TUI in the
+    agent's own shell — no terminal to drive, blocking forever — is the worst possible one. Second,
+    the hazard is live, not doctrinal: every 0029-era installed manifest teaches an already-running
+    agent to record its task work with exactly the invocation this entry repurposed
+    (`session open TASK --purpose TEXT`, no `--handle`), and manifests in the wild stay stale until
+    each workspace upgrades — so the stale instruction must land on a legible refusal, never on a
+    spawned TUI. The refusal covers **both** scopes for one coherent rule (the launched open, not
+    one scope's flavor of it, is what an agent cannot use), sits **before any record** so a refused
+    open manufactures nothing, and names the agent's own path (`--handle`) plus the boundary that
+    will move it (detached hosting, 0029's Arc-2 deferral). `--handle` stays fully open to declared
+    agents at both scopes — it is the path the manifest sends them down.
   - **`--handle` is what makes an open record-only.** The verb's paths are now split on one flag
     rather than on scope: no `--handle` launches (workspace or task), `--handle` records a run Ward
     did not start (workspace or task). One rule to teach, and the manifest now says it that way. The
@@ -225,7 +247,7 @@ nothing, which the tests pin (`readSessions` empty, `runs()` empty).
   records without any spawn, and `ward status` shows the open session on its task's own row
   (`t1 feature [active] — sessions: feature-1`) — the indicator this entry decided not to duplicate
   at workspace level.
-- `bun test test/agent` → `58 pass, 0 fail` (the launch suite grew from 15 to 22 cases); `bun test`
+- `bun test test/agent` → `58 pass, 0 fail` (the launch suite grew from 15 to 21 cases); `bun test`
   → `550 pass, 0 fail, 2357 expect() calls` across 47 files, from `543 / 2313 / 47` at this branch's
   base. **Two existing cases changed, deliberately:** the scope suite's
   `session open TASK records the task session …` became
@@ -250,6 +272,45 @@ shapes, the schema registry, completion, and telemetry are untouched.
 **Next.** Project-scope launches (the third opener over the same spine, and the entry that owes
 `status` its answer for sessions without a task row); the `WARD_AGENT`-hermetic test scaffolding;
 rooms, when they have records to stand on.
+
+### 2026-08-24 — The declared-agent guard (review follow-through)
+
+**Goal.** Close the review's one substantive finding: the launched path must refuse a declared
+agent. **What was done.** The refusal in `cmdSessionOpen`'s launched path — `callerIsAgent()`
+checked before any work, at both scopes, naming the agent's own path (`--handle`, with the exact
+invocation for the scope asked) and the boundary (launching stays a human act until detached hosting
+exists); the manifest's record-only bullet gained one clause saying the same; a guard case in the
+launch suite. The why is the new Design decision: 0005's never-interactive posture, plus the live
+stale-manifest hazard — every 0029-era `AGENTS.md` in the wild teaches a running agent to record its
+task work with exactly the invocation this entry turned into a launch, and until each workspace
+upgrades, that instruction must meet a legible refusal rather than a TUI blocking the agent's shell.
+
+**What works now — with the exact commands that prove it** (Bun 1.3.14, Linux):
+
+- **Dogfood, in the scratch workspace above:** with `WARD_AGENT=sess-9`,
+  `ward session open t1 --purpose x` →
+  `error: a declared agent is not given the launched open — it starts an interactive run in this
+  terminal. Record your own run instead: ward session open t1 --purpose TEXT --handle HANDLE —
+  launching stays a human act until detached hosting exists`,
+  exit 1, no record written, no process spawned; the bare `ward session open --purpose x` refuses
+  the same way with the workspace-shaped fix; both `--handle` forms still record, declared, exit 0.
+- `bun test test/agent/launch.test.ts` → `22 pass, 0 fail` — the new case pins both refusals
+  (stderr, no record at either scope, `runs()` empty) and both `--handle` paths staying open to a
+  declared caller.
+- `bun test` → `551 pass, 0 fail, 2370 expect() calls` across 47 files; `mise run fmt` then
+  `env -u WARD_AGENT mise run check` → exit 0.
+
+**One addition beyond the commissioned scope, named because it is one.** The commission asked for
+the task scope; the guard covers the **workspace** scope too. The task-scope half is this entry's
+obligation — it changed the meaning of an invocation stale manifests still teach. The
+workspace-scope half is added for one coherent rule (0005's posture is about the affordance, not the
+scope: no declared agent is ever handed an interactive run), and because guarding one scope of the
+same verb would leave the same hazard reachable one argument away. The manifest bytes changed again
+before anything shipped, so the lineage needs no new history entry — the 0029-era fingerprint
+already covers the outgoing installed default, and the pinned current hash simply moved.
+
+**Decisions.** In Design, above (_The launched open is a human's verb until detached hosting
+exists_). **Next.** Unchanged from the first iteration.
 
 ## Spec-feedback
 
