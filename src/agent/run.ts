@@ -1,6 +1,7 @@
 // Starting, resuming, and locating the agent RUN behind a recorded session
-// (design/0029-launched-sessions/) — the Ward-shaped half of the agent-harness
-// seam. The adapter (src/harness/claude.ts) knows how to build an argv, spawn
+// (design/0029-launched-sessions/, extended to task scope by
+// design/0032-task-scope-session-launch/) — the Ward-shaped half of the
+// agent-harness seam. The adapter (src/harness/claude.ts) knows how to build an argv, spawn
 // a process, and find a transcript; this module knows what Ward wants done:
 // which record to write first, what environment declares the agent, which
 // events to append, and how a failure is recorded rather than lost.
@@ -25,12 +26,15 @@ import {
   startArgv,
 } from '../harness/claude.ts';
 import type { SessionRecord } from '../store/types.ts';
+import { resolveOpenTask } from '../workspace/scan.ts';
 import {
   appendSessionEvent,
   findSession,
+  openSession,
   openWorkspaceSession,
   requireOpenSession,
 } from '../workspace/sessions.ts';
+import { readTaskWorktrees } from '../workspace/worktrees.ts';
 import { readAgentConfig } from './config.ts';
 import type { Resolved } from './settings.ts';
 
@@ -48,7 +52,12 @@ export interface LaunchedSession {
 type Recorded = (record: SessionRecord) => void;
 
 /**
- * Open a workspace-scope session and run the agent in it, in the foreground.
+ * Open a workspace-scope session and run the agent in it, in the foreground —
+ * standing in the workspace root (or `workingDirectory`), where an agent
+ * responsible for the whole workspace loads workspace-wide context.
+ *
+ * What launching means — for THIS scope and every launched scope, because
+ * both go through `launchOpened`:
  *
  * The handle is ASSIGNED, not discovered: Ward mints a UUID and passes it as
  * `--session-id`, so the run is born under an id Ward already recorded. That
@@ -72,20 +81,73 @@ export async function launchWorkspaceSession(
   workingDirectory: string | undefined,
   onRecorded: Recorded = () => {},
 ): Promise<LaunchedSession> {
+  return launchOpened(root, onRecorded, (choice) =>
+    openWorkspaceSession(root, purpose, {
+      handle: claudeHandle(choice.nativeId),
+      ...choice.model,
+      ...choice.effort,
+      ...(workingDirectory === undefined ? {} : { workingDirectory }),
+    }),
+  );
+}
+
+/**
+ * Open a TASK-scope session and run the agent in it, in the foreground
+ * (design/0032-task-scope-session-launch/) — the same launch spine as the
+ * workspace scope: assigned handle, record-then-launch, `WARD_AGENT` set,
+ * exit ≠ close. What differs is WHERE the agent stands: a task's agent works
+ * in the task's worktree, so with exactly one worktree that is the launch
+ * directory, and with none or several Ward REFUSES — legibly, before any
+ * record exists — rather than standing the agent somewhere it guessed.
+ * `workingDirectory` (the verb's `--dir`) overrides, exactly as it always
+ * named the recorded directory on this verb.
+ */
+export async function launchTaskSession(
+  root: string,
+  taskCode: string,
+  purpose: string,
+  workingDirectory: string | undefined,
+  onRecorded: Recorded = () => {},
+): Promise<LaunchedSession> {
+  // Settled BEFORE the record is written: a refusal here manufactures
+  // nothing — no session, no id spent, no event trail for a launch that
+  // never had a place to stand.
+  const dir = workingDirectory ?? (await soleWorktreeOf(root, taskCode));
+  return launchOpened(root, onRecorded, (choice) =>
+    openSession(root, taskCode, purpose, {
+      handle: claudeHandle(choice.nativeId),
+      ...choice.model,
+      ...choice.effort,
+      workingDirectory: dir,
+    }),
+  );
+}
+
+/** What the launch resolved before the record was opened. */
+interface LaunchChoice {
+  readonly nativeId: string;
+  readonly model: Partial<Record<'model', string>>;
+  readonly effort: Partial<Record<'effort', string>>;
+}
+
+/**
+ * The one launch spine both scopes share, so they cannot drift: resolve the
+ * configuration, mint the id, open the record (the scope-shaped half a caller
+ * supplies), REPORT it, then spawn. The configuration is resolved BEFORE the
+ * record is written, because what the run is started with is part of what the
+ * record says (the session-log minimum names the model): the record must be
+ * complete the moment it exists, not patched after the process is up.
+ */
+async function launchOpened(
+  root: string,
+  onRecorded: Recorded,
+  open: (choice: LaunchChoice) => Promise<SessionRecord>,
+): Promise<LaunchedSession> {
   const nativeId = randomUUID();
-  // Resolved BEFORE the record is written, because what the run is started
-  // with is part of what the record says (the session-log minimum names the
-  // model): the record must be complete the moment it exists, not patched
-  // after the process is up.
   const agent = await readAgentConfig(root);
   const model = chosenFlag('model', agent.model);
   const effort = chosenFlag('effort', agent.effort);
-  const record = await openWorkspaceSession(root, purpose, {
-    handle: claudeHandle(nativeId),
-    ...model,
-    ...effort,
-    ...(workingDirectory === undefined ? {} : { workingDirectory }),
-  });
+  const record = await open({ nativeId, model, effort });
   onRecorded(record);
   const run = await runClaude({
     argv: startArgv({ nativeId, ...model, ...effort, args: argsOf(agent.args) }),
@@ -93,6 +155,30 @@ export async function launchWorkspaceSession(
     env: { WARD_AGENT: record.id },
   });
   return { record, run };
+}
+
+/**
+ * The task's one worktree — or a refusal that names the options. Zero
+ * worktrees means the task has no room to stand an agent in; several mean
+ * Ward would be guessing which one the work is in, and a guessed directory
+ * silently loads the wrong context. Both refusals name the way through:
+ * create the worktree, or say where with `--dir`.
+ */
+async function soleWorktreeOf(root: string, taskCode: string): Promise<string> {
+  const task = await resolveOpenTask(root, taskCode);
+  const worktrees = await readTaskWorktrees(root, task.dir);
+  const sole = worktrees[0];
+  if (sole !== undefined && worktrees.length === 1) return sole.path;
+  if (worktrees.length === 0) {
+    throw new WardError(
+      `task '${taskCode}' has no worktree to stand the agent in — create one with ` +
+        `\`ward worktree create ${taskCode} --repo NAME\`, or name a directory with --dir PATH`,
+    );
+  }
+  throw new WardError(
+    `task '${taskCode}' has ${worktrees.length} worktrees — say where the agent stands with ` +
+      `--dir PATH (one of: ${worktrees.map((worktree) => worktree.path).join(', ')})`,
+  );
 }
 
 /**

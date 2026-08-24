@@ -11,7 +11,12 @@ import { choice, integer, string } from '@optique/core/valueparser';
 import { run } from '@optique/run';
 import picocolors from 'picocolors';
 import pkg from '../../package.json' with { type: 'json' };
-import { launchWorkspaceSession, locateSession, resumeSession } from '../agent/run.ts';
+import {
+  launchTaskSession,
+  launchWorkspaceSession,
+  locateSession,
+  resumeSession,
+} from '../agent/run.ts';
 import { WardError } from '../errors.ts';
 import { type PrForgeState, probeForge } from '../forge/gh.ts';
 import { readConfig } from '../global/config.ts';
@@ -542,12 +547,13 @@ const worktree = command(
   { brief: message`Operate on task worktrees.` },
 );
 
-// Sessions (design/0029-launched-sessions/): with no TASK, `session open`
-// opens a session at WORKSPACE scope and LAUNCHES the agent in it — Ward
+// Sessions (design/0029-launched-sessions/, task scope launched by
+// design/0032-task-scope-session-launch/): `session open` opens a session and
+// LAUNCHES the agent in it — at WORKSPACE scope with no TASK (standing in the
+// root), at TASK scope with one (standing in the task's worktree). Ward
 // assigns the handle before the process starts, so nothing is ever hand-copied
-// and nothing of Ward's lands in the agent's context. With a TASK it stays the
-// record-only verb 0004 built; `--handle` is the record-only path at either
-// scope, for a session Ward did not start.
+// and nothing of Ward's lands in the agent's context. `--handle` is the
+// record-only path at either scope, for a session Ward did not start.
 const session = command(
   'session',
   or(
@@ -562,7 +568,7 @@ const session = command(
         json: jsonFlag(),
       }),
       {
-        brief: message`Open a session: with no TASK, at workspace scope, launching the agent.`,
+        brief: message`Open a session and launch the agent — workspace scope without TASK, task scope with one.`,
       },
     ),
     command(
@@ -1715,15 +1721,18 @@ async function cmdWorktreeList(json: boolean): Promise<void> {
 }
 
 /**
- * `session open` (design/0029-launched-sessions/), three paths through one
- * verb:
+ * `session open` (design/0029-launched-sessions/, task scope launched by
+ * design/0032-task-scope-session-launch/), the paths through one verb:
  *
- * - **TASK given** — the record-only session 0004 built, unchanged.
- * - **no TASK, `--handle` given** — a record-only session at workspace scope,
- *   for a run Ward did not start (the agent reading the manifest is the
- *   motivating case: it is already running and records itself).
- * - **no TASK, no `--handle`** — the launched path: Ward assigns the handle,
- *   writes the record, and runs the agent in the foreground.
+ * - **`--handle` given** — record-only, at either scope, for a run Ward did
+ *   not start (the agent reading the manifest is the motivating case: it is
+ *   already running and records itself). Byte-for-byte the behavior 0004 and
+ *   0029 built.
+ * - **no `--handle`** — the launched path: Ward assigns the handle, writes
+ *   the record, and runs the agent in the foreground. With no TASK the scope
+ *   is the workspace and the agent stands in the root; with a TASK the scope
+ *   is that task and the agent stands in the task's worktree — its sole one,
+ *   or the one `--dir` names when there are none or several.
  *
  * Omitting TASK means workspace scope EXPLICITLY, which is why this verb no
  * longer infers a task from the working directory as 0006 gave it: the same
@@ -1739,22 +1748,15 @@ async function cmdSessionOpen(
   json: boolean,
 ): Promise<void> {
   const root = await requireMutableWorkspace();
-  if (task !== undefined) {
-    renderSessionOpened(
-      await openSession(root, task, purpose, {
-        ...(handle === undefined ? {} : { handle }),
-        ...(dir === undefined ? {} : { workingDirectory: dir }),
-      }),
-      json,
-    );
-    return;
-  }
   if (handle !== undefined) {
+    const options = {
+      handle,
+      ...(dir === undefined ? {} : { workingDirectory: dir }),
+    };
     renderSessionOpened(
-      await openWorkspaceSession(root, purpose, {
-        handle,
-        ...(dir === undefined ? {} : { workingDirectory: dir }),
-      }),
+      task === undefined
+        ? await openWorkspaceSession(root, purpose, options)
+        : await openSession(root, task, purpose, options),
       json,
     );
     return;
@@ -1763,16 +1765,20 @@ async function cmdSessionOpen(
   // the callback, so what the caller reads is the record as it stood BEFORE
   // any process existed — the ordering the whole design rests on, made
   // visible rather than merely promised.
-  const { record, run } = await launchWorkspaceSession(root, purpose, dir, (opened) => {
+  const onRecorded = (opened: SessionRecord): void => {
     if (json) printJson(sessionMutationJson(opened));
     else {
       console.log(
         `${pc.green('opened')} session ${pc.bold(opened.id)} ` +
-          pc.dim(`(workspace scope, handle ${opened.handle ?? '?'})`),
+          pc.dim(`(${describeScope(opened)}, handle ${opened.handle ?? '?'})`),
       );
       console.log(pc.dim(`launching the agent in ${opened.workingDirectory} — WARD_AGENT is set`));
     }
-  });
+  };
+  const { record, run } =
+    task === undefined
+      ? await launchWorkspaceSession(root, purpose, dir, onRecorded)
+      : await launchTaskSession(root, task, purpose, dir, onRecorded);
   if (run.outcome === 'failed') {
     throw new WardError(
       `the agent did not start — ${run.cause}. Session ${record.id} is recorded and open: ` +
