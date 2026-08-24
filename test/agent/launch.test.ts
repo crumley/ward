@@ -2,7 +2,10 @@
 // (design/0029-launched-sessions/): `ward session open --purpose TEXT` opens a
 // WORKSPACE-scope session, writes its record, and only then runs the agent —
 // which the stub harness proves by looking for its own session document from
-// inside the launch. Then resume (with its events, failure included) and
+// inside the launch. Since design/0032-task-scope-session-launch/ the same
+// spine launches at TASK scope: `session open TASK` stands the agent in the
+// task's sole worktree, refuses legibly when there are none or several, and
+// `--dir` says where. Then resume (with its events, failure included) and
 // locate (found vs. gone), and the record-only paths that stayed as they were.
 //
 // No test here spawns the real Claude Code: WARD_CLAUDE_BIN points at the
@@ -13,10 +16,14 @@ import { join } from 'node:path';
 import { sessionLocateShape, sessionMutationShape } from '../../src/cli/schema.ts';
 import { mungeCwd } from '../../src/harness/claude.ts';
 import { readDocument, writeDocument } from '../../src/store/document.ts';
-import { type SessionRecord, workspaceRecordType } from '../../src/store/types.ts';
+import {
+  type SessionRecord,
+  workspaceRecordType,
+  worktreeRecordType,
+} from '../../src/store/types.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
-import { readSessions } from '../../src/workspace/sessions.ts';
+import { openSession, readSessions } from '../../src/workspace/sessions.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import {
   applyGitTestEnv,
@@ -121,6 +128,138 @@ test('a harness that will not start: refused legibly, with the record standing',
   expect(record).toMatchObject({ state: 'open', scope: 'workspace' });
 });
 
+// -- the launch, at task scope (design/0032-task-scope-session-launch/) -----
+
+test('open TASK: the record beside its task, the agent standing in the sole worktree', async () => {
+  writeGlobalConfig({ model: 'fable', effort: 'high' });
+  await openTask(ws, 'feature', {});
+  await fabricateWorktree('tasks/t1-feature', 't1-feature');
+
+  const opened = ward(['session', 'open', 't1', '--purpose', 'drive the feature']);
+  expect(opened.exitCode).toBe(0);
+  expect(opened.stdout).toContain('opened session feature-1');
+  expect(opened.stdout).toContain('(task t1, handle claude:');
+  expect(opened.stdout).toContain('launching the agent in worktrees/t1-feature');
+
+  const [record] = await readSessions(ws, 'tasks/t1-feature');
+  expect(record).toMatchObject({
+    id: 'feature-1',
+    scope: 'task',
+    task: 't1',
+    state: 'open',
+    workingDirectory: 'worktrees/t1-feature',
+    purpose: 'drive the feature',
+    model: 'fable', // what it was started with, on the record — same as workspace scope
+    effort: 'high',
+  });
+  const [run] = runs();
+  expect(run?.recordSeen).toBe(true); // the record precedes the process at this scope too
+  expect(run?.wardAgent).toBe('feature-1');
+  expect(run?.cwd).toBe(join(ws, 'worktrees', 't1-feature')); // the task's own room
+  expect(run?.argv[0]).toBe('--session-id');
+  // The handle Ward recorded IS the id the process was started under.
+  expect(record?.handle).toBe(`claude:${run?.argv[1]}`);
+
+  // …and the session still open after the exit, with the resume affordance.
+  expect(opened.stdout).toContain('session feature-1 is still open');
+});
+
+test('open TASK --json: one document, task-shaped, before the run', async () => {
+  await openTask(ws, 'feature', {});
+  await fabricateWorktree('tasks/t1-feature', 't1-feature');
+  const result = ward(['session', 'open', 't1', '--purpose', 'machine-readable', '--json']);
+  expect(result.exitCode).toBe(0);
+  const document = sessionMutationShape.parse(JSON.parse(result.stdout));
+  expect(document).toMatchObject({
+    id: 'feature-1',
+    scope: 'task',
+    task: 't1',
+    state: 'open',
+    workingDirectory: 'worktrees/t1-feature',
+  });
+  expect(runs()[0]?.recordSeen).toBe(true);
+});
+
+test('open TASK with no worktree: refused legibly, nothing manufactured — unless --dir', async () => {
+  await openTask(ws, 'feature', {});
+  const refused = ward(['session', 'open', 't1', '--purpose', 'nowhere to stand']);
+  expect(refused.exitCode).toBe(1);
+  expect(refused.stderr).toContain("task 't1' has no worktree to stand the agent in");
+  expect(refused.stderr).toContain('ward worktree create t1 --repo NAME');
+  expect(refused.stderr).toContain('--dir PATH');
+  expect(await readSessions(ws, 'tasks/t1-feature')).toEqual([]); // no record, no id spent
+  expect(runs()).toEqual([]); // no process either
+
+  // --dir says where, and the launch proceeds exactly there.
+  const placed = ward(['session', 'open', 't1', '--purpose', 'placed by hand', '--dir', '.']);
+  expect(placed.exitCode).toBe(0);
+  expect((await readSessions(ws, 'tasks/t1-feature'))[0]?.workingDirectory).toBe('.');
+  expect(runs()[0]?.cwd).toBe(ws);
+});
+
+test('open TASK with several worktrees: refused naming each — --dir picks one', async () => {
+  await openTask(ws, 'feature', {});
+  await fabricateWorktree('tasks/t1-feature', 't1-feature');
+  await fabricateWorktree('tasks/t1-feature', 't1-second');
+
+  const refused = ward(['session', 'open', 't1', '--purpose', 'which room?']);
+  expect(refused.exitCode).toBe(1);
+  expect(refused.stderr).toContain("task 't1' has 2 worktrees");
+  expect(refused.stderr).toContain('worktrees/t1-feature');
+  expect(refused.stderr).toContain('worktrees/t1-second');
+  expect(await readSessions(ws, 'tasks/t1-feature')).toEqual([]);
+  expect(runs()).toEqual([]);
+
+  const placed = ward([
+    'session',
+    'open',
+    't1',
+    '--purpose',
+    'the second room',
+    '--dir',
+    'worktrees/t1-second',
+  ]);
+  expect(placed.exitCode).toBe(0);
+  expect((await readSessions(ws, 'tasks/t1-feature'))[0]?.workingDirectory).toBe(
+    'worktrees/t1-second',
+  );
+  expect(runs()[0]?.cwd).toBe(join(ws, 'worktrees', 't1-second'));
+});
+
+test('open TASK --handle stays record-only — a run Ward did not start', async () => {
+  await openTask(ws, 'feature', {});
+  await fabricateWorktree('tasks/t1-feature', 't1-feature');
+  const result = ward([
+    'session',
+    'open',
+    't1',
+    '--purpose',
+    'already running',
+    '--handle',
+    'claude:existing',
+  ]);
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout).toContain('opened session feature-1 (task t1, in worktrees/t1-feature)');
+  expect(runs()).toEqual([]); // nothing was started
+  const [record] = await readSessions(ws, 'tasks/t1-feature');
+  expect(record).toMatchObject({ handle: 'claude:existing', scope: 'task', task: 't1' });
+  expect(record?.model).toBeUndefined(); // recorded only where Ward did the starting
+});
+
+test('resume of a launched task session re-attaches in the recorded worktree', async () => {
+  await openTask(ws, 'feature', {});
+  await fabricateWorktree('tasks/t1-feature', 't1-feature');
+  ward(['session', 'open', 't1', '--purpose', 'resume me']);
+  const nativeId = runs()[0]?.argv[1] ?? '';
+
+  const resumed = ward(['session', 'resume', 'feature-1']);
+  expect(resumed.exitCode).toBe(0);
+  expect(resumed.stdout).toContain('resuming session feature-1');
+  expect(runs()[1]?.argv).toEqual(['--resume', nativeId]);
+  expect(runs()[1]?.cwd).toBe(join(ws, 'worktrees', 't1-feature')); // the recorded directory
+  expect(eventsOf(await readSessions(ws, 'tasks/t1-feature'))).toEqual(['opened', 'resumed']);
+});
+
 // -- resume -----------------------------------------------------------------
 
 test('resume: the same id, in the recorded directory, with the attempt recorded', async () => {
@@ -170,7 +309,9 @@ test('resume works on a manually recorded task session — any claude: handle', 
 
 test('a session Ward cannot re-attach to is refused by name, never guessed at', async () => {
   await openTask(ws, 'feature', {});
-  ward(['session', 'open', 't1', '--purpose', 'no handle']);
+  // A record with no handle at all — the store API still writes them (a
+  // pre-0029 shape); the CLI's handle-less path now launches instead.
+  await openSession(ws, 't1', 'no handle', {});
   const noHandle = ward(['session', 'resume', 'feature-1']);
   expect(noHandle.exitCode).toBe(1);
   expect(noHandle.stderr).toContain('has no harness handle');
@@ -362,6 +503,29 @@ function runs(): Run[] {
 
 function eventsOf(records: readonly (SessionRecord | undefined)[]): string[] {
   return (records[0]?.events ?? []).map((event) => event.event);
+}
+
+/**
+ * A worktree the task can stand its agent in: the record (which is what the
+ * launch reads) plus the directory (which is what the spawn stands in). No
+ * repository is registered and no git worktree exists — the launch consumes
+ * the RECORD, which is the point: the directory question is answered from the
+ * store, never from a git scan.
+ */
+async function fabricateWorktree(taskDir: string, name: string): Promise<void> {
+  const path = `worktrees/${name}`;
+  await writeDocument(ws, worktreeRecordType(taskDir, name), {
+    data: {
+      type: 'worktree',
+      repo: 'demo',
+      branch: name,
+      disposition: 'deliverable',
+      path,
+      createdAt: new Date().toISOString(),
+    },
+    body: `Worktree \`${path}\` (test fixture).`,
+  });
+  mkdirSync(join(ws, path), { recursive: true });
 }
 
 /** A transcript where the harness would have written one. */
