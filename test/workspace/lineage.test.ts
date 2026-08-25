@@ -50,6 +50,15 @@ test('the AGENTS.md 0029 supersedes is in history — every workspace still on i
   );
 });
 
+test('the AGENTS.md 0032 supersedes is in history — every workspace still on it upgrades', () => {
+  // design/0032-task-scope-session-launch/ retaught the manifest that a task
+  // session open LAUNCHES; the 0029-era default it replaces must stay a known
+  // default for the same reason as above.
+  expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
+    'ef5ffe607886ca2fea68c54f7cf72a138c5058316116b49a78d664ffa58ac510', // 7fa9656 (design 0029)
+  );
+});
+
 // The maintenance guard-rail: the lineage's history is maintained by hand, so
 // the current defaults are pinned here. When templates.ts (or the catalog
 // seed) changes, this test fails — the fix is to append the outgoing hash to
@@ -57,7 +66,7 @@ test('the AGENTS.md 0029 supersedes is in history — every workspace still on i
 // exactly the bookkeeping that keeps every shipped default recognizable.
 test('the current defaults are pinned; changing one must move its old hash into history', () => {
   expect(sha256OfText(AGENTS_MD)).toBe(
-    'ef5ffe607886ca2fea68c54f7cf72a138c5058316116b49a78d664ffa58ac510', // since design 0029
+    '2f7aa813009881366f0eded6b525452d5a49d464c36e0c042e0a38fc6e0be5ad', // since design 0032
   );
   expect(sha256OfText(WARD_INTERNAL_README)).toBe(
     '6f10845611635508f006727f83bdc2222d840a9da972393781662c9f6ff04ac4', // since 65f1e8b (0013)

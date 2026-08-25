@@ -54,6 +54,10 @@ open is what starts the agent** — there is no id to copy by hand:
   workspace root. Ward assigns the harness handle before the process starts and sets
   \`WARD_AGENT\` in its environment, so the new session is declared from its first command and
   nothing about Ward has to be explained to it.
+- \`ward session open TASK --purpose TEXT\` does the same at **task scope**: the session is
+  recorded beside its task and the agent is launched **in the task's worktree** — with exactly
+  one worktree it is chosen for you; with none or several, Ward refuses and \`--dir PATH\` says
+  where the agent stands.
 - **When the agent exits, the session stays open.** An exit is not a close: open and running are
   different things. Pick it back up with \`ward session resume ID\` — same conversation, same
   handle, in the directory it ran in — or end it with \`ward session close ID\`.
@@ -65,11 +69,11 @@ open is what starts the agent** — there is no id to copy by hand:
   overridden **per key** by an \`agent:\` block in \`workspace.md\`. A key set nowhere is passed
   as nothing at all — the harness's own default then applies. \`ward doctor\` prints the resolved
   answer with the layer each key came from.
-- **Sessions Ward did not launch record themselves.** \`ward session open --purpose TEXT --handle
-  HANDLE\` (and \`ward session open TASK --purpose TEXT\` for a task) records without launching —
-  the path for an agent that is already running, like the one reading this file. Put your
-  harness's own run id in \`--handle\` (for Claude Code: \`claude:<session-id>\`) so the run can
-  be located again.
+- **Sessions Ward did not launch record themselves.** \`--handle HANDLE\` on \`ward session
+  open\` (at either scope) records without launching — the path for an agent that is already
+  running, like the one reading this file. Put your harness's own run id in \`--handle\` (for
+  Claude Code: \`claude:<session-id>\`) so the run can be located again. The launched open is
+  the human's path: a declared agent is refused it and always records with \`--handle\`.
 
 ## Driving \`ward\` as an agent
 

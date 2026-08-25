@@ -41,10 +41,14 @@ test('session open with no TASK is workspace scope, even inside a worktree (0029
   expect(await readSessions(ws, 'tasks/t1-feature')).toEqual([]);
 });
 
-test('session open TASK records the task session, the worktree as its directory', async () => {
-  const result = runWard(['session', 'open', 't1', '--purpose', 'drive the feature'], wtDir);
+test('session open TASK launches at task scope, the sole worktree as its directory (0032)', async () => {
+  const result = runWardEnv(['session', 'open', 't1', '--purpose', 'drive the feature'], wtDir, {
+    NO_COLOR: '1',
+    WARD_CLAUDE_BIN: writeFakeClaude(scratch, `claude-task-${caseId}`),
+  });
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('opened session feature-1');
+  expect(result.stdout).toContain('launching the agent in worktrees/t1-feature');
   const sessions = await readSessions(ws, 'tasks/t1-feature');
   expect(sessions[0]?.workingDirectory).toBe('worktrees/t1-feature');
 });

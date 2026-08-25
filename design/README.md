@@ -125,6 +125,11 @@ the SF's disposition is appended in its entry, remove the line here.
   workspace's own main line the gated push §18 means?
 - **SF-002** — [0030](0030-upgrade-self-service/README.md): the forge pull request as review surface
   only — landing stays the local gated merge.
+- **SF-001** — [0032](0032-task-scope-session-launch/spec-feedback.md): may Ward derive each scope's
+  natural standing place when the opener does not choose, or does axis independence require both to
+  be named?
+- **SF-002** — [0032](0032-task-scope-session-launch/spec-feedback.md): what the resident/room split
+  means below the persona machinery — a task-scope session doing hands-on work in the worktree.
 
 Entries 0001–0029 predate this queue and their SFs carry dispositions unevenly — some settled in
 their own text, some settled by later intent edits without a disposition line, some genuinely open.

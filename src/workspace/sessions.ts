@@ -1,9 +1,10 @@
 // Session records (design/0004-work-spine/, extended by
-// design/0029-launched-sessions/): the record side of a session — allocation,
-// the scope it belongs to, and the append-only lifecycle trail. Ward now
-// LAUNCHES the agent for a workspace-scope session (src/agent/run.ts drives
-// that), but the record is still the authority: it is written BEFORE any
-// process starts and it outlives every run, because open ≠ running
+// design/0029-launched-sessions/ and design/0032-task-scope-session-launch/):
+// the record side of a session — allocation, the scope it belongs to, and the
+// append-only lifecycle trail. Ward now LAUNCHES the agent for workspace- and
+// task-scope sessions (src/agent/run.ts drives that), but the record is still
+// the authority: it is written BEFORE any process starts and it outlives
+// every run, because open ≠ running
 // (intent/01-concepts/02-sessions-and-lifecycle.md).
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -57,6 +58,8 @@ export async function openSession(
       purpose,
       workingDirectory: options.workingDirectory ?? worktrees[0]?.path ?? '.',
       ...(options.handle === undefined ? {} : { handle: options.handle }),
+      ...(options.model === undefined ? {} : { model: options.model }),
+      ...(options.effort === undefined ? {} : { effort: options.effort }),
       subject: `Open session ${id} on task ${taskCode}`,
     });
   });
