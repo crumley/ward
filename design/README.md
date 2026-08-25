@@ -125,6 +125,20 @@ the SF's disposition is appended in its entry, remove the line here.
   workspace's own main line the gated push §18 means?
 - **SF-002** — [0030](0030-upgrade-self-service/README.md): the forge pull request as review surface
   only — landing stays the local gated merge.
+- **SF-001** — [0031](0031-detached-session-hosting/spec-feedback.md): the multiplexer seam's
+  mapping constraint says "for resume", conflating attach (a live run) with re-create (a stopped
+  one) — name both acts.
+- **SF-002** — [0031](0031-detached-session-hosting/spec-feedback.md): the multiplexer-vs-messaging
+  split needs a provisional floor — the host carries hosting only; anything message-shaped rides on
+  the record.
+- **SF-003** — [0031](0031-detached-session-hosting/spec-feedback.md): hosting does not gate on the
+  harness seam's fork-mode question — record the non-dependency under that open question.
+- **SF-004** — [0031](0031-detached-session-hosting/spec-feedback.md): the seam is silent on who may
+  destroy live state — live state is torn down by the lifecycle, never by hygiene.
+- **SF-005** — [0031](0031-detached-session-hosting/spec-feedback.md): attach multiplicity and write
+  ownership are unstated — shared-write attach vs single-writer with explicit takeover.
+- **SF-006** — [0031](0031-detached-session-hosting/spec-feedback.md): mapping a record to a live
+  session says nothing about verifying the mapped-to session belongs to the record.
 
 Entries 0001–0029 predate this queue and their SFs carry dispositions unevenly — some settled in
 their own text, some settled by later intent edits without a disposition line, some genuinely open.
