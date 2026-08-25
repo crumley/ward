@@ -1,60 +1,55 @@
 # 0032 — Task-scope session launch
 
-> `ward session open TASK --purpose TEXT` now opens a session at **task scope** and **starts the
-> agent in it**, standing in the task's own worktree — the same launch spine 0029 built (assigned
-> handle, record-then-launch, `WARD_AGENT`, exit ≠ close), reached from the task's side. With one
-> worktree the directory is derived; with none or several Ward refuses legibly and `--dir` says
-> where. `--handle` stays the record-only path at either scope, byte-for-byte.
+> `ward session open TASK --purpose TEXT` now opens a session at **task scope** and starts the agent
+> in it, standing in the task's own worktree — the launched open
+> [0029](../0029-launched-sessions/README.md) built, reached from the task's side. `--handle` stays
+> the record-only path at either scope, and a declared agent is refused the launched open outright.
 >
-> **Status:** accepted · **Started:** 2026-08-24
+> **Status:** built — awaiting review · **Started:** 2026-08-24
 
-The owner's commissioning directive made one ask with three edges — restated here in the entry's
-words, not the owner's:
+Ward's core delivery loop — a task, its worktree, an agent working in it, a pull request out of it —
+had a manual seam in the middle. 0029 made `ward session open --purpose TEXT` launch the agent at
+workspace scope and deliberately deferred the other scopes; `session open TASK` stayed record-only,
+so the task whose worktree was ready still needed its agent started by hand, in the right directory,
+with the session recorded separately. The records were already shaped for this (scope is data on the
+session document, and task sessions have nested beside their task since
+[0004](../0004-work-spine/README.md)), so the extension is an addition, not a migration.
 
-1. **The launched open reaches task scope.** 0029 deferred exactly this ("task-scoped
-   `session open TASK` stays record-only"), and this entry is the pickup: the core delivery loop — a
-   task, its worktree, an agent working in it, a pull request out of it — becomes one command, with
-   everything the workspace-scope launch already guarantees (the id assigned before the process
-   exists, the record complete before the launch, the lifecycle trail, the recorded model and
-   effort).
-2. **The record-only path does not move.** `--handle` — the path for a run Ward did not start —
-   keeps its exact behavior at both scopes; an agent recording itself mid-run must find the verb it
-   was taught.
-3. **Where the agent stands is designed, not guessed.** The launch directory is the task's worktree,
-   and the edge cases are deliberate: a sole worktree is used; zero or several are refused with the
-   options named (create one, or pass `--dir`); `--dir` keeps the meaning it has always had on this
-   verb — the recorded working directory, now also the launch directory.
+This entry extends the launch to task scope: the same spine — assigned handle, record before
+process, `WARD_AGENT`, exit ≠ close — with the task's worktree as where the agent stands, and the
+ambiguous cases (no worktree, several) refused rather than guessed. Extending it also creates a
+hazard the entry must close itself: the invocation being repurposed is one installed manifests teach
+an already-running agent to use for recording itself, and those manifests stay stale until each
+workspace upgrades — so the launched open refuses a declared agent, at both scopes, and the manifest
+is refreshed through the [0020](../0020-deterministic-upgrade/README.md) lineage mechanism.
+
+Spec-feedback lives in [`spec-feedback.md`](spec-feedback.md); the build journal in
+[`build-log.md`](build-log.md).
 
 ## Serves intent
 
-- [`sessions-and-lifecycle`](../../intent/01-concepts/02-sessions-and-lifecycle.md) — the same
-  lifecycle, at a second scope: the record precedes the process, an exit leaves the session `open`,
-  `resumed` / `resume-failed` / `closed` land on the trail, and the session-log minimum (purpose,
-  directory, handle, model) is met by the same fields at task scope that 0029 wrote at workspace
-  scope. Nothing lifecycle-shaped is scope-shaped, which is what made this entry an extension rather
-  than a redesign.
-- [`scopes-and-personas`](../../intent/01-concepts/01-scopes-and-personas.md) — **the two axes**,
-  exercised for real: scope (the task's outcome) and working directory (the task's worktree) are
-  recorded separately, the directory derived from the scope's own record when the opener does not
-  choose and refused when derivation would be a guess (SF-001 records the friction in how the slice
-  words the independence).
+- [`sessions-and-lifecycle`](../../intent/01-concepts/02-sessions-and-lifecycle.md) — the launched
+  lifecycle (record precedes process, exit leaves `open`, events on the trail, the session-log
+  minimum's fields) now holds at a second scope with no lifecycle change, because nothing
+  lifecycle-shaped turned out to be scope-shaped.
+- [`scopes-and-personas`](../../intent/01-concepts/01-scopes-and-personas.md) — scope and working
+  directory are recorded as the two independent axes, with the directory derived from the scope's
+  own record when the opener does not choose (SF-001 in [`spec-feedback.md`](spec-feedback.md)
+  records the friction in how the slice words that independence).
 - [`domain-model`](../../intent/01-concepts/00-domain-model.md) — the session nests under the scope
-  it belongs to (`tasks/<code>-<slug>/sessions/`), exactly where record-only task sessions have
-  lived since 0004; ids stay unique among open sessions workspace-wide, so `resume`, `locate`, and
-  `close` address a launched task session by its bare id with nothing new.
-- [`agent-harness`](../../intent/02-subsystems/03-agent-harness.md) — _start an agent at a scope …
-  in a working directory_, now true for the scope the seam's sentence most obviously meant. The
-  adapter (`src/harness/claude.ts`) is untouched: a second scope needed nothing from the seam, which
-  is the seam working.
+  it belongs to (`tasks/<code>-<slug>/sessions/`), and workspace-wide id uniqueness lets `resume`,
+  `locate`, and `close` address a launched task session by bare id with nothing new.
+- [`agent-harness`](../../intent/02-subsystems/03-agent-harness.md) — the seam's start-at-a-scope
+  constraint is realized for the task scope with the adapter untouched, which is the thin-adapter
+  promise holding.
 - [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md) — the installed
-  `AGENTS.md` taught that a task open records without launching; that sentence is now false, so the
-  manifest is refreshed and the outgoing default's fingerprint joins the lineage
-  ([0020](../0020-deterministic-upgrade/README.md)'s mechanism, 0029's precedent), reaching existing
-  workspaces through `ward workspace upgrade`.
-- [`principles`](../../intent/00-foundation/01-principles.md) — §16 (the record is written before
-  the process and a refusal writes nothing at all), §12 (the handle still costs zero tokens —
-  nothing about the task is asked of the agent), §6 (the sole-worktree rule is deterministic, and
-  ambiguity is a refusal rather than a heuristic), §20 (the refusal names both ways through).
+  `AGENTS.md` described the task open as record-only, which is now false, so the manifest is
+  refreshed and the outgoing default's fingerprint joins the lineage for `ward workspace upgrade` to
+  act on.
+- [`principles`](../../intent/00-foundation/01-principles.md) — §16 (the record precedes the
+  process, and a refusal writes nothing), §12 (the handle still costs zero tokens), §6 (the
+  sole-worktree rule is deterministic; ambiguity refuses rather than guesses), §20 (every refusal
+  names the ways through).
 
 ## Scope
 
@@ -64,11 +59,10 @@ words, not the owner's:
     the record (scope `task`, its task code, handle, directory, purpose, and the resolved
     `model`/`effort`), report it, then run the agent in the foreground with
     `WARD_AGENT=<session id>`, in the recorded directory. Exit ≠ close; the run's exit code is the
-    invocation's; a spawn failure is refused legibly with the record standing — all of it the 0029
-    contract, at the new scope.
-  - **One launch spine for both scopes.** `launchWorkspaceSession` and the new `launchTaskSession`
-    are two openers over one private `launchOpened` in `src/agent/run.ts`, so the launch semantics
-    cannot drift between scopes by construction.
+    invocation's; a spawn failure is refused legibly with the record standing — the 0029 contract,
+    at the new scope.
+  - **One launch spine for both scopes**, so their semantics cannot drift (Design, _One spine, two
+    openers_).
   - **The launch-directory rule.** `--dir` wins when given. Otherwise: exactly one worktree — use
     it; zero — refuse, naming `ward worktree create TASK --repo NAME` and `--dir PATH`; several —
     refuse, naming every worktree path and `--dir`. A refusal happens **before the record exists**:
@@ -76,9 +70,9 @@ words, not the owner's:
   - **The launched open refuses a declared agent — at both scopes.** A caller with `WARD_AGENT` set
     is refused the handle-less open before any work, with the refusal naming both ways through:
     record your own run with `--handle`, and leave launching to a human until detached hosting
-    exists. The task-scope half is this entry's obligation (below, the stale-manifest hazard); the
-    workspace-scope half goes a hair beyond the commission and is named as an addition in the build
-    log, the way 0029 named its model/effort recording.
+    exists. The task-scope half is this entry's obligation (it changed the meaning of an invocation
+    stale manifests still teach); the workspace-scope half reaches beyond the entry's core scope and
+    is named as an addition, with its reasoning, in Design (_The launched open is a human's verb_).
   - **The record-only path, unmoved.** `--handle` at either scope behaves exactly as before — same
     records, same output, no spawn — and the store-level `openSession` API keeps its record-only
     nature (it additionally records `model`/`effort` when the launch passes them, mirroring
@@ -87,266 +81,151 @@ words, not the owner's:
     id, recorded directory); this entry proves them against a launched task session rather than
     changing them.
   - **The manifest refresh** — the Sessions section gains the task-scope bullet (launched, in the
-    task's worktree, sole-or-`--dir`), and the record-only bullet now says `--handle` is what makes
-    an open record-only and that the launched open is the human's path, refused to a declared agent;
-    the outgoing 0029-era default's sha256 joins `INSTALLED_ARTIFACT_LINEAGE` so
-    `ward workspace upgrade` brings an untouched manifest forward.
-  - **Tests** — task-scope cases in the stub-harness end-to-end suite (record beside the task,
-    launch cwd, `WARD_AGENT`, record seen from inside the run, model/effort recorded; both refusals
-    with nothing manufactured; `--dir` at zero and at several; `--handle` record-only; resume in the
-    recorded worktree), the scope suite's task-open case updated to the launched behavior, and the
-    lineage pins moved.
+    task's worktree, sole-or-`--dir`) and now states that `--handle` is what makes an open
+    record-only and that the launched open is the human's path; the outgoing 0029-era default's
+    sha256 joins `INSTALLED_ARTIFACT_LINEAGE` so `ward workspace upgrade` brings an untouched
+    manifest forward.
+  - **Tests** — task-scope cases in the stub-harness end-to-end suite, the scope suite's task-open
+    case updated to the launched behavior, and the lineage pins moved (the acceptance list below
+    names what they prove).
 - **Deferred:**
-  - **Launching at project scope.** _Why safe:_ unchanged from 0029 — the scope enum grows a value
-    with the verb that opens one; both launched scopes now go through one spine, so the third is an
-    opener, not a migration.
-  - **A workspace-level sessions line in `ward status`.** 0029 deferred it to "the entry that adds
-    project scope … with more than one case in hand", and this entry deliberately keeps the
-    deferral: the decision here was that there is **nothing to build for task scope** — task rows
-    have carried their open session ids since the status report gained `openSessions` (human
-    `— sessions: …` and JSON alike), so a launched task session is already visible exactly where its
-    work is. _Why safe:_ the only sessions `status` cannot yet place are the ones that belong to no
-    task row — workspace scope today, project scope next — and that is the same presentation
-    question 0029 named, still best answered with the project case in hand. `ward session locate`,
-    the record, and `workspace restore`'s count see every scope today.
-  - **Room-scope sessions, and a persona on the launch.** _Why safe:_ rooms have no records yet and
-    personas no cast (0029's SF-004, adjudicated: fields conditioned on a source existing); SF-002
-    below records what building at the worktree taught about where that boundary will land.
-  - **Usage/token recording at close.** _Why safe:_ 0029's reasoning, unchanged — optional by the
-    seam's contract, and this entry's job was the second scope, not the accounting.
-  - **Hardening the test scaffolding against an ambient `WARD_AGENT`.** Building from inside a
-    Ward-launched session showed the spawned-CLI suites inherit the caller's `WARD_AGENT` and eight
-    pre-existing cases fail under it (they assert human-shaped output); this entry's gate runs are
-    `env -u WARD_AGENT`. _Why safe:_ the failures predate this entry, CI has no `WARD_AGENT`, and
-    the fix (stripping it at every spawn helper) touches many suites this entry otherwise leaves
-    alone — it deserves its own small change, not a rider.
-- **Acceptance:** `mise run check` green, and the suites proving: the launched task open writes
-  scope `task` beside its task with the worktree as its directory and the resolved model/effort on
-  the record; the stub observes its own record from inside a run whose cwd is the worktree and whose
-  `WARD_AGENT` is the session id; the zero- and multi-worktree refusals name their options and
-  manufacture nothing; `--dir` launches exactly where it says at both edge cases; `--handle` at task
-  scope records without any spawn; a declared agent is refused the handle-less open at both scopes
-  with nothing manufactured, while `--handle` still records for it at both; resume of a launched
-  task session re-attaches in the recorded worktree; and the outgoing `AGENTS.md` is a known default
-  so upgrade brings it forward.
+  - **Launching at project scope.** Safe to defer because the deferral costs only absence: the scope
+    enum grows a value with the verb that opens one, and with both launched scopes now going through
+    one spine, the third arrives as an opener, not a migration — nothing written today needs
+    revisiting.
+  - **A workspace-level sessions line in `ward status`.** 0029 deferred the presentation question to
+    the entry with more than one homeless case in hand, and this entry deliberately keeps that
+    deferral after deciding there is **nothing to build for task scope**: task rows have carried
+    their open session ids since the status report gained `openSessions` (human `— sessions: …` and
+    JSON alike), so a launched task session is already visible exactly where its work is. Safe to
+    defer because the only sessions `status` cannot yet place are those with no task row — workspace
+    scope today, project scope next — and they remain visible to `ward session locate`, the record
+    itself, and `workspace restore`'s count; nothing is silently lost, only not yet summarized in
+    one listing.
+  - **Room-scope sessions, and a persona on the launch.** Safe to defer because rooms have no
+    records and personas no cast to name one from — a launch cannot record a field that has no
+    source (the session-log minimum's own conditioning) — and SF-002 in
+    [`spec-feedback.md`](spec-feedback.md) records where that boundary will land so the future entry
+    starts from what this one learned.
+  - **Usage/token recording at close.** Safe to defer because the harness contract makes usage
+    optional and nothing may depend on its presence; the session records remain complete without it,
+    and the transcript it would be read from outlives the session by the harness's own retention.
+  - **Hardening the test scaffolding against an ambient `WARD_AGENT`.** Building from inside a live
+    agent session showed the spawned-CLI suites inherit the caller's `WARD_AGENT` and eight
+    pre-existing cases fail under it (they assert human-shaped output); this entry's gate runs unset
+    it ([`build-log.md`](build-log.md)). Safe to defer because the failures predate this entry and
+    reproduce on its untouched base, CI carries no `WARD_AGENT`, and the fix spans many suites this
+    entry otherwise leaves alone — a small dedicated change loses nothing in the gap beyond the
+    `env -u` workaround it documents.
+- **Acceptance:**
+  1. `env -u WARD_AGENT mise run check` exits 0 (lint, format, `tsc --noEmit`, tests, links,
+     actionlint).
+  2. `bun test test/agent/launch.test.ts` — the launched task open writes scope `task` beside its
+     task with the worktree as its directory and the resolved model/effort on the record, and the
+     stub harness observes its own record from inside a run whose cwd is the worktree and whose
+     `WARD_AGENT` is the session id.
+  3. Same suite — the zero- and multi-worktree refusals name their options and manufacture nothing
+     (no record, no spawn), and `--dir` launches exactly where it says at both edge cases.
+  4. Same suite — a declared agent is refused the handle-less open at both scopes with nothing
+     manufactured, while `--handle` still records for it at both.
+  5. Same suite — `--handle` at task scope records without any spawn, and resume of a launched task
+     session re-attaches in the recorded worktree.
+  6. `bun test test/cli/scope.test.ts` — `session open TASK` launches with the sole worktree as the
+     session's directory, and the rest of the cwd-inference behavior is untouched.
+  7. `bun test test/workspace/lineage.test.ts` — the outgoing 0029-era `AGENTS.md` is a known
+     default (so upgrade brings it forward) and the current default's pin matches the shipped
+     template.
 
 ## Design
 
 - **Decisions:** no new ADRs — the store stack ([ADR 0005](../decisions/0005-store-stack.md))
-  governs the record, and every stack choice this launch rests on was 0029's. Entry-local:
+  governs the record, and every stack choice this launch rests on was 0029's. Entry-local, each with
+  the alternative it beat:
   - **One spine, two openers.** The launch invariants — configuration resolved before the record,
     record written and reported before the spawn, `WARD_AGENT` set, argv from the same `startArgv` —
-    are one private function (`launchOpened`); each scope contributes only how its record is opened.
-    The alternative (a parallel `launchTaskSession` transcribing 0029's body) would have been two
-    copies of the ordering the whole design rests on, divergeable by any future edit. The refactor
-    changes nothing observable at workspace scope, which the untouched 0029 suites prove.
-  - **The task's agent stands in the task's worktree.** The worktree is where the task's changes are
-    made — the anchor the domain model gives the work — so it is the directory in which the launched
-    agent loads context and acts. The workspace root would hand a task-scope agent the whole
-    workspace's ground and leave it to find its own way down; the worktree is the honest default and
-    the reason this launch automates the delivery loop at all.
+    live in one private function (`launchOpened`); each scope contributes only how its record is
+    opened. _Alternative:_ a parallel `launchTaskSession` transcribing the workspace launcher's body
+    — attractive because it would leave 0029's reviewed function byte-untouched. _Why it lost:_ it
+    duplicates the ordering the whole design rests on, and a future edit to one copy forks the
+    launch semantics silently. _Cost:_ the workspace path now flows through an indirection 0029's
+    text does not describe — paid once, and the untouched 0029 suites pin that nothing observable
+    moved.
+  - **The task's agent stands in the task's worktree.** The worktree is the anchor where the task's
+    changes are made, so it is where the launched agent loads context and acts. _Alternative:_ the
+    workspace root, as 0029 does — attractive for uniformity, and it needs no directory resolution
+    at all. _Why it lost:_ it hands a task-scope agent the whole workspace's ground and leaves it to
+    find its own way down to the work; standing in the worktree is what makes the launch automate
+    the delivery loop rather than merely relocate its first prompt. _Cost:_ the launch needs a
+    directory-resolution step with two refusal cases — accepted and designed rather than smoothed
+    over.
   - **Sole worktree derived; ambiguity refused, never guessed.** With one worktree there is nothing
-    to decide. With zero, launching in a fabricated place (the root, a nonexistent path) would
-    record a directory the work never stood in; with several, picking one silently would load one
-    branch's context for another branch's work — exactly the wrong-context failure a refusal costs
-    nothing to prevent. Both refusals name the way through (create the worktree, or `--dir`), and
-    both happen **before the record is written**: a launch that never had a place to stand leaves no
-    session, no spent id, and no trail to explain away. The record-only default
-    (`worktrees[0] ?? '.'`, from 0004) is deliberately untouched: a `--handle` caller is recording a
-    run that already stood somewhere, and a guessed-at default there mis-records at worst, where a
-    launched guess mis-**acts**.
-  - **`--dir` stays one thing.** It has always named the recorded working directory on this verb; on
-    the launched path the recorded directory is also the launch directory, so `--dir` now steers the
-    launch by meaning exactly what it always meant — not by gaining a second sense.
-  - **The launched open is a human's verb until detached hosting exists.** The refusal follows from
-    two facts. First, the standing posture since [0005](../0005-agent-audience/README.md): a
-    declared agent is never handed an interactive affordance, and a foreground `claude` TUI in the
-    agent's own shell — no terminal to drive, blocking forever — is the worst possible one. Second,
-    the hazard is live, not doctrinal: every 0029-era installed manifest teaches an already-running
-    agent to record its task work with exactly the invocation this entry repurposed
-    (`session open TASK --purpose TEXT`, no `--handle`), and manifests in the wild stay stale until
-    each workspace upgrades — so the stale instruction must land on a legible refusal, never on a
-    spawned TUI. The refusal covers **both** scopes for one coherent rule (the launched open, not
-    one scope's flavor of it, is what an agent cannot use), sits **before any record** so a refused
-    open manufactures nothing, and names the agent's own path (`--handle`) plus the boundary that
-    will move it (detached hosting, 0029's Arc-2 deferral). `--handle` stays fully open to declared
-    agents at both scopes — it is the path the manifest sends them down.
-  - **`--handle` is what makes an open record-only.** The verb's paths are now split on one flag
-    rather than on scope: no `--handle` launches (workspace or task), `--handle` records a run Ward
-    did not start (workspace or task). One rule to teach, and the manifest now says it that way. The
-    task+`--handle` combination is byte-for-byte the 0004 behavior.
+    to decide. _Alternative:_ reuse the record-only default (`worktrees[0] ?? '.'`, from 0004) —
+    attractive as one rule for both paths, with no refusals to write. _Why it lost:_ a guessed
+    directory on a launch **mis-acts** — zero worktrees would stand the agent in a place the work
+    never was, several would load one branch's context for another branch's work — where the
+    record-only guess merely mis-records a run that already stood somewhere; that asymmetry is also
+    why the record-only default is deliberately untouched. _Cost:_ a task with several worktrees
+    always pays one `--dir`, and a task with none cannot launch without it. Both refusals name the
+    way through and happen **before the record is written**, so a launch that never had a place to
+    stand leaves no session, no spent id, and no trail to explain away.
+  - **`--dir` stays one thing.** On the launched path the recorded working directory is also the
+    launch directory, so the existing flag steers the launch by meaning what it always meant.
+    _Alternative:_ a launch-specific flag beside it — attractive as a visible separation of
+    recording from launching. _Why it lost:_ on a launched session the two are one fact, and two
+    flags would let the record and the run disagree about where the agent stood. _Cost:_ none
+    observed; the flag's description broadens without changing.
+  - **The launched open is a human's verb until detached hosting exists.** A caller with
+    `WARD_AGENT` set is refused the handle-less open at both scopes, before any work. _Alternative:_
+    let declared agents launch too — attractive for symmetry, and it is the future shape once
+    sessions can be hosted detached. _Why it lost, twice over:_ the standing posture since
+    [0005](../0005-agent-audience/README.md) is that a declared agent is never handed an interactive
+    affordance, and a foreground `claude` TUI in an agent's own shell — no terminal to drive,
+    blocking forever — is the worst possible one; and the hazard is live, not doctrinal, because
+    every 0029-era installed manifest teaches an already-running agent to record its task work with
+    exactly the invocation this entry repurposed, and manifests in the wild stay stale until each
+    workspace upgrades — the stale instruction must land on a legible refusal, never on a spawned
+    TUI. The refusal covers **both** scopes for one coherent rule (the launched open, not one
+    scope's flavor of it, is what an agent cannot use — guarding one scope would leave the same
+    hazard reachable one argument away); covering the workspace scope is the entry's one addition
+    beyond its core scope, named as one. _Cost:_ agent-driven launching waits for the
+    detached-hosting arc 0029 deferred, and the refusal text names that boundary along with the
+    agent's own path (`--handle`, which stays fully open to declared callers).
+  - **`--handle` is what makes an open record-only.** The verb's paths split on one flag rather than
+    on scope: no `--handle` launches (either scope), `--handle` records a run Ward did not start
+    (either scope). _Alternative:_ keep the split by scope — attractive because it changes no
+    existing invocation's meaning. _Why it lost:_ the scope split **is** the deferral this entry
+    exists to end, and a one-flag rule is teachable in one sentence, which the manifest now spends.
+    _Cost:_ the handle-less task invocation changes meaning under stale manifests — the exact hazard
+    the human's-verb refusal above closes.
   - **`openSession` records what the launch passed, and nothing more.** The store function gains the
-    same optional `model`/`effort` spreads `openWorkspaceSession` got in 0029 — recorded only where
-    Ward did the starting, because they state what actually ran, and a hand-recorded session has no
-    source for them (the session-log minimum's own conditioning).
-  - **No new shapes, verbs, or completion.** 0029 built the JSON shapes scope-ready:
-    `sessionMutationShape` already carries `scope`, `task`, `model`, `effort`, so the launched task
-    open emits the same document the record-only one did, `ward schema` already publishes it, the
-    parser tree gained no words (no new flag, no new verb), and telemetry's verb tree is unchanged.
-    Parity cost zero lines, which is the 0029 groundwork paying out.
-- **Layout:** changed: `src/agent/run.ts` (`launchTaskSession`, the shared `launchOpened`, the
-  sole-worktree resolver), `src/workspace/sessions.ts` (`openSession` records model/effort),
-  `src/cli/index.ts` (`cmdSessionOpen` split on `--handle`, one launched renderer for both scopes
-  via `describeScope`, the verb's brief), `src/workspace/templates.ts` (the manifest's Sessions
-  section), `src/workspace/lineage.ts` (the outgoing default's fingerprint). Tests:
-  `test/agent/launch.test.ts` (the task-scope section and a fixture that fabricates worktree records
-  — the launch reads the record, so no git worktree is needed), `test/cli/scope.test.ts` (the
-  task-open case, now launched), `test/workspace/lineage.test.ts` (pins moved, the 0032-supersedes
-  guard added).
+    same optional `model`/`effort` spreads `openWorkspaceSession` got in 0029. _Alternative:_ record
+    the resolved configuration on every open, `--handle` included — attractive as more data on every
+    record. _Why it lost:_ a hand-recorded session's run was not started by Ward, so today's
+    resolution may not be what actually ran — the field would state a guess as a fact. _Cost:_
+    hand-recorded sessions carry no model or effort, which is the session-log minimum's own
+    conditioning (a field with no source is not invented).
+  - **No new shapes, verbs, or completion.** 0029 built the JSON shapes scope-ready —
+    `sessionMutationShape` already carries `scope`, `task`, `model`, `effort` — so the launched task
+    open emits the document the record-only one did, `ward schema` already publishes it, the parser
+    tree gained no words, and telemetry's verb tree is unchanged. Not a choice this entry made so
+    much as 0029's groundwork paying out; stated so a reader looking for the plumbing knows there
+    deliberately is none.
+- **Layout:** no new modules, and the boundaries hold as drawn. The scope-shaped openers and the
+  shared spine live in `src/agent/run.ts` — the Ward-shaped half of the harness seam — and the
+  adapter (`src/harness/claude.ts`) is untouched, which is the seam's promise demonstrated. The
+  launch-directory rule lives with the launch, not the store: `src/workspace/sessions.ts` stays a
+  record writer whose defaults serve the record-only path, and the refusals are the launcher's. The
+  manifest and its lineage move together (`src/workspace/templates.ts` +
+  `src/workspace/lineage.ts`), the pairing 0020 established.
 - **Mechanisms:**
-  - _Open (task, launched):_ settle the directory — `--dir`, else the task's sole worktree, else
-    refuse naming the options → resolve the configuration → mint a UUID → write and commit
-    `tasks/<dir>/sessions/<id>.md` (scope `task`, task code, handle, directory, purpose,
-    model/effort) → report → spawn `claude --session-id <uuid> [--model M] [--effort E] <args…>` in
-    the worktree with `WARD_AGENT=<id>` → wait → print the resume line → exit with the run's code.
+  - _Open (task, launched):_ refuse a declared caller → settle the directory — `--dir`, else the
+    task's sole worktree, else refuse naming the options → resolve the configuration → mint a UUID →
+    write and commit `tasks/<dir>/sessions/<id>.md` (scope `task`, task code, handle, directory,
+    purpose, model/effort) → report → spawn
+    `claude --session-id <uuid> [--model M] [--effort E] <args…>` in the worktree with
+    `WARD_AGENT=<id>` → wait → print the resume line → exit with the run's code.
   - _Open (task, `--handle`):_ unchanged — record and commit, no spawn.
   - _Resume / locate / close:_ unchanged code paths; a launched task session is found by bare id at
     its scope, resumed in its recorded worktree, located against it.
   - _Upgrade:_ unchanged — the lineage knows the 0029-era `AGENTS.md`, so a workspace still carrying
     it untouched is `stale` and comes forward.
-
-## Build log
-
-### 2026-08-24 — The second launched scope
-
-**Goal.** Everything in Scope. **What was done.** Read the governing intent
-(`02-sessions-and-lifecycle`, `01-scopes-and-personas`, `03-agent-harness`) and the layers below
-(0028, 0029) before designing; then: the launch spine factored out and the task opener added;
-`openSession`'s model/effort; the CLI's `--handle` split and shared launched renderer; the
-manifest's task bullet with its lineage entry; the suites.
-
-Two things changed shape while building. (1) `launchTaskSession` began as a transcription of the
-workspace launcher and became an opener over a shared spine the moment the two bodies were
-side-by-side: every line that differed was scope, every line that matched was invariant, and the
-invariant is exactly what must not drift. (2) The directory refusal moved ahead of the record — the
-first draft resolved worktrees inside the open and refused after allocation, which would have spent
-an id and written nothing to explain it; settling the directory first means a refusal manufactures
-nothing, which the tests pin (`readSessions` empty, `runs()` empty).
-
-**What works now — with the exact commands that prove it** (Bun 1.3.14, Linux):
-
-- **Dogfood, in a scratch workspace** with `WARD_CONFIG_DIR`, `CLAUDE_CONFIG_DIR`, and
-  `WARD_CLAUDE_BIN` pinned at a stub that prints its argv, cwd, and environment. With a task `t1`
-  and no worktree, `ward session open t1 --purpose "drive the feature"` refuses:
-  `task 't1' has no worktree to stand the agent in`, naming both
-  `ward worktree create t1 --repo NAME` and `--dir PATH` — and no session record exists. After
-  `ward worktree create t1 --repo demo`, the same command prints
-  `opened session feature-1 (task t1, handle claude:3c786ca7-…)` then
-  `launching the agent in worktrees/t1-feature — WARD_AGENT is set`; the stub reports
-  `--session-id 3c786ca7-…`, cwd `…/ws/worktrees/t1-feature`, `WARD_AGENT=feature-1`; on exit:
-  `session feature-1 is still open — an exit is not a close`. The record at
-  `tasks/t1-feature/sessions/feature-1.md` carries `scope: task`, `task: t1`,
-  `workingDirectory: worktrees/t1-feature`, the handle, and the `opened` event.
-- `ward session resume feature-1` → `--resume 3c786ca7-…`, cwd the worktree again, and the trail
-  reads `opened`, `resumed`. `ward session locate feature-1` resolves against the **worktree's**
-  munged path, exit 0.
-- With a second worktree, `ward session open t1 --purpose …` refuses:
-  `task 't1' has 2 worktrees — say where the agent stands with --dir PATH (one of:
-  worktrees/t1-feature, worktrees/t1-second)`;
-  adding `--dir worktrees/t1-second` records and launches exactly there. `--handle claude:abc`
-  records without any spawn, and `ward status` shows the open session on its task's own row
-  (`t1 feature [active] — sessions: feature-1`) — the indicator this entry decided not to duplicate
-  at workspace level.
-- `bun test test/agent` → `58 pass, 0 fail` (the launch suite grew from 15 to 21 cases); `bun test`
-  → `550 pass, 0 fail, 2357 expect() calls` across 47 files, from `543 / 2313 / 47` at this branch's
-  base. **Two existing cases changed, deliberately:** the scope suite's
-  `session open TASK records the task session …` became
-  `… launches at task scope, the sole
-  worktree as its directory (0032)` (same record assertions,
-  now through the stub harness), and the launch suite's no-handle resume fixture opens its
-  handle-less session through the store API, since the CLI's handle-less path now launches.
-- `mise run fmt` then `mise run check` → exit 0 (Biome + dprint + `tsc --noEmit` + `bun test` +
-  lychee + actionlint). Both run as `env -u WARD_AGENT mise run check` on this machine: the build
-  ran inside a Ward-launched session, whose own `WARD_AGENT` leaks into the spawned-CLI suites and
-  fails eight **pre-existing** cases that assert human-shaped output (verified against the untouched
-  base: `bun test` → `8 fail`, `env -u WARD_AGENT bun test` → `543 pass`). The scaffolding hardening
-  is deferred, above, with its why-safe.
-
-**Shared surfaces this entry touches** — with 0029: `src/agent/run.ts` (the spine factored out under
-the existing exports), `src/cli/index.ts` (the one `session open` handler),
-`test/agent/launch.test.ts` (the same stub, log, and scaffolding). With 0020:
-`src/workspace/lineage.ts` + `test/workspace/lineage.test.ts` (one history entry appended, the
-current pin moved — the exact bookkeeping the guard test demands). The harness adapter, the JSON
-shapes, the schema registry, completion, and telemetry are untouched.
-
-**Next.** Project-scope launches (the third opener over the same spine, and the entry that owes
-`status` its answer for sessions without a task row); the `WARD_AGENT`-hermetic test scaffolding;
-rooms, when they have records to stand on.
-
-### 2026-08-24 — The declared-agent guard (review follow-through)
-
-**Goal.** Close the review's one substantive finding: the launched path must refuse a declared
-agent. **What was done.** The refusal in `cmdSessionOpen`'s launched path — `callerIsAgent()`
-checked before any work, at both scopes, naming the agent's own path (`--handle`, with the exact
-invocation for the scope asked) and the boundary (launching stays a human act until detached hosting
-exists); the manifest's record-only bullet gained one clause saying the same; a guard case in the
-launch suite. The why is the new Design decision: 0005's never-interactive posture, plus the live
-stale-manifest hazard — every 0029-era `AGENTS.md` in the wild teaches a running agent to record its
-task work with exactly the invocation this entry turned into a launch, and until each workspace
-upgrades, that instruction must meet a legible refusal rather than a TUI blocking the agent's shell.
-
-**What works now — with the exact commands that prove it** (Bun 1.3.14, Linux):
-
-- **Dogfood, in the scratch workspace above:** with `WARD_AGENT=sess-9`,
-  `ward session open t1 --purpose x` →
-  `error: a declared agent is not given the launched open — it starts an interactive run in this
-  terminal. Record your own run instead: ward session open t1 --purpose TEXT --handle HANDLE —
-  launching stays a human act until detached hosting exists`,
-  exit 1, no record written, no process spawned; the bare `ward session open --purpose x` refuses
-  the same way with the workspace-shaped fix; both `--handle` forms still record, declared, exit 0.
-- `bun test test/agent/launch.test.ts` → `22 pass, 0 fail` — the new case pins both refusals
-  (stderr, no record at either scope, `runs()` empty) and both `--handle` paths staying open to a
-  declared caller.
-- `bun test` → `551 pass, 0 fail, 2370 expect() calls` across 47 files; `mise run fmt` then
-  `env -u WARD_AGENT mise run check` → exit 0.
-
-**One addition beyond the commissioned scope, named because it is one.** The commission asked for
-the task scope; the guard covers the **workspace** scope too. The task-scope half is this entry's
-obligation — it changed the meaning of an invocation stale manifests still teach. The
-workspace-scope half is added for one coherent rule (0005's posture is about the affordance, not the
-scope: no declared agent is ever handed an interactive run), and because guarding one scope of the
-same verb would leave the same hazard reachable one argument away. The manifest bytes changed again
-before anything shipped, so the lineage needs no new history entry — the 0029-era fingerprint
-already covers the outgoing installed default, and the pinned current hash simply moved.
-
-**Decisions.** In Design, above (_The launched open is a human's verb until detached hosting
-exists_). **Next.** Unchanged from the first iteration.
-
-## Spec-feedback
-
-- **SF-001** — [`scopes-and-personas`](../../intent/01-concepts/01-scopes-and-personas.md), _Scope
-  and working directory: the two axes of a session_. _Friction:_ the slice says the two axes "are
-  chosen independently when a session starts", and its why is real — responsibility and standing are
-  different choices. But this entry (and 0029 before it, silently) has Ward **derive** the directory
-  from the scope when the opener does not choose: workspace scope stands in the root, task scope in
-  the task's sole worktree, and an ambiguous derivation is refused rather than guessed. Nothing in
-  the slice says who chooses, or what an unchosen directory means at each scope — read literally,
-  "chosen independently" could demand that every open name both axes, which would cost the launched
-  open its one-command shape for no gain in the ordinary case. _Assumption to keep moving:_
-  independence means the axes **can** be set independently (`--dir` overrides at either scope), not
-  that Ward may not derive a natural default from the scope's own record; a derivation with more
-  than one honest answer is a refusal, never a pick. _Proposed revision:_ one sentence in the
-  two-axes section: "Each scope has a natural standing place — the workspace its root, a task its
-  worktree, a room its anchor — which Ward may derive when the opener does not choose; where the
-  derivation is ambiguous, Ward asks rather than guesses. Independence means the opener can always
-  override it." _Why it belongs in intent:_ it holds however the launch is built, and it is the
-  difference between a one-command open and a form with two required fields.
-- **SF-002** — [`scopes-and-personas`](../../intent/01-concepts/01-scopes-and-personas.md), _The
-  roles_ (resident vs. room) with [`domain-model`](../../intent/01-concepts/00-domain-model.md)'s
-  scope vocabulary. _Friction:_ deciding where a task-scope session stands surfaced a boundary the
-  role model draws and the session machinery cannot yet honor. In the role model, the **resident**
-  (task scope) directs and evaluates but "does not do the work itself"; the hands-on work happens in
-  a **room**, standing on the worktree. This entry launches a task-scope session standing **in** the
-  worktree to do the hands-on work — the honest shape today, because rooms have no records and
-  personas no cast, but it means the one session is both resident and room, and when room-scope
-  sessions arrive, every session this entry launched will read as a resident doing student work. The
-  intent never says what the role model means for a workspace operating **below** its persona
-  machinery. _Assumption to keep moving:_ scope names responsibility, not conduct — a task-scope
-  session is responsible for the task's outcome, and until a narrower scope exists to hold the
-  hands-on episode, recording it at task scope in the worktree is accurate, not a violation; the
-  role model describes the cast Ward is growing toward, not a constraint on a cast-less workspace.
-  _Proposed revision:_ a clause where the roles are introduced: "Until a workspace has rooms and a
-  cast, sessions at a scope may do the work the role model would delegate below it; the role model
-  constrains personas, and a session with no persona is bound only by its scope's responsibility."
-  Alternatively, fold it into the existing conditioned-minimum idiom (0029's SF-004): role
-  expectations, like persona fields, are conditioned on the cast existing.
