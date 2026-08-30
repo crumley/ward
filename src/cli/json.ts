@@ -29,7 +29,7 @@ import {
 } from '../store/types.ts';
 import type { CreateReport } from '../workspace/create.ts';
 import type { DoctorReport } from '../workspace/doctor.ts';
-import type { AddReport, RefreshReport } from '../workspace/repos.ts';
+import type { AddReport, RefreshReport, RemoveReport } from '../workspace/repos.ts';
 import type { RestoreReport } from '../workspace/restore.ts';
 import type { StatusReport, TaskStatus } from '../workspace/status.ts';
 import type { MergeReport } from '../workspace/steward.ts';
@@ -45,6 +45,7 @@ import type {
   RepoListShape,
   RepoPathShape,
   RepoRefreshShape,
+  RepoRemoveShape,
   SessionLocateShape,
   SessionMutationShape,
   ShellAdoptShape,
@@ -275,6 +276,16 @@ export function repoRefreshJson(reports: readonly RefreshReport[]): RepoRefreshS
     outcome: report.outcome,
     detail: report.detail,
   }));
+}
+
+/** The removed record verbatim — its remote is the re-add argument (design/0033-repo-remove/). */
+export function repoRemoveJson(report: RemoveReport): RepoRemoveShape {
+  return {
+    name: report.record.name,
+    remote: report.record.remote,
+    mainLine: report.record.mainLine,
+    checkout: report.checkout,
+  };
 }
 
 export function projectOpenJson(record: ProjectRecord): ProjectOpenShape {

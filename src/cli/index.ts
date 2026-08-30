@@ -45,7 +45,12 @@ import { type Finding, runDoctor } from '../workspace/doctor.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
 import { openProject, readProjects } from '../workspace/projects.ts';
 import type { Publication } from '../workspace/publish.ts';
-import { addRepository, listRepositories, refreshRepositories } from '../workspace/repos.ts';
+import {
+  addRepository,
+  listRepositories,
+  refreshRepositories,
+  removeRepository,
+} from '../workspace/repos.ts';
 import { restoreConverged, restoreWorkspace } from '../workspace/restore.ts';
 import { readTasks } from '../workspace/scan.ts';
 import { scopeFromCwd } from '../workspace/scope.ts';
@@ -85,6 +90,7 @@ import {
   repoListJson,
   repoPathJson,
   repoRefreshJson,
+  repoRemoveJson,
   sessionLocateJson,
   sessionMutationJson,
   shellAdoptJson,
@@ -308,6 +314,22 @@ const repoRefresh = command(
   { brief: message`Fetch and fast-forward canonical checkouts to their main lines.` },
 );
 
+// Registration's converse (design/0033-repo-remove/): the record and the
+// checkout go together, gated on the checkout carrying no evidence of
+// unrecorded work — a worktree of an open task, a dirty tree, a stash entry,
+// an unlanded branch — with every refusal naming its remedy.
+const repoRemove = command(
+  'remove',
+  object({
+    action: constant('repo-remove'),
+    name: argument(repoName()),
+    json: jsonFlag(),
+  }),
+  {
+    brief: message`Unregister a repository and delete its canonical checkout (refused while work depends on it).`,
+  },
+);
+
 const repoList = command('list', object({ action: constant('repo-list'), json: jsonFlag() }), {
   brief: message`List the registered repositories.`,
 });
@@ -330,7 +352,7 @@ const repoPath = command(
   { brief: message`Print the absolute path of a repository's canonical checkout.` },
 );
 
-const repo = command('repo', or(repoAdd, repoRefresh, repoList, repoPath), {
+const repo = command('repo', or(repoAdd, repoRefresh, repoRemove, repoList, repoPath), {
   brief: message`Operate on the workspace's registered repositories.`,
 });
 
@@ -734,6 +756,9 @@ try {
         break;
       case 'repo-refresh':
         await cmdRepoRefresh(result.name, result.json, result.stash);
+        break;
+      case 'repo-remove':
+        await cmdRepoRemove(result.name, result.json);
         break;
       case 'repo-list':
         await cmdRepoList(result.json);
@@ -1506,6 +1531,27 @@ async function cmdRepoAdd(source: string, name: string | undefined, json: boolea
   console.log(`  remote    ${report.record.remote}`);
   console.log(`  main line ${report.record.mainLine}`);
   console.log(`  checkout  ${pc.dim(`repos/${report.record.name}/`)}`);
+}
+
+/**
+ * Removal renders its own undo (design/0033-repo-remove/): the remote goes on
+ * the last line as the exact re-add command, so the act is legibly reversible
+ * at the moment it completes — after it, `repo list` no longer knows the
+ * remote. Refusals never reach here: they are WardErrors on stderr.
+ */
+async function cmdRepoRemove(name: string, json: boolean): Promise<void> {
+  const root = await requireMutableWorkspace();
+  const report = await removeRepository(root, name);
+  if (json) {
+    printJson(repoRemoveJson(report));
+    return;
+  }
+  console.log(`${pc.green('removed')} ${pc.bold(report.record.name)}`);
+  console.log(
+    `  checkout  ${pc.dim(`repos/${report.record.name}/`)} ` +
+      (report.checkout === 'deleted' ? 'deleted' : pc.dim('was already gone')),
+  );
+  console.log(`  re-add with ${pc.dim(`ward repo add ${report.record.remote}`)}`);
 }
 
 /**
