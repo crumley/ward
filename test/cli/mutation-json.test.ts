@@ -14,6 +14,7 @@ import {
   projectOpenShape,
   repoAddShape,
   repoRefreshShape,
+  repoRemoveShape,
   sessionMutationShape,
   taskCloseShape,
   taskMutationShape,
@@ -81,6 +82,16 @@ test('repo refresh --json: one row per repository; the empty set is []', () => {
   const empty = runWard(['repo', 'refresh', '--json'], emptyWs);
   expect(empty.exitCode).toBe(0);
   expect(JSON.parse(empty.stdout)).toEqual([]);
+});
+
+test('repo remove --json: the record as it stood, the remote carried as the undo', () => {
+  const added = runWard(['repo', 'add', remote, '--name', 'doomed', '--json'], ws);
+  expect(added.exitCode).toBe(0);
+  const result = runWard(['repo', 'remove', 'doomed', '--json'], ws);
+  expect(result.exitCode).toBe(0);
+  const removed = validated('repo remove', repoRemoveShape, result.stdout);
+  expect(removed).toMatchObject({ name: 'doomed', mainLine: 'main', checkout: 'deleted' });
+  expect(removed.remote).toBe(remote);
 });
 
 test('project open --json: the opened floor', () => {
