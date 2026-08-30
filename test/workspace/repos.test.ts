@@ -19,7 +19,10 @@ import {
   listRepositories,
   type RefreshRow,
   refreshRepositories,
+  removeRepository,
 } from '../../src/workspace/repos.ts';
+import { closeTask, openTask } from '../../src/workspace/tasks.ts';
+import { createWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
 
 test('add clones a remote, reads its main line, and commits the record', async () => {
@@ -105,6 +108,74 @@ test('list returns the registered set', async () => {
   expect(records.map((r) => r.name)).toEqual([]);
   await addRepository(ws, remote);
   expect((await listRepositories(ws)).map((r) => r.name)).toEqual(['origin-repo']);
+});
+
+// -- remove (design/0033-repo-remove/) -------------------------------------
+
+test('remove deletes the checkout, unregisters the record, and commits the journal entry', async () => {
+  await addRepository(ws, remote);
+  const report = await removeRepository(ws, 'origin-repo');
+  expect(report.checkout).toBe('deleted');
+  expect(report.record.remote).toBe(remote); // the re-add argument, carried out of the record
+  expect(existsSync(checkoutPath(ws, 'origin-repo'))).toBe(false);
+  expect((await listRepositories(ws)).map((r) => r.name)).toEqual([]);
+  expect(git(ws, 'log', '-1', '--format=%s').stdout).toContain('Unregister repository origin-repo');
+  expect(git(ws, 'status', '--porcelain').stdout).toBe('');
+});
+
+test('removing an unregistered name is refused legibly', async () => {
+  expect(removeRepository(ws, 'nope')).rejects.toThrow(/no repository named 'nope'/);
+});
+
+test('remove is refused while an open task worktree stands on the repository', async () => {
+  await addRepository(ws, remote);
+  await openTask(ws, 'holder', {});
+  await createWorktree(ws, 't1', 'origin-repo');
+  expect(removeRepository(ws, 'origin-repo')).rejects.toThrow(/open task t1/);
+  expect(existsSync(checkoutPath(ws, 'origin-repo'))).toBe(true); // untouched
+
+  // The close tears the worktree down; its branch, holding nothing the
+  // remote's main line lacks, goes with the checkout without a refusal.
+  await closeTask(ws, 't1', 'abandoned');
+  expect((await removeRepository(ws, 'origin-repo')).checkout).toBe('deleted');
+});
+
+test('the dirty-tree fail-safe refuses the delete', async () => {
+  await addRepository(ws, remote);
+  await Bun.write(join(checkoutPath(ws, 'origin-repo'), 'seed.txt'), 'unrecorded work\n');
+  expect(removeRepository(ws, 'origin-repo')).rejects.toThrow(/uncommitted changes/);
+  expect(existsSync(checkoutPath(ws, 'origin-repo'))).toBe(true);
+  expect((await listRepositories(ws)).map((r) => r.name)).toEqual(['origin-repo']);
+});
+
+test('a stash entry refuses the delete — parked work is still work', async () => {
+  await addRepository(ws, remote);
+  const checkout = checkoutPath(ws, 'origin-repo');
+  await Bun.write(join(checkout, 'seed.txt'), 'parked\n');
+  gitOrThrow(checkout, 'stash', 'push', '-u');
+  expect(removeRepository(ws, 'origin-repo')).rejects.toThrow(/stash entries/);
+});
+
+test('a local branch with unlanded commits refuses the delete; deleting it clears the way', async () => {
+  await addRepository(ws, remote);
+  const checkout = checkoutPath(ws, 'origin-repo');
+  gitOrThrow(checkout, 'checkout', '-b', 'stranded');
+  writeFileSync(join(checkout, 'work.txt'), 'never pushed\n');
+  gitOrThrow(checkout, 'add', '-A');
+  gitOrThrow(checkout, 'commit', '-m', 'unlanded work');
+  gitOrThrow(checkout, 'checkout', 'trunk');
+  expect(removeRepository(ws, 'origin-repo')).rejects.toThrow(/stranded/);
+
+  gitOrThrow(checkout, 'branch', '-D', 'stranded');
+  expect((await removeRepository(ws, 'origin-repo')).checkout).toBe('deleted');
+});
+
+test('a record whose checkout is already gone is still unregistered', async () => {
+  await addRepository(ws, remote);
+  rmSync(checkoutPath(ws, 'origin-repo'), { recursive: true });
+  const report = await removeRepository(ws, 'origin-repo');
+  expect(report.checkout).toBe('missing');
+  expect((await listRepositories(ws)).map((r) => r.name)).toEqual([]);
 });
 
 // -- concurrency (design/0023-refresh-concurrency-ux/) ---------------------

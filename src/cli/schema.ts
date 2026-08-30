@@ -274,6 +274,20 @@ export const repoRefreshShape = z.array(
 );
 export type RepoRefreshShape = z.infer<typeof repoRefreshShape>;
 
+/**
+ * `repo remove` (design/0033-repo-remove/): the record as it stood when
+ * unregistered — the remote is the re-add argument, so the document carries
+ * its own undo — plus what became of the checkout. Refusals (a held worktree,
+ * a dirty tree, an unlanded branch) stay the error path and emit no document.
+ */
+export const repoRemoveShape = z.strictObject({
+  name: z.string(),
+  remote: z.string(),
+  mainLine: z.string(),
+  checkout: z.enum(['deleted', 'missing']),
+});
+export type RepoRemoveShape = z.infer<typeof repoRemoveShape>;
+
 export const projectOpenShape = z.strictObject({
   floor: z.number().int().positive(),
   slug: z.string(),
@@ -661,6 +675,7 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'workspace create': workspaceCreateShape,
   'repo add': repoAddShape,
   'repo refresh': repoRefreshShape,
+  'repo remove': repoRemoveShape,
   'project open': projectOpenShape,
   'task open': taskMutationShape,
   'task pause': taskMutationShape,

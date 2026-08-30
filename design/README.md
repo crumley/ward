@@ -125,6 +125,9 @@ the SF's disposition is appended in its entry, remove the line here.
   workspace's own main line the gated push §18 means?
 - **SF-002** — [0030](0030-upgrade-self-service/README.md): the forge pull request as review surface
   only — landing stays the local gated merge.
+- **SF-001** — [0033](0033-repo-remove/README.md): repository removal built as a local, autonomous
+  act behind the fail-safe — the removal limb of the slice's open question, awaiting the intent
+  edit.
 
 Entries 0001–0029 predate this queue and their SFs carry dispositions unevenly — some settled in
 their own text, some settled by later intent edits without a disposition line, some genuinely open.

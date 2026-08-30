@@ -1,18 +1,20 @@
 // The repository set (intent/01-concepts/06-workspace-lifecycle.md): register
 // by adopt-or-clone converging on the contained canonical checkout under
 // repos/<name>/, refresh it on demand — never through a dirty tree unless the
-// human explicitly asks for the stash cycle — and list what is registered.
-// Records live at repositories/<name>.md, one per repo. Refresh runs the
-// repositories concurrently and reports them in registration order
-// (design/0023-refresh-concurrency-ux/).
-import { existsSync, readdirSync } from 'node:fs';
+// human explicitly asks for the stash cycle — list what is registered, and
+// remove a repository whose checkout carries no evidence of unrecorded work
+// (design/0033-repo-remove/). Records live at repositories/<name>.md, one per
+// repo. Refresh runs the repositories concurrently and reports them in
+// registration order (design/0023-refresh-concurrency-ux/).
+import { existsSync, readdirSync, rmSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
 import { withStoreLock } from '../store/lock.ts';
-import { type RepositoryRecord, repositoryRecordType } from '../store/types.ts';
+import { type RepositoryRecord, repositoryRecordType, worktreeRecordType } from '../store/types.ts';
 import { git, gitAsync, gitOrThrow } from './git.ts';
+import { commitRecords, readTasks } from './scan.ts';
 
 export interface AddReport {
   readonly record: RepositoryRecord;
@@ -146,6 +148,143 @@ export async function addRepository(
     gitOrThrow(root, 'commit', '-m', `Register repository ${name} (ward ${pkg.version})`);
     return { record, outcome: 'registered' as const };
   });
+}
+
+// -- remove ---------------------------------------------------------------
+
+export interface RemoveReport {
+  /** The record as it stood — its remote is what re-registering takes. */
+  readonly record: RepositoryRecord;
+  /** 'deleted' — the checkout was removed; 'missing' — there was none on disk. */
+  readonly checkout: 'deleted' | 'missing';
+}
+
+/**
+ * Unregister a repository and delete its canonical checkout — registration's
+ * converse, and the set's one destructive verb, so every gate runs before
+ * anything is touched. What keeps the delete autonomous (§18) is the same
+ * fail-safe refresh lives by (intent/01-concepts/03-work-lifecycle.md):
+ * evidence of unrecorded work refuses the verb, and a checkout that passes is
+ * re-creatable from its remote to the commit — the report carries that
+ * remote, and `ward repo add` puts it back.
+ *
+ * The evidence is read off the world, never remembered (§17): a worktree of
+ * an open task (it borrows the checkout's object store, so deletion severs
+ * it), a dirty or conflicted tree, parked stash entries, or a local branch
+ * carrying commits origin/<mainLine> does not — an abandoned task's unlanded
+ * branch lives exactly here, and the checkout is the one place it survives.
+ *
+ * Everything sits inside the store lock: the gates are local reads, cheap to
+ * serialize, and a concurrent `worktree create` must not thread a new
+ * worktree under a checkout mid-deletion.
+ */
+export async function removeRepository(root: string, name: string): Promise<RemoveReport> {
+  const recordType = repositoryRecordType(name);
+  return withStoreLock(root, `repo remove ${name}`, async () => {
+    if (!existsSync(join(root, recordType.relPath))) {
+      throw new WardError(`no repository named '${name}' is registered — see: ward repo list`);
+    }
+    const record = (await readDocument(root, recordType)).data;
+
+    const holders = await tasksAnchoredIn(root, name);
+    if (holders.length > 0) {
+      throw new WardError(
+        `repository '${name}' anchors worktrees of open task${holders.length === 1 ? '' : 's'} ` +
+          `${holders.join(', ')} — close ${holders.length === 1 ? 'it' : 'them'} first ` +
+          '(ward task close), then rerun',
+      );
+    }
+
+    const checkout = checkoutPath(root, name);
+    const hadCheckout = existsSync(checkout);
+    if (hadCheckout) refuseUnrecordedWork(checkout, name, record.mainLine);
+
+    // Checkout first, record second: interrupted between the two, the world
+    // is a record whose checkout is missing — drift doctor already names,
+    // with `ward repo add` as its converging remedy. The other order leaves
+    // an orphaned checkout no record accounts for.
+    if (hadCheckout) rmSync(checkout, { recursive: true, force: true });
+    rmSync(join(root, recordType.relPath));
+    commitRecords(root, `Unregister repository ${name}`, recordType.relPath);
+    return { record, checkout: hadCheckout ? 'deleted' : 'missing' };
+  });
+}
+
+/**
+ * Open-task codes with a worktree record of this repository. The records are
+ * read directly (the same shape worktrees.ts reads) rather than through
+ * worktrees.ts, which imports this module — the duplication buys the absence
+ * of an import cycle.
+ */
+async function tasksAnchoredIn(root: string, name: string): Promise<string[]> {
+  const codes: string[] = [];
+  for (const task of await readTasks(root)) {
+    if (task.record.state === 'closed') continue;
+    const dir = join(root, task.dir, 'worktrees');
+    if (!existsSync(dir)) continue;
+    for (const file of readdirSync(dir)
+      .filter((entry) => entry.endsWith('.md'))
+      .sort()) {
+      const worktree = (await readDocument(root, worktreeRecordType(task.dir, file.slice(0, -3))))
+        .data;
+      if (worktree.repo === name && !codes.includes(task.record.code)) {
+        codes.push(task.record.code);
+      }
+    }
+  }
+  return codes;
+}
+
+/**
+ * The fail-safe, read off the checkout in one pass. Every refusal names what
+ * was found and the remedy (§20); a checkout git itself cannot read is
+ * refused too — an unreadable tree is exactly the case where "probably fine
+ * to delete" is a guess.
+ */
+function refuseUnrecordedWork(checkout: string, name: string, mainLine: string): void {
+  const status = git(checkout, 'status', '--porcelain');
+  if (status.exitCode !== 0) {
+    throw new WardError(`cannot read repos/${name}: ${status.stderr.trim()}`);
+  }
+  if (hasUnmergedPaths(status.stdout)) {
+    throw new WardError(
+      `repos/${name} has unresolved conflicts — resolve the unmerged paths (git status), then rerun`,
+    );
+  }
+  if (status.stdout.trim() !== '') {
+    throw new WardError(
+      `repos/${name} has uncommitted changes — deleting them would be silent loss; ` +
+        'commit or discard them, then rerun',
+    );
+  }
+  if (git(checkout, 'stash', 'list').stdout.trim() !== '') {
+    throw new WardError(
+      `repos/${name} carries stash entries — apply or drop them (git stash list), then rerun`,
+    );
+  }
+  const branches = git(
+    checkout,
+    'branch',
+    '--format=%(refname:short)',
+    '--no-merged',
+    `origin/${mainLine}`,
+  );
+  if (branches.exitCode !== 0) {
+    throw new WardError(
+      `cannot read repos/${name}'s branches against origin/${mainLine}: ${branches.stderr.trim()}`,
+    );
+  }
+  const unlanded = branches.stdout
+    .split('\n')
+    .map((branch) => branch.trim())
+    .filter((branch) => branch !== '');
+  if (unlanded.length > 0) {
+    throw new WardError(
+      `repos/${name} holds local branch${unlanded.length === 1 ? '' : 'es'} with commits ` +
+        `origin/${mainLine} does not have (${unlanded.join(', ')}) — push or delete ` +
+        `${unlanded.length === 1 ? 'it' : 'them'}, then rerun`,
+    );
+  }
 }
 
 // -- refresh --------------------------------------------------------------
