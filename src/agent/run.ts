@@ -89,6 +89,7 @@ export async function launchWorkspaceSession(
   onRecorded(record);
   const run = await runClaude({
     argv: startArgv({ nativeId, ...model, ...effort, args: argsOf(agent.args) }),
+    command: commandOf(agent.command),
     cwd: resolve(root, record.workingDirectory),
     env: { WARD_AGENT: record.id },
   });
@@ -121,6 +122,7 @@ export async function resumeSession(
   onRecorded(record);
   const run = await runClaude({
     argv: resumeArgv(nativeId, argsOf(agent.args)),
+    command: commandOf(agent.command),
     cwd: resolve(root, record.workingDirectory),
     env: { WARD_AGENT: record.id },
   });
@@ -196,4 +198,14 @@ function chosenFlag<K extends string>(
 /** `args` always resolves (its default is the empty list), so it is never absent. */
 function argsOf(resolved: Resolved<readonly string[]>): readonly string[] {
   return resolved.provenance === 'absent' ? [] : resolved.value;
+}
+
+/**
+ * `agent.command` when a layer set it, else undefined — and the adapter's own
+ * default program then runs (design/0035-agent-command/). Not recorded on the
+ * session: how a harness is reached on THIS machine is a fact about the
+ * machine, not about what the run was (the model is; the launcher is not).
+ */
+function commandOf(resolved: Resolved<readonly string[]>): readonly string[] | undefined {
+  return resolved.provenance === 'absent' ? undefined : resolved.value;
 }

@@ -216,6 +216,12 @@ export const doctorAgentShape = z.strictObject({
   model: resolvedAgentKey(z.string()),
   effort: resolvedAgentKey(z.string()),
   args: resolvedAgentKey(z.array(z.string())),
+  /**
+   * How the harness is invoked on this machine — the program and its leading
+   * words (design/0035-agent-command/). Absent means the adapter's own default
+   * program runs.
+   */
+  command: resolvedAgentKey(z.array(z.string())),
 });
 
 export const doctorShape = z.strictObject({

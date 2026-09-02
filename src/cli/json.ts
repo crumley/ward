@@ -534,11 +534,18 @@ function agentConfigJson(agent: NonNullable<DoctorReport['agent']>): DoctorShape
     effort: resolvedKeyJson(agent.effort),
     // Copied, not aliased: the report's array is readonly, and the JSON
     // document is the caller's to keep.
-    args:
-      agent.args.provenance === 'absent'
-        ? { provenance: 'absent' }
-        : { provenance: agent.args.provenance, value: [...agent.args.value] },
+    args: resolvedListJson(agent.args),
+    command: resolvedListJson(agent.command),
   };
+}
+
+function resolvedListJson(resolved: Resolved<readonly string[]>): {
+  provenance: AgentProvenance;
+  value?: string[];
+} {
+  return resolved.provenance === 'absent'
+    ? { provenance: 'absent' }
+    : { provenance: resolved.provenance, value: [...resolved.value] };
 }
 
 function resolvedKeyJson(resolved: Resolved<string>): {

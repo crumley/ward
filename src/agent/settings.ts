@@ -1,6 +1,7 @@
 // What Ward hands the harness when it starts an agent
 // (design/0028-agent-configuration/): which harness, which model, how much
-// thinking effort, and any extra flags. Two axes carry it — the pair the
+// thinking effort, any extra flags — and, since design/0035-agent-command/,
+// how the harness is invoked on this machine. Two axes carry it — the pair the
 // human-shell contract names (intent/02-subsystems/07-human-shell.md,
 // "Opinionated configuration, global and workspace-local"): a human's
 // defaults in the global config, overridden PER KEY by the workspace record.
@@ -67,6 +68,21 @@ export const agentSettingsSchema = z.object({
    * anyone means.
    */
   args: z.array(z.string().min(1)).optional(),
+  /**
+   * How the harness is INVOKED on this machine (design/0035-agent-command/):
+   * the program and any leading words, `['npx', 'claude']` the motivating
+   * case — a machine where `claude` cannot be run directly and has to be
+   * reached through a launcher. Distinct from `harness`, which says WHICH
+   * adapter reads the handle and shapes the argv; this says how that adapter's
+   * CLI is started here. A list, never one string: splitting a string would
+   * mean choosing a quoting rule, and a list is already the shape a spawn
+   * takes. At least one entry, because a command with no program runs
+   * nothing — there is no "none" escape hatch here the way `args: []` is one;
+   * a workspace that wants the default back names it (`command: [claude]`).
+   * Absent means the adapter's own default program stands, exactly as before
+   * the key existed.
+   */
+  command: z.array(z.string().min(1)).min(1).optional(),
 });
 export type AgentSettings = z.infer<typeof agentSettingsSchema>;
 
@@ -102,6 +118,8 @@ export interface ResolvedAgentConfig {
   readonly model: Resolved<string>;
   readonly effort: Resolved<string>;
   readonly args: Resolved<readonly string[]>;
+  /** Absent when nobody set it: the harness adapter's default program then runs. */
+  readonly command: Resolved<readonly string[]>;
 }
 
 /** The layers, narrowest first when they disagree. Either may be missing. */
@@ -117,7 +135,8 @@ export interface AgentLayers {
  * globally, keep answering — which is exactly what "I want my defaults, and
  * in this one workspace the model is different" asks for.
  *
- * `args` replaces at the winning level; it never concatenates across levels.
+ * `args` — and `command` — replace at the winning level; they never
+ * concatenate across levels.
  * A concatenation would be a one-way ratchet: a flag set globally could never
  * be REMOVED for one workspace, only added to, and the way out would be to
  * edit the global file that every other workspace depends on. Replacement
@@ -131,6 +150,9 @@ export function resolveAgentConfig({ workspace, global }: AgentLayers): Resolved
     model: pick(workspace?.model, global?.model),
     effort: pick(workspace?.effort, global?.effort),
     args: pick<readonly string[]>(workspace?.args, global?.args, AGENT_DEFAULTS.args),
+    // No Ward-side default: which program starts the harness is the ADAPTER's
+    // knowledge (src/harness/claude.ts), and this module knows no adapter.
+    command: pick<readonly string[]>(workspace?.command, global?.command),
   };
 }
 
