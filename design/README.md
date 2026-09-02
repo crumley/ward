@@ -131,6 +131,12 @@ the SF's disposition is appended in its entry, remove the line here.
 - **SF-001** — [0034](0034-workspace-session-shorthand/spec-feedback.md): the session log's purpose
   minimum assumes a goal — what an interactive workspace session, opened to receive work, records as
   its purpose.
+- **SF-001** — [0035](0035-agent-command/spec-feedback.md): the harness seam distinguishes
+  harnesses, not invocations — is how a harness is started on a machine configuration distinct from
+  which harness is selected?
+- **SF-002** — [0035](0035-agent-command/spec-feedback.md): a workspace-level `agent.command` is a
+  machine-shaped fact inside a record that travels — may the self-sufficient record carry a key
+  valid only on some machines?
 
 Entries 0001–0029 predate this queue and their SFs carry dispositions unevenly — some settled in
 their own text, some settled by later intent edits without a disposition line, some genuinely open.
