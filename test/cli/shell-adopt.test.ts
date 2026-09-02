@@ -55,9 +55,23 @@ const fileSets: ReadonlyArray<{ name: string; files: readonly string[] }> = [
     files: [
       'functions/wwcd.fish',
       'completions/wwcd.fish',
+      // wwcd → __ward_workspace_root → __ward_choose → both picker functions.
       'functions/__ward_picker_present.fish',
       'functions/__ward_picker.fish',
       'functions/__ward_choose.fish',
+      'functions/__ward_workspace_root.fish',
+    ],
+  },
+  {
+    // wws resolves the workspace exactly as wwcd does, through the same helper.
+    name: 'wws',
+    files: [
+      'functions/wws.fish',
+      'completions/wws.fish',
+      'functions/__ward_picker_present.fish',
+      'functions/__ward_picker.fish',
+      'functions/__ward_choose.fish',
+      'functions/__ward_workspace_root.fish',
     ],
   },
 ];
@@ -309,7 +323,7 @@ const findings: ReadonlyArray<{
       {
         check: 'fish shorthands',
         severity: 'info',
-        message: expect.stringContaining('wrr, wrcd, wwcd not adopted'),
+        message: expect.stringContaining('wrr, wrcd, wwcd, wws not adopted'),
       },
     ],
   },
@@ -365,13 +379,13 @@ const findings: ReadonlyArray<{
     ],
   },
   {
-    name: 'every shorthand adopted: three oks and no remainder line at all',
+    name: 'every shorthand adopted: one ok each and no remainder line at all',
     stage: () => adopt(['--all']),
-    expected: () => [
-      { check: 'fish shorthand wrr', severity: 'ok' },
-      { check: 'fish shorthand wrcd', severity: 'ok' },
-      { check: 'fish shorthand wwcd', severity: 'ok' },
-    ],
+    expected: () =>
+      FISH_SHORTHANDS.map((shorthand) => ({
+        check: `fish shorthand ${shorthand.name}`,
+        severity: 'ok',
+      })),
   },
 ];
 
@@ -444,11 +458,9 @@ test('--json carries the offering and the write report in the shape ward schema 
   const offering = shellAdoptShape.parse(JSON.parse(adopt(['--json']).stdout));
   expect(offering.offeredOnly).toBe(true);
   expect(offering.dir).toBe(fishDir());
-  expect(offering.shorthands).toMatchObject([
-    { name: 'wrr', status: 'available', files: [] },
-    { name: 'wrcd', status: 'available', files: [] },
-    { name: 'wwcd', status: 'available', files: [] },
-  ]);
+  expect(offering.shorthands).toMatchObject(
+    FISH_SHORTHANDS.map((shorthand) => ({ name: shorthand.name, status: 'available', files: [] })),
+  );
 
   const written = shellAdoptShape.parse(JSON.parse(adopt(['wrr', '--json']).stdout));
   expect(written.offeredOnly).toBe(false);
@@ -528,7 +540,7 @@ test('an adopted shorthand parses, autoloads, and runs under a real fish', () =>
 // (test/helpers.ts pins it for every suite). `scratch` is deliberately not a
 // workspace: adoption is per-user MACHINE state and must work from anywhere.
 
-const FISH = '/usr/bin/fish';
+const FISH = Bun.which('fish') ?? '/usr/bin/fish';
 const cliPath = new URL('../../src/cli/index.ts', import.meta.url).pathname;
 
 let scratch: string;

@@ -98,11 +98,37 @@ const choose: ShellHelper = {
 end`,
 };
 
+const workspaceRoot: ShellHelper = {
+  name: '__ward_workspace_root',
+  summary: 'resolve a workspace name — or none — to its root, and print it',
+  needs: [choose.name, pickerPresent.name],
+  body: `function __ward_workspace_root --description 'Resolve a workspace name, or none, to its root; print it'
+    set -l name $argv[1]
+    set -l target
+    if test -n "$name"
+        set target (command ward workspace path $name)
+    else if not __ward_picker_present
+        # Nothing named and nothing to pick with: a bare \`ward workspace path\`
+        # means the default workspace, which is the answer worth having.
+        echo "ward: no picker installed — going to the default workspace" >&2
+        set target (command ward workspace path)
+        or return $status
+    end
+    if test -z "$target"
+        set name (__ward_choose workspaces workspace "$name")
+        or return $status
+        set target (command ward workspace path $name)
+        or return $status
+    end
+    echo $target
+end`,
+};
+
 /**
  * Every helper, in the order the monolithic layer defines them — the picker
  * seam first, because it is the seam everything above it is written against.
  */
-export const FISH_HELPERS: readonly ShellHelper[] = [pickerPresent, picker, choose];
+export const FISH_HELPERS: readonly ShellHelper[] = [pickerPresent, picker, choose, workspaceRoot];
 
 // -- the shorthands ----------------------------------------------------------
 
@@ -148,32 +174,44 @@ end`,
 const wwcd: Shorthand = {
   name: 'wwcd',
   summary: 'cd to a workspace root, from any directory',
-  needs: [choose.name, pickerPresent.name],
+  needs: [workspaceRoot.name],
+  // The resolution — name, picker, or the default — is `__ward_workspace_root`'s,
+  // shared with `wws` (design/0034-workspace-session-shorthand/): two shorthands
+  // that reach a workspace must not carry two answers to "which one?".
   body: `function wwcd --description 'cd to a workspace root, from any directory'
-    set -l name $argv[1]
-    set -l target
-    if test -n "$name"
-        set target (command ward workspace path $name)
-    else if not __ward_picker_present
-        # Nothing named and nothing to pick with: a bare \`ward workspace path\`
-        # means the default workspace, which is the answer worth having.
-        echo "ward: no picker installed — going to the default workspace" >&2
-        set target (command ward workspace path)
-        or return $status
-    end
-    if test -z "$target"
-        set name (__ward_choose workspaces workspace "$name")
-        or return $status
-        set target (command ward workspace path $name)
-        or return $status
-    end
+    set -l target (__ward_workspace_root $argv[1])
+    or return $status
     cd $target
 end`,
   completion: `complete -c wwcd -f -a '(ward shell candidates workspaces)'`,
 };
 
-/** The v1 set, in the order both assemblies present them. */
-export const FISH_SHORTHANDS: readonly Shorthand[] = [wrr, wrcd, wwcd];
+const wws: Shorthand = {
+  name: 'wws',
+  summary: 'open a session in a workspace — cd to its root and start the agent there',
+  needs: [workspaceRoot.name],
+  body: `function wws --description 'Open a session in a workspace: cd to its root and start the agent there'
+    # The first argument names the workspace unless it is a flag; everything
+    # after it goes to \`ward session open\` untouched, so
+    # \`wws main --purpose TEXT\` says what the session is for.
+    set -l name
+    if test (count $argv) -gt 0; and not string match -q -- '-*' $argv[1]
+        set name $argv[1]
+        set -e argv[1]
+    end
+    set -l target (__ward_workspace_root $name)
+    or return $status
+    # cd in the calling shell, not a subshell: when the agent exits you are
+    # standing in the workspace, exactly where wwcd would have left you.
+    cd $target
+    or return $status
+    command ward session open $argv
+end`,
+  completion: `complete -c wws -f -a '(ward shell candidates workspaces)'`,
+};
+
+/** The shorthand set, in the order both assemblies present them. */
+export const FISH_SHORTHANDS: readonly Shorthand[] = [wrr, wrcd, wwcd, wws];
 
 /** The adoptable names, for the parser's `choice` and for every refusal that lists them. */
 export const FISH_SHORTHAND_NAMES: readonly string[] = FISH_SHORTHANDS.map(

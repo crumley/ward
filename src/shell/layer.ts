@@ -1,6 +1,6 @@
 // `ward shell init <shell>` (design/0025-fish-shell-layer/): the emitted
-// layer of mnemonic shorthands — `wrr`, `wrcd`, `wwcd` — that work from any
-// directory. Intent calls for exactly this ("the interactive layer adds
+// layer of mnemonic shorthands — `wrr`, `wrcd`, `wwcd`, `wws` — that work
+// from any directory. Intent calls for exactly this ("the interactive layer adds
 // mnemonic shorthands for common operations — thin plumbing, evolvable as
 // telemetry reveals real usage", intent/02-subsystems/07-human-shell.md).
 //
