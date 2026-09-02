@@ -157,8 +157,15 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: 'c3632671f68f052cbe4449e81bf38618ca8a379ead3f500fae2b4346846ceefd',
         era: 'b85124f (design 0034)',
       },
-      // Current since design 0034's follow-up: an omitted purpose is recorded
-      // as `Coordinating work · opened <time>`, and the manifest says so.
+      // be13037 (design 0034, follow-up) — an omitted purpose is recorded as
+      // `Coordinating work · opened <time>`, and the manifest says so.
+      {
+        sha256: '2a2fdc448ac6ee2bd765f4056c90f47c15aa175662e55a568430bf08de84cb63',
+        era: 'be13037 (design 0034)',
+      },
+      // Current since design 0035: `agent.command` joins the configuration
+      // keys the Sessions section names — how the harness is invoked on this
+      // machine — and doctor checks the command can be found.
     ],
   },
 ];

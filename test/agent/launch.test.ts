@@ -6,7 +6,9 @@
 // locate (found vs. gone), and the record-only paths that stayed as they were.
 //
 // No test here spawns the real Claude Code: WARD_CLAUDE_BIN points at the
-// stub, the same hermeticity seam WARD_GH and WARD_CONFIG_DIR provide.
+// stub, the same hermeticity seam WARD_GH and WARD_CONFIG_DIR provide — and
+// the cases that exercise a configured `agent.command` (design/0035) leave the
+// override unset and point the command itself at the stub.
 import { afterAll, beforeEach, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -126,6 +128,52 @@ test('the resolved configuration becomes the argv — absent keys omit their fla
   const unconfigured = (await readSessions(ws, ''))[1];
   expect(unconfigured?.model).toBeUndefined(); // nothing chosen, nothing recorded
   expect(unconfigured?.effort).toBeUndefined();
+});
+
+test("agent.command is how the harness is invoked here: its words first, then Ward's flags, then args", async () => {
+  // The work machine's case (design/0035-agent-command/): the CLI is reached
+  // through a launcher, so the command is `[launcher, claude]` and Ward's own
+  // flags follow the launcher's words. The stub stands in for the launcher
+  // and records everything after itself — so `claude` shows up as argv[0].
+  writeGlobalConfig({ command: [stub, 'claude'], args: ['--dangerously-skip-permissions'] });
+  const opened = ward(['session', 'open', '--purpose', 'through a launcher'], { bin: null });
+  expect(opened.exitCode).toBe(0);
+  const [run] = runs();
+  expect(run?.argv[0]).toBe('claude');
+  expect(run?.argv[1]).toBe('--session-id');
+  expect(run?.argv[2]).toMatch(UUID);
+  expect(run?.argv.slice(3)).toEqual(['--dangerously-skip-permissions']);
+  expect(run?.wardAgent).toBe('workspace-1');
+  expect(run?.recordSeen).toBe(true);
+
+  // A resume goes through the same command — the launcher is a property of
+  // this machine, needed exactly as much the second time.
+  const nativeId = run?.argv[2] ?? '';
+  expect(ward(['session', 'resume', 'workspace-1'], { bin: null }).exitCode).toBe(0);
+  expect(runs()[1]?.argv).toEqual([
+    'claude',
+    '--resume',
+    nativeId,
+    '--dangerously-skip-permissions',
+  ]);
+
+  // The workspace overrides the whole list, and the record never carries the
+  // command: how the harness is reached is the machine's fact, not the run's.
+  await writeWorkspaceAgent({ command: [stub] });
+  expect(ward(['session', 'open', '--purpose', 'direct here'], { bin: null }).exitCode).toBe(0);
+  expect(runs()[2]?.argv[0]).toBe('--session-id');
+  const records = await readSessions(ws, '');
+  expect(records.every((record) => !('command' in record))).toBe(true);
+});
+
+test('a configured command that cannot start is the same legible refusal, naming the key', async () => {
+  writeGlobalConfig({ command: ['/nonexistent/launcher', 'claude'] });
+  const result = ward(['session', 'open', '--purpose', 'no launcher'], { bin: null });
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr).toContain('the agent did not start');
+  expect(result.stderr).toContain('/nonexistent/launcher');
+  expect(result.stderr).toContain('agent.command');
+  expect((await readSessions(ws, ''))[0]?.state).toBe('open'); // recorded before the attempt
 });
 
 test('--json: one document, emitted before the run takes the terminal', () => {
@@ -366,13 +414,22 @@ let logFile: string;
 let stub: string;
 let caseId = 0;
 
-/** One CLI invocation with the stub harness wired in (a row may override it). */
-function ward(argv: string[], options: { bin?: string; exitCode?: number } = {}): CliResult {
+/**
+ * One CLI invocation with the stub harness wired in through WARD_CLAUDE_BIN (a
+ * row may override it — or pass `bin: null` to leave the override unset, so
+ * the configured `agent.command` is what runs).
+ */
+function ward(argv: string[], options: { bin?: string | null; exitCode?: number } = {}): CliResult {
   const bin =
-    options.bin ??
-    (options.exitCode === undefined
-      ? stub
-      : writeFakeClaude(scratch, `claude-exit-${caseId}`, { logFile, exitCode: options.exitCode }));
+    options.bin === null
+      ? undefined
+      : (options.bin ??
+        (options.exitCode === undefined
+          ? stub
+          : writeFakeClaude(scratch, `claude-exit-${caseId}`, {
+              logFile,
+              exitCode: options.exitCode,
+            })));
   const result = Bun.spawnSync(['bun', cliPath, ...argv], {
     cwd: ws,
     env: {

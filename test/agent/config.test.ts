@@ -43,6 +43,7 @@ const mergeRows: ReadonlyArray<{
       model: unset,
       effort: unset,
       args: fromDefault([]),
+      command: unset,
     },
   },
   {
@@ -58,6 +59,7 @@ const mergeRows: ReadonlyArray<{
       model: fromGlobal('fable'),
       effort: fromGlobal('high'),
       args: fromGlobal(['--dangerously-skip-permissions']),
+      command: unset,
     },
   },
   {
@@ -68,6 +70,7 @@ const mergeRows: ReadonlyArray<{
       model: fromWorkspace('sonnet'),
       effort: fromWorkspace('low'),
       args: fromWorkspace(['--verbose']),
+      command: unset,
     },
   },
   {
@@ -79,6 +82,7 @@ const mergeRows: ReadonlyArray<{
       model: fromWorkspace('sonnet'),
       effort: fromGlobal('high'),
       args: fromGlobal(['--dangerously-skip-permissions']),
+      command: unset,
     },
   },
   {
@@ -90,6 +94,7 @@ const mergeRows: ReadonlyArray<{
       model: fromGlobal('fable'),
       effort: unset,
       args: fromDefault([]),
+      command: unset,
     },
   },
   {
@@ -100,6 +105,7 @@ const mergeRows: ReadonlyArray<{
       model: fromGlobal('fable'),
       effort: unset,
       args: fromGlobal(['--flag']),
+      command: unset,
     },
   },
   {
@@ -110,6 +116,7 @@ const mergeRows: ReadonlyArray<{
       model: unset,
       effort: unset,
       args: fromDefault([]),
+      command: unset,
     },
   },
   {
@@ -121,6 +128,7 @@ const mergeRows: ReadonlyArray<{
       model: unset,
       effort: unset,
       args: fromWorkspace(['--c']),
+      command: unset,
     },
   },
   {
@@ -132,6 +140,42 @@ const mergeRows: ReadonlyArray<{
       model: unset,
       effort: unset,
       args: fromWorkspace([]),
+      command: unset,
+    },
+  },
+  {
+    name: 'the work machine: the harness is reached through a launcher, set once globally',
+    global: { command: ['npx', 'claude'] },
+    expected: {
+      harness: fromDefault('claude'),
+      model: unset,
+      effort: unset,
+      args: fromDefault([]),
+      command: fromGlobal(['npx', 'claude']),
+    },
+  },
+  {
+    name: 'a workspace names its own command, and the whole list replaces — never appends',
+    global: { command: ['npx', 'claude'], model: 'fable' },
+    workspace: { command: ['/opt/claude/bin/claude'] },
+    expected: {
+      harness: fromDefault('claude'),
+      model: fromGlobal('fable'),
+      effort: unset,
+      args: fromDefault([]),
+      command: fromWorkspace(['/opt/claude/bin/claude']),
+    },
+  },
+  {
+    name: 'the way back to the default in one workspace is to name it — command: [claude]',
+    global: { command: ['npx', 'claude'] },
+    workspace: { command: ['claude'] },
+    expected: {
+      harness: fromDefault('claude'),
+      model: unset,
+      effort: unset,
+      args: fromDefault([]),
+      command: fromWorkspace(['claude']),
     },
   },
 ];
@@ -148,6 +192,10 @@ test('absent carries no value at all — there is nothing to pass, not an empty 
   const resolved = resolveAgentConfig({});
   expect('value' in resolved.model).toBe(false);
   expect('value' in resolved.effort).toBe(false);
+  // The command has no Ward-side default either: which program starts the
+  // harness is the adapter's knowledge, and settings knows no adapter.
+  expect('value' in resolved.command).toBe(false);
+  expect('command' in AGENT_DEFAULTS).toBe(false);
   // The two keys Ward does answer say so with a default, and the defaults are
   // stated in exactly one place.
   expect(resolved.harness).toEqual(fromDefault(AGENT_DEFAULTS.harness));
@@ -211,6 +259,26 @@ const configRows: ReadonlyArray<{ name: string; frontMatter: string; agent: Agen
   {
     name: 'args must be a list, not one string',
     frontMatter: 'agent:\n  args: --dangerously-skip-permissions\n',
+    agent: {},
+  },
+  {
+    name: 'the command a launcher machine writes: the program and its leading word',
+    frontMatter: 'agent:\n  command: [npx, claude]\n',
+    agent: { command: ['npx', 'claude'] },
+  },
+  {
+    name: 'command must be a list too — one string would need a quoting rule Ward does not own',
+    frontMatter: 'agent:\n  command: npx claude\n',
+    agent: {},
+  },
+  {
+    name: 'an empty command runs nothing — invalid, unlike the empty args list',
+    frontMatter: 'agent:\n  command: []\n',
+    agent: {},
+  },
+  {
+    name: 'an empty word in the command is as invalid as one in args',
+    frontMatter: "agent:\n  command: ['']\n",
     agent: {},
   },
 ];
