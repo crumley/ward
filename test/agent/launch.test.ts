@@ -59,6 +59,36 @@ test('open with no TASK: the record first, then the agent, in the workspace root
   expect(record?.handle).toBe(`claude:${run?.argv[1]}`);
 });
 
+test('open with no TASK and no --purpose: the launch runs, and the record says what kind of session it is', async () => {
+  // design/0034-workspace-session-shorthand/: `wws` opens a workspace session
+  // without making the human invent a purpose — the record carries one stable
+  // phrase instead of an empty field.
+  const opened = ward(['session', 'open']);
+  expect(opened.exitCode).toBe(0);
+  expect(opened.stdout).toContain('opened session workspace-1');
+  expect(runs()[0]?.recordSeen).toBe(true);
+  expect((await readSessions(ws, ''))[0]).toMatchObject({
+    scope: 'workspace',
+    purpose: 'interactive workspace session',
+  });
+  // …and the record-only path at workspace scope may leave it out too.
+  const recorded = ward(['session', 'open', '--handle', 'claude:by-hand']);
+  expect(recorded.exitCode).toBe(0);
+  expect((await readSessions(ws, ''))[1]).toMatchObject({
+    handle: 'claude:by-hand',
+    purpose: 'interactive workspace session',
+  });
+});
+
+test('a task session still states its purpose — refused before any record is written', async () => {
+  await openTask(ws, 'feature', {});
+  const refused = ward(['session', 'open', 't1']);
+  expect(refused.exitCode).toBe(1);
+  expect(refused.stderr).toContain('ward session open t1 --purpose TEXT');
+  expect(await readSessions(ws, 'tasks/t1-feature')).toEqual([]);
+  expect(runs()).toEqual([]); // nothing launched
+});
+
 test('the resolved configuration becomes the argv — absent keys omit their flags', async () => {
   // Global: model + effort + one arg. Workspace: the model alone, overriding
   // per key (design/0028-agent-configuration/) — so the launch must carry the
