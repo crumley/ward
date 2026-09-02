@@ -1,6 +1,6 @@
 // The fish shell layer (design/0025-fish-shell-layer/): `ward shell init
-// fish` emits the shorthands — `wrr`, `wrcd`, `wwcd` — that work from any
-// directory, `ward shell candidates KIND` is the feed they pick from, and
+// fish` emits the shorthands — `wrr`, `wrcd`, `wwcd`, `wws` — that work from
+// any directory, `ward shell candidates KIND` is the feed they pick from, and
 // `ward repo path` grew the shorthand ladder they lean on. The layer runs
 // inside the human's shell, so the bar is the same as completion's: never
 // hang, never prompt, never fail cryptically, and never be counted as usage.
@@ -11,23 +11,31 @@ import { verbPath } from '../../src/cli/telemetry.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
+import { readSessions } from '../../src/workspace/sessions.ts';
 import { applyGitTestEnv, makeTempDir, NO_GH, removeDir } from '../helpers.ts';
 
 // -- the emitted script ----------------------------------------------------
 
-test('`ward shell init fish` emits the three shorthands, the picker seam, and their completions', () => {
+test('`ward shell init fish` emits the four shorthands, the picker seam, and their completions', () => {
   const result = ward(['shell', 'init', 'fish'], alpha);
   expect(result.exitCode).toBe(0);
   const script = result.stdout;
 
-  // The v1 set, as functions — wrcd and wwcd must run logic, not expand.
-  for (const fn of ['function wrr', 'function wrcd', 'function wwcd']) {
+  // The set, as functions — all but wrr must run logic, not expand.
+  for (const fn of ['function wrr', 'function wrcd', 'function wwcd', 'function wws']) {
     expect(script).toContain(fn);
   }
   // Thin plumbing: every shorthand ends in a real `ward` invocation.
   expect(script).toContain('command ward repo refresh $argv');
   expect(script).toContain('command ward repo path $name');
   expect(script).toContain('command ward workspace path $name');
+  expect(script).toContain('command ward session open $argv');
+  // One answer to "which workspace?": wwcd and wws both ask the shared helper,
+  // and the helper sits above them (design/0034-workspace-session-shorthand/).
+  expect(script.split('__ward_workspace_root').length - 1).toBe(3); // defined once, called twice
+  expect(script.indexOf('function wwcd')).toBeGreaterThan(
+    script.indexOf('function __ward_workspace_root'),
+  );
 
   // fzf is named on exactly two lines of running code — the presence probe
   // and the invocation — so swapping the picker is a two-function edit
@@ -46,6 +54,7 @@ test('`ward shell init fish` emits the three shorthands, the picker seam, and th
   expect(script).toContain("complete -c wrr -w 'ward repo refresh'");
   expect(script).toContain("complete -c wrcd -f -a '(ward shell candidates repos)'");
   expect(script).toContain("complete -c wwcd -f -a '(ward shell candidates workspaces)'");
+  expect(script).toContain("complete -c wws -f -a '(ward shell candidates workspaces)'");
 });
 
 test('the emitted script is valid fish — checked by fish itself', () => {
@@ -292,6 +301,53 @@ test('a picked candidate yields its NAME alone — the CUE never reaches the ver
   expect(picked.stdout.trim().split('\n')).toEqual([alpha, join(alpha, 'repos', 'shared')]);
 });
 
+test('wws lands in a workspace and opens a session there; the rest of argv reaches `ward session open`', async () => {
+  if (!existsSync(FISH)) return;
+  register(alpha);
+  const script = join(scratch, 'layer.fish');
+  writeFileSync(script, ward(['shell', 'init', 'fish'], alpha).stdout);
+
+  // Named, with a purpose: cd to alpha, then `ward session open` runs THERE
+  // with everything after the name — `--handle` records without launching,
+  // which is what keeps this hermetic. The shell is left standing in the
+  // workspace, where wwcd would have left it.
+  const named = fish(
+    `source ${script}; cd /; wws alpha --purpose 'from the shell' --handle test:1; and pwd`,
+    `${fakeBin}:${wardBin}:${toolBin}`,
+  );
+  expect(named.exitCode).toBe(0);
+  expect(named.stdout).toContain('opened session workspace-1');
+  expect(named.stdout.trim().split('\n').at(-1)).toBe(alpha);
+  expect((await readSessions(alpha, ''))[0]).toMatchObject({
+    scope: 'workspace',
+    purpose: 'from the shell',
+    handle: 'test:1',
+  });
+
+  // A leading flag is not a name: with no picker, wws takes the default
+  // workspace (said out loud) and a purpose nobody gave is the stable default.
+  const bare = fish(
+    `source ${script}; cd /; wws --handle test:2; and pwd`,
+    `${wardBin}:${toolBin}`,
+  );
+  expect(bare.exitCode).toBe(0);
+  expect(bare.stderr).toContain('going to the default workspace');
+  expect(bare.stdout).toContain('opened session workspace-2');
+  expect(bare.stdout.trim().split('\n').at(-1)).toBe(alpha);
+  expect((await readSessions(alpha, ''))[1]?.purpose).toBe('interactive workspace session');
+
+  // A name ward cannot resolve, and no picker: the listing, exit 127, and no
+  // session — the cd never happened, so nothing ran in the wrong place.
+  const unknown = fish(
+    `source ${script}; cd /; wws zzz --handle test:3; echo "exit=$status"; pwd`,
+    `${wardBin}:${toolBin}`,
+  );
+  expect(unknown.stderr).toContain('no picker installed');
+  expect(unknown.stdout).toContain('exit=127');
+  expect(unknown.stdout.trim().split('\n').at(-1)).toBe('/');
+  expect((await readSessions(alpha, '')).length).toBe(2);
+});
+
 test('wrr forwards its arguments to `ward repo refresh`, from outside any workspace', () => {
   if (!existsSync(FISH)) return;
   register(alpha);
@@ -310,7 +366,7 @@ test('wrr forwards its arguments to `ward repo refresh`, from outside any worksp
 // verbs cannot see each other's cases, and a `ward` shim plus a fake `fzf` on
 // a scratch PATH so the fish cases control what is installed.
 
-const FISH = '/usr/bin/fish';
+const FISH = Bun.which('fish') ?? '/usr/bin/fish';
 const cliPath = new URL('../../src/cli/index.ts', import.meta.url).pathname;
 
 let scratch: string;

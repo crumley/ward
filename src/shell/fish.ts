@@ -1,8 +1,8 @@
 // The fish shell layer, emitted verbatim by `ward shell init fish`
 // (design/0025-fish-shell-layer/). It is hand-written fish — and it is
 // allowed to be, because it holds no description of Ward's command tree:
-// `wrr` forwards its arguments untouched, the two `cd` functions ask `ward`
-// where to go, and completion is either delegated to ward's own generated
+// `wrr` forwards its arguments untouched, the workspace and repository
+// functions ask `ward` where to go, and completion is either delegated to ward's own generated
 // script (`complete -w`) or fed live by a callback. 0022's rule is against a
 // SECOND description of the tree, not against a shell script.
 //
@@ -43,9 +43,9 @@ const PICKER_SEAM_NOTE = `# The only two functions that know a picker exists, an
 
 const COMPLETION_NOTE = `# wrr inherits ward's own generated completions by wrapping the command it
 # forwards to, so the tree is never described twice (install them with
-# \`ward completion fish\`). wrcd and wwcd are new names, so they carry their
-# own — fed by the same callback the functions use, NAME<TAB>CUE being exactly
-# what fish reads as a candidate and its description.`;
+# \`ward completion fish\`). wrcd, wwcd, and wws are new names, so they carry
+# their own — fed by the same callback the functions use, NAME<TAB>CUE being
+# exactly what fish reads as a candidate and its description.`;
 
 /** The picker seam, by name: the two helpers the note above is about. */
 const SEAM = ['__ward_picker_present', '__ward_picker'];

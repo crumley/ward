@@ -56,6 +56,7 @@ import { readTasks } from '../workspace/scan.ts';
 import { scopeFromCwd } from '../workspace/scope.ts';
 import {
   closeSession,
+  DEFAULT_WORKSPACE_SESSION_PURPOSE,
   describeScope,
   openSession,
   openWorkspaceSession,
@@ -365,7 +366,7 @@ const shellInit = command(
   'init',
   object({ action: constant('shell-init'), shell: argument(string({ metavar: 'SHELL' })) }),
   {
-    brief: message`Emit the shell layer of shorthands (wrr, wrcd, wwcd) — redirect it into your shell config.`,
+    brief: message`Emit the shell layer of shorthands (wrr, wrcd, wwcd, wws) — redirect it into your shell config.`,
   },
 );
 
@@ -578,7 +579,11 @@ const session = command(
       object({
         action: constant('session-open'),
         task: optional(argument(taskCode('TASK'))),
-        purpose: option('--purpose', string({ metavar: 'TEXT' })),
+        purpose: optional(
+          option('--purpose', string({ metavar: 'TEXT' }), {
+            description: message`What the session is for. Optional at workspace scope; a task session states one.`,
+          }),
+        ),
         handle: optional(option('--handle', string({ metavar: 'TEXT' }))),
         dir: optional(option('--dir', string({ metavar: 'PATH' }))),
         json: jsonFlag(),
@@ -617,6 +622,23 @@ const session = command(
   ),
   { brief: message`Open, resume, locate, and close agent sessions.` },
 );
+
+/**
+ * The purpose a `session open` records (design/0034-workspace-session-shorthand/).
+ * At workspace scope it may be omitted: the session is for the workspace
+ * itself, and the record says so in one stable phrase rather than making the
+ * human invent one at every `wws`. A task session still states its purpose —
+ * several episodes can run against one task, and the purpose is what tells
+ * them apart on the record.
+ */
+function sessionPurpose(task: string | undefined, purpose: string | undefined): string {
+  if (purpose !== undefined) return purpose;
+  if (task === undefined) return DEFAULT_WORKSPACE_SESSION_PURPOSE;
+  throw new WardError(
+    `a task session states its purpose — ward session open ${task} --purpose TEXT ` +
+      '(only a workspace-scope session, opened with no TASK, may leave it out)',
+  );
+}
 
 const status = command('status', object({ action: constant('status'), json: jsonFlag() }), {
   brief: message`Where everything stands — derived from the leaves, never stored.`,
@@ -877,7 +899,13 @@ try {
         await cmdWorktreeList(result.json);
         break;
       case 'session-open':
-        await cmdSessionOpen(result.task, result.purpose, result.handle, result.dir, result.json);
+        await cmdSessionOpen(
+          result.task,
+          sessionPurpose(result.task, result.purpose),
+          result.handle,
+          result.dir,
+          result.json,
+        );
         break;
       case 'session-resume':
         await cmdSessionResume(result.id, result.json);

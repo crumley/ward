@@ -126,21 +126,24 @@ it once — Ward prints, you redirect, the same contract completion has:
 ward shell init fish > ~/.config/fish/conf.d/ward.fish
 ```
 
-Three functions, each usable from any directory:
+Four functions, each usable from any directory:
 
-| Shorthand     | What it does                                                                       |
-| ------------- | ---------------------------------------------------------------------------------- |
-| `wrr`         | `ward repo refresh`, arguments and all — from anywhere, via the default workspace. |
-| `wrcd NAME`   | `cd` to a repository's canonical checkout, searching across workspaces.            |
-| `wwcd [NAME]` | `cd` to a workspace root.                                                          |
+| Shorthand            | What it does                                                                       |
+| -------------------- | ---------------------------------------------------------------------------------- |
+| `wrr`                | `ward repo refresh`, arguments and all — from anywhere, via the default workspace. |
+| `wrcd NAME`          | `cd` to a repository's canonical checkout, searching across workspaces.            |
+| `wwcd [NAME]`        | `cd` to a workspace root.                                                          |
+| `wws [NAME] [ARGS…]` | `cd` to a workspace root and open a session there — the agent starts, and when it  |
+|                      | exits you are standing in the workspace. `ARGS` go to `ward session open` as is.   |
 
 `wrcd` takes a shorthand for the name: exact wins, then a unique prefix, then a unique substring, so
 `wrcd dot` reaches `dotfiles` while nothing else could be meant — and Ward says on stderr which
 repository it landed on. Give either function no name (or one that resolves to nothing) and it opens
-a picker over the candidates, prefilled with what you typed. The picker is [fzf]; without it, both
-functions print the candidates and ask you to name one — no hang, no prompt — and `wwcd` with no
-name simply takes you to the default workspace. `ward doctor` tells you which of those two worlds
-you are in.
+a picker over the candidates, prefilled with what you typed. The picker is [fzf]; without it, the
+functions print the candidates and ask you to name one — no hang, no prompt — and `wwcd` or `wws`
+with no name simply takes the default workspace. `ward doctor` tells you which of those two worlds
+you are in. `wws` needs no `--purpose`: a workspace-scope session may leave it out, and the record
+then says `interactive workspace session` (`wws main --purpose "…"` when you have one to give).
 
 Re-run the command after upgrading Ward — the shorthand set is expected to churn as usage shows what
 is worth one, and `ward doctor` tells you when your installed copy has fallen behind (byte-compared

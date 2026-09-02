@@ -38,6 +38,15 @@ const WORKSPACE_SESSION_SLUG = 'workspace';
 /** Sessions of the workspace itself live at the root — the scope's own level. */
 const WORKSPACE_SCOPE_DIR = '';
 
+/**
+ * What a workspace-scope session is for when the opener says nothing
+ * (design/0034-workspace-session-shorthand/). One stable phrase, deliberately
+ * generic: such a session is opened to receive work, not to do one named
+ * piece of it — the tasks it opens carry their own purposes — so the honest
+ * record is the kind of session it is, not a goal invented to fill the field.
+ */
+export const DEFAULT_WORKSPACE_SESSION_PURPOSE = 'interactive workspace session';
+
 export async function openSession(
   root: string,
   taskCode: string,

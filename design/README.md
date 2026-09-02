@@ -128,6 +128,9 @@ the SF's disposition is appended in its entry, remove the line here.
 - **SF-001** — [0033](0033-repo-remove/README.md): repository removal built as a local, autonomous
   act behind the fail-safe — the removal limb of the slice's open question, awaiting the intent
   edit.
+- **SF-001** — [0034](0034-workspace-session-shorthand/spec-feedback.md): the session log's purpose
+  minimum assumes a goal — what an interactive workspace session, opened to receive work, records as
+  its purpose.
 
 Entries 0001–0029 predate this queue and their SFs carry dispositions unevenly — some settled in
 their own text, some settled by later intent edits without a disposition line, some genuinely open.
