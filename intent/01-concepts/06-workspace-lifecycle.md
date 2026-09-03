@@ -152,7 +152,13 @@ workspace-local configuration
 ([`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md)). The durable boundary:
 **global state may hold preferences and conveniences only — never anything the understanding or
 resumption of work depends on.** _Why:_ the moment recovery needs a fact that lives outside the
-workspace, §3 is false and a restored or relocated workspace is silently incomplete.
+workspace, §3 is false and a restored or relocated workspace is silently incomplete. **A key whose
+validity depends on the machine** — how a harness is reached, say — is a preference in exactly this
+sense, and the machine's own global configuration is its natural home: set there, each machine
+carries what works for it and the workspace record carries nothing machine-shaped. A workspace may
+still override such a key, and then it is **workspace policy, not a promise about every machine the
+workspace will stand on**: its failure costs a launch, never the understanding or resumption of the
+work, and the health check names it on the machine where it does not hold.
 
 ## Workspace integrity: what can drift, and what Ward may do about it
 
