@@ -7,11 +7,14 @@
 // the store, or the CLI (the seam's own "everything Ward-specific staying in
 // Ward").
 //
-// The one Ward-shaped thing here is `WARD_CLAUDE_BIN`: the env override that
-// selects the binary. It is the hermeticity seam tests use — the same pattern
-// as `WARD_CONFIG_DIR` and `WARD_GH` — so no test ever spawns the real CLI,
-// and it doubles as the escape hatch for a human whose `claude` is not on
-// PATH under that name.
+// How the CLI is INVOKED on this machine is configuration, not a constant
+// (design/0035-agent-command/): `agent.command` names the program and any
+// leading words — `['npx', 'claude']` where `claude` cannot be run directly —
+// and this adapter only supplies the default (`claude`) for a machine that
+// says nothing. Above both sits `WARD_CLAUDE_BIN`, the env override that
+// selects the program for one invocation: the hermeticity seam tests use —
+// the same pattern as `WARD_CONFIG_DIR` and `WARD_GH` — so no test ever
+// spawns the real CLI.
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -21,10 +24,47 @@ type Env = Record<string, string | undefined>;
 /** The harness type recorded in every handle this adapter mints. */
 export const CLAUDE_HARNESS = 'claude';
 
-/** The executable, overridable for tests and for a differently-named install. */
-export function claudeBin(env: Env = process.env): string {
+/** What runs when nobody said otherwise: the CLI under its own name, on PATH. */
+export const DEFAULT_CLAUDE_COMMAND: readonly string[] = ['claude'];
+
+/** Where the command the adapter will run came from — reported by doctor. */
+export type ClaudeCommandSource = 'override' | 'configured' | 'default';
+
+export interface ClaudeCommand {
+  /** The program and its leading words — everything BEFORE Ward's own flags. */
+  readonly command: readonly string[];
+  readonly source: ClaudeCommandSource;
+}
+
+/**
+ * The command that starts the CLI here: `WARD_CLAUDE_BIN` when set (one
+ * program, the whole command — a test's stub, or an emergency), else the
+ * configured `agent.command`, else the default. The env override sits ABOVE
+ * the configuration because it is the narrowest layer there is — one
+ * invocation — and narrower wins on every axis this configuration has; it is
+ * also what keeps every existing hermetic test pointing at its stub whatever
+ * a scratch config says.
+ */
+export function claudeCommand(
+  configured: readonly string[] | undefined,
+  env: Env = process.env,
+): ClaudeCommand {
   const override = env.WARD_CLAUDE_BIN;
-  return override !== undefined && override !== '' ? override : 'claude';
+  if (override !== undefined && override !== '') return { command: [override], source: 'override' };
+  if (configured !== undefined && configured.length > 0) {
+    return { command: configured, source: 'configured' };
+  }
+  return { command: DEFAULT_CLAUDE_COMMAND, source: 'default' };
+}
+
+/**
+ * Whether a command's program can be found: an absolute or relative path
+ * checked as such (relative to `cwd`, where the launch would stand), a bare
+ * name searched on PATH. Returns the resolved location, or null — the same
+ * question doctor asks of `gh`, asked before a launch dies on it.
+ */
+export function locateProgram(program: string, cwd: string, env: Env = process.env): string | null {
+  return Bun.which(program, { cwd, ...(env.PATH === undefined ? {} : { PATH: env.PATH }) });
 }
 
 /**
@@ -62,7 +102,8 @@ export interface StartRequest {
 }
 
 /**
- * The argv of a fresh run, without the binary. `--session-id <uuid>` is the
+ * The argv of a fresh run, without the command that starts the CLI (that is
+ * `claudeCommand`'s, prepended at spawn). `--session-id <uuid>` is the
  * whole trick this entry rests on: Claude Code accepts the id of the
  * conversation it is about to create, so WARD assigns the handle and the
  * process is born under it — no prompt, no hook, no token spent asking the
@@ -101,7 +142,10 @@ export function resumeArgv(nativeId: string, args: readonly string[]): string[] 
 }
 
 export interface RunRequest {
+  /** The argv AFTER the command: Ward's flags, then the human's `agent.args`. */
   readonly argv: readonly string[];
+  /** The configured `agent.command`, when a layer set one (see `claudeCommand`). */
+  readonly command?: readonly string[] | undefined;
   /** Absolute working directory the run stands in. */
   readonly cwd: string;
   /** Extra environment for the child, merged over the caller's own. */
@@ -122,7 +166,9 @@ export type RunResult =
  * MEANS is Ward's business, not the adapter's.
  */
 export async function runClaude(request: RunRequest, env: Env = process.env): Promise<RunResult> {
-  const command = [claudeBin(env), ...request.argv];
+  // The command's own words come first, Ward's flags after them, the human's
+  // args last: `npx claude --session-id … --dangerously-skip-permissions`.
+  const command = [...claudeCommand(request.command, env).command, ...request.argv];
   try {
     const child = Bun.spawn(command, {
       cwd: request.cwd,

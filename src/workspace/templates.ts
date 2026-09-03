@@ -62,10 +62,12 @@ open is what starts the agent** — there is no id to copy by hand:
   **found** (with the path) or **gone**. Gone is a normal answer: retention belongs to the
   harness, not to Ward, and the session record is what survives it.
 - **What the agent is started with** is configuration on two axes: your defaults in
-  \`~/.config/ward/config.md\` (\`agent.model\`, \`agent.effort\`, \`agent.args\`, \`agent.harness\`)
-  overridden **per key** by an \`agent:\` block in \`workspace.md\`. A key set nowhere is passed
-  as nothing at all — the harness's own default then applies. \`ward doctor\` prints the resolved
-  answer with the layer each key came from.
+  \`~/.config/ward/config.md\` (\`agent.model\`, \`agent.effort\`, \`agent.args\`, \`agent.harness\`,
+  and \`agent.command\` — how the harness is invoked on this machine, \`[npx, claude]\` where
+  \`claude\` cannot be run directly) overridden **per key** by an \`agent:\` block in
+  \`workspace.md\`. A key set nowhere is passed as nothing at all — the harness's own default
+  then applies. \`ward doctor\` prints the resolved answer with the layer each key came from,
+  and checks that the command can be found.
 - **Sessions Ward did not launch record themselves.** \`ward session open --purpose TEXT --handle
   HANDLE\` (and \`ward session open TASK --purpose TEXT\` for a task) records without launching —
   the path for an agent that is already running, like the one reading this file. Put your

@@ -9,10 +9,12 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  claudeBin,
+  claudeCommand,
   claudeHandle,
   claudeNativeId,
+  DEFAULT_CLAUDE_COMMAND,
   locateClaudeRun,
+  locateProgram,
   mungeCwd,
   resumeArgv,
   startArgv,
@@ -133,8 +135,64 @@ test('locate reports found and gone as distinct outcomes, with the path either w
   rmSync(dir, { recursive: true, force: true });
 });
 
-test('the binary is `claude`, overridden by WARD_CLAUDE_BIN — the hermeticity seam', () => {
-  expect(claudeBin({})).toBe('claude');
-  expect(claudeBin({ WARD_CLAUDE_BIN: '' })).toBe('claude'); // empty is not a choice
-  expect(claudeBin({ WARD_CLAUDE_BIN: '/opt/fake/claude' })).toBe('/opt/fake/claude');
+test('the command: WARD_CLAUDE_BIN, else agent.command, else `claude` (design/0035)', () => {
+  const table: ReadonlyArray<
+    [
+      string,
+      readonly string[] | undefined,
+      Record<string, string>,
+      ReturnType<typeof claudeCommand>,
+    ]
+  > = [
+    ['nothing anywhere', undefined, {}, { command: ['claude'], source: 'default' }],
+    [
+      'the work machine: a launcher in front of the CLI',
+      ['npx', 'claude'],
+      {},
+      { command: ['npx', 'claude'], source: 'configured' },
+    ],
+    [
+      'the override is the whole command — one program, the narrowest layer',
+      ['npx', 'claude'],
+      { WARD_CLAUDE_BIN: '/opt/fake/claude' },
+      { command: ['/opt/fake/claude'], source: 'override' },
+    ],
+    [
+      'an empty override is not a choice',
+      undefined,
+      { WARD_CLAUDE_BIN: '' },
+      {
+        command: ['claude'],
+        source: 'default',
+      },
+    ],
+    [
+      'an empty configured list cannot run anything — the default stands',
+      [],
+      {},
+      {
+        command: ['claude'],
+        source: 'default',
+      },
+    ],
+  ];
+  for (const [name, configured, env, expected] of table) {
+    expect(claudeCommand(configured, env), name).toEqual(expected);
+  }
+  expect(DEFAULT_CLAUDE_COMMAND).toEqual(['claude']);
+});
+
+test('locateProgram: a bare name on PATH, a path as a path, nothing for what is not there', () => {
+  const dir = join(tmpdir(), `ward-harness-program-${process.pid}`);
+  mkdirSync(join(dir, 'bin'), { recursive: true });
+  writeFileSync(join(dir, 'bin', 'fake-claude'), '#!/bin/sh\n', { mode: 0o755 });
+  const env = { PATH: join(dir, 'bin') };
+  expect(locateProgram('fake-claude', dir, env)).toBe(join(dir, 'bin', 'fake-claude'));
+  expect(locateProgram(join(dir, 'bin', 'fake-claude'), '/', env)).toBe(
+    join(dir, 'bin', 'fake-claude'),
+  );
+  expect(locateProgram('./bin/fake-claude', dir, env)).toBe(join(dir, 'bin', 'fake-claude'));
+  expect(locateProgram('fake-claude', dir, { PATH: '/nowhere' })).toBeNull();
+  expect(locateProgram('/nonexistent/claude', dir, env)).toBeNull();
+  rmSync(dir, { recursive: true, force: true });
 });

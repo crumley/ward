@@ -1825,7 +1825,8 @@ async function cmdSessionOpen(
   if (run.outcome === 'failed') {
     throw new WardError(
       `the agent did not start — ${run.cause}. Session ${record.id} is recorded and open: ` +
-        `fix the harness (WARD_CLAUDE_BIN overrides the binary) and resume it with ` +
+        `fix the harness (agent.command configures how it is started; ward doctor checks it) ` +
+        `and resume it with ` +
         `ward session resume ${record.id}`,
     );
   }

@@ -10,15 +10,15 @@
 // directory exactly as the CLI does — and the spawned CLI given the same pair
 // explicitly.
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AgentSettings } from '../../src/agent/settings.ts';
 import { doctorShape } from '../../src/cli/schema.ts';
 import { readDocument, writeDocument } from '../../src/store/document.ts';
 import { workspaceRecordType } from '../../src/store/types.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
-import { type Finding, runDoctor } from '../../src/workspace/doctor.ts';
-import { applyGitTestEnv, makeTempDir, NO_GH, removeDir } from '../helpers.ts';
+import { type Finding, runDoctor as runDoctorReal } from '../../src/workspace/doctor.ts';
+import { applyGitTestEnv, makeTempDir, NO_GH, removeDir, writeFakeClaude } from '../helpers.ts';
 
 test('doctor resolves both axes and names the layer that answered, per key', async () => {
   writeGlobalAgent({ model: 'fable', effort: 'high', args: ['--dangerously-skip-permissions'] });
@@ -30,13 +30,72 @@ test('doctor resolves both axes and names the layer that answered, per key', asy
     model: { provenance: 'workspace', value: 'sonnet' },
     effort: { provenance: 'global', value: 'high' },
     args: { provenance: 'global', value: ['--dangerously-skip-permissions'] },
+    command: { provenance: 'absent' },
   });
   expect(finding(report.workspace, 'agent configuration')).toEqual({
     check: 'agent configuration',
     severity: 'ok',
     message:
       "harness claude (ward's default) · model sonnet (this workspace) · " +
-      'effort high (global config) · args --dangerously-skip-permissions (global config)',
+      'effort high (global config) · args --dangerously-skip-permissions (global config) · ' +
+      'command not set',
+  });
+});
+
+// -- the command, and whether it can be found (design/0035-agent-command/) --
+
+test('the command resolves like every other key, and doctor checks it can be found', async () => {
+  writeGlobalAgent({ command: ['npx', 'claude'] });
+  await writeWorkspaceAgent({ command: [stub, '--via-shim'] });
+
+  const report = await runDoctor(root);
+  expect(report.agent?.command).toEqual({
+    provenance: 'workspace',
+    value: [stub, '--via-shim'],
+  });
+  expect(finding(report.workspace, 'agent configuration').message).toContain(
+    `command ${stub} --via-shim (this workspace)`,
+  );
+  expect(finding(report.workspace, 'agent command')).toEqual({
+    check: 'agent command',
+    severity: 'ok',
+    message: `${stub} --via-shim (this workspace) — ${stub}`,
+  });
+});
+
+test('a command whose program is nowhere is a warning that names it and the key', async () => {
+  writeGlobalAgent({ command: ['npx-that-is-not-installed', 'claude'] });
+  const shown = finding((await runDoctor(root)).workspace, 'agent command');
+  expect(shown.severity).toBe('warn');
+  expect(shown.message).toContain('npx-that-is-not-installed (global config) is not on PATH');
+  expect(shown.message).toContain('ward session open would fail');
+  expect(shown.message).toContain('agent.command');
+  expect((await runDoctor(root)).healthy).toBe(true); // a launch that would fail is not a broken record
+});
+
+test('unset, the default program is checked too — that is the machine that needs the key', async () => {
+  // A PATH with git on it and nothing else: doctor still runs, and `claude`
+  // is exactly as absent as it is on a machine that needs the key.
+  const shown = finding(
+    (await runDoctor(root, { PATH: pathWithoutClaude })).workspace,
+    'agent command',
+  );
+  expect(shown.severity).toBe('warn');
+  expect(shown.message).toContain("claude (the claude adapter's default) is not on PATH");
+  expect(shown.message).toContain('[npx, claude]');
+  expect(shown.message).toContain(join(configHome, 'config.md'));
+});
+
+test('WARD_CLAUDE_BIN is the narrowest layer: doctor describes what the launch would run', async () => {
+  writeGlobalAgent({ command: ['npx', 'claude'] });
+  const shown = finding(
+    (await runDoctor(root, { WARD_CLAUDE_BIN: stub })).workspace,
+    'agent command',
+  );
+  expect(shown).toEqual({
+    check: 'agent command',
+    severity: 'ok',
+    message: `${stub} (WARD_CLAUDE_BIN) — ${stub}`,
   });
 });
 
@@ -96,6 +155,7 @@ test('doctor --json carries the resolution as data, an absent key without a valu
     model: { provenance: 'global', value: 'fable' },
     effort: { provenance: 'workspace', value: 'max' },
     args: { provenance: 'global', value: [] },
+    command: { provenance: 'absent' },
   });
 
   // The whole point, in one document: with nothing configured on either axis,
@@ -108,7 +168,13 @@ test('doctor --json carries the resolution as data, an absent key without a valu
     model: { provenance: 'absent' },
     effort: { provenance: 'absent' },
     args: { provenance: 'default', value: [] },
+    command: { provenance: 'absent' },
   });
+
+  // A configured command is data too — the list, with its layer.
+  writeGlobalAgent({ command: ['npx', 'claude'] });
+  const launcher = doctorShape.parse(JSON.parse(ward(['doctor', '--json'], root).stdout));
+  expect(launcher.agent?.command).toEqual({ provenance: 'global', value: ['npx', 'claude'] });
 });
 
 // -- setup -----------------------------------------------------------------
@@ -119,8 +185,29 @@ let bareRoot: string;
 let configHome: string;
 let emptyConfigHome: string;
 let stateHome: string;
+let stub: string;
+let pathWithoutClaude: string;
 let caseId = 0;
 let originalConfigDir: string | undefined;
+let originalClaudeBin: string | undefined;
+
+/**
+ * `runDoctor` with a few environment variables pinned for the call — the
+ * program lookup reads PATH and the WARD_CLAUDE_BIN seam from the ambient
+ * environment, exactly as the launch does.
+ */
+async function runDoctor(root: string, env: Record<string, string> = {}) {
+  const saved = Object.fromEntries(Object.keys(env).map((key) => [key, process.env[key]]));
+  Object.assign(process.env, env);
+  try {
+    return await runDoctorReal(root);
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
 
 function finding(findings: readonly Finding[], check: string): Finding {
   const found = findings.find((entry) => entry.check === check);
@@ -136,6 +223,9 @@ function writeGlobalAgent(agent: AgentSettings): void {
   if (agent.effort !== undefined) lines.push(`  effort: ${agent.effort}`);
   if (agent.args !== undefined) {
     lines.push(`  args: [${agent.args.map((arg) => `'${arg}'`).join(', ')}]`);
+  }
+  if (agent.command !== undefined) {
+    lines.push(`  command: [${agent.command.map((word) => `'${word}'`).join(', ')}]`);
   }
   mkdirSync(configHome, { recursive: true });
   writeFileSync(
@@ -164,6 +254,7 @@ function ward(argv: string[], cwd: string, config: string = configHome) {
       WARD_CONFIG_DIR: config,
       WARD_STATE_DIR: stateHome,
       WARD_AGENT: undefined,
+      WARD_CLAUDE_BIN: undefined,
     },
   });
   return { exitCode: result.exitCode, stdout: result.stdout.toString() };
@@ -174,7 +265,17 @@ const cliPath = new URL('../../src/cli/index.ts', import.meta.url).pathname;
 beforeAll(() => {
   applyGitTestEnv();
   originalConfigDir = process.env.WARD_CONFIG_DIR;
+  originalClaudeBin = process.env.WARD_CLAUDE_BIN;
+  // The command finding reads the launch's own seam: unset it here so a
+  // developer's ambient override cannot answer for the configuration under test.
+  delete process.env.WARD_CLAUDE_BIN;
   scratch = makeTempDir();
+  stub = writeFakeClaude(scratch, 'claude-stub');
+  pathWithoutClaude = join(scratch, 'path-without-claude');
+  mkdirSync(pathWithoutClaude, { recursive: true });
+  const git = Bun.which('git');
+  if (git === null) throw new Error('git is required on PATH to run this suite');
+  symlinkSync(git, join(pathWithoutClaude, 'git'));
 });
 
 beforeEach(async () => {
@@ -192,5 +293,6 @@ beforeEach(async () => {
 
 afterAll(() => {
   process.env.WARD_CONFIG_DIR = originalConfigDir;
+  if (originalClaudeBin !== undefined) process.env.WARD_CLAUDE_BIN = originalClaudeBin;
   removeDir(scratch);
 });

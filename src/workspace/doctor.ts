@@ -28,6 +28,7 @@ import {
   resolutionOrder,
 } from '../global/registry.ts';
 import type { GlobalRead } from '../global/store.ts';
+import { claudeCommand, locateProgram } from '../harness/claude.ts';
 import {
   adoptionDir,
   fishConfigured,
@@ -583,6 +584,7 @@ async function workspaceChecks(
   // about the same broken file.
   const agent = resolveAgentConfig({ workspace: record?.agent, global: config.agent });
   findings.push(agentConfigFinding(agent));
+  findings.push(agentCommandFinding(root, agent));
 
   const ignoreFile = join(root, '.gitignore');
   const ignoreLines = existsSync(ignoreFile)
@@ -643,7 +645,7 @@ async function workspaceChecks(
  */
 function agentConfigFinding(agent: ResolvedAgentConfig): Finding {
   const check = 'agent configuration';
-  const configured = [agent.harness, agent.model, agent.effort, agent.args].some(
+  const configured = [agent.harness, agent.model, agent.effort, agent.args, agent.command].some(
     (key) => key.provenance === 'workspace' || key.provenance === 'global',
   );
   const summary = [
@@ -651,6 +653,7 @@ function agentConfigFinding(agent: ResolvedAgentConfig): Finding {
     describeKey('model', agent.model),
     describeKey('effort', agent.effort),
     describeKey('args', agent.args, renderArgs),
+    describeKey('command', agent.command, renderArgs),
   ].join(' · ');
   return configured
     ? { check, severity: 'ok', message: summary }
@@ -659,7 +662,7 @@ function agentConfigFinding(agent: ResolvedAgentConfig): Finding {
         severity: 'info',
         message:
           `${summary} — nothing configured; set your defaults in ${globalConfigPath()} ` +
-          `(agent.model, agent.effort, agent.args) and override them per workspace in ` +
+          `(agent.model, agent.effort, agent.args, agent.command) and override them per workspace in ` +
           `${workspaceRecordType.relPath}`,
       };
 }
@@ -687,6 +690,53 @@ function sourceWord(provenance: Exclude<AgentProvenance, 'absent'>): string {
 
 function renderArgs(args: readonly string[]): string {
   return args.length === 0 ? 'none' : args.join(' ');
+}
+
+/**
+ * Whether the command that would start the harness HERE can actually be
+ * found (design/0035-agent-command/) — the launch's first failure, diagnosed
+ * before a `session open` dies on it. Read through the same `claudeCommand`
+ * the launch spawns, so doctor and the launch always describe the same
+ * program: the `WARD_CLAUDE_BIN` override, else the configured
+ * `agent.command`, else the adapter's default `claude`. The lookup stands in
+ * the workspace root, where a launched workspace session stands; a relative
+ * program is judged from there.
+ *
+ * Warn, never error: a workspace whose harness cannot be started is still a
+ * healthy RECORD — what is broken is this machine's way of reaching the CLI,
+ * and the finding names both the program and the key that fixes it. The
+ * unconfigured case is checked too, because "`claude` is not on PATH, set
+ * agent.command" is precisely the diagnosis a machine that needs the key is
+ * waiting for.
+ */
+function agentCommandFinding(root: string, agent: ResolvedAgentConfig): Finding {
+  const check = 'agent command';
+  const configured = agent.command.provenance === 'absent' ? undefined : agent.command.value;
+  const { command, source } = claudeCommand(configured);
+  const program = command[0] ?? '';
+  const origin =
+    source === 'override'
+      ? 'WARD_CLAUDE_BIN'
+      : source === 'default' || agent.command.provenance === 'absent'
+        ? "the claude adapter's default"
+        : sourceWord(agent.command.provenance);
+  const found = locateProgram(program, root);
+  if (found !== null) {
+    return { check, severity: 'ok', message: `${command.join(' ')} (${origin}) — ${found}` };
+  }
+  const remedy =
+    source === 'configured'
+      ? `fix the program, or the agent.command that names it`
+      : `set agent.command in ${globalConfigPath()} — for example [npx, claude] where ` +
+        'claude is reached through a launcher — or override it per workspace in ' +
+        workspaceRecordType.relPath;
+  return {
+    check,
+    severity: 'warn',
+    message:
+      `${program} (${origin}) is not on PATH and not a file — ward session open would fail ` +
+      `to start the agent; ${remedy}`,
+  };
 }
 
 /**
