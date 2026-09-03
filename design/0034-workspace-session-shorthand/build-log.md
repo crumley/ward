@@ -39,9 +39,9 @@ shim on PATH that runs this worktree's `src/cli/index.ts`:
 - `WARD_AGENT=1 ward session open --handle test:1` →
   `opened session workspace-1 (workspace scope,
   in .)`; the record reads
-  `purpose: interactive workspace session`. With `--json`, the document carries the same purpose and
-  parses under the unchanged `sessionMutationShape`; `ward schema session open` still documents
-  `purpose` as a string.
+  `purpose: interactive workspace session` (the first draft's phrase; see 2026-09-03 below). With
+  `--json`, the document carries the same purpose and parses under the unchanged
+  `sessionMutationShape`; `ward schema session open` still documents `purpose` as a string.
 - `fish --no-config -c 'ward shell init fish | source; functions wws'` → the function;
   `ward shell init fish | fish --no-config --no-execute /dev/stdin` → clean.
 - **`wws` in a real fish, no fzf on PATH:** from `/`, `wws --handle test:3; and pwd` →
@@ -64,3 +64,19 @@ shim on PATH that runs this worktree's `src/cli/index.ts`:
 the first real churn 0027's per-alias staleness reports; then telemetry on whether `--purpose` is
 ever typed under `wws`, which decides the deferred `-w` completion; and SF-001's adjudication, which
 decides whether the default purpose is the slice's answer or only this entry's.
+
+## 2026-09-03 — The default purpose, reworded on review
+
+**Goal.** The owner's review of [#72](https://github.com/crumley/ward/pull/72): keep `wws`, keep
+task scope requiring a purpose, and make the default say what the session is for with the instant it
+was opened. **What was done.** The constant became `defaultWorkspaceSessionPurpose(openedAt)` in
+`src/workspace/sessions.ts`, applied where the record is written so the instant is `openedAt`
+itself; the task-scope refusal moved from the parser's `sessionPurpose` into `openSession`, where
+the scope is already known and the refusal lands before the lock. The manifest bullet, its lineage
+entry (the merged 0034 hash moves into history), the help line, the README, and the suites follow.
+
+**What building forced.** #72 merged while this change was in flight, so it travels on its own
+branch off the new tip rather than as a fourth commit — the same rebase-around-a-fast-merge the
+entry's collision note anticipated for 0032, met from the other side.
+
+**Verified.** `mise run fmt` then `mise run check` → exit 0 (the counts are in the PR).

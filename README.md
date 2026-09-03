@@ -143,7 +143,7 @@ a picker over the candidates, prefilled with what you typed. The picker is [fzf]
 functions print the candidates and ask you to name one — no hang, no prompt — and `wwcd` or `wws`
 with no name simply takes the default workspace. `ward doctor` tells you which of those two worlds
 you are in. `wws` needs no `--purpose`: a workspace-scope session may leave it out, and the record
-then says `interactive workspace session` (`wws main --purpose "…"` when you have one to give).
+then says `Coordinating work · opened <time>` (`wws main --purpose "…"` when you have one to give).
 
 Re-run the command after upgrading Ward — the shorthand set is expected to churn as usage shows what
 is worth one, and `ward doctor` tells you when your installed copy has fallen behind (byte-compared

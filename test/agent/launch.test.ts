@@ -16,7 +16,7 @@ import { readDocument, writeDocument } from '../../src/store/document.ts';
 import { type SessionRecord, workspaceRecordType } from '../../src/store/types.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
-import { readSessions } from '../../src/workspace/sessions.ts';
+import { defaultWorkspaceSessionPurpose, readSessions } from '../../src/workspace/sessions.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import {
   applyGitTestEnv,
@@ -27,6 +27,7 @@ import {
 } from '../helpers.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const DEFAULT_PURPOSE = /^Coordinating work · opened \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 
 // -- the launch -------------------------------------------------------------
 
@@ -59,25 +60,33 @@ test('open with no TASK: the record first, then the agent, in the workspace root
   expect(record?.handle).toBe(`claude:${run?.argv[1]}`);
 });
 
-test('open with no TASK and no --purpose: the launch runs, and the record says what kind of session it is', async () => {
+test('open with no TASK and no --purpose: the launch runs, and the record states the purpose itself', async () => {
   // design/0034-workspace-session-shorthand/: `wws` opens a workspace session
-  // without making the human invent a purpose — the record carries one stable
-  // phrase instead of an empty field.
+  // without making the human invent a purpose — Ward states one on their
+  // behalf, stamped with the record's own opening instant.
   const opened = ward(['session', 'open']);
   expect(opened.exitCode).toBe(0);
   expect(opened.stdout).toContain('opened session workspace-1');
   expect(runs()[0]?.recordSeen).toBe(true);
-  expect((await readSessions(ws, ''))[0]).toMatchObject({
-    scope: 'workspace',
-    purpose: 'interactive workspace session',
-  });
+  const [launched] = await readSessions(ws, '');
+  expect(launched?.scope).toBe('workspace');
+  expect(launched?.purpose).toBe(defaultWorkspaceSessionPurpose(launched?.openedAt ?? ''));
+  expect(launched?.purpose).toMatch(DEFAULT_PURPOSE);
   // …and the record-only path at workspace scope may leave it out too.
   const recorded = ward(['session', 'open', '--handle', 'claude:by-hand']);
   expect(recorded.exitCode).toBe(0);
-  expect((await readSessions(ws, ''))[1]).toMatchObject({
-    handle: 'claude:by-hand',
-    purpose: 'interactive workspace session',
-  });
+  const [, byHand] = await readSessions(ws, '');
+  expect(byHand?.handle).toBe('claude:by-hand');
+  expect(byHand?.purpose).toBe(defaultWorkspaceSessionPurpose(byHand?.openedAt ?? ''));
+});
+
+test("the default purpose is the record's own instant, to the second", () => {
+  expect(defaultWorkspaceSessionPurpose('2026-09-02T22:41:07.123Z')).toBe(
+    'Coordinating work · opened 2026-09-02T22:41:07Z',
+  );
+  expect(defaultWorkspaceSessionPurpose('2026-09-02T22:41:07Z')).toBe(
+    'Coordinating work · opened 2026-09-02T22:41:07Z',
+  );
 });
 
 test('a task session still states its purpose — refused before any record is written', async () => {

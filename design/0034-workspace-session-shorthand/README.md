@@ -3,8 +3,9 @@
 > `wws [NAME] [ARGS…]` takes the shell to a workspace root — the default one when nothing is named
 > and nothing can pick — and runs `ward session open` there, so starting an agent in a workspace is
 > one word from any directory. To make that word enough, `ward session open` no longer requires
-> `--purpose` at workspace scope: an omitted purpose is recorded as `interactive workspace session`.
-> The workspace resolution `wwcd` carried moves into one helper both shorthands call.
+> `--purpose` at workspace scope: an omitted purpose is recorded as
+> `Coordinating work · opened <time>`. The workspace resolution `wwcd` carried moves into one helper
+> both shorthands call.
 >
 > **Status:** built — awaiting review · **Started:** 2026-09-02
 
@@ -46,10 +47,11 @@ whole reason the shorthand would otherwise need a prompt.
 
 - **In:**
   - **`--purpose` optional at workspace scope** (`src/cli/index.ts`, `src/workspace/sessions.ts`):
-    `ward session open` with no TASK and no `--purpose` records `DEFAULT_WORKSPACE_SESSION_PURPOSE`
-    — `interactive workspace session` — on both the launched path and the `--handle` record-only
-    path. With a TASK and no `--purpose`, a refusal naming the exact invocation; no record is
-    written and nothing is launched. The option carries its own help line saying so.
+    `ward session open` with no TASK and no `--purpose` records `defaultWorkspaceSessionPurpose` —
+    `Coordinating work · opened <time>`, the instant being the record's own `openedAt` — on both the
+    launched path and the `--handle` record-only path. With a TASK and no `--purpose`, a refusal
+    naming the exact invocation; no record is written and nothing is launched. The option carries
+    its own help line saying so.
   - **`wws`** (`src/shell/shorthands.ts`): `wws [NAME] [ARGS…]`. The first argument names the
     workspace unless it begins with `-`; every remaining argument reaches `ward session open`
     untouched. The workspace resolves as `wwcd`'s does — by name, else the picker, else (no picker)
@@ -85,7 +87,7 @@ whole reason the shorthand would otherwise need a prompt.
 - **Acceptance:**
   1. `mise run check` green.
   2. `bun test test/agent/launch.test.ts` — `session open` with no TASK and no `--purpose` launches
-     and records `interactive workspace session`; the same with `--handle` records it;
+     and records `Coordinating work · opened <time>`; the same with `--handle` records it;
      `session
      open TASK` without `--purpose` is refused with nothing written and nothing
      launched.
@@ -109,19 +111,24 @@ whole reason the shorthand would otherwise need a prompt.
     (`purpose: z.string().min(1)`), the JSON shape is unchanged, and `ward schema session open`
     still documents `purpose` as a string; what moved is the boundary at which the default is
     supplied, from the human's fingers to the parser.
-  - **`interactive workspace session`, lowercase, nothing appended.** Purposes on the record read as
-    fragments (`drive the feature`, `machine-readable output`), so the default reads like one.
-    Nothing is appended — no date, no host — because the record already carries `openedAt`, the
-    directory, and the handle, and a purpose that restated them would be a second home for facts the
-    record has once.
+  - **`Coordinating work · opened <time>`.** The first draft recorded
+    `interactive workspace
+    session`, lowercase, with nothing appended, on the argument that the
+    record already carries `openedAt` and a purpose restating it would be a second home for a fact.
+    The owner's review turned that around: a session opened to receive work is _for_ coordinating
+    it, so the phrase should say so, and the instant belongs in the purpose because that is where a
+    human reads it — two such sessions in a `ward status` list read apart by their purpose alone,
+    without a column look-up. The one-home rule holds: the instant is `openedAt` itself, formatted
+    to the second, never a second clock read, so the two can never disagree.
   - **Task scope keeps requiring a purpose.** Several sessions can run against one task — drive the
     feature, answer review, chase a flaky check — and on the task's session log the purpose is what
     tells them apart; the task record's own purpose says what the _task_ is for, not what _this
     episode_ is for. At workspace scope there is one thing the session can be for, which is why the
     default is honest there and would be a placeholder here. The cost is the asymmetry the help line
     has to explain; it is one sentence, and the refusal names the exact invocation. This is
-    reversible in one line of `sessionPurpose` if the task-scope launch
-    ([0032](https://github.com/crumley/ward/pull/68), in flight) makes a default wanted there.
+    reversible in one line of `openSession` if the task-scope launch
+    ([0032](https://github.com/crumley/ward/pull/68), in flight) makes a default wanted there. The
+    owner affirmed the asymmetry on review: when you open a task, you have a purpose in mind.
   - **A shorthand, not a verb.** `ward workspace session NAME` was the alternative: discoverable
     under `--help`, one place for the resolution. It lost on the two things the shorthand is for. A
     verb cannot `cd` the calling shell — the human would return from the agent to wherever they

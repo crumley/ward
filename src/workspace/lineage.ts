@@ -151,8 +151,14 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: 'ef5ffe607886ca2fea68c54f7cf72a138c5058316116b49a78d664ffa58ac510',
         era: '7fa9656 (design 0029)',
       },
-      // Current since design 0034: `--purpose` is optional at workspace scope,
-      // and the manifest says what an omitted one records.
+      // b85124f (design 0034) — `--purpose` optional at workspace scope; the
+      // manifest named the omitted purpose as 'interactive workspace session'.
+      {
+        sha256: 'c3632671f68f052cbe4449e81bf38618ca8a379ead3f500fae2b4346846ceefd',
+        era: 'b85124f (design 0034)',
+      },
+      // Current since design 0034's follow-up: an omitted purpose is recorded
+      // as `Coordinating work · opened <time>`, and the manifest says so.
     ],
   },
 ];
