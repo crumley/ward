@@ -31,6 +31,9 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   any leading words) is configured beside the model and the extra flags and defaults to the
   adapter's own; it never changes which adapter owns the handle." — and a matching phrase in _Left
   to implementation_: "how start/resume are invoked per harness **and per machine**".
+- **Status:** adjudicated — [#75](https://github.com/crumley/ward/pull/75) (owner's ruling:
+  invocation is distinct from harness identity; the harness is `claude` whatever command reaches
+  it).
 
 ## SF-002 — a workspace-level command is a machine fact in a record that travels
 
@@ -58,3 +61,6 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   resumption of the work, and `doctor` names it on the machine where it does not hold." — and a
   pointer from the human-shell configuration clause noting that a workspace-local key is workspace
   policy, not a promise about every machine the workspace will stand on.
+- **Status:** adjudicated — [#76](https://github.com/crumley/ward/pull/76) (owner's ruling: the
+  hierarchy already resolves it — set the key in the machine's own global configuration and leave it
+  out of the workspace, so each machine carries what works for it).
