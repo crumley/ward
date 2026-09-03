@@ -51,8 +51,8 @@ open is what starts the agent** — there is no id to copy by hand:
 
 - \`ward session open [--purpose TEXT]\` opens a session at **workspace scope** (the workspace
   itself is what it is responsible for), records it, and **launches the agent in it**, in the
-  workspace root — \`--purpose\` is optional here, and leaving it out records \`interactive
-  workspace session\`. Ward assigns the harness handle before the process starts and sets
+  workspace root — \`--purpose\` is optional here: left out, the record says
+  \`Coordinating work · opened <time>\`. Ward assigns the harness handle before the process starts and sets
   \`WARD_AGENT\` in its environment, so the new session is declared from its first command and
   nothing about Ward has to be explained to it.
 - **When the agent exits, the session stays open.** An exit is not a close: open and running are

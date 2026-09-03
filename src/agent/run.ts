@@ -68,7 +68,7 @@ type Recorded = (record: SessionRecord) => void;
  */
 export async function launchWorkspaceSession(
   root: string,
-  purpose: string,
+  purpose: string | undefined,
   workingDirectory: string | undefined,
   onRecorded: Recorded = () => {},
 ): Promise<LaunchedSession> {

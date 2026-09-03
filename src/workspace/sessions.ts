@@ -40,19 +40,37 @@ const WORKSPACE_SCOPE_DIR = '';
 
 /**
  * What a workspace-scope session is for when the opener says nothing
- * (design/0034-workspace-session-shorthand/). One stable phrase, deliberately
- * generic: such a session is opened to receive work, not to do one named
- * piece of it — the tasks it opens carry their own purposes — so the honest
- * record is the kind of session it is, not a goal invented to fill the field.
+ * (design/0034-workspace-session-shorthand/): coordinating work — such a
+ * session is opened to receive and route work, not to do one named piece of
+ * it; the tasks it opens carry their own purposes. Ward states that on the
+ * human's behalf, stamped with the instant the record was opened, so two
+ * such sessions read apart in a list and the phrase is a fact about THIS
+ * record rather than a placeholder. The instant is `openedAt` itself — the
+ * same value, never a second clock read — trimmed to the second because a
+ * purpose is read by people.
  */
-export const DEFAULT_WORKSPACE_SESSION_PURPOSE = 'interactive workspace session';
+export function defaultWorkspaceSessionPurpose(openedAt: string): string {
+  return `Coordinating work · opened ${openedAt.replace(/\.\d{3}Z$/, 'Z')}`;
+}
 
 export async function openSession(
   root: string,
   taskCode: string,
-  purpose: string,
+  purpose: string | undefined,
   options: OpenSessionOptions,
 ): Promise<SessionRecord> {
+  // A task session states its purpose (design/0034-workspace-session-shorthand/):
+  // when you open a task you have one in mind, and several episodes can run
+  // against one task, so the purpose is what tells them apart on the log.
+  // Only a workspace-scope session may leave it out — there Ward states one
+  // on the human's behalf (`defaultWorkspaceSessionPurpose`). Refused before
+  // the lock, so nothing is read or written for a call that cannot proceed.
+  if (purpose === undefined) {
+    throw new WardError(
+      `a task session states its purpose — ward session open ${taskCode} --purpose TEXT ` +
+        '(only a workspace-scope session, opened with no TASK, may leave it out)',
+    );
+  }
   // The id-allocation scan through the commit is the serialized critical
   // section (§17, design/0013-telemetry-and-serialized-writes/).
   return withStoreLock(root, `session open ${taskCode}`, async () => {
@@ -80,7 +98,7 @@ export async function openSession(
  */
 export async function openWorkspaceSession(
   root: string,
-  purpose: string,
+  purpose: string | undefined,
   options: OpenSessionOptions,
 ): Promise<SessionRecord> {
   return withStoreLock(root, 'session open (workspace)', async () => {
@@ -254,7 +272,8 @@ interface OpenedFields {
   readonly id: string;
   readonly scope: SessionRecord['scope'];
   readonly task?: string;
-  readonly purpose: string;
+  /** Absent only at workspace scope, where the record states one itself. */
+  readonly purpose?: string | undefined;
   readonly workingDirectory: string;
   readonly handle?: string;
   readonly model?: string;
@@ -274,7 +293,7 @@ async function writeOpened(
     id: fields.id,
     scope: fields.scope,
     ...(fields.task === undefined ? {} : { task: fields.task }),
-    purpose: fields.purpose,
+    purpose: fields.purpose ?? defaultWorkspaceSessionPurpose(openedAt),
     workingDirectory: fields.workingDirectory,
     ...(fields.handle === undefined ? {} : { handle: fields.handle }),
     ...(fields.model === undefined ? {} : { model: fields.model }),

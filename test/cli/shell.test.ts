@@ -11,7 +11,7 @@ import { verbPath } from '../../src/cli/telemetry.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
-import { readSessions } from '../../src/workspace/sessions.ts';
+import { defaultWorkspaceSessionPurpose, readSessions } from '../../src/workspace/sessions.ts';
 import { applyGitTestEnv, makeTempDir, NO_GH, removeDir } from '../helpers.ts';
 
 // -- the emitted script ----------------------------------------------------
@@ -334,7 +334,8 @@ test('wws lands in a workspace and opens a session there; the rest of argv reach
   expect(bare.stderr).toContain('going to the default workspace');
   expect(bare.stdout).toContain('opened session workspace-2');
   expect(bare.stdout.trim().split('\n').at(-1)).toBe(alpha);
-  expect((await readSessions(alpha, ''))[1]?.purpose).toBe('interactive workspace session');
+  const [, bareRecord] = await readSessions(alpha, '');
+  expect(bareRecord?.purpose).toBe(defaultWorkspaceSessionPurpose(bareRecord?.openedAt ?? ''));
 
   // A name ward cannot resolve, and no picker: the listing, exit 127, and no
   // session — the cd never happened, so nothing ran in the wrong place.
