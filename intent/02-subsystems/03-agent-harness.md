@@ -26,7 +26,14 @@ binding the concepts to any one of them_ (§5).
   Where the window is unavoidable it is accepted knowingly and kept as short as an adapter can make
   it, never widened for convenience.
 - **Be selectable per scope** (default per workspace, overridable per scope), so different scopes
-  can use different harnesses, and two can be mixed in one workspace.
+  can use different harnesses, and two can be mixed in one workspace. **The harness's invocation is
+  configuration, not identity.** How a chosen harness is started on a given machine — the program
+  and any leading words — is configured beside the model and the extra flags, on the same two axes
+  ([`07-human-shell.md`](07-human-shell.md)), and defaults to the adapter's own; it never changes
+  which adapter owns the handle. _Why:_ the same harness is one command on one machine and reached
+  through a launcher on another, and a handle must be read by the same adapter whatever launcher
+  started the run — folding the launcher into the harness choice would make one harness look like
+  two.
 - **Make the run's history locatable from the recorded handle** — for resume after a reboot and for
   reflection later — whatever its format. _Why:_ each harness stores history in its own
   format/location; the handle is the only reliable way to find that run again. **Locate
@@ -83,10 +90,10 @@ binding the concepts to any one of them_ (§5).
 ## Left to implementation
 
 - The exact adapter interface; the per-harness handle format and history location; how start/resume
-  are invoked per harness; how the optional fork is detected and exercised; **how usage is read per
-  harness** (and in what units); the default harness and the per-scope override mechanism; whether
-  Ward defensively **snapshots or distills** a run's history before a harness can discard it, and on
-  what cadence. Planned in [`design/`](../../design/).
+  are invoked per harness and per machine; how the optional fork is detected and exercised; **how
+  usage is read per harness** (and in what units); the default harness and the per-scope override
+  mechanism; whether Ward defensively **snapshots or distills** a run's history before a harness can
+  discard it, and on what cadence. Planned in [`design/`](../../design/).
 
 ## Open questions
 
