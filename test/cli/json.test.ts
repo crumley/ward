@@ -38,7 +38,7 @@ test('status --json: one parseable document carrying the derived rollup', () => 
   expect(task.purpose).toBe('machine-readable output');
   expect(task.prs).toEqual([PR_URL]);
   expect(task.inReview).toBe(true);
-  expect(task.openSessions).toEqual(['json-output-1']);
+  expect(task.openSessions).toEqual(['json-output-1@test']);
   expect(task.outcome).toBeUndefined(); // optional fields are omitted, never null
 });
 
@@ -99,7 +99,10 @@ test('doctor --json: findings as data, healthy as the verdict, exit code kept', 
   expect(report.healthy).toBe(true);
   expect(typeof report.workspaceRoot).toBe('string');
   expect(report.machine.length).toBeGreaterThan(0);
-  expect(report.machine[0]).toMatchObject({ check: 'git', severity: 'ok' });
+  // The machine's own name leads the machine section (0038), then git.
+  expect(report.machine[0]).toMatchObject({ check: 'machine', severity: 'ok' });
+  expect(report.machineName).toEqual({ name: 'test', source: 'override' });
+  expect(report.machine[1]).toMatchObject({ check: 'git', severity: 'ok' });
   const checks = report.workspace.map((finding: { check: string }) => finding.check);
   expect(checks).toContain('version stamp');
   expect(checks).toContain('baseline AGENTS.md');

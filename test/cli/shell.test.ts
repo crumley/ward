@@ -316,7 +316,7 @@ test('wws lands in a workspace and opens a session there; the rest of argv reach
     `${fakeBin}:${wardBin}:${toolBin}`,
   );
   expect(named.exitCode).toBe(0);
-  expect(named.stdout).toContain('opened session workspace-1');
+  expect(named.stdout).toContain('opened session workspace-1@test');
   expect(named.stdout.trim().split('\n').at(-1)).toBe(alpha);
   expect((await readSessions(alpha, ''))[0]).toMatchObject({
     scope: 'workspace',
@@ -332,7 +332,7 @@ test('wws lands in a workspace and opens a session there; the rest of argv reach
   );
   expect(bare.exitCode).toBe(0);
   expect(bare.stderr).toContain('going to the default workspace');
-  expect(bare.stdout).toContain('opened session workspace-2');
+  expect(bare.stdout).toContain('opened session workspace-2@test');
   expect(bare.stdout.trim().split('\n').at(-1)).toBe(alpha);
   const [, bareRecord] = await readSessions(alpha, '');
   expect(bareRecord?.purpose).toBe(defaultWorkspaceSessionPurpose(bareRecord?.openedAt ?? ''));

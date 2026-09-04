@@ -10,7 +10,7 @@ import { gitOrThrow } from '../../src/workspace/git.ts';
 import { openProject } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { readTasks, resolveOpenTask } from '../../src/workspace/scan.ts';
-import { openSession, readSessions } from '../../src/workspace/sessions.ts';
+import { closeSession, openSession, readSessions } from '../../src/workspace/sessions.ts';
 import { statusReport } from '../../src/workspace/status.ts';
 import { addTaskPr, closeTask, openTask, setTaskState } from '../../src/workspace/tasks.ts';
 import { createWorktree } from '../../src/workspace/worktrees.ts';
@@ -29,7 +29,7 @@ test('the bootstrap loop: project → task → worktree → work → merge → d
   expect(existsSync(wtDir)).toBe(true);
 
   const session = await openSession(ws, 't1', 'write the feature', { handle: 'claude-code:abc' });
-  expect(session.id).toBe('json-output-1');
+  expect(session.id).toBe('json-output-1@test');
   expect(session.workingDirectory).toBe(wt.path);
 
   await Bun.write(join(wtDir, 'out.json'), '{}\n');
@@ -119,11 +119,16 @@ test('pause and resume route attention; the PR overlay follows the set', async (
   expect(p?.tasks[0]?.inReview).toBe(true);
 });
 
-test('session ids are workspace-unique among open sessions; closed frees the discriminator', async () => {
+test('session ids name the machine and climb; a closed number is never handed out again', async () => {
   await openTask(ws, 'chat', {});
   const first = await openSession(ws, 't1', 'first', {});
   const second = await openSession(ws, 't1', 'second', {});
-  expect([first.id, second.id]).toEqual(['chat-1', 'chat-2']);
+  expect([first.id, second.id]).toEqual(['chat-1@test', 'chat-2@test']);
+  // Closing frees nothing: the next open takes the next number, so the closed
+  // record is never overwritten (design/0038-machine-bound-sessions/).
+  await closeSession(ws, 'chat-1@test');
+  const third = await openSession(ws, 't1', 'third', {});
+  expect(third.id).toBe('chat-3@test');
 });
 
 // -- setup ----------------------------------------------------------------

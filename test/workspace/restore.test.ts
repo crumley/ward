@@ -168,7 +168,7 @@ test('open session records are named, never restored and never touched', async (
   expect(report.sessions.detail).toContain('not restorable');
   expect(report.sessions.detail).toContain('ward session close');
   // The record is untouched: still open, exactly as the original machine left it.
-  const sessionFile = join(clone, 'tasks/t1-feature-work/sessions/feature-work-1.md');
+  const sessionFile = join(clone, 'tasks/t1-feature-work/sessions/feature-work-1@test.md');
   expect(existsSync(sessionFile)).toBe(true);
   expect(await Bun.file(sessionFile).text()).toContain('state: open');
 });
