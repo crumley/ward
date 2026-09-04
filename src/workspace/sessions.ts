@@ -8,6 +8,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { WardError } from '../errors.ts';
+import { readMachine } from '../global/machine.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
 import { withStoreLock } from '../store/lock.ts';
 import {
@@ -16,7 +17,7 @@ import {
   sessionRecordType,
   sessionScopeOf,
 } from '../store/types.ts';
-import { commitRecords, readTasks, resolveOpenTask, smallestFree } from './scan.ts';
+import { commitRecords, readTasks, resolveOpenTask } from './scan.ts';
 import { readTaskWorktrees } from './worktrees.ts';
 
 export interface OpenSessionOptions {
@@ -76,11 +77,13 @@ export async function openSession(
   return withStoreLock(root, `session open ${taskCode}`, async () => {
     const task = await resolveOpenTask(root, taskCode);
     const worktrees = await readTaskWorktrees(root, task.dir);
-    const id = await allocateId(root, task.record.slug);
+    const machine = (await readMachine()).name;
+    const id = await allocateId(root, task.record.slug, machine);
     return writeOpened(root, task.dir, {
       id,
       scope: 'task',
       task: task.record.code,
+      machine,
       purpose,
       workingDirectory: options.workingDirectory ?? worktrees[0]?.path ?? '.',
       ...(options.handle === undefined ? {} : { handle: options.handle }),
@@ -102,10 +105,12 @@ export async function openWorkspaceSession(
   options: OpenSessionOptions,
 ): Promise<SessionRecord> {
   return withStoreLock(root, 'session open (workspace)', async () => {
-    const id = await allocateId(root, WORKSPACE_SESSION_SLUG);
+    const machine = (await readMachine()).name;
+    const id = await allocateId(root, WORKSPACE_SESSION_SLUG, machine);
     return writeOpened(root, WORKSPACE_SCOPE_DIR, {
       id,
       scope: 'workspace',
+      machine,
       purpose,
       workingDirectory: options.workingDirectory ?? '.',
       ...(options.handle === undefined ? {} : { handle: options.handle }),
@@ -199,7 +204,7 @@ export interface OpenSessionListing {
  * very listing `closeSession` resolves against — one reader, so what the
  * shell offers and what the verb accepts cannot disagree. Since
  * design/0029-launched-sessions/ it also carries the workspace's own sessions,
- * which is why ids remain unique among OPEN sessions workspace-wide.
+ * at every scope.
  */
 export async function readOpenSessions(root: string): Promise<OpenSessionListing[]> {
   return (await readAllSessions(root)).filter((listing) => listing.record.state === 'open');
@@ -221,10 +226,12 @@ export async function readAllSessions(root: string): Promise<OpenSessionListing[
 
 /**
  * Resolve a bare id to a session, open or closed — the read a reflection makes
- * when it wants a finished session's history. An open session wins over a
- * closed one carrying the same id, because ids are unique among OPEN sessions
- * and only reused after close (intent/01-concepts/00-domain-model.md): the
- * open one is the thing a bare id addresses today.
+ * when it wants a finished session's history. Since
+ * design/0038-machine-bound-sessions/ a bare id addresses ONE session over the
+ * whole history of the workspace, not merely one among those open: numbers are
+ * never reused and the machine is part of the id. The open-wins tie-break is
+ * kept for the records that predate that rule, where a slug's numbers really
+ * were recycled after close.
  */
 export async function findSession(root: string, id: string): Promise<OpenSessionListing> {
   const matches = (await readAllSessions(root)).filter((session) => session.record.id === id);
@@ -254,18 +261,61 @@ function sessionsDir(scopeDir: string): string {
 }
 
 /**
- * Ids are unique among open sessions workspace-wide, so a bare id addresses
- * every operation; discriminators are reused only after close
- * (intent/01-concepts/00-domain-model.md, Identity). The scan covers every
- * scope, which is what keeps a workspace session and a task session from
- * both answering to `workspace-1`.
+ * A session id, taken apart: `workspace-7@gcp` is slug `workspace`, number 7,
+ * machine `gcp`. Ids written before design/0038-machine-bound-sessions/ carry
+ * no `@`, and their machine parses as undefined — unrecorded, never guessed.
  */
-async function allocateId(root: string, slug: string): Promise<string> {
-  const taken = (await readOpenSessions(root))
-    .filter((session) => session.record.id.startsWith(`${slug}-`))
-    .map((session) => Number.parseInt(session.record.id.slice(slug.length + 1), 10))
-    .filter((n) => !Number.isNaN(n));
-  return `${slug}-${smallestFree(taken)}`;
+export interface SessionIdParts {
+  readonly slug: string;
+  readonly n: number;
+  readonly machine?: string;
+}
+
+const SESSION_ID = /^(?<slug>.+)-(?<n>\d+)(?:@(?<machine>[^@]+))?$/;
+
+/** The parts of an id Ward allocated, or null for anything else. */
+export function parseSessionId(id: string): SessionIdParts | null {
+  const groups = SESSION_ID.exec(id)?.groups;
+  if (groups === undefined) return null;
+  const n = Number.parseInt(groups.n ?? '', 10);
+  if (Number.isNaN(n)) return null;
+  return {
+    slug: groups.slug ?? '',
+    n,
+    ...(groups.machine === undefined ? {} : { machine: groups.machine }),
+  };
+}
+
+/**
+ * Allocate the next id for a slug on THIS machine: `<slug>-<n>@<machine>`,
+ * where `n` is one more than the highest ever recorded — never the smallest
+ * free one (design/0038-machine-bound-sessions/).
+ *
+ * Two rules, each closing a way the record could be falsified:
+ *
+ * - **The machine is part of the id.** Two clones of one workspace, on two
+ *   machines, each allocating from their own records would otherwise mint the
+ *   same id, and the git sync that joins them is an add/add conflict on two
+ *   different sessions' records.
+ * - **A number is never reused.** The scan reads every session at every
+ *   scope, OPEN AND CLOSED, because reusing a closed session's number would
+ *   have the next open overwrite that record — spending "closed stays closed"
+ *   (intent/01-concepts/02-sessions-and-lifecycle.md) on an id nobody needed
+ *   to recycle. Nothing is stored to count with: the records ARE the counter,
+ *   read under the same lock that writes them (§17).
+ *
+ * Ids with no machine — everything written before this entry — count toward
+ * this machine's numbering, so the sequence a human reads keeps climbing
+ * (`workspace-6` is followed by `workspace-7@gcp`) instead of restarting at
+ * one beside them.
+ */
+async function allocateId(root: string, slug: string, machine: string): Promise<string> {
+  const used = (await readAllSessions(root))
+    .map((session) => parseSessionId(session.record.id))
+    .filter((parts) => parts !== null && parts.slug === slug)
+    .filter((parts) => parts?.machine === undefined || parts.machine === machine)
+    .map((parts) => parts?.n ?? 0);
+  return `${slug}-${Math.max(0, ...used) + 1}@${machine}`;
 }
 
 interface OpenedFields {
@@ -276,6 +326,8 @@ interface OpenedFields {
   readonly purpose?: string | undefined;
   readonly workingDirectory: string;
   readonly handle?: string;
+  /** This machine, always — a record Ward writes always knows where it was written. */
+  readonly machine: string;
   readonly model?: string;
   readonly effort?: string;
   readonly subject: string;
@@ -296,6 +348,7 @@ async function writeOpened(
     purpose: fields.purpose ?? defaultWorkspaceSessionPurpose(openedAt),
     workingDirectory: fields.workingDirectory,
     ...(fields.handle === undefined ? {} : { handle: fields.handle }),
+    machine: fields.machine,
     ...(fields.model === undefined ? {} : { model: fields.model }),
     ...(fields.effort === undefined ? {} : { effort: fields.effort }),
     state: 'open',

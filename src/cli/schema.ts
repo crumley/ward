@@ -113,6 +113,24 @@ export const needsYouShape = z.strictObject({
 });
 export type NeedsYouShape = z.infer<typeof needsYouShape>;
 
+/**
+ * One open workspace-scope session in `status`
+ * (design/0038-machine-bound-sessions/): the record's identity and purpose,
+ * the machine it ran on where one is recorded, and `history` — whether its
+ * harness transcript is on THIS machine, read from the local filesystem at
+ * read time and never stored.
+ */
+export const statusSessionShape = z.strictObject({
+  id: z.string(),
+  purpose: z.string(),
+  /** Absent on a record written before 0038: unrecorded, never guessed. */
+  machine: z.string().optional(),
+  openedAt: z.string(),
+  /** 'unlocatable': no handle this build can resolve, so nothing to look for. */
+  history: z.enum(['found', 'gone', 'unlocatable']),
+});
+export type StatusSessionShape = z.infer<typeof statusSessionShape>;
+
 export const statusShape = z.strictObject({
   workspace: workStateSchema,
   projects: z.array(
@@ -125,6 +143,10 @@ export const statusShape = z.strictObject({
     }),
   ),
   bareTasks: z.array(statusTaskShape),
+  /** This machine's name (0038) — which sessions below can be resumed here. */
+  machine: z.string(),
+  /** The OPEN workspace-scope sessions (0038); task sessions ride their task rows. */
+  sessions: z.array(statusSessionShape),
   /** Present exactly when the forge answered; empty means nothing awaits (0009). */
   needsYou: z.array(needsYouShape).optional(),
   /** What the settled-work window hid from the listing above (0036). */
@@ -262,9 +284,21 @@ export const doctorAgentShape = z.strictObject({
   command: resolvedAgentKey(z.array(z.string())),
 });
 
+/**
+ * What this machine is called, and which layer said so
+ * (design/0038-machine-bound-sessions/) — the name that becomes the second
+ * half of every session id allocated here.
+ */
+export const doctorMachineShape = z.strictObject({
+  name: z.string(),
+  source: z.enum(['override', 'configured', 'hostname']),
+});
+
 export const doctorShape = z.strictObject({
   healthy: z.boolean(),
   workspaceRoot: z.string().nullable(),
+  /** This machine's name and its source (0038). */
+  machineName: doctorMachineShape,
   /** Null outside a workspace, where only half the resolution exists. */
   agent: doctorAgentShape.nullable(),
   machine: z.array(findingShape),
@@ -606,6 +640,8 @@ export const sessionMutationShape = z.strictObject({
   purpose: z.string(),
   workingDirectory: z.string(),
   handle: z.string().optional(),
+  /** The machine the session ran on (0038); absent on a record written before it. */
+  machine: z.string().optional(),
   /** What the agent was started with — present only where Ward did the starting. */
   model: z.string().optional(),
   effort: z.string().optional(),
@@ -676,6 +712,8 @@ export const sessionLocateShape = z.strictObject({
   nativeId: z.string(),
   /** The directory the run stood in; part of the transcript's address. */
   workingDirectory: z.string(),
+  /** The machine the run stood on (0038) — where a `gone` history may still be. */
+  machine: z.string().optional(),
   outcome: z.enum(['found', 'gone']),
   path: z.string(),
 });

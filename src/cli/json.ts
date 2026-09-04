@@ -155,6 +155,14 @@ export function statusJson(report: StatusReport): StatusShape {
       projects: report.hidden.projects,
       settledAfterDays: report.hidden.settledAfterDays,
     },
+    machine: report.machine,
+    sessions: report.sessions.map((session) => ({
+      id: session.id,
+      purpose: session.purpose,
+      ...(session.machine === undefined ? {} : { machine: session.machine }),
+      openedAt: session.openedAt,
+      history: session.history,
+    })),
     ...(report.needsYou === undefined
       ? {}
       : {
@@ -500,6 +508,7 @@ export function sessionMutationJson(record: SessionRecord): SessionMutationShape
     purpose: record.purpose,
     workingDirectory: record.workingDirectory,
     ...(record.handle === undefined ? {} : { handle: record.handle }),
+    ...(record.machine === undefined ? {} : { machine: record.machine }),
     ...(record.model === undefined ? {} : { model: record.model }),
     ...(record.effort === undefined ? {} : { effort: record.effort }),
     state: record.state,
@@ -552,6 +561,7 @@ export function sessionLocateJson(location: SessionLocation): SessionLocateShape
     harness: CLAUDE_HARNESS,
     nativeId: location.nativeId,
     workingDirectory: location.record.workingDirectory,
+    ...(location.record.machine === undefined ? {} : { machine: location.record.machine }),
     outcome: location.outcome,
     path: location.path,
   };
@@ -566,6 +576,7 @@ export function doctorJson(report: DoctorReport): DoctorShape {
   return {
     healthy: report.healthy,
     workspaceRoot: report.workspaceRoot,
+    machineName: { name: report.machineName.name, source: report.machineName.source },
     agent: report.agent === null ? null : agentConfigJson(report.agent),
     machine: report.machine.map(finding),
     workspace: report.workspace.map(finding),

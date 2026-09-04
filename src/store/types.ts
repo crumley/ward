@@ -212,6 +212,17 @@ export const sessionSchema = z
     /** Free-form harness handle (which harness, which native run), when known. */
     handle: z.string().min(1).optional(),
     /**
+     * The machine the session ran on (design/0038-machine-bound-sessions/):
+     * the slug `src/global/machine.ts` resolves, recorded because a session
+     * is bound to the computer holding its harness history while the record
+     * travels to every clone of the workspace. The id spells it too
+     * (`workspace-7@gcp`), but a spelling is a presentation choice and this
+     * is a fact — so resume and status read the field, never a substring.
+     * Optional so every record written before this entry stays valid
+     * unchanged; an absent machine reads as unrecorded and is never guessed.
+     */
+    machine: z.string().min(1).optional(),
+    /**
      * What the agent was actually STARTED with, recorded at launch
      * (design/0029-launched-sessions/) — present exactly when the resolution
      * supplied one, absent when Ward passed no flag at all. The intent's
