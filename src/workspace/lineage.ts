@@ -177,10 +177,17 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '146730f74a5f509e85bff76aa56c93e9eb70272212a63cbdbc03062cb251fd4d',
         era: 'design 0036 (task address)',
       },
-      // Current since design 0038: session ids carry the machine and never
-      // reuse a number, resume refuses a history another machine holds,
-      // `ward status` lists the open workspace sessions, and the exit
-      // question is named with its `--on-exit` pre-answer.
+      // design 0038 — session ids carry the machine and never reuse a number,
+      // resume refuses a history another machine holds, `ward status` lists
+      // the open workspace sessions, and the exit question is named with its
+      // `--on-exit` pre-answer; floors could not yet claim repositories.
+      {
+        sha256: '56e5346e859eb390249c93f3c32d096a6ef732c1033fdd5af3bdbc294d300d27',
+        era: 'design 0038 (machine-bound sessions)',
+      },
+      // Current since design 0037: a floor may claim repositories as a routing
+      // default, `task open --repo` records and places, and `worktree create`
+      // reads the task's single recorded repository.
     ],
   },
 ];
