@@ -62,6 +62,13 @@ principle (§8) and feeds the compounding loop
     only forbid a cheaper surface that delivers the same deliberately-chosen pick — the constraint
     serves the human's delight, and must never argue against a surface that delivers it.
 
+  **Ward prefers the full address when it speaks.** Where a noun has both a full address and a
+  shorter accepted form, what Ward **prints** is the full one, and it **accepts the shorthand while
+  that shorthand is unique** — refusing, with every candidate named, when it is not. _Why:_ a
+  shorthand that is unique today is ambiguous the moment a second holder appears, so a human who
+  copied one off a listing has copied something that will stop working; and completion offers the
+  full form for the same reason — a menu must never fill in a word the verb would then refuse.
+
   _Asymmetry (§8):_ both mechanisms are **human-audience** affordances; an **agent** caller (which
   declares itself, below) passes explicit context and gets **deterministic** handling — a missing
   argument outside the picker is a deterministic error naming the fix, never a blocking interactive
@@ -98,6 +105,15 @@ principle (§8) and feeds the compounding loop
   flows are clumsy, which tooling is missing — how the interaction layer compounds — and rows
   written per keystroke would bury the commands under the machinery, degrading the very analysis
   this constraint exists to enable.
+- **Settled work leaves the glanceable surface, and stays retrievable.** Work that has been finished
+  for longer than a stated window drops off the surfaces that answer "where does everything stand?"
+  and "what needs me?", and is shown again **on request**. The surface **says what it left out** and
+  how to see it, and the record itself is untouched — nothing is deleted, and nothing is hidden from
+  a caller who asks. _Why:_ these surfaces exist to route attention, and a listing that never
+  forgets defeats that by volume long before it stops being complete — a glance in which two live
+  items sit among seventy finished ones has spent the human's attention on exactly what it was built
+  to save. Silently filtering would be the opposite failure (§20), which is why the window and its
+  escape are both stated at the surface.
 - **Workspace- and scope-aware from any working directory.** Invoked anywhere **inside** an
   initialized workspace — at the root or deep in a subdirectory — Ward **discovers the workspace
   itself**, with no flag and no "which workspace?" prompt. It goes further: when the working
