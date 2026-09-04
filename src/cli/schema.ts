@@ -33,9 +33,29 @@ export const prForgeShape = z.strictObject({
 });
 export type PrForgeShape = z.infer<typeof prForgeShape>;
 
+/**
+ * What the settled-work window omitted from a listing
+ * (design/0036-floor-addressed-tasks/) — always present on the verbs that
+ * window, zeros included, so a filtered listing is never mistaken for the
+ * whole record. `--all` lifts the filter and the counts go to zero.
+ */
+export const hiddenShape = z.strictObject({
+  tasks: z.number().int().nonnegative(),
+  projects: z.number().int().nonnegative(),
+  settledAfterDays: z.number().int().positive(),
+});
+export type HiddenShape = z.infer<typeof hiddenShape>;
+
 /** The task shape shared by `task list` and `status` (0005). */
 export const taskShape = z.strictObject({
   code: z.string(),
+  /**
+   * The task's full address — `f3t22` on a floor, `t18` in the bare pool
+   * (0036). Derived from `code` and the floor, never stored, and the string a
+   * task-addressed verb should be given: a bare `code` is a shorthand that
+   * resolves only while it is unique among the workspace's open tasks.
+   */
+  address: z.string(),
   slug: z.string(),
   state: workStateSchema,
   floor: z.number().int().positive().optional(),
@@ -81,6 +101,8 @@ export type StatusTaskShape = z.infer<typeof statusTaskShape>;
 /** One derived attention item (0009): what awaits the human, nothing stored. */
 export const needsYouShape = z.strictObject({
   task: z.string(),
+  /** The task's full address — what the entry's remedy commands are spelled with (0036). */
+  address: z.string(),
   /** 'stale-base' (0014): an open PR whose base is not the repository's main line. */
   reason: z.enum(['awaiting-close', 'changes-requested', 'stale-base']),
   pr: z.string().optional(),
@@ -105,28 +127,44 @@ export const statusShape = z.strictObject({
   bareTasks: z.array(statusTaskShape),
   /** Present exactly when the forge answered; empty means nothing awaits (0009). */
   needsYou: z.array(needsYouShape).optional(),
+  /** What the settled-work window hid from the listing above (0036). */
+  hidden: hiddenShape,
 });
 export type StatusShape = z.infer<typeof statusShape>;
 
-export const projectListShape = z.array(
-  z.strictObject({
-    floor: z.number().int().positive(),
-    slug: z.string(),
-    state: workStateSchema,
-    derived: workStateSchema,
-    taskCount: z.number().int().nonnegative(),
-    openedAt: z.string(),
-    closedAt: z.string().optional(),
-  }),
-);
+export const projectListShape = z.strictObject({
+  projects: z.array(
+    z.strictObject({
+      floor: z.number().int().positive(),
+      slug: z.string(),
+      state: workStateSchema,
+      derived: workStateSchema,
+      taskCount: z.number().int().nonnegative(),
+      openedAt: z.string(),
+      closedAt: z.string().optional(),
+    }),
+  ),
+  /** What the settled-work window hid from `projects` (0036). */
+  hidden: hiddenShape,
+});
 export type ProjectListShape = z.infer<typeof projectListShape>;
 
-export const taskListShape = z.array(taskShape);
+/**
+ * `task list` (0005), windowed since 0036: the listing is an object rather
+ * than a bare array because a windowed array is indistinguishable from a
+ * complete one — the document has to be able to say what it left out.
+ */
+export const taskListShape = z.strictObject({
+  tasks: z.array(taskShape),
+  hidden: hiddenShape,
+});
 export type TaskListShape = z.infer<typeof taskListShape>;
 
 export const worktreeListShape = z.array(
   z.strictObject({
     task: z.string(),
+    /** The task's full address (0036) — `task` stays the room the record carries. */
+    address: z.string(),
     /** The registered repository — present exactly when the source is one (0019). */
     repo: z.string().optional(),
     /** 'workspace': a worktree of the workspace's own repository — the stewardship case (0019). */
@@ -310,6 +348,8 @@ export type ProjectOpenShape = z.infer<typeof projectOpenShape>;
  */
 export const taskMutationShape = z.strictObject({
   code: z.string(),
+  /** The task's full address (0036) — what a task-addressed verb should be given. */
+  address: z.string(),
   slug: z.string(),
   state: workStateSchema,
   floor: z.number().int().positive().optional(),
@@ -337,6 +377,8 @@ export type TaskCloseShape = z.infer<typeof taskCloseShape>;
 /** `worktree create`: the record as written, flat like the `worktree list` rows. */
 export const worktreeCreateShape = z.strictObject({
   task: z.string(),
+  /** The task's full address (0036). */
+  address: z.string(),
   /** The registered repository — present exactly when the source is one (0019). */
   repo: z.string().optional(),
   /** 'workspace': a worktree of the workspace's own repository — the stewardship case (0019). */
@@ -355,6 +397,8 @@ export type WorktreeCreateShape = z.infer<typeof worktreeCreateShape>;
  */
 export const worktreeRebaseShape = z.strictObject({
   task: z.string(),
+  /** The task's full address (0036). */
+  address: z.string(),
   reports: z.array(
     z.strictObject({
       /** The registered repository — present exactly when the source is one (0019). */

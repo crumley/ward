@@ -18,6 +18,7 @@ import { join } from 'node:path';
 import { WardError } from '../errors.ts';
 import { readDocument } from '../store/document.ts';
 import { repositoryRecordType, type WorktreeRecord } from '../store/types.ts';
+import { taskAddress } from './address.ts';
 import { git } from './git.ts';
 import { addRepository, checkoutPath, listRepositoryNames } from './repos.ts';
 import { readTasks } from './scan.ts';
@@ -92,7 +93,7 @@ export async function restoreWorkspace(root: string): Promise<RestoreReport> {
     // and re-materializing one would undo a correct teardown (the 0016 posture).
     if (task.record.state === 'closed') continue;
     for (const record of await readTaskWorktrees(root, task.dir)) {
-      worktrees.push(restoreWorktree(root, task.record.code, record, repositories));
+      worktrees.push(restoreWorktree(root, taskAddress(task), record, repositories));
     }
   }
 

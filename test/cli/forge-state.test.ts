@@ -39,8 +39,8 @@ test('status --json live: per-PR forge state, the exact in-review rule, needs-yo
   expect(t2.inReview).toBe(false); // fully merged: linked PRs, but no longer in review
   expect(t3.forge).toBeUndefined(); // nothing linked, nothing to report
   expect(status.needsYou).toEqual([
-    { task: 't1', reason: 'changes-requested', pr: PR_CHANGES },
-    { task: 't2', reason: 'awaiting-close' },
+    { task: 't1', address: 't1', reason: 'changes-requested', pr: PR_CHANGES },
+    { task: 't2', address: 't2', reason: 'awaiting-close' },
   ]);
 });
 
@@ -59,8 +59,9 @@ test('status human rendering live: PR summaries on the task lines, the needs-you
 
 test('task list carries the same live forge state, both renderings', () => {
   const json = runWardEnv(['task', 'list', '--json'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
-  const tasks = JSON.parse(json.stdout);
-  expect(() => taskListShape.parse(tasks)).not.toThrow();
+  const listing = JSON.parse(json.stdout);
+  expect(() => taskListShape.parse(listing)).not.toThrow();
+  const tasks = listing.tasks;
   expect(tasks[0].forge.map((pr: { state: string }) => pr.state)).toEqual(['merged', 'open']);
   expect(tasks[1].inReview).toBe(false);
   expect(tasks[2].forge).toBeUndefined();
@@ -104,7 +105,7 @@ test('without gh, the JSON omits every forge-state field — vanished, never nul
   }
   expect('needsYou' in status).toBe(false);
   expect(runWard(['status', '--json'], ws).stdout).toBe(result.stdout); // byte-identical
-  const tasks = JSON.parse(runWard(['task', 'list', '--json'], ws).stdout);
+  const tasks = JSON.parse(runWard(['task', 'list', '--json'], ws).stdout).tasks;
   for (const task of tasks) {
     expect('forge' in task).toBe(false);
   }
@@ -172,8 +173,8 @@ test('an open PR on a non-main base with no mappable repository warns nothing; J
     },
   ]);
   expect(status.needsYou).toEqual([
-    { task: 't1', reason: 'changes-requested', pr: PR_CHANGES },
-    { task: 't2', reason: 'awaiting-close' },
+    { task: 't1', address: 't1', reason: 'changes-requested', pr: PR_CHANGES },
+    { task: 't2', address: 't2', reason: 'awaiting-close' },
   ]);
   // The human summary stays a count line — the base belongs to needs-you,
   // which stays silent here rather than guessing at an unmappable URL.
@@ -195,9 +196,11 @@ test('task close reads the forge through the same seam', () => {
 });
 
 test('task close delivers a fully merged set the forge confirmed', () => {
+  // Rooms run in opening order (0036), so the close above frees t2 without
+  // handing it back: the fourth task in this pool takes t4.
   runWard(['task', 'open', 'done', '--purpose', 'merged elsewhere'], ws);
-  runWard(['task', 'pr', 't2', PR_DONE], ws); // t2 was freed by the close above
-  const result = runWardEnv(['task', 'close', 't2'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
+  runWard(['task', 'pr', 't4', PR_DONE], ws);
+  const result = runWardEnv(['task', 'close', 't4'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('resolved (merged)');
   // Reachability (0012): no registered repository can answer for this PR's

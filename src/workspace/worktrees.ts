@@ -9,6 +9,7 @@ import { WardError } from '../errors.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
 import { withStoreLock } from '../store/lock.ts';
 import { repositoryRecordType, type WorktreeRecord, worktreeRecordType } from '../store/types.ts';
+import { taskAddress } from './address.ts';
 import { git, gitOrThrow } from './git.ts';
 import { type RefreshReport, refreshRepositories } from './repos.ts';
 import { commitRecords, type FoundTask, readTasks, resolveOpenTask } from './scan.ts';
@@ -32,7 +33,11 @@ export async function createWorktree(
   const branch = branchInput ?? task.record.slug;
   const fileName = `${repoName}--${branch.replaceAll('/', '-')}`;
   const recordType = worktreeRecordType(task.dir, fileName);
-  const path = `worktrees/${task.record.code}-${branch.replaceAll('/', '-')}`;
+  // The directory carries the task's ADDRESS (design/0036-floor-addressed-tasks/),
+  // so two floors' room-1 tasks never propose the same path and a human
+  // reading `worktrees/` knows which task each belongs to. Existing worktree
+  // records carry their own `path`, so nothing on disk moves.
+  const path = `worktrees/${taskAddress(task)}-${branch.replaceAll('/', '-')}`;
 
   if (existsSync(join(root, recordType.relPath))) {
     const existing = (await readDocument(root, recordType)).data;
@@ -75,7 +80,7 @@ export async function createWorktree(
       data: record,
       body:
         `Worktree of \`${repoName}\` on branch \`${branch}\`, occupied for task ` +
-        `\`${task.record.code}\`. Deliverable: its changes reach the main line only through a ` +
+        `\`${taskAddress(task)}\`. Deliverable: its changes reach the main line only through a ` +
         'pull request.',
     });
     commitRecords(root, `Create worktree ${branch} for task ${taskCode}`, task.dir);
@@ -104,7 +109,7 @@ export async function createWorkspaceWorktree(
   const branch = branchInput ?? `steward/${task.record.slug}`;
   const fileName = `workspace--${branch.replaceAll('/', '-')}`;
   const recordType = worktreeRecordType(task.dir, fileName);
-  const path = `worktrees/${task.record.code}-${branch.replaceAll('/', '-')}`;
+  const path = `worktrees/${taskAddress(task)}-${branch.replaceAll('/', '-')}`;
   const mainLine = resolveWorkspaceMainLine(root);
 
   let record: WorktreeRecord;
@@ -133,7 +138,7 @@ export async function createWorkspaceWorktree(
         data: record,
         body:
           `Worktree of the workspace's own repository on branch \`${branch}\`, occupied for ` +
-          `task \`${task.record.code}\` — the stewardship case: its changes reach the ` +
+          `task \`${taskAddress(task)}\` — the stewardship case: its changes reach the ` +
           "workspace's main line only through the gated merge (`ward workspace merge`).",
       });
       commitRecords(root, `Create stewardship worktree ${branch} for task ${taskCode}`, task.dir);
@@ -445,6 +450,8 @@ async function freshnessOf(root: string, record: WorktreeRecord): Promise<Worktr
 
 export interface WorktreeListing {
   readonly taskCode: string;
+  /** The task's full address — what Ward speaks (design/0036-floor-addressed-tasks/). */
+  readonly taskAddress: string;
   readonly record: WorktreeRecord;
   readonly present: boolean;
 }
@@ -455,6 +462,7 @@ export async function listWorktrees(root: string): Promise<WorktreeListing[]> {
     for (const record of await readTaskWorktrees(root, task.dir)) {
       listings.push({
         taskCode: task.record.code,
+        taskAddress: taskAddress(task),
         record,
         present: existsSync(join(root, record.path)),
       });

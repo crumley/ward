@@ -54,7 +54,7 @@ test('task pr, inferred: one argument is the URL, the task comes from the locati
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('task t1 — from the working directory');
   expect(result.stdout).toContain(`linked ${PR_URL}`);
-  const tasks = JSON.parse(runWard(['task', 'list', '--json'], ws).stdout);
+  const tasks = JSON.parse(runWard(['task', 'list', '--json'], ws).stdout).tasks;
   expect(tasks[0].prs).toEqual([PR_URL]);
 });
 
@@ -90,14 +90,14 @@ test('outside any claimed worktree, the missing code is a legible error naming t
   const result = runWard(['task', 'pause'], ws);
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toContain('no task worktree encloses this directory');
-  expect(result.stderr).toContain('ward task pause CODE');
+  expect(result.stderr).toContain('ward task pause ADDRESS');
 });
 
 test('a declared agent is refused the inference, even standing inside the worktree', () => {
   const result = runWardEnv(['task', 'pause'], wtDir, { WARD_AGENT: '1' });
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toContain('a declared agent passes scope explicitly');
-  expect(result.stderr).toContain('ward task pause CODE');
+  expect(result.stderr).toContain('ward task pause ADDRESS');
 });
 
 test('a declared agent with an explicit code proceeds as ever', () => {
@@ -116,7 +116,7 @@ test('an explicit code wins from anywhere, with nothing echoed', () => {
 test('task close always takes its code: without one it fails and mutates nothing', () => {
   const result = runWard(['task', 'close'], wtDir);
   expect(result.exitCode).not.toBe(0);
-  const tasks = JSON.parse(runWard(['task', 'list', '--json'], ws).stdout);
+  const tasks = JSON.parse(runWard(['task', 'list', '--json'], ws).stdout).tasks;
   expect(tasks[0].state).toBe('active');
 });
 

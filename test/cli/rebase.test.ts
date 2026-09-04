@@ -26,7 +26,7 @@ test('a declared agent is refused the inference; with an explicit code it procee
   const refused = runWardEnv(['worktree', 'rebase'], wtDir, { WARD_AGENT: '1' });
   expect(refused.exitCode).toBe(1);
   expect(refused.stderr).toContain('a declared agent passes scope explicitly');
-  expect(refused.stderr).toContain('ward worktree rebase TASK');
+  expect(refused.stderr).toContain('ward worktree rebase ADDRESS');
 
   const explicit = runWardEnv(['worktree', 'rebase', 't1'], wtDir, { WARD_AGENT: '1' });
   expect(explicit.exitCode).toBe(0);

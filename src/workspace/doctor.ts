@@ -49,6 +49,7 @@ import {
   repositoryRecordType,
   workspaceRecordType,
 } from '../store/types.ts';
+import { taskAddress } from './address.ts';
 import { sha256OfFile } from './baselines.ts';
 import { git, gitAvailable, gitIdentityConfigured, hasCommits } from './git.ts';
 import { discoverWorkspace, IGNORE_LINES, inspectClaudeGuidance } from './layout.ts';
@@ -1065,7 +1066,7 @@ async function worktreeChecks(root: string): Promise<Finding[]> {
                 check,
                 severity: 'warn',
                 message:
-                  `missing on disk — task ${task.record.code} anchors branch ` +
+                  `missing on disk — task ${taskAddress(task)} anchors branch ` +
                   `'${record.branch}' of ${source} there; re-materialize it: ` +
                   'ward workspace restore',
               },

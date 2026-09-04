@@ -9,6 +9,7 @@ import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
 import { readDocument } from '../store/document.ts';
 import { type TaskRecord, taskRecordType } from '../store/types.ts';
+import { requireTaskAddress, taskAddress, taskFloor, taskRoom } from './address.ts';
 import { gitOrThrow } from './git.ts';
 import { warnJournalOffMainLine } from './steward.ts';
 
@@ -39,17 +40,42 @@ export async function readTasks(root: string): Promise<FoundTask[]> {
 }
 
 /**
- * Resolve a bare task code to its non-closed task. Codes are unique among
- * open tasks and reused only after close, so at most one non-closed task can
- * carry a code (intent/00-domain-model, Identity).
+ * Resolve what a caller typed to its non-closed task
+ * (design/0036-floor-addressed-tasks/).
+ *
+ * The full address `f<floor>t<room>` names exactly one container and one room
+ * in it, so it always resolves or refuses. A bare `t<room>` is a SHORTHAND:
+ * it resolves while it is unique among the workspace's open tasks — the bare
+ * pool and every floor — and when several floors hold that room it refuses
+ * deterministically, naming every candidate by address and slug. Refusing is
+ * the point: the alternative is picking one, and a verb that picks silently
+ * between two live tasks is how a close lands on the wrong one. Closed tasks
+ * are addressable by neither form; their rooms belong to whoever holds them
+ * next (intent/01-concepts/00-domain-model.md, Identity).
  */
-export async function resolveOpenTask(root: string, code: string): Promise<FoundTask> {
-  const matches = (await readTasks(root)).filter(
-    (task) => task.record.code === code && task.record.state !== 'closed',
+export async function resolveOpenTask(root: string, input: string): Promise<FoundTask> {
+  const wanted = requireTaskAddress(input);
+  const open = (await readTasks(root)).filter((task) => task.record.state !== 'closed');
+  const matches = open.filter(
+    (task) =>
+      taskRoom(task) === wanted.room &&
+      (wanted.floor === undefined || taskFloor(task) === wanted.floor),
   );
   const first = matches[0];
   if (first === undefined) {
-    throw new WardError(`no open task has code '${code}' — see: ward task list`);
+    throw new WardError(
+      wanted.floor === undefined
+        ? `no open task has code '${input}' — see: ward task list`
+        : `no open task at ${input.toLowerCase()} — floor ${wanted.floor} holds no open task in ` +
+            `room ${wanted.room} (see: ward task list)`,
+    );
+  }
+  if (matches.length > 1) {
+    const named = matches
+      .map((task) => `${taskAddress(task)} (${task.record.slug})`)
+      .sort()
+      .join(', ');
+    throw new WardError(`${input.toLowerCase()} is ambiguous — ${named}; name one`);
   }
   return first;
 }

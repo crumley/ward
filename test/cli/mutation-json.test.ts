@@ -112,6 +112,7 @@ test('task open --json: the record as written, optional fields omitted', () => {
   const task = validated('task open', taskMutationShape, result.stdout);
   expect(task).toMatchObject({
     code: 't1',
+    address: 'f2t1', // the room composed with its floor (0036)
     slug: 'json-output',
     state: 'active',
     floor: 2,
@@ -127,10 +128,11 @@ test('worktree create --json: identity flat, like the worktree list rows', () =>
   expect(result.exitCode).toBe(0);
   expect(validated('worktree create', worktreeCreateShape, result.stdout)).toMatchObject({
     task: 't1',
+    address: 'f2t1',
     repo: 'demo',
     branch: 'json-output',
     disposition: 'deliverable',
-    path: 'worktrees/t1-json-output',
+    path: 'worktrees/f2t1-json-output',
   });
 });
 
@@ -144,7 +146,7 @@ test('session open --json: the session record, handle included', () => {
     id: 'json-output-1',
     task: 't1',
     purpose: 'drive the feature',
-    workingDirectory: 'worktrees/t1-json-output',
+    workingDirectory: 'worktrees/f2t1-json-output',
     handle: 'claude:run',
     state: 'open',
   });
@@ -172,11 +174,11 @@ test('task pause / resume --json: the state transition as recorded', () => {
 test('the human renderings are byte-identical without the flag (pause, resume)', () => {
   const paused = runWard(['task', 'pause', 't1'], ws);
   expect(paused.exitCode).toBe(0);
-  expect(paused.stdout).toBe('paused t1 — json-output\n');
+  expect(paused.stdout).toBe('paused f2t1 — json-output\n');
 
   const resumed = runWard(['task', 'resume', 't1'], ws);
   expect(resumed.exitCode).toBe(0);
-  expect(resumed.stdout).toBe('resumed t1 — json-output\n');
+  expect(resumed.stdout).toBe('resumed f2t1 — json-output\n');
 });
 
 test('worktree rebase --json: per-worktree rows; current when already atop', () => {
@@ -184,16 +186,17 @@ test('worktree rebase --json: per-worktree rows; current when already atop', () 
   expect(result.exitCode).toBe(0);
   const report = validated('worktree rebase', worktreeRebaseShape, result.stdout);
   expect(report.task).toBe('t1');
+  expect(report.address).toBe('f2t1');
   expect(report.reports).toMatchObject([
-    { repo: 'demo', branch: 'json-output', path: 'worktrees/t1-json-output', outcome: 'current' },
+    { repo: 'demo', branch: 'json-output', path: 'worktrees/f2t1-json-output', outcome: 'current' },
   ]);
 });
 
 test('the derivation echo moves to stderr under --json — stdout stays one document', () => {
-  const wtDir = join(ws, 'worktrees', 't1-json-output');
+  const wtDir = join(ws, 'worktrees', 'f2t1-json-output');
   const result = runWard(['task', 'pr', 'https://example.com/pr/2', '--json'], wtDir);
   expect(result.exitCode).toBe(0);
-  expect(result.stderr).toContain('task t1 — from the working directory');
+  expect(result.stderr).toContain('task f2t1 — from the working directory');
   expect(validated('task pr', taskMutationShape, result.stdout).prs).toEqual([
     PR_URL,
     'https://example.com/pr/2',
@@ -219,7 +222,7 @@ test('task close --json, forge unavailable: the named trust survives in the step
   expect(typeof report.task.closedAt).toBe('string');
   const steps = new Map(report.steps.map((step) => [step.step, step.detail]));
   expect(steps.get('pr set')).toBe("forge unavailable — trusting the stated outcome 'delivered'");
-  expect(steps.get('worktree worktrees/t1-json-output')).toBe('removed');
+  expect(steps.get('worktree worktrees/f2t1-json-output')).toBe('removed');
   expect(steps.get('record')).toBe('closed with outcome delivered');
 });
 
@@ -227,7 +230,7 @@ test('task close --json, forge unavailable: the named trust survives in the step
 
 test('a refused close emits no document: stderr + exit 1, stdout empty', () => {
   const opened = runWard(['task', 'open', 'refused', '--json'], ws);
-  refusedCode = validated('task open', taskMutationShape, opened.stdout).code;
+  refusedCode = validated('task open', taskMutationShape, opened.stdout).address;
   const pr = 'https://example.com/pr/3';
   runWard(['task', 'pr', refusedCode, pr, '--json'], ws);
   const fakeGh = writeFakeGh(scratch, 'gh-open-pr', {
@@ -261,11 +264,12 @@ test('a rebase conflict under --json: the outcome in the document, the verdict i
 
 test('worktree rebase --json on a task with no worktrees: reports is []', () => {
   const opened = runWard(['task', 'open', 'bare', '--json'], ws);
-  const code = validated('task open', taskMutationShape, opened.stdout).code;
-  const result = runWard(['worktree', 'rebase', code, '--json'], ws);
+  const address = validated('task open', taskMutationShape, opened.stdout).address;
+  const result = runWard(['worktree', 'rebase', address, '--json'], ws);
   expect(result.exitCode).toBe(0);
   expect(validated('worktree rebase', worktreeRebaseShape, result.stdout)).toEqual({
-    task: code,
+    task: address.replace(/^f\d+/, ''),
+    address,
     reports: [],
   });
 });

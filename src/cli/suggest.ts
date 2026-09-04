@@ -27,6 +27,7 @@ import type { Suggestion } from '@optique/core/parser';
 import { string, type ValueParser } from '@optique/core/valueparser';
 import { listWorkspaces } from '../global/registry.ts';
 import { repoCandidates } from '../shell/candidates.ts';
+import { taskAddress } from '../workspace/address.ts';
 import { git } from '../workspace/git.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
 import { listRepositories } from '../workspace/repos.ts';
@@ -87,22 +88,27 @@ function inWorkspace(
 }
 
 /**
- * Task codes — the identity a task-addressed verb takes (`task pause CODE`,
- * `worktree rebase TASK`, `session open TASK`, `workspace upgrade TASK`).
- * Only NON-CLOSED tasks are offered: codes are unique among open tasks and
- * reused after close (intent/01-concepts/00-domain-model.md, Identity), so a
- * closed task's code either addresses nothing or addresses somebody else's
- * task — the one case where completing a real-looking code would mislead.
- * The slug rides along as the description: the human recognizes `t6` by what
- * it is for, which is the whole point of the cue (§8, human audience).
+ * Task addresses — the identity a task-addressed verb takes
+ * (`task pause ADDRESS`, `worktree rebase TASK`, `session open TASK`,
+ * `workspace upgrade TASK`). Only NON-CLOSED tasks are offered: a closed
+ * task's room either addresses nothing or addresses somebody else's task —
+ * the one case where completing a real-looking identity would mislead.
+ *
+ * The FULL address is what is offered, never the bare room
+ * (design/0036-floor-addressed-tasks/): the bare form is a shorthand that
+ * resolves only while it is unique, so completing it would sometimes fill in
+ * a word the verb then refuses as ambiguous — the exact failure the opening
+ * comment's first contract exists to prevent. The slug rides along as the
+ * description: the human recognizes `f3t6` by what it is for, which is the
+ * whole point of the cue (§8, human audience).
  */
-export function taskCode(metavar: 'CODE' | 'TASK'): ValueParser<'async', string> {
+export function taskIdentity(metavar: 'ADDRESS' | 'TASK'): ValueParser<'async', string> {
   return suggesting(
     metavar,
     inWorkspace(async (root) =>
       (await readTasks(root))
         .filter((task) => task.record.state !== 'closed')
-        .map((task) => ({ text: task.record.code, description: task.record.slug })),
+        .map((task) => ({ text: taskAddress(task), description: task.record.slug })),
     ),
   );
 }

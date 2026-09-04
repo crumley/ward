@@ -26,7 +26,8 @@ operated with the \`ward\` CLI and tracked in git.
 - \`repositories/\` — the records of registered repositories (one document each).
 - \`repos/\` — canonical checkouts of registered repositories, kept fresh and never worked in
   directly.
-- \`worktrees/\` — per-task worktrees, where changes are actually made.
+- \`worktrees/\` — per-task worktrees, where changes are actually made, one directory per
+  task address and branch.
 - \`.ward/\` — Ward's store internals and bookkeeping, including the store write lock and local
   usage telemetry (\`telemetry/\`, untracked — it never leaves the workspace); nothing in it is
   meant to be edited by hand.
@@ -35,9 +36,16 @@ operated with the \`ward\` CLI and tracked in git.
 
 - Run \`ward doctor\` to check machine preconditions and the record's integrity.
 - Records are markdown with typed front matter — read them directly; that is what they are for.
-- Standing inside a task's worktree, task-addressed verbs need no code — Ward derives the task
+- **A task is addressed \`f<floor>t<room>\`** — \`f3t1\` is room 1 on floor 3 — and a task with no
+  floor is addressed \`t<room>\`. Spelling is case-insensitive. A bare \`t1\` is a shorthand that
+  works while exactly one open task holds that room; when several do, Ward names them and asks
+  for one.
+- Standing inside a task's worktree, task-addressed verbs need no address — Ward derives the task
   from the working directory (\`ward task pr URL\`, \`ward worktree rebase\`) and echoes what it
-  derived. An explicit code always works, and \`ward task close\` always takes one.
+  derived. An explicit address always works, and \`ward task close\` always takes one.
+- \`ward status\`, \`ward task list\`, and \`ward project list\` show what is in flight: work
+  closed more than a week ago drops off the listing, and \`--all\` brings it back. A closed task
+  is shown by its slug, not its room — the room belongs to whoever holds it next.
 - Work is never committed to a repository's main line directly; changes travel through a worktree
   and a pull request.
 - When a main line moves under work in progress, \`ward worktree rebase\` replays the task's
@@ -102,15 +110,16 @@ You may be reading this from the workspace root or from inside a task worktree u
   its id — nothing to do. If it did not, record yourself before you start work:
   \`ward session open TASK --purpose TEXT --handle HANDLE\` (see **Sessions**, above).
 - **Name the task explicitly.** Deriving the task from the working directory is a human
-  affordance; a declared agent is refused it and passes the task code on every task-addressed
-  verb (\`ward task list --json\` says what exists).
+  affordance; a declared agent is refused it and passes the **full address** (\`f3t22\`) on every
+  task-addressed verb, read from \`address\` in \`--json\` (\`ward task list --json\` says what
+  exists; its \`hidden\` block says what the settled-work window left out).
 - **Work in the task's worktree** under \`worktrees/\`, never in \`repos/\` — the canonical
   checkouts are reference copies of each repository's main line.
-- **Stay atop the main line.** When it moves, \`ward worktree rebase CODE\` rebases the task's
+- **Stay atop the main line.** When it moves, \`ward worktree rebase ADDRESS\` rebases the task's
   worktrees onto the refreshed tip. A dirty tree is refused; a conflict is aborted and reported
   with the tree left as found — resolving it is your work, then rerun. It never pushes: publish
   a rewritten branch yourself with \`git push --force-with-lease\`.
-- **Link your pull request.** \`ward task pr CODE URL\` records it on the task; review state is
+- **Link your pull request.** \`ward task pr ADDRESS URL\` records it on the task; review state is
   read live from the forge, never stored.
 - **Closing is gated.** \`ward task close\` requires the PR set resolved and tears down
   worktrees — leave it to the human unless that authority was explicitly delegated to you.

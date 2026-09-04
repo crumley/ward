@@ -137,6 +137,12 @@ the SF's disposition is appended in its entry, remove the line here.
 - **SF-002** — [0035](0035-agent-command/spec-feedback.md): a workspace-level `agent.command` is a
   machine-shaped fact inside a record that travels — may the self-sufficient record carry a key
   valid only on some machines?
+- **SF-001** — [0036](0036-floor-addressed-tasks/spec-feedback.md): the task identity rule reads as
+  "bare code only" and leaves reuse-on-close unbounded — should a task's address compose floor +
+  room, with the bare room as a shorthand?
+- **SF-002** — [0036](0036-floor-addressed-tasks/spec-feedback.md): the attention surface has no
+  rule for forgetting settled work, and none for which spelling Ward should speak when a noun has
+  both a full address and a shorthand.
 
 Entries 0001–0029 predate this queue and their SFs carry dispositions unevenly — some settled in
 their own text, some settled by later intent edits without a disposition line, some genuinely open.

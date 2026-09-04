@@ -93,12 +93,15 @@ test('floors are monotonic and never reused, even past a closed project', async 
   expect((await openProject(ws, 'third')).floor).toBe(4);
 });
 
-test('task codes are unique among open tasks and reused only after close', async () => {
+test('rooms run in opening order: a closed room is not handed straight back', async () => {
   const a = await openTask(ws, 'one', {});
   const b = await openTask(ws, 'two', {});
   expect([a.record.code, b.record.code]).toEqual(['t1', 't2']);
   await closeTask(ws, 't1', 'abandoned');
-  expect((await openTask(ws, 'three', {})).record.code).toBe('t1'); // reused after close
+  // The freed room stays free until the sequence comes round to it again
+  // (design/0036-floor-addressed-tasks/): reuse-on-close is what let one
+  // code name two tasks seconds apart.
+  expect((await openTask(ws, 'three', {})).record.code).toBe('t3');
   expect((await readTasks(ws)).length).toBe(3); // the closed record remains
 });
 

@@ -38,6 +38,7 @@ test('worktree create --workspace: the stewardship worktree, both renderings', (
   const doc = worktreeCreateShape.parse(JSON.parse(json.stdout));
   expect(doc).toEqual({
     task: 't1',
+    address: 't1',
     source: 'workspace',
     branch: 'steward/steward-work',
     disposition: 'deliverable',
