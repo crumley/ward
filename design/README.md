@@ -143,6 +143,17 @@ the SF's disposition is appended in its entry, remove the line here.
 - **SF-002** — [0036](0036-floor-addressed-tasks/spec-feedback.md): the attention surface has no
   rule for forgetting settled work, and none for which spelling Ward should speak when a noun has
   both a full address and a shorthand.
+- **SF-001** — [0038](0038-machine-bound-sessions/spec-feedback.md): uniqueness among open sessions
+  is too weak — a reused id overwrites a closed session's record, and two machines sharing a
+  workspace mint the same one.
+- **SF-002** — [0038](0038-machine-bound-sessions/spec-feedback.md): the session-log minimum does
+  not name the machine, and _running_ is per machine.
+- **SF-003** — [0038](0038-machine-bound-sessions/spec-feedback.md): may the shell ask a present
+  human whether a thread is done, and is a defaulted answer still theirs?
+- **SF-004** — [0038](0038-machine-bound-sessions/spec-feedback.md): locate is answered per machine
+  — `gone` here is not the same fact as gone everywhere.
+- **SF-005** — [0038](0038-machine-bound-sessions/spec-feedback.md): the interactive rules cover a
+  mode the human enters, not a moment they are demonstrably already in.
 
 Entries 0001–0029 predate this queue and their SFs carry dispositions unevenly — some settled in
 their own text, some settled by later intent edits without a disposition line, some genuinely open.
