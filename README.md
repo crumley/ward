@@ -124,6 +124,7 @@ The same file carries your defaults for every agent Ward starts — the `agent:`
 ```yaml
 ---
 type: ward-config
+machine: mbp                            # what this computer is called in a session id
 agent:
   model: fable                          # passed through verbatim; unset means the harness's default
   effort: high
@@ -131,6 +132,13 @@ agent:
   command: [npx, claude]                # how the harness is invoked on THIS machine
 ---
 ```
+
+`machine` names this computer, and a session id ends with it: `workspace-7@mbp`. Unset, it is the
+hostname's first label, lowercased. It matters because a session is bound to the machine holding its
+harness history while the workspace record travels through git — so two machines sharing one
+workspace never mint the same id, and a resume on the wrong one is refused with the machine that can
+answer it named
+([`design/0038-machine-bound-sessions/`](design/0038-machine-bound-sessions/README.md)).
 
 `agent.command` is the program and any leading words — `[claude]` where the CLI is on PATH, which is
 also what an unset key means; `[npx, claude]` on a machine where it has to be reached through a

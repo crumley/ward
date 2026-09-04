@@ -169,9 +169,18 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '2af9f23552c0458877124333ca4fe413517257a3ba0d2e1b3dad363ff8d578f4',
         era: 'design 0035 (agent.command)',
       },
-      // Current since design 0036: tasks are addressed `f<floor>t<room>`, the
-      // agent passes the full address and reads it from `address` in --json,
-      // and the glanceable listings hide settled work behind `--all`.
+      // design 0036 — tasks are addressed `f<floor>t<room>`, the agent passes
+      // the full address and reads it from `address` in --json, and the
+      // glanceable listings hide settled work behind `--all`; the Sessions
+      // section still said nothing about which machine a session ran on.
+      {
+        sha256: '146730f74a5f509e85bff76aa56c93e9eb70272212a63cbdbc03062cb251fd4d',
+        era: 'design 0036 (task address)',
+      },
+      // Current since design 0038: session ids carry the machine and never
+      // reuse a number, resume refuses a history another machine holds,
+      // `ward status` lists the open workspace sessions, and the exit
+      // question is named with its `--on-exit` pre-answer.
     ],
   },
 ];

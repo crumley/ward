@@ -63,12 +63,26 @@ open is what starts the agent** — there is no id to copy by hand:
   \`Coordinating work · opened <time>\`. Ward assigns the harness handle before the process starts and sets
   \`WARD_AGENT\` in its environment, so the new session is declared from its first command and
   nothing about Ward has to be explained to it.
+- **A session id names the machine it ran on**, and a number is never reused:
+  \`workspace-7@mbp\` is workspace session seven, on \`mbp\`. A session is bound to the computer
+  holding its harness history while this record travels, so two machines sharing one workspace
+  never mint the same id and a closed session's record is never written over. Ids recorded before
+  this rule carry no \`@\` and keep working unchanged. \`ward doctor\` says what this machine is
+  called (set \`machine:\` in \`~/.config/ward/config.md\` to name it yourself).
 - **When the agent exits, the session stays open.** An exit is not a close: open and running are
   different things. Pick it back up with \`ward session resume ID\` — same conversation, same
-  handle, in the directory it ran in — or end it with \`ward session close ID\`.
+  handle, in the directory it ran in — or end it with \`ward session close ID\`. At a terminal,
+  Ward asks once whether to close it when the run exits, defaulting to yes only when the run left
+  no history at all; \`--on-exit keep|close\` answers in advance, and nothing is ever asked of an
+  agent, a \`--json\` invocation, or a caller without a terminal.
+- \`ward status\` lists the open workspace-scope sessions, each saying whether its harness history
+  is on this machine — so a session with nothing to resume is visible, with the command that ends
+  it. \`ward session resume\` refuses a session whose history is on another machine, naming the
+  machine that can resume it, rather than starting a run that can only fail.
 - \`ward session locate ID\` resolves a session's handle to the harness's own history, reporting
-  **found** (with the path) or **gone**. Gone is a normal answer: retention belongs to the
-  harness, not to Ward, and the session record is what survives it.
+  **found** (with the path) or **gone** — asked of THIS machine, and naming the machine the run
+  stood on. Gone is a normal answer: retention belongs to the harness, not to Ward, and the
+  session record is what survives it.
 - **What the agent is started with** is configuration on two axes: your defaults in
   \`~/.config/ward/config.md\` (\`agent.model\`, \`agent.effort\`, \`agent.args\`, \`agent.harness\`,
   and \`agent.command\` — how the harness is invoked on this machine, \`[npx, claude]\` where
