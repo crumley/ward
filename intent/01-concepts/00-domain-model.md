@@ -70,6 +70,14 @@ exists; nothing about a project requires it ever to close. The derivation (below
 project honestly: `active` while work is in flight or newly possible, and its floor is simply never
 retired.
 
+A project **may claim repositories** it is the home for: a **routing default** for work opened
+against them, never a rule about what its tasks may touch. Explicit placement always wins, and
+moving a claim changes only where new work lands — work already placed stays where it is, and the
+change is reported with what it left behind. **Why a default and not a rule:** the association
+("maintenance on this repository belongs on this floor") is stable enough to be worth recording once
+and never stable enough to enforce; and a judgment recorded at a container may change what happens
+**next**, but never silently relocates what is already placed (Status, below).
+
 One project is **standing** in every workspace: the workspace's own — the home for work **on** the
 workspace itself (upgrades, migrations, reflection adoption), established at creation and never
 closing, because its arc is the workspace's, which has no terminal state — the guaranteed instance
@@ -206,8 +214,10 @@ children, not stored as a separate field — and that includes the **room**: a r
 _container_ and its sessions are its leaves, so **room occupancy is derived from its sessions** — a
 room is _occupied_ iff it holds at least one non-closed session, _free_ otherwise. Likewise a
 project's status is a _query_ over its tasks' states, the workspace's over its projects'. Only
-judgments that **cannot** be derived from children — a priority, a "waiting on an external decision"
-note, an attention flag — are recorded at the higher scope.
+judgments that **cannot** be derived from children — a priority, a **routing default** (Project,
+above), a "waiting on an external decision" note, an attention flag — are recorded at the higher
+scope. Such a judgment governs what happens **next**; changing one never silently relocates what is
+already placed.
 
 **Why derive, not store.** A stored roll-up goes stale the instant a child changes, and would make
 every child transition write its parent — a lost-update hazard (`../00-foundation/01-principles.md`
@@ -400,13 +410,25 @@ single-keyed and the identity still memorable. Uniqueness is only among _open_ s
 workspace-wide, sized to in-flight cardinality; over history a reused id is disambiguated by time
 and context like every other code.
 
-A **task follows the same rule, for the same reason**: its code is allocated **unique among the open
-tasks in the workspace**, so a bare task code is a sufficient address for every lifecycle operation
-— start, pause, resume, close, dispatch — without a floor qualifier. Tasks are the primary lifecycle
-unit and are _operated on_ constantly; threading a `(floor, task)` pair through every call is the
-same model smell the session rule closed. Rooms compose their address (`4A12`) because in-flight
-room cardinality is high and per-floor sequences keep the codes tiny; a task trades a slightly
-longer code for a bare address, because it is addressed far more often than it is browsed.
+A **task composes its address the way a room does**: a task on a floor is addressed by its **floor
+number plus its room** (`f3t1` is room 1 on floor 3), and a task opened directly under the workspace
+— no floor to compose with — is addressed by its room alone. Composition is what keeps the address
+unambiguous while the room stays small: several floors may hold a room 1 at once, and only the
+composed form tells them apart.
+
+The **bare room number is a shorthand**, accepted while it is **unique among the workspace's open
+tasks** and refused — naming every candidate — when it is not. Tasks are the primary lifecycle unit
+and are _operated on_ constantly, so the short form has to keep working; but the short form working
+_usually_ is not a reason to make it the only spelling, and a shorthand that silently picks between
+two live tasks is worse than one that asks. The full address is what Ward speaks; the shorthand is
+what a human types.
+
+**Rooms on a floor run as a sequence in opening order**, sized to two digits, **coming round again
+only after the floor's rooms have been used** — not reissued the moment a task closes.
+Reuse-on-close is the failure this rule exists to prevent: an address that changes hands seconds
+after a close is an address the record cannot be trusted on (§11, §16), in briefs, in logs, and in a
+human's memory — and it removes exactly the margin that lets **time** disambiguate a reused code
+(above). Each container keeps its own sequence: every floor, and the workspace's bare pool.
 
 **Floor numbers are monotonic and never reused.** A closed project's floor number is retired —
 retained for history — and the next project takes the next number. **Why:** the floor number is the
@@ -416,18 +438,25 @@ trustworthy (§11). Rooms reuse codes because in-flight room cardinality demands
 lifetime project count is dozens, so monotonic floor numbers stay short and cost nothing to
 remember.
 
+**The ordering of floors carries no semantics Ward assigns.** A workspace may adopt conventions
+about which floors hold which kind of work — low numbers for what recurs, high numbers for what
+arrives and leaves — and Ward neither enforces nor infers them. **Why:** floor numbers are monotonic
+and never reused, so Ward cannot allocate "the next low floor" without breaking the rule that makes
+historical room addresses trustworthy; the convention is a workspace's practice, and belongs in its
+own guidance.
+
 **What gets an identity** (current intent):
 
-| Thing     | Identity                                                                                                                                                  |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Project   | slug + code; the **code is a floor number** (`1`, `2`, `3…`) — **monotonic, never reused**                                                                |
-| Task      | slug + code, **unique among open tasks workspace-wide** (a bare code addresses it); when remote-linked, also **referenceable by its remote work-item id** |
-| Room      | **floor number + room code** (`4A12`), by memorable convention; addresses the room workspace-wide without naming its task or anchor                       |
-| Session   | slug + code, **unique among open sessions workspace-wide** (a bare id addresses it)                                                                       |
-| Worktree  | natural key (repository + branch); its **disposition** is an attribute, not identity                                                                      |
-| Workdir   | natural key (task + name); scope-relative is enough                                                                                                       |
-| Workspace | the root itself; identified by location                                                                                                                   |
-| Artifact  | addressed by scope + type + name                                                                                                                          |
+| Thing     | Identity                                                                                                                                                                       |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Project   | slug + code; the **code is a floor number** (`1`, `2`, `3…`) — **monotonic, never reused**                                                                                     |
+| Task      | slug + **floor number + room** (`f3t1`); the bare room is a **shorthand while unique** among open tasks; when remote-linked, also **referenceable by its remote work-item id** |
+| Room      | **floor number + room code** (`4A12`), by memorable convention; addresses the room workspace-wide without naming its task or anchor                                            |
+| Session   | slug + code, **unique among open sessions workspace-wide** (a bare id addresses it)                                                                                            |
+| Worktree  | natural key (repository + branch); its **disposition** is an attribute, not identity                                                                                           |
+| Workdir   | natural key (task + name); scope-relative is enough                                                                                                                            |
+| Workspace | the root itself; identified by location                                                                                                                                        |
+| Artifact  | addressed by scope + type + name                                                                                                                                               |
 
 A session also stores a **harness handle** — the locator for its underlying harness run — but that
 is a recorded _attribute_, not a second identity (like a task's remote-work-item link;
@@ -495,7 +524,8 @@ detours is the prime directive in miniature. (Mechanics and modes in `01-scopes-
 - **Artifacts**, their **provenance/lineage**, the seeded types (**brief**, **decision**, **note**)
   within the open, workspace-evolvable type set, and cross-scope discoverability/ownership.
 - **Identity** — slug + short code, the floor/room convention (floor numbers monotonic, never
-  reused), bare workspace-unique codes for open sessions **and open tasks**,
+  reused), **composed task addresses** (`f3t1`) with the bare room as a shorthand while unique,
+  rooms running in opening order round a floor, bare workspace-unique ids for open sessions,
   identity-need-not-mirror-containment.
 - **The dispatch / report / wake flows** and **forking** as concepts (mechanisms in
   [`../02-subsystems/02-messaging-coordination.md`](../02-subsystems/02-messaging-coordination.md)
@@ -515,6 +545,6 @@ Every other slice links here rather than redefining these nouns.
 
 _Recently settled here:_ the **per-level existence tests** (the hierarchy, above); **anchor** and
 **workdir** as settled names (Anchor, above); the **two-tier artifact taxonomy** (Artifacts, above,
-with the store); **task codes** workspace-unique among open tasks and **floor numbers** monotonic
-(Identity, above). Indexed in
+with the store); **composed task addresses** with the bare room as a shorthand and rooms running in
+opening order, and **floor numbers** monotonic (Identity, above). Indexed in
 [`../00-foundation/open-questions.md`](../00-foundation/open-questions.md).

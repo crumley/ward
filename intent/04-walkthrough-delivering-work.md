@@ -51,11 +51,11 @@ watching it, so neither has earned its keep yet (_The growth path_, below).
 ## 2. Open a task
 
 Under floor `1`, the human opens a task _json-output_, **local-only** for now
-(`01-concepts/03-work-lifecycle.md`). Its code is **unique among the workspace's open tasks**, so
-the bare code addresses it for every later operation (`01-concepts/00-domain-model.md`, Identity). A
-**resident** persona owns it. The task record captures its scope, its success criteria, and that it
-touches `ward`. Opening it makes it `active` — there is no separate "drafted" state
-(`01-concepts/03-work-lifecycle.md`, task states).
+(`01-concepts/03-work-lifecycle.md`). Its address **composes its floor and its room** — `f1t1` — and
+the bare room addresses it for every later operation while it stays unique among the workspace's
+open tasks (`01-concepts/00-domain-model.md`, Identity). A **resident** persona owns it. The task
+record captures its scope, its success criteria, and that it touches `ward`. Opening it makes it
+`active` — there is no separate "drafted" state (`01-concepts/03-work-lifecycle.md`, task states).
 
 **Records written:** a _task record_ with its identity and recorded intent; a _session log_ entry
 for the resident's task-scope session, capturing persona, working directory, model, and **harness
@@ -180,13 +180,13 @@ Everything above is the spine. What a busier workspace adds, each already specif
 
 ## What this exercises (and what it no longer does)
 
-**Exercised here:** the project existence test and floor identity, bare workspace-unique task codes,
-worktree disposition and idempotent setup hooks, recorded theming, elided-room occupancy on an
-anchor, working-directory-keyed context loading, harness handles with session purpose and usage,
-gated outward actions, privacy translation at the single upstream gate, derived `in-review`, the
-toil yielding to occupancy and to a dirty tree, the delivered close with artifact disposition,
-teardown, scope-boundary reflection with a cursor, and cold-start recovery with rounds and a
-recorded episode.
+**Exercised here:** the project existence test and floor identity, composed task addresses with the
+bare room as a shorthand, worktree disposition and idempotent setup hooks, recorded theming,
+elided-room occupancy on an anchor, working-directory-keyed context loading, harness handles with
+session purpose and usage, gated outward actions, privacy translation at the single upstream gate,
+derived `in-review`, the toil yielding to occupancy and to a dirty tree, the delivered close with
+artifact disposition, teardown, scope-boundary reflection with a cursor, and cold-start recovery
+with rounds and a recorded episode.
 
 **Deliberately not exercised — the watch-list.** The spine leaves these unchecked by any
 walkthrough, so a change to intent that breaks one will not be caught here: **briefs and dispatch
