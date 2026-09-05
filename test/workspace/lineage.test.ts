@@ -61,7 +61,7 @@ test('the AGENTS.md 0029 supersedes is in history — every workspace still on i
 // exactly the bookkeeping that keeps every shipped default recognizable.
 test('the current defaults are pinned; changing one must move its old hash into history', () => {
   expect(sha256OfText(AGENTS_MD)).toBe(
-    '2af9f23552c0458877124333ca4fe413517257a3ba0d2e1b3dad363ff8d578f4', // since design 0035
+    '146730f74a5f509e85bff76aa56c93e9eb70272212a63cbdbc03062cb251fd4d', // since design 0036
   );
   expect(sha256OfText(WARD_INTERNAL_README)).toBe(
     '6f10845611635508f006727f83bdc2222d840a9da972393781662c9f6ff04ac4', // since 65f1e8b (0013)

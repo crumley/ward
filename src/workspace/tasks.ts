@@ -17,6 +17,7 @@ import {
   taskRecordType,
   type WorktreeRecord,
 } from '../store/types.ts';
+import { nextRoom, ROOMS_PER_FLOOR, taskAddress, taskRoom } from './address.ts';
 import { git } from './git.ts';
 import { taskContainer } from './projects.ts';
 import {
@@ -25,14 +26,7 @@ import {
   type RefreshReport,
   refreshRepositories,
 } from './repos.ts';
-import {
-  commitRecords,
-  type FoundTask,
-  readTasks,
-  requireSlug,
-  resolveOpenTask,
-  smallestFree,
-} from './scan.ts';
+import { commitRecords, type FoundTask, readTasks, requireSlug, resolveOpenTask } from './scan.ts';
 import { readSessions, withEvent } from './sessions.ts';
 import { resolveWorkspaceMainLine } from './steward.ts';
 import { readTaskWorktrees } from './worktrees.ts';
@@ -60,22 +54,36 @@ export async function openTask(
   // code, and their commits must not race (design/0013-telemetry-and-serialized-writes/).
   return withStoreLock(root, `task open ${slug}`, async () => {
     const container = await taskContainer(root, options.floor);
-    const openCodes = (await readTasks(root))
-      .filter((task) => task.record.state !== 'closed')
-      .map((task) => Number.parseInt(task.record.code.replace(/^t/, ''), 10))
-      .filter((code) => !Number.isNaN(code));
-    // Codes are reused once a task closes, but a closed task's records SURVIVE
-    // at `<code>-<slug>/` — so a code that is free can still name a directory
-    // that is occupied, and writing there would overwrite a closed task's
-    // record with a new one (§17, and the record is the truth, §16). Only ever
-    // reachable when the same slug comes round again, which is exactly what a
-    // DERIVED slug does (design/0030-upgrade-self-service/). Skip such a code.
-    let number = smallestFree(openCodes);
-    while (existsSync(join(root, `${container}/t${number}-${slug}`))) {
-      openCodes.push(number);
-      number = smallestFree(openCodes);
+    // Rooms run as a per-container sequence in opening order
+    // (design/0036-floor-addressed-tasks/): every floor has its own, and so
+    // does the bare pool. The cursor is the container's most recently opened
+    // task — open or closed, because the sequence is about the order rooms
+    // were HANDED OUT, not about what is in flight — and it is read from the
+    // records, never stored (§17).
+    const own = (await readTasks(root)).filter((task) => task.dir.startsWith(`${container}/`));
+    const cursor = mostRecentRoom(own);
+    const room = nextRoom(
+      {
+        ...(cursor === undefined ? {} : { mostRecentRoom: cursor }),
+        occupied: own
+          .filter((task) => task.record.state !== 'closed')
+          .flatMap((task) => taskRoom(task) ?? []),
+      },
+      // A closed task's records SURVIVE at `<code>-<slug>/`, so a free room
+      // can still name a directory that is occupied, and writing there would
+      // overwrite a closed task's record with a new one (§17, and the record
+      // is the truth, §16). Only ever reachable when the same slug comes round
+      // again, which is exactly what a DERIVED slug does
+      // (design/0030-upgrade-self-service/).
+      (candidate) => existsSync(join(root, `${container}/t${candidate}-${slug}`)),
+    );
+    if (room === 0) {
+      throw new WardError(
+        `${describeContainer(options.floor)} has no free room — every one of the ` +
+          `${ROOMS_PER_FLOOR} rooms is held by an open task; close or pause one first`,
+      );
     }
-    const code = `t${number}`;
+    const code = `t${room}`;
     const dir = `${container}/${code}-${slug}`;
     const record: TaskRecord = {
       type: 'task',
@@ -88,15 +96,37 @@ export async function openTask(
       prs: [],
       openedAt: new Date().toISOString(),
     };
+    const address = taskAddress({ dir, record });
     await writeDocument(root, taskRecordType(dir), {
       data: record,
       body:
-        `The \`${slug}\` task, addressed by its bare code \`${code}\` while open. Its worktree ` +
-        'and session records nest beside this document; its status is stored here, at the leaf.',
+        `The \`${slug}\` task, addressed \`${address}\` while open — room \`${code}\`` +
+        `${options.floor === undefined ? ', in the bare pool' : ` on floor ${options.floor}`}. ` +
+        'Its worktree and session records nest beside this document; its status is stored here, ' +
+        'at the leaf.',
     });
-    commitRecords(root, `Open task ${slug} (${code})`, dir);
+    commitRecords(root, `Open task ${slug} (${address})`, dir);
     return { dir, record };
   });
+}
+
+/**
+ * The room the container handed out most recently, by `openedAt` across every
+ * record it holds — the cursor the next room follows. Undefined for an empty
+ * container, where the sequence starts at room 1.
+ */
+function mostRecentRoom(tasks: readonly FoundTask[]): number | undefined {
+  let latest: FoundTask | undefined;
+  for (const task of tasks) {
+    if (taskRoom(task) === undefined) continue;
+    if (latest === undefined || task.record.openedAt > latest.record.openedAt) latest = task;
+  }
+  return latest === undefined ? undefined : taskRoom(latest);
+}
+
+/** What a full container is called in its refusal: a floor, or the bare pool. */
+function describeContainer(floor: number | undefined): string {
+  return floor === undefined ? 'the bare task pool' : `floor ${floor}`;
 }
 
 export async function setTaskState(
@@ -110,7 +140,8 @@ export async function setTaskState(
     if (task.record.state === state) return task;
     const record: TaskRecord = { ...task.record, state };
     await writeTask(root, task.dir, record);
-    commitRecords(root, `${state === 'paused' ? 'Pause' : 'Resume'} task ${code}`, task.dir);
+    const verbed = state === 'paused' ? 'Pause' : 'Resume';
+    commitRecords(root, `${verbed} task ${taskAddress(task)}`, task.dir);
     return { dir: task.dir, record };
   });
 }
@@ -121,7 +152,7 @@ export async function addTaskPr(root: string, code: string, url: string): Promis
     if (task.record.prs.includes(url)) return task;
     const record: TaskRecord = { ...task.record, prs: [...task.record.prs, url] };
     await writeTask(root, task.dir, record);
-    commitRecords(root, `Link PR to task ${code}`, task.dir);
+    commitRecords(root, `Link PR to task ${taskAddress(task)}`, task.dir);
     return { dir: task.dir, record };
   });
 }
@@ -209,7 +240,7 @@ export async function closeTask(
       closedAt: new Date().toISOString(),
     };
     await writeTask(root, task.dir, closedRecord);
-    commitRecords(root, `Close task ${code} (${outcome})`, task.dir);
+    commitRecords(root, `Close task ${taskAddress(task)} (${outcome})`, task.dir);
     steps.push({ step: 'record', detail: `closed with outcome ${outcome}` });
     return closedRecord;
   });

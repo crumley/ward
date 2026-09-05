@@ -13,6 +13,7 @@ import { WardError } from '../errors.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
 import { withStoreLock } from '../store/lock.ts';
 import { type RepositoryRecord, repositoryRecordType, worktreeRecordType } from '../store/types.ts';
+import { taskAddress } from './address.ts';
 import { git, gitAsync, gitOrThrow } from './git.ts';
 import { commitRecords, readTasks } from './scan.ts';
 
@@ -211,7 +212,7 @@ export async function removeRepository(root: string, name: string): Promise<Remo
 }
 
 /**
- * Open-task codes with a worktree record of this repository. The records are
+ * Open tasks with a worktree record of this repository, named by address. The records are
  * read directly (the same shape worktrees.ts reads) rather than through
  * worktrees.ts, which imports this module — the duplication buys the absence
  * of an import cycle.
@@ -227,8 +228,8 @@ async function tasksAnchoredIn(root: string, name: string): Promise<string[]> {
       .sort()) {
       const worktree = (await readDocument(root, worktreeRecordType(task.dir, file.slice(0, -3))))
         .data;
-      if (worktree.repo === name && !codes.includes(task.record.code)) {
-        codes.push(task.record.code);
+      if (worktree.repo === name && !codes.includes(taskAddress(task))) {
+        codes.push(taskAddress(task));
       }
     }
   }

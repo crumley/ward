@@ -61,7 +61,14 @@ test('the same warning in --json: the needsYou entry carries pr, base, and mainL
   const status = JSON.parse(result.stdout);
   expect(() => statusShape.parse(status)).not.toThrow();
   expect(status.needsYou).toEqual([
-    { task: 't1', reason: 'stale-base', pr: PR, base: RETIRED, mainLine: 'main' },
+    {
+      address: 't1',
+      task: 't1',
+      reason: 'stale-base',
+      pr: PR,
+      base: RETIRED,
+      mainLine: 'main',
+    },
   ]);
   // The per-PR row carries the raw datum the warning was derived from.
   expect(status.bareTasks[0].forge).toEqual([
@@ -84,7 +91,9 @@ test("a merged PR's base is history — the close gate owns that end, not the gl
     responses: { [PR]: { state: 'MERGED', baseRefName: RETIRED } },
   });
   const json = runWardEnv(['status', '--json'], ws, { NO_COLOR: '1', WARD_GH: fake });
-  expect(JSON.parse(json.stdout).needsYou).toEqual([{ task: 't1', reason: 'awaiting-close' }]);
+  expect(JSON.parse(json.stdout).needsYou).toEqual([
+    { task: 't1', address: 't1', reason: 'awaiting-close' },
+  ]);
   const human = runWardEnv(['status'], ws, { NO_COLOR: '1', WARD_GH: fake });
   expect(human.stdout).not.toContain('is based on');
 });

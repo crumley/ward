@@ -87,20 +87,24 @@ test('the human rendering names the actions, and the 0019 rails land and close t
 });
 
 test('a refusal emits no document: a task with no workspace worktree is exit 1, stdout empty', () => {
-  expect(runWard(['task', 'open', 'no-worktree', '--json'], ws).exitCode).toBe(0);
-  const result = runWard(['workspace', 'upgrade', 't1', '--json'], ws);
+  const opened = runWard(['task', 'open', 'no-worktree', '--json'], ws);
+  expect(opened.exitCode).toBe(0);
+  // Rooms run in opening order (0036) — the address is read from the record,
+  // never assumed to be the smallest free room.
+  const address = JSON.parse(opened.stdout).address as string;
+  const result = runWard(['workspace', 'upgrade', address, '--json'], ws);
   expect(result.exitCode).toBe(1);
   expect(result.stdout).toBe('');
-  expect(result.stderr).toContain('ward worktree create t1 --workspace');
-  expect(runWard(['task', 'close', 't1', '--outcome', 'abandoned'], ws).exitCode).toBe(0);
+  expect(result.stderr).toContain(`ward worktree create ${address} --workspace`);
+  expect(runWard(['task', 'close', address, '--outcome', 'abandoned'], ws).exitCode).toBe(0);
 });
 
 test('the loud proceed: a journal commit off the recorded main line says so on stderr, and lands', () => {
   gitOrThrow(ws, 'switch', '-c', 'experiment');
   const result = runWard(['task', 'open', 'loud-proceed'], ws);
   expect(result.exitCode).toBe(0); // proceeds — refusing would wedge the bookkeeping
-  expect(result.stdout).toContain('opened task');
-  loudCode = /opened task (\S+)/.exec(result.stdout)?.[1] ?? '';
+  expect(result.stdout).toContain('opened ');
+  loudCode = /opened (\S+)/.exec(result.stdout)?.[1] ?? '';
   expect(loudCode).not.toBe('');
   expect(result.stderr).toContain(`off the recorded main line '${mainLine}'`);
   expect(result.stderr).toContain(`git switch ${mainLine}`);

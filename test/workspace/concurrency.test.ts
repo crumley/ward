@@ -66,7 +66,7 @@ test('a stale lock left by a crashed writer is taken over, legibly', async () =>
 
   const result = runWard(['task', 'open', 'after-crash'], ws);
   expect(result.exitCode).toBe(0);
-  expect(result.stdout).toContain('opened task');
+  expect(result.stdout).toContain('opened t1 — after-crash');
   expect(result.stderr).toContain('took over a stale store lock');
   expect(result.stderr).toContain(String(deadPid));
   expect(existsSync(storeLockPath(ws))).toBe(false); // released after the write

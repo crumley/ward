@@ -35,6 +35,7 @@ import {
   type WorktreeRecord,
   workspaceRecordType,
 } from '../store/types.ts';
+import { taskAddress } from './address.ts';
 import { git, gitOrThrow } from './git.ts';
 import { inspectClaudeGuidance } from './layout.ts';
 import { classifyArtifact, INSTALLED_ARTIFACT_LINEAGE, sha256OfText } from './lineage.ts';
@@ -137,7 +138,7 @@ export async function upgradeWorkspace(root: string, taskCode: string): Promise<
   // not the root store, but two concurrent upgrades of one task would race
   // the same branch — the lock makes the second a clean convergence instead.
   return withStoreLock(root, `workspace upgrade ${taskCode}`, () =>
-    upgradeInCopy(root, task.record.code, worktree.branch, worktree.path, copy),
+    upgradeInCopy(root, taskAddress(task), worktree.branch, worktree.path, copy),
   );
 }
 
@@ -149,15 +150,15 @@ function requireWorkspaceWorktree(
   const worktree = worktrees.find((record) => record.source === 'workspace');
   if (worktree === undefined) {
     throw new WardError(
-      `task ${task.record.code} has no worktree of the workspace's own repository — the ` +
+      `task ${taskAddress(task)} has no worktree of the workspace's own repository — the ` +
         'upgrade is stewardship and writes into one, so the human can preview and merge it ' +
-        `(design 0019). Create it first: ward worktree create ${task.record.code} --workspace`,
+        `(design 0019). Create it first: ward worktree create ${taskAddress(task)} --workspace`,
     );
   }
   if (!existsSync(join(root, worktree.path))) {
     throw new WardError(
       `${worktree.path} is recorded but missing on disk — re-establish it: ` +
-        `ward worktree create ${task.record.code} --workspace`,
+        `ward worktree create ${taskAddress(task)} --workspace`,
     );
   }
   return worktree;
@@ -486,13 +487,13 @@ export async function selfServiceUpgrade(
     outcome: existing === undefined ? 'derived' : 'reused',
     detail:
       existing === undefined
-        ? `${task.record.code} — opened for this upgrade (${task.record.slug})`
-        : `${task.record.code} — the upgrade task already open here (${task.record.slug})`,
+        ? `${taskAddress(task)} — opened for this upgrade (${task.record.slug})`
+        : `${taskAddress(task)} — the upgrade task already open here (${task.record.slug})`,
   });
   const { record: worktree } = await createWorkspaceWorktree(
     root,
-    task.record.code,
-    existing?.worktree?.branch ?? freshStewardshipBranch(root, task.record.code),
+    taskAddress(task),
+    existing?.worktree?.branch ?? freshStewardshipBranch(root, taskAddress(task)),
   );
   echo({
     step: 'worktree',
@@ -502,24 +503,24 @@ export async function selfServiceUpgrade(
       `(off ${mainLine})`,
   });
 
-  const report = await upgradeWorkspace(root, task.record.code);
+  const report = await upgradeWorkspace(root, taskAddress(task));
   const branch = report.branch ?? worktree.branch;
   const publication = await publishStewardshipBranch(root, {
     branch,
     mainLine: report.mainLine.name,
     title: `Upgrade the workspace to ward ${pkg.version}'s defaults`,
-    body: pullRequestBody(report, branch, task.record.code),
+    body: pullRequestBody(report, branch, taskAddress(task)),
   });
   // The same linkage `ward task pr` writes — the task's PR set is where a
   // close reads review state from, and the URL is the only thing stored (0009).
-  if (publication.url !== undefined) await addTaskPr(root, task.record.code, publication.url);
+  if (publication.url !== undefined) await addTaskPr(root, taskAddress(task), publication.url);
 
   return {
     ...report,
     vehicle: 'derived',
     derived,
     pullRequest: publication,
-    remaining: remainingActs(report, branch, task.record.code, publication),
+    remaining: remainingActs(report, branch, taskAddress(task), publication),
   };
 }
 
@@ -544,7 +545,7 @@ function refuseSecondUpgrade(
   const count = git(root, 'rev-list', '--count', `${mainLine}..${branch}`);
   const ahead = Number.parseInt(count.stdout.trim(), 10);
   if (count.exitCode !== 0 || Number.isNaN(ahead) || ahead === 0) return;
-  const code = existing.task.record.code;
+  const code = taskAddress(existing.task);
   throw new WardError(
     `an upgrade of this workspace is already in flight — task ${code} holds ${ahead} ` +
       `commit${ahead === 1 ? '' : 's'} on '${branch}' that ${mainLine} has not taken. Ward ` +
@@ -578,7 +579,7 @@ async function deriveUpgradeTask(root: string): Promise<FoundTask> {
  * branch is history, and an abandoned one is the human's to delete). Checking
  * that leftover out would silently adopt work the human explicitly discarded,
  * and would report "current" over an upgrade the workspace never took. So a
- * taken name gets the task's own code appended: deterministic, legible in
+ * taken name gets the task's own address appended: deterministic, legible in
  * `git branch`, and never anyone else's history.
  */
 function freshStewardshipBranch(root: string, code: string): string {
@@ -591,9 +592,9 @@ function abandonEmptyUpgradeTask(task: FoundTask): RemainingAct {
   return {
     step: 'close',
     detail:
-      `task ${task.record.code} was opened for an upgrade and holds nothing to land — ` +
+      `task ${taskAddress(task)} was opened for an upgrade and holds nothing to land — ` +
       'the workspace is already current, so there is no work in it',
-    command: `ward task close ${task.record.code} --outcome abandoned`,
+    command: `ward task close ${taskAddress(task)} --outcome abandoned`,
   };
 }
 

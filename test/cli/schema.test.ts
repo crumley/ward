@@ -87,9 +87,20 @@ test('the emitted schemas carry the 0005 stability policy', () => {
   // Exact per build (`additionalProperties: false`) — the schema travels with
   // the binary that emits it — and optional fields are simply not required.
   const taskList = JSON.parse(runWard(['schema', 'task', 'list'], ws).stdout);
-  const task = taskList.items;
+  // The listing is an object since 0036 — a windowed array could not say what
+  // it left out — so the task shape is one level in, under `tasks`.
+  expect(taskList.required).toEqual(['tasks', 'hidden']);
+  const task = taskList.properties.tasks.items;
   expect(task.additionalProperties).toBe(false);
-  expect(task.required).toEqual(['code', 'slug', 'state', 'prs', 'inReview', 'openedAt']);
+  expect(task.required).toEqual([
+    'code',
+    'address',
+    'slug',
+    'state',
+    'prs',
+    'inReview',
+    'openedAt',
+  ]);
   // `forge` is 0009's live-forge-state field: optional because it vanishes
   // whenever the forge cannot answer, like every forge-state field.
   for (const optional of ['floor', 'purpose', 'outcome', 'closedAt', 'forge']) {

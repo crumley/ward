@@ -10,6 +10,7 @@
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
+import { taskAddress } from '../workspace/address.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
 import { checkoutPath, listRepositories } from '../workspace/repos.ts';
 import { scopeFromCwd } from '../workspace/scope.ts';
@@ -151,7 +152,8 @@ export function recordInvocation(argv: readonly string[]): void {
  * The invocation's scope, as the concept exists today — anchor-shaped
  * (intent/02-subsystems/07-human-shell.md names scope among the telemetry
  * fields; the full scope model is unbuilt, but the working directory already
- * resolves to the anchors the records claim): `task:tN` inside a worktree a
+ * resolves to the anchors the records claim): `task:f3t22` — the task's full
+ * address (design/0036-floor-addressed-tasks/) — inside a worktree a
  * non-closed task claims (the 0006 resolver — closed tasks claim nothing, so
  * a reused code is never mis-attributed), `repo:<name>` inside a registered
  * repository's canonical checkout, `workspace` anywhere else inside. Recorded
@@ -162,7 +164,7 @@ export function recordInvocation(argv: readonly string[]): void {
  */
 async function resolveScope(root: string, cwd: string): Promise<string> {
   const claimed = await scopeFromCwd(root, cwd);
-  if (claimed !== null) return `task:${claimed.task.record.code}`;
+  if (claimed !== null) return `task:${taskAddress(claimed.task)}`;
   const rel = relative(root, cwd);
   if (rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)) {
     for (const repo of await listRepositories(root)) {

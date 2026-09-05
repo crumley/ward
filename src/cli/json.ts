@@ -27,11 +27,12 @@ import {
   type WorkState,
   type WorktreeRecord,
 } from '../store/types.ts';
+import { taskAddress } from '../workspace/address.ts';
 import type { CreateReport } from '../workspace/create.ts';
 import type { DoctorReport } from '../workspace/doctor.ts';
 import type { AddReport, RefreshReport, RemoveReport } from '../workspace/repos.ts';
 import type { RestoreReport } from '../workspace/restore.ts';
-import type { StatusReport, TaskStatus } from '../workspace/status.ts';
+import type { HiddenSummary, StatusReport, TaskStatus } from '../workspace/status.ts';
 import type { MergeReport } from '../workspace/steward.ts';
 import type { CloseReport } from '../workspace/tasks.ts';
 import type { UpgradeReport } from '../workspace/upgrade.ts';
@@ -72,14 +73,21 @@ export function printJson(value: unknown): void {
   console.log(JSON.stringify(value, null, 2));
 }
 
-/** The task shape shared by `task list` and `status`. */
+/**
+ * The task shape shared by `task list` and `status`. `address` is derived,
+ * never stored (design/0036-floor-addressed-tasks/): `code` keeps naming the
+ * room the record carries, and the address composes it with the floor — so an
+ * agent addresses a verb by `address` and still reads the record it knows.
+ */
 export function taskJson(
   record: TaskRecord,
+  address: string,
   inReview: boolean,
   forge?: readonly PrForgeState[],
 ): TaskShape {
   return {
     code: record.code,
+    address,
     slug: record.slug,
     state: record.state,
     ...(record.floor === undefined ? {} : { floor: record.floor }),
@@ -123,7 +131,7 @@ function statusWorktreeJson(status: WorktreeStatus): StatusWorktreeShape {
 /** In `status`, tasks additionally carry their open sessions and worktrees. */
 function statusTaskJson(status: TaskStatus): StatusTaskShape {
   return {
-    ...taskJson(status.task, status.inReview, status.forge),
+    ...taskJson(status.task, status.address, status.inReview, status.forge),
     openSessions: [...status.openSessions],
     ...(status.worktrees === undefined
       ? {}
@@ -142,11 +150,17 @@ export function statusJson(report: StatusReport): StatusShape {
       tasks: project.tasks.map(statusTaskJson),
     })),
     bareTasks: report.bareTasks.map(statusTaskJson),
+    hidden: {
+      tasks: report.hidden.tasks,
+      projects: report.hidden.projects,
+      settledAfterDays: report.hidden.settledAfterDays,
+    },
     ...(report.needsYou === undefined
       ? {}
       : {
           needsYou: report.needsYou.map((entry) => ({
             task: entry.task,
+            address: entry.address,
             reason: entry.reason,
             ...(entry.pr === undefined ? {} : { pr: entry.pr }),
             ...(entry.base === undefined ? {} : { base: entry.base }),
@@ -162,27 +176,53 @@ export interface ProjectListEntry {
   readonly taskCount: number;
 }
 
-export function projectListJson(entries: readonly ProjectListEntry[]): ProjectListShape {
-  return entries.map((entry) => ({
-    floor: entry.record.floor,
-    slug: entry.record.slug,
-    state: entry.record.state,
-    derived: entry.derived,
-    taskCount: entry.taskCount,
-    openedAt: entry.record.openedAt,
-    ...(entry.record.closedAt === undefined ? {} : { closedAt: entry.record.closedAt }),
-  }));
+export function projectListJson(
+  entries: readonly ProjectListEntry[],
+  hidden: HiddenSummary,
+): ProjectListShape {
+  return {
+    projects: entries.map((entry) => ({
+      floor: entry.record.floor,
+      slug: entry.record.slug,
+      state: entry.record.state,
+      derived: entry.derived,
+      taskCount: entry.taskCount,
+      openedAt: entry.record.openedAt,
+      ...(entry.record.closedAt === undefined ? {} : { closedAt: entry.record.closedAt }),
+    })),
+    hidden: {
+      tasks: hidden.tasks,
+      projects: hidden.projects,
+      settledAfterDays: hidden.settledAfterDays,
+    },
+  };
+}
+
+export interface TaskListEntry {
+  readonly record: TaskRecord;
+  readonly address: string;
+  readonly inReview: boolean;
+  readonly forge?: readonly PrForgeState[];
 }
 
 export function taskListJson(
-  tasks: readonly { record: TaskRecord; inReview: boolean; forge?: readonly PrForgeState[] }[],
+  tasks: readonly TaskListEntry[],
+  hidden: HiddenSummary,
 ): TaskListShape {
-  return tasks.map((task) => taskJson(task.record, task.inReview, task.forge));
+  return {
+    tasks: tasks.map((task) => taskJson(task.record, task.address, task.inReview, task.forge)),
+    hidden: {
+      tasks: hidden.tasks,
+      projects: hidden.projects,
+      settledAfterDays: hidden.settledAfterDays,
+    },
+  };
 }
 
 export function worktreeListJson(listings: readonly WorktreeListing[]): WorktreeListShape {
   return listings.map((listing) => ({
     task: listing.taskCode,
+    address: listing.taskAddress,
     ...(listing.record.repo === undefined ? {} : { repo: listing.record.repo }),
     ...(listing.record.source === undefined ? {} : { source: listing.record.source }),
     branch: listing.record.branch,
@@ -297,10 +337,15 @@ export function projectOpenJson(record: ProjectRecord): ProjectOpenShape {
   };
 }
 
-/** The task record as the mutation wrote it — no derived overlays (§16). */
-export function taskMutationJson(record: TaskRecord): TaskMutationShape {
+/**
+ * The task record as the mutation wrote it — no derived overlays (§16) beyond
+ * the address, which is derived from the record and its containment and is
+ * what the next verb is addressed by (0036).
+ */
+export function taskMutationJson(record: TaskRecord, address: string): TaskMutationShape {
   return {
     code: record.code,
+    address,
     slug: record.slug,
     state: record.state,
     ...(record.floor === undefined ? {} : { floor: record.floor }),
@@ -315,15 +360,20 @@ export function taskMutationJson(record: TaskRecord): TaskMutationShape {
 /** The close report: steps verbatim — the trust language lives in `detail`. */
 export function taskCloseJson(report: CloseReport): TaskCloseShape {
   return {
-    task: taskMutationJson(report.task.record),
+    task: taskMutationJson(report.task.record, taskAddress(report.task)),
     outcome: report.outcome,
     steps: report.steps.map((step) => ({ step: step.step, detail: step.detail })),
   };
 }
 
-export function worktreeCreateJson(taskCode: string, record: WorktreeRecord): WorktreeCreateShape {
+export function worktreeCreateJson(
+  taskCode: string,
+  address: string,
+  record: WorktreeRecord,
+): WorktreeCreateShape {
   return {
     task: taskCode,
+    address,
     ...(record.repo === undefined ? {} : { repo: record.repo }),
     ...(record.source === undefined ? {} : { source: record.source }),
     branch: record.branch,
@@ -335,10 +385,12 @@ export function worktreeCreateJson(taskCode: string, record: WorktreeRecord): Wo
 
 export function worktreeRebaseJson(
   taskCode: string,
+  address: string,
   reports: readonly RebaseReport[],
 ): WorktreeRebaseShape {
   return {
     task: taskCode,
+    address,
     reports: reports.map((report) => ({
       ...(report.record.repo === undefined ? {} : { repo: report.record.repo }),
       ...(report.record.source === undefined ? {} : { source: report.record.source }),

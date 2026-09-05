@@ -73,12 +73,12 @@ const needs: ReadonlyArray<{
   {
     name: 'a fully merged PR set awaits the gated close',
     statuses: [status('t1', [pr('merged'), pr('merged')])],
-    expected: [{ task: 't1', reason: 'awaiting-close' }],
+    expected: [{ task: 't1', address: 't1', reason: 'awaiting-close' }],
   },
   {
     name: 'changes requested on an open PR awaits the human',
     statuses: [status('t1', [pr('merged'), pr('open', 'changes-requested', 'https://x/pr/2')])],
-    expected: [{ task: 't1', reason: 'changes-requested', pr: 'https://x/pr/2' }],
+    expected: [{ task: 't1', address: 't1', reason: 'changes-requested', pr: 'https://x/pr/2' }],
   },
   {
     name: 'an approved open PR needs nobody yet',
@@ -107,8 +107,8 @@ const needs: ReadonlyArray<{
       status('t2', [pr('merged')]),
     ],
     expected: [
-      { task: 't1', reason: 'changes-requested', pr: 'https://x/pr/1' },
-      { task: 't2', reason: 'awaiting-close' },
+      { task: 't1', address: 't1', reason: 'changes-requested', pr: 'https://x/pr/1' },
+      { task: 't2', address: 't2', reason: 'awaiting-close' },
     ],
   },
   // 0014: the stale base — warned only when every link in the chain answers
@@ -120,6 +120,7 @@ const needs: ReadonlyArray<{
     expected: [
       {
         task: 't1',
+        address: 't1',
         reason: 'stale-base',
         pr: DEMO_PR,
         base: 'design/0009-live-forge-state',
@@ -137,7 +138,7 @@ const needs: ReadonlyArray<{
     name: "a merged PR's base is history — the close gate owns that end",
     statuses: [status('t1', [stackedPr('merged', 'design/0009-live-forge-state')])],
     repos: [repo()],
-    expected: [{ task: 't1', reason: 'awaiting-close' }],
+    expected: [{ task: 't1', address: 't1', reason: 'awaiting-close' }],
   },
   {
     name: 'no reported base warns nothing — absence is never guessed at',
@@ -163,9 +164,10 @@ const needs: ReadonlyArray<{
     ],
     repos: [repo()],
     expected: [
-      { task: 't1', reason: 'changes-requested', pr: DEMO_PR },
+      { task: 't1', address: 't1', reason: 'changes-requested', pr: DEMO_PR },
       {
         task: 't1',
+        address: 't1',
         reason: 'stale-base',
         pr: DEMO_PR,
         base: 'design/0009-live-forge-state',
@@ -227,6 +229,7 @@ function status(code: string, forge: PrForgeState[] | undefined): TaskStatus {
   const record = task({ prs: (forge ?? []).map((s) => s.url), state: 'active' });
   return {
     task: { ...record, code },
+    address: code, // a bare task's room IS its address (0036)
     inReview: inReview(record, forge),
     ...(forge === undefined ? {} : { forge }),
     openSessions: [],

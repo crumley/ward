@@ -40,6 +40,7 @@ import { CANDIDATE_KINDS, candidates, renderCandidates } from '../shell/candidat
 import { emitShellLayer } from '../shell/layer.ts';
 import { FISH_SHORTHAND_NAMES, findShorthand } from '../shell/shorthands.ts';
 import type { SessionRecord, TaskRecord, WorkState } from '../store/types.ts';
+import { taskAddress } from '../workspace/address.ts';
 import { createWorkspace, type StepReport } from '../workspace/create.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
@@ -63,9 +64,14 @@ import {
 import {
   deriveStatus,
   forgeStates,
+  glanceOrder,
+  type HiddenSummary,
   inReview,
   type NeedsYouEntry,
   openPrUrls,
+  SETTLED_AFTER_DAYS,
+  settledProject,
+  settledTask,
   statusReport,
   type TaskStatus,
 } from '../workspace/status.ts';
@@ -116,7 +122,7 @@ import {
   repoName,
   schemaVerb,
   sessionId,
-  taskCode,
+  taskIdentity,
   workspaceBranch,
   workspaceIdentity,
 } from './suggest.ts';
@@ -152,6 +158,18 @@ const pc = callerIsAgent() ? picocolors.createColors(false) : picocolors;
 function jsonFlag() {
   return option('--json', {
     description: message`Emit the result as JSON on stdout (a stable, documented shape).`,
+  });
+}
+
+/**
+ * Lift the settled-work window (design/0036-floor-addressed-tasks/): the
+ * glanceable surfaces hide work closed longer ago than the window, and this
+ * is the one flag that shows all of it. Its own help says what it lifts, so
+ * the window is discoverable from `--help` and not only from the footer.
+ */
+function allFlag() {
+  return option('--all', {
+    description: message`Include settled work — tasks and floors closed more than a week ago.`,
   });
 }
 
@@ -210,7 +228,7 @@ const workspaceUpgrade = command(
   'upgrade',
   object({
     action: constant('workspace-upgrade'),
-    task: optional(argument(taskCode('TASK'))),
+    task: optional(argument(taskIdentity('TASK'))),
     json: jsonFlag(),
   }),
   {
@@ -445,9 +463,11 @@ const project = command(
       }),
       { brief: message`Open a project; it takes the next floor number.` },
     ),
-    command('list', object({ action: constant('project-list'), json: jsonFlag() }), {
-      brief: message`List projects with their derived status.`,
-    }),
+    command(
+      'list',
+      object({ action: constant('project-list'), all: allFlag(), json: jsonFlag() }),
+      { brief: message`List projects with their derived status.` },
+    ),
   ),
   { brief: message`Operate on projects (floors).` },
 );
@@ -466,32 +486,32 @@ const task = command(
       }),
       { brief: message`Open a task, bare or under a project floor.` },
     ),
-    command('list', object({ action: constant('task-list'), json: jsonFlag() }), {
-      brief: message`List tasks, open and closed.`,
+    command('list', object({ action: constant('task-list'), all: allFlag(), json: jsonFlag() }), {
+      brief: message`List tasks, open and closed — settled ones hidden unless --all.`,
     }),
     command(
       'pause',
       object({
         action: constant('task-pause'),
-        code: optional(argument(taskCode('CODE'))),
+        code: optional(argument(taskIdentity('ADDRESS'))),
         json: jsonFlag(),
       }),
-      { brief: message`Set a task down, resumable. CODE is inferred inside a task's worktree.` },
+      { brief: message`Set a task down, resumable. ADDRESS is inferred inside a task's worktree.` },
     ),
     command(
       'resume',
       object({
         action: constant('task-resume'),
-        code: optional(argument(taskCode('CODE'))),
+        code: optional(argument(taskIdentity('ADDRESS'))),
         json: jsonFlag(),
       }),
-      { brief: message`Pick a paused task back up. CODE is inferred inside a task's worktree.` },
+      { brief: message`Pick a paused task back up. ADDRESS is inferred inside a task's worktree.` },
     ),
     command(
       'pr',
       // Two arities, the one-argument form first: optique commits to the first
       // alternative whose full parse succeeds, so `pr URL` binds URL and
-      // `pr CODE URL` falls through to the explicit form.
+      // `pr ADDRESS URL` falls through to the explicit form.
       or(
         object({
           action: constant('task-pr'),
@@ -500,18 +520,20 @@ const task = command(
         }),
         object({
           action: constant('task-pr'),
-          code: argument(taskCode('CODE')),
+          code: argument(taskIdentity('ADDRESS')),
           url: argument(string({ metavar: 'URL' })),
           json: jsonFlag(),
         }),
       ),
-      { brief: message`Link a pull request to a task. CODE is inferred inside a task's worktree.` },
+      {
+        brief: message`Link a pull request to a task. ADDRESS is inferred inside a task's worktree.`,
+      },
     ),
     command(
       'close',
       object({
         action: constant('task-close'),
-        code: argument(taskCode('CODE')),
+        code: argument(taskIdentity('ADDRESS')),
         outcome: withDefault(
           option('--outcome', choice(['delivered', 'abandoned'])),
           'delivered' as const,
@@ -531,7 +553,7 @@ const worktree = command(
       'create',
       object({
         action: constant('worktree-create'),
-        task: optional(argument(taskCode('TASK'))),
+        task: optional(argument(taskIdentity('TASK'))),
         repo: optional(option('--repo', repoName())),
         // The workspace's own repository is registered nowhere and has no name
         // in the repository set, so it is addressed plainly rather than by a
@@ -550,7 +572,7 @@ const worktree = command(
       'rebase',
       object({
         action: constant('worktree-rebase'),
-        task: optional(argument(taskCode('TASK'))),
+        task: optional(argument(taskIdentity('TASK'))),
         json: jsonFlag(),
       }),
       {
@@ -577,7 +599,7 @@ const session = command(
       'open',
       object({
         action: constant('session-open'),
-        task: optional(argument(taskCode('TASK'))),
+        task: optional(argument(taskIdentity('TASK'))),
         purpose: optional(
           option('--purpose', string({ metavar: 'TEXT' }), {
             description: message`What the session is for. Optional at workspace scope (recorded as "Coordinating work · opened <time>"); a task session states one.`,
@@ -621,9 +643,11 @@ const session = command(
   ),
   { brief: message`Open, resume, locate, and close agent sessions.` },
 );
-const status = command('status', object({ action: constant('status'), json: jsonFlag() }), {
-  brief: message`Where everything stands — derived from the leaves, never stored.`,
-});
+const status = command(
+  'status',
+  object({ action: constant('status'), all: allFlag(), json: jsonFlag() }),
+  { brief: message`Where everything stands — derived from the leaves, never stored.` },
+);
 
 const doctor = command('doctor', object({ action: constant('doctor'), json: jsonFlag() }), {
   brief: message`Check machine preconditions and, inside a workspace, its integrity.`,
@@ -778,7 +802,7 @@ try {
         break;
       }
       case 'project-list':
-        await cmdProjectList(result.json);
+        await cmdProjectList(result.all, result.json);
         break;
       case 'task-open': {
         const opened = await openTask(await requireMutableWorkspace(), result.slug, {
@@ -786,52 +810,57 @@ try {
           ...(result.purpose === undefined ? {} : { purpose: result.purpose }),
         });
         if (result.json) {
-          printJson(taskMutationJson(opened.record));
+          printJson(taskMutationJson(opened.record, taskAddress(opened)));
           break;
         }
         console.log(
-          `${pc.green('opened')} task ${pc.bold(opened.record.code)} — ${opened.record.slug}` +
+          `${pc.green('opened')} ${pc.bold(taskAddress(opened))} — ${opened.record.slug}` +
             (opened.record.floor === undefined ? '' : pc.dim(` (floor ${opened.record.floor})`)),
         );
         break;
       }
       case 'task-list':
-        await cmdTaskList(result.json);
+        await cmdTaskList(result.all, result.json);
         break;
       case 'task-pause': {
-        const target = await resolveTaskTarget(result.code, 'ward task pause CODE', result.json);
+        const target = await resolveTaskTarget(result.code, 'ward task pause ADDRESS', result.json);
         const paused = await setTaskState(target.root, target.code, 'paused');
         if (result.json) {
-          printJson(taskMutationJson(paused.record));
+          printJson(taskMutationJson(paused.record, taskAddress(paused)));
           break;
         }
         console.log(
-          `${pc.yellow('paused')} ${pc.bold(paused.record.code)} — ${paused.record.slug}`,
+          `${pc.yellow('paused')} ${pc.bold(taskAddress(paused))} — ${paused.record.slug}`,
         );
         break;
       }
       case 'task-resume': {
-        const target = await resolveTaskTarget(result.code, 'ward task resume CODE', result.json);
+        const target = await resolveTaskTarget(
+          result.code,
+          'ward task resume ADDRESS',
+          result.json,
+        );
         const resumed = await setTaskState(target.root, target.code, 'active');
         if (result.json) {
-          printJson(taskMutationJson(resumed.record));
+          printJson(taskMutationJson(resumed.record, taskAddress(resumed)));
           break;
         }
         console.log(
-          `${pc.green('resumed')} ${pc.bold(resumed.record.code)} — ${resumed.record.slug}`,
+          `${pc.green('resumed')} ${pc.bold(taskAddress(resumed))} — ${resumed.record.slug}`,
         );
         break;
       }
       case 'task-pr': {
         const code = 'code' in result ? result.code : undefined;
-        const target = await resolveTaskTarget(code, 'ward task pr CODE URL', result.json);
+        const target = await resolveTaskTarget(code, 'ward task pr ADDRESS URL', result.json);
         const linked = await addTaskPr(target.root, target.code, result.url);
         if (result.json) {
-          printJson(taskMutationJson(linked.record));
+          printJson(taskMutationJson(linked.record, taskAddress(linked)));
           break;
         }
         console.log(
-          `${pc.green('linked')} ${result.url} ${pc.dim(`(${linked.record.prs.length} in the set)`)}`,
+          `${pc.green('linked')} ${result.url} to ${pc.bold(taskAddress(linked))} ` +
+            pc.dim(`(${linked.record.prs.length} in the set)`),
         );
         break;
       }
@@ -841,7 +870,7 @@ try {
       case 'worktree-create': {
         const target = await resolveTaskTarget(
           result.task,
-          'ward worktree create TASK --repo NAME | --workspace',
+          'ward worktree create ADDRESS --repo NAME | --workspace',
           result.json,
         );
         if (result.workspace === (result.repo !== undefined)) {
@@ -855,7 +884,9 @@ try {
             ? await createWorkspaceWorktree(target.root, target.code, result.branch)
             : await createWorktree(target.root, target.code, result.repo, result.branch);
         if (result.json) {
-          printJson(worktreeCreateJson(created.task.record.code, created.record));
+          printJson(
+            worktreeCreateJson(created.task.record.code, taskAddress(created.task), created.record),
+          );
           break;
         }
         console.log(
@@ -870,7 +901,7 @@ try {
       case 'worktree-rebase': {
         const target = await resolveTaskTarget(
           result.task,
-          'ward worktree rebase TASK',
+          'ward worktree rebase ADDRESS',
           result.json,
         );
         await cmdWorktreeRebase(target.root, target.code, result.json);
@@ -898,7 +929,7 @@ try {
         break;
       }
       case 'status':
-        await cmdStatus(result.json);
+        await cmdStatus(result.all, result.json);
         break;
       case 'doctor':
         await cmdDoctor(result.json);
@@ -1096,8 +1127,8 @@ async function impliedUpgradeTask(
   }
   const scope = await scopeFromCwd(root, process.cwd());
   if (scope === null) return undefined;
-  echo(pc.dim(`task ${scope.task.record.code} — from the working directory`));
-  return scope.task.record.code;
+  echo(pc.dim(`task ${taskAddress(scope.task)} — from the working directory`));
+  return taskAddress(scope.task);
 }
 
 /**
@@ -1514,8 +1545,8 @@ async function resolveTaskTarget(
   // Under --json the derivation echo moves to stderr: stdout carries one JSON
   // document, alone (0005), and the echo is a human affordance, not data.
   const echo = json ? console.error : console.log;
-  echo(pc.dim(`task ${scope.task.record.code} — from the working directory`));
-  return { root, code: scope.task.record.code, worktreePath: scope.worktree.path };
+  echo(pc.dim(`task ${taskAddress(scope.task)} — from the working directory`));
+  return { root, code: taskAddress(scope.task), worktreePath: scope.worktree.path };
 }
 
 async function cmdRepoAdd(source: string, name: string | undefined, json: boolean): Promise<void> {
@@ -1617,29 +1648,95 @@ async function cmdRepoList(json: boolean): Promise<void> {
   }
 }
 
+/**
+ * One task's identity and state, rendered the same way on every surface
+ * (design/0036-floor-addressed-tasks/).
+ *
+ * An OPEN task is named by its full address — `f3t22` — because that is what
+ * a verb takes and what disambiguates it from the other floors' room 22. A
+ * CLOSED task is named by its SLUG and dated: the room is a slot it has left,
+ * and printing the number would name whoever holds it next. The record still
+ * carries both (`code` and `address` in `--json`); what changes here is what
+ * the human is told.
+ */
+function renderTaskIdentity(
+  record: TaskRecord,
+  address: string,
+  isInReview: boolean,
+  note = '',
+): string {
+  if (record.state === 'closed') {
+    const outcome = record.outcome === undefined ? '' : ` · ${record.outcome}`;
+    const when = record.closedAt === undefined ? '' : ` · ${record.closedAt.slice(0, 10)}`;
+    return `${pc.dim('·')} ${record.slug}${note} ${pc.dim(`[closed${outcome}${when}]`)}`;
+  }
+  const review = isInReview ? pc.cyan(' · in-review') : '';
+  return `${pc.bold(address)} ${record.slug}${note} [${renderState(record.state)}${review}]`;
+}
+
+/**
+ * The footer that keeps the window honest: what was hidden, why, and the one
+ * flag that shows it. Silent when nothing was hidden — a surface that
+ * announced a filter it did not apply would spend attention for nothing.
+ */
+function renderHidden(hidden: HiddenSummary, command: string): void {
+  if (hidden.tasks === 0 && hidden.projects === 0) return;
+  const parts: string[] = [];
+  if (hidden.tasks > 0) parts.push(`${hidden.tasks} settled task${hidden.tasks === 1 ? '' : 's'}`);
+  if (hidden.projects > 0) {
+    parts.push(`${hidden.projects} settled floor${hidden.projects === 1 ? '' : 's'}`);
+  }
+  console.log(
+    pc.dim(
+      `${parts.join(' and ')} hidden (closed more than ${hidden.settledAfterDays} days ago) — ` +
+        command,
+    ),
+  );
+}
+
 function renderState(state: WorkState): string {
   return { active: pc.green('active'), paused: pc.yellow('paused'), closed: pc.dim('closed') }[
     state
   ];
 }
 
-async function cmdProjectList(json: boolean): Promise<void> {
+async function cmdProjectList(all: boolean, json: boolean): Promise<void> {
   const root = await requireWorkspace();
   const projects = await readProjects(root);
   const tasks = await readTasks(root);
-  const entries = projects.map((project) => {
+  const now = Date.now();
+  let hiddenProjects = 0;
+  let hiddenTasks = 0;
+  const entries = projects.flatMap((project) => {
     const own = tasks.filter((task) => task.dir.startsWith(`${project.dir}/`));
     const derived =
       project.record.state === 'active'
         ? deriveStatus(own.map((task) => task.record.state))
         : project.record.state;
-    return { record: project.record, derived, taskCount: own.length };
+    if (
+      !all &&
+      settledProject(
+        project.record,
+        own.map((task) => task.record),
+        now,
+      )
+    ) {
+      hiddenProjects += 1;
+      hiddenTasks += own.length;
+      return [];
+    }
+    return [{ record: project.record, derived, taskCount: own.length }];
   });
+  const hidden = {
+    tasks: hiddenTasks,
+    projects: hiddenProjects,
+    settledAfterDays: SETTLED_AFTER_DAYS,
+  };
   if (json) {
-    printJson(projectListJson(entries));
+    printJson(projectListJson(entries, hidden));
     return;
   }
-  if (entries.length === 0) {
+  if (entries.length === 0 && hiddenProjects === 0) {
     console.log(pc.dim('no projects — open one with: ward project open SLUG'));
     return;
   }
@@ -1649,38 +1746,47 @@ async function cmdProjectList(json: boolean): Promise<void> {
         `[${renderState(entry.derived)}] ${pc.dim(`(${entry.taskCount} tasks)`)}`,
     );
   }
+  renderHidden(hidden, 'ward project list --all');
 }
 
-async function cmdTaskList(json: boolean): Promise<void> {
+async function cmdTaskList(all: boolean, json: boolean): Promise<void> {
   const root = await requireWorkspace();
   const tasks = await readTasks(root);
   const probe = await probeForge(openPrUrls(tasks.map((task) => task.record)));
-  const entries = tasks.map(({ record }) => {
-    const forge = forgeStates(record, probe);
+  const now = Date.now();
+  const shown = glanceOrder(
+    all ? tasks : tasks.filter((task) => !settledTask(task.record, now)),
+    (task) => task.record.state,
+  );
+  const hidden = {
+    tasks: tasks.length - shown.length,
+    projects: 0,
+    settledAfterDays: SETTLED_AFTER_DAYS,
+  };
+  const entries = shown.map((task) => {
+    const forge = forgeStates(task.record, probe);
     return {
-      record,
-      inReview: inReview(record, forge),
+      record: task.record,
+      address: taskAddress(task),
+      inReview: inReview(task.record, forge),
       ...(forge === undefined ? {} : { forge }),
     };
   });
   if (json) {
-    printJson(taskListJson(entries));
+    printJson(taskListJson(entries, hidden));
     return;
   }
-  if (entries.length === 0) {
+  if (entries.length === 0 && hidden.tasks === 0) {
     console.log(pc.dim('no tasks — open one with: ward task open SLUG'));
     return;
   }
   for (const entry of entries) {
     const { record } = entry;
-    const outcome = record.outcome === undefined ? '' : pc.dim(` · ${record.outcome}`);
-    const review = entry.inReview ? pc.cyan(' · in-review') : '';
     const floor = record.floor === undefined ? '' : pc.dim(` (floor ${record.floor})`);
     const prs = entry.forge === undefined ? '' : pc.dim(` — prs: ${forgeSummary(entry.forge)}`);
-    console.log(
-      `  ${pc.bold(record.code)} ${record.slug}${floor} [${renderState(record.state)}${review}${outcome}]${prs}`,
-    );
+    console.log(`  ${renderTaskIdentity(record, entry.address, entry.inReview, floor)}${prs}`);
   }
+  renderHidden(hidden, 'ward task list --all');
   renderForgeUnavailable(
     !probe.live,
     tasks.map((task) => task.record),
@@ -1707,20 +1813,21 @@ async function cmdTaskClose(
 
 async function cmdWorktreeRebase(root: string, code: string, json: boolean): Promise<void> {
   const { task, reports } = await rebaseTaskWorktrees(root, code);
+  const address = taskAddress(task);
   // A dirty refusal is the fail-safe honored, not a failure — the same exit
   // posture as repo refresh; conflict and failed broke the verb's promise.
   const broken = reports.some((r) => r.outcome === 'conflict' || r.outcome === 'failed');
   if (json) {
     // The per-worktree outcomes are the document, conflicts included — the
     // verb completed and reported; only the exit code carries the verdict.
-    printJson(worktreeRebaseJson(task.record.code, reports));
+    printJson(worktreeRebaseJson(task.record.code, address, reports));
     if (broken) process.exit(1);
     return;
   }
   if (reports.length === 0) {
     console.log(
       pc.dim(
-        `no worktrees on task ${task.record.code} — create one with: ward worktree create TASK --repo NAME`,
+        `no worktrees on task ${address} — create one with: ward worktree create ADDRESS --repo NAME`,
       ),
     );
     return;
@@ -1748,16 +1855,16 @@ async function cmdWorktreeList(json: boolean): Promise<void> {
     return;
   }
   if (listings.length === 0) {
-    console.log(pc.dim('no worktrees — create one with: ward worktree create TASK --repo NAME'));
+    console.log(pc.dim('no worktrees — create one with: ward worktree create ADDRESS --repo NAME'));
     return;
   }
-  for (const { taskCode, record, present } of listings) {
+  for (const { taskAddress: address, record, present } of listings) {
     const where = present ? pc.dim(record.path) : pc.yellow(`${record.path} (missing)`);
     // A workspace-anchored worktree names its source plainly — the workspace
     // repo has no name in the repository set (0019).
     const source = record.repo ?? 'workspace';
     console.log(
-      `  ${pc.bold(taskCode)} ${source}:${record.branch} ` +
+      `  ${pc.bold(address)} ${source}:${record.branch} ` +
         `${pc.dim(`(${record.disposition})`)} ${where}`,
     );
   }
@@ -1917,8 +2024,8 @@ function renderStillOpen(id: string, json: boolean): void {
   );
 }
 
-async function cmdStatus(json: boolean): Promise<void> {
-  const report = await statusReport(await requireWorkspace());
+async function cmdStatus(all: boolean, json: boolean): Promise<void> {
+  const report = await statusReport(await requireWorkspace(), { all });
   if (json) {
     printJson(statusJson(report));
     return;
@@ -1926,6 +2033,7 @@ async function cmdStatus(json: boolean): Promise<void> {
   console.log(`Workspace: ${renderState(report.workspace)}\n`);
   if (report.projects.length === 0 && report.bareTasks.length === 0) {
     console.log(pc.dim('nothing in flight — an empty workspace is active, not idle'));
+    renderHidden(report.hidden, 'ward status --all');
     return;
   }
   for (const project of report.projects) {
@@ -1947,6 +2055,7 @@ async function cmdStatus(json: boolean): Promise<void> {
     ...report.projects.flatMap((project) => project.tasks),
     ...report.bareTasks,
   ].map((status) => status.task);
+  renderHidden(report.hidden, 'ward status --all');
   renderForgeUnavailable(report.needsYou === undefined, allTasks);
   if (report.needsYou !== undefined && report.needsYou.length > 0) {
     console.log(`\n${pc.bold('needs you')}`);
@@ -1957,19 +2066,16 @@ async function cmdStatus(json: boolean): Promise<void> {
 }
 
 function renderTaskStatus(status: TaskStatus): string {
-  const review = status.inReview ? pc.cyan(' · in-review') : '';
-  const outcome = status.task.outcome === undefined ? '' : pc.dim(` · ${status.task.outcome}`);
   const prs = status.forge === undefined ? '' : pc.dim(` — prs: ${forgeSummary(status.forge)}`);
   const sessions =
     status.openSessions.length === 0
       ? ''
       : pc.dim(` — sessions: ${status.openSessions.join(', ')}`);
   const lines = [
-    `  ${pc.bold(status.task.code)} ${status.task.slug} ` +
-      `[${renderState(status.task.state)}${review}${outcome}]${prs}${sessions}`,
+    `  ${renderTaskIdentity(status.task, status.address, status.inReview)}${prs}${sessions}`,
   ];
   for (const worktree of status.worktrees ?? []) {
-    lines.push(renderWorktreeFreshness(status.task.code, worktree));
+    lines.push(renderWorktreeFreshness(status.address, worktree));
   }
   return lines.join('\n');
 }
@@ -1982,13 +2088,13 @@ function renderTaskStatus(status: TaskStatus): string {
  * verdict, and — where behind — the remedy. Rebasing is the caller's act:
  * status is a read verb and names the command, never runs it.
  */
-function renderWorktreeFreshness(code: string, status: WorktreeStatus): string {
+function renderWorktreeFreshness(address: string, status: WorktreeStatus): string {
   const head = `    ${pc.dim(status.record.path)} — `;
   if (status.freshness === undefined) return `${head}${pc.dim('freshness unavailable (git)')}`;
   const detail = status.detail ?? status.freshness;
   if (status.freshness === 'current') return head + pc.dim(detail);
   if (status.freshness === 'behind') {
-    return head + pc.yellow(detail) + pc.dim(` — rebase with: ward worktree rebase ${code}`);
+    return head + pc.yellow(detail) + pc.dim(` — rebase with: ward worktree rebase ${address}`);
   }
   if (status.freshness === 'unreadable') return head + pc.red(detail);
   return head + pc.yellow(detail); // dirty | drifted — occupancy and drift, in warning color
@@ -2027,9 +2133,12 @@ function renderForgeUnavailable(unavailable: boolean, tasks: readonly TaskRecord
 function renderNeedsYou(entry: NeedsYouEntry): string {
   switch (entry.reason) {
     case 'awaiting-close':
-      return `task ${pc.bold(entry.task)} — PR set fully merged; close it: ward task close ${entry.task}`;
+      return (
+        `task ${pc.bold(entry.address)} — PR set fully merged; ` +
+        `close it: ward task close ${entry.address}`
+      );
     case 'changes-requested':
-      return `task ${pc.bold(entry.task)} — changes requested on ${entry.pr ?? 'a linked PR'}`;
+      return `task ${pc.bold(entry.address)} — changes requested on ${entry.pr ?? 'a linked PR'}`;
     case 'stale-base': {
       // The incident's cause, caught while it is still cheap to fix
       // (design/0014-stale-base-warning/): name the PR, its base, the main
@@ -2038,7 +2147,7 @@ function renderNeedsYou(entry: NeedsYouEntry): string {
       const pr = entry.pr ?? 'a linked PR';
       const main = entry.mainLine ?? 'the main line';
       return (
-        `task ${pc.bold(entry.task)} — PR ${pr} is based on '${entry.base ?? 'another branch'}', ` +
+        `task ${pc.bold(entry.address)} — PR ${pr} is based on '${entry.base ?? 'another branch'}', ` +
         `not the main line '${main}' — merging as-is delivers into a branch that may never land ` +
         `(the close gate would refuse it); retarget first: gh pr edit ${pr} --base ${main}`
       );

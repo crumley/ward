@@ -29,7 +29,7 @@ test('the bare path builds its own vehicle end to end, and ends by naming what r
   const report = await selfServiceUpgrade(ws);
   expect(report.vehicle).toBe('derived');
   expect(report.outcome).toBe('upgraded');
-  expect(report.task).toBe('t1');
+  expect(report.task).toBe('f1t1'); // the standing project's floor, room 1 (0036)
   expect(report.branch).toBe('steward/workspace-upgrade');
   expect(report.commit).toBeDefined();
   expect(report.derived?.map((step) => [step.step, step.outcome])).toEqual([
@@ -56,7 +56,7 @@ test('the bare path builds its own vehicle end to end, and ends by naming what r
   expect(report.remaining.map((act) => [act.step, act.command])).toEqual([
     ['review', 'ward workspace merge steward/workspace-upgrade --preview'],
     ['merge', 'ward workspace merge steward/workspace-upgrade'],
-    ['close', 'ward task close t1'],
+    ['close', 'ward task close f1t1'],
   ]);
 
   // And the acts it named are the acts that work: the gated merge lands it,
@@ -80,7 +80,9 @@ test('the derived task carries the structural marker and lives in the standing p
   expect(record.stewardship).toBe('upgrade'); // the record says what it is (§16)
   expect(record.floor).toBe(standing?.record.floor);
   expect(record.purpose).toContain('installed artifacts to the defaults ward');
-  expect((await findOpenUpgradeTask(ws))?.task.record.code).toBe(report.task);
+  // The report names the address; the record keeps carrying the room (0036).
+  expect(report.task).toBe('f1t1');
+  expect((await findOpenUpgradeTask(ws))?.task.record.code).toBe('t1');
 });
 
 test('the no-op case manufactures nothing: no task, no worktree, no branch', async () => {
@@ -101,12 +103,12 @@ test('a second upgrade is refused while the first holds work — naming it and b
   await selfServiceUpgrade(ws);
 
   expect(selfServiceUpgrade(ws)).rejects.toThrow(/already in flight/);
-  expect(selfServiceUpgrade(ws)).rejects.toThrow(/task t1 holds 1 commit/);
+  expect(selfServiceUpgrade(ws)).rejects.toThrow(/task f1t1 holds 1 commit/);
   // The two ways out, both named with their exact command.
   expect(selfServiceUpgrade(ws)).rejects.toThrow(
-    /ward workspace merge steward\/workspace-upgrade, then ward task close t1/,
+    /ward workspace merge steward\/workspace-upgrade, then ward task close f1t1/,
   );
-  expect(selfServiceUpgrade(ws)).rejects.toThrow(/ward task close t1 --outcome abandoned/);
+  expect(selfServiceUpgrade(ws)).rejects.toThrow(/ward task close f1t1 --outcome abandoned/);
 
   // Discarding it is one of the ways out, and it really is a way out. The
   // discarded branch survives the close (0019 defers pruning), so the next
@@ -115,8 +117,8 @@ test('a second upgrade is refused while the first holds work — naming it and b
   await closeTask(ws, 't1', 'abandoned');
   const second = await selfServiceUpgrade(ws);
   expect(second.outcome).toBe('upgraded');
-  expect(second.task).toBe('t2');
-  expect(second.branch).toBe('steward/workspace-upgrade-t2');
+  expect(second.task).toBe('f1t2');
+  expect(second.branch).toBe('steward/workspace-upgrade-f1t2'); // the address disambiguates
   expect(second.commit).toBeDefined();
 });
 
@@ -126,7 +128,7 @@ test('an interrupted run converges: an upgrade task holding nothing is reused, n
   await openTask(ws, 'workspace-upgrade', { stewardship: 'upgrade' });
 
   const report = await selfServiceUpgrade(ws);
-  expect(report.task).toBe('t1'); // the same task, finished — not a second one
+  expect(report.task).toBe('t1'); // the same BARE task, finished — not a second one
   expect(report.derived?.[0]).toMatchObject({ step: 'task', outcome: 'reused' });
   expect(report.outcome).toBe('upgraded');
   expect((await readTasks(ws)).length).toBe(1);
@@ -139,7 +141,7 @@ test('detection is structural, not a slug match: an unmarked task named for an u
   expect(await findOpenUpgradeTask(ws)).toBeUndefined();
 
   const report = await selfServiceUpgrade(ws);
-  expect(report.task).toBe('t2');
+  expect(report.task).toBe('f1t1'); // its own room on the standing floor, not the bare t1
   expect(report.branch).toBe('steward/workspace-upgrade');
 });
 

@@ -163,9 +163,15 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '2a2fdc448ac6ee2bd765f4056c90f47c15aa175662e55a568430bf08de84cb63',
         era: 'be13037 (design 0034)',
       },
-      // Current since design 0035: `agent.command` joins the configuration
-      // keys the Sessions section names — how the harness is invoked on this
-      // machine — and doctor checks the command can be found.
+      // design 0035 — `agent.command` joined the configuration keys the
+      // Sessions section names, and doctor checks the command can be found.
+      {
+        sha256: '2af9f23552c0458877124333ca4fe413517257a3ba0d2e1b3dad363ff8d578f4',
+        era: 'design 0035 (agent.command)',
+      },
+      // Current since design 0036: tasks are addressed `f<floor>t<room>`, the
+      // agent passes the full address and reads it from `address` in --json,
+      // and the glanceable listings hide settled work behind `--all`.
     ],
   },
 ];

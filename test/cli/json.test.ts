@@ -49,9 +49,12 @@ test('status --json is byte-identical across runs on the same state', () => {
 });
 
 test('task list --json: the record plus the derived in-review overlay', () => {
-  const tasks = JSON.parse(runWard(['task', 'list', '--json'], ws).stdout);
+  const listing = JSON.parse(runWard(['task', 'list', '--json'], ws).stdout);
+  const tasks = listing.tasks;
   expect(tasks.length).toBe(1);
   expect(tasks[0].code).toBe('t1');
+  expect(tasks[0].address).toBe('f2t1'); // the room composed with its floor (0036)
+  expect(listing.hidden).toEqual({ tasks: 0, projects: 0, settledAfterDays: 7 });
   expect(tasks[0].floor).toBe(2);
   expect(tasks[0].prs).toEqual([PR_URL]);
   expect(tasks[0].inReview).toBe(true);
@@ -59,7 +62,7 @@ test('task list --json: the record plus the derived in-review overlay', () => {
 });
 
 test('project list --json: stored state, derived status, task count', () => {
-  const projects = JSON.parse(runWard(['project', 'list', '--json'], ws).stdout);
+  const projects = JSON.parse(runWard(['project', 'list', '--json'], ws).stdout).projects;
   expect(projects).toMatchObject([
     { floor: 1, slug: 'workspace', state: 'active', derived: 'active', taskCount: 0 },
     { floor: 2, slug: 'agent-output', state: 'active', derived: 'active', taskCount: 1 },
@@ -71,10 +74,11 @@ test('worktree list --json: identity, disposition, and presence on disk', () => 
   expect(worktrees).toMatchObject([
     {
       task: 't1',
+      address: 'f2t1',
       repo: 'demo',
       branch: 'json-output',
       disposition: 'deliverable',
-      path: 'worktrees/t1-json-output',
+      path: 'worktrees/f2t1-json-output',
       present: true,
     },
   ]);
@@ -112,7 +116,6 @@ test('the human rendering is unchanged by the flag existing', () => {
 
 test('empty sets are empty arrays, not prose', () => {
   for (const argv of [
-    ['task', 'list', '--json'],
     ['worktree', 'list', '--json'],
     ['repo', 'list', '--json'],
   ]) {
@@ -120,14 +123,23 @@ test('empty sets are empty arrays, not prose', () => {
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual([]);
   }
+  // `task list` is windowed (0036), so its document is an object that can say
+  // what it left out — the array is inside it, and still an array when empty.
+  const tasks = runWard(['task', 'list', '--json'], emptyWs);
+  expect(tasks.exitCode).toBe(0);
+  expect(JSON.parse(tasks.stdout)).toEqual({
+    tasks: [],
+    hidden: { tasks: 0, projects: 0, settledAfterDays: 7 },
+  });
 });
 
 test('a fresh workspace already lists its standing project — never an empty set', () => {
   const result = runWard(['project', 'list', '--json'], emptyWs);
   expect(result.exitCode).toBe(0);
-  expect(JSON.parse(result.stdout)).toMatchObject([
-    { floor: 1, slug: 'workspace', state: 'active', derived: 'active', taskCount: 0 },
-  ]);
+  expect(JSON.parse(result.stdout)).toMatchObject({
+    projects: [{ floor: 1, slug: 'workspace', state: 'active', derived: 'active', taskCount: 0 }],
+    hidden: { tasks: 0, projects: 0, settledAfterDays: 7 },
+  });
 });
 
 // -- setup ----------------------------------------------------------------
