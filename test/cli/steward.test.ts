@@ -39,7 +39,7 @@ test('worktree create --workspace: the stewardship worktree, both renderings', (
   const doc = worktreeCreateShape.parse(JSON.parse(json.stdout));
   expect(doc).toEqual({
     task: 't1',
-    address: 't1',
+    address: 'f0t1',
     source: 'workspace',
     branch: 'steward/steward-work',
     disposition: 'deliverable',
@@ -205,11 +205,11 @@ test('status reads workspace-worktree freshness against the workspace main line'
   const status = runWard(['status'], ws);
   expect(status.exitCode).toBe(0);
   expect(status.stdout).toContain(
-    `${record.path} — behind ${mainLine} by 1 commit — rebase with: ward worktree rebase t1`,
+    `${record.path} — behind ${mainLine} by 1 commit — rebase with: ward worktree rebase f0t1`,
   );
 
   const doc = statusShape.parse(JSON.parse(runWard(['status', '--json'], ws).stdout));
-  const rows = doc.bareTasks.find((task) => task.code === 't1')?.worktrees;
+  const rows = doc.projects[0]?.tasks.find((task) => task.code === 't1')?.worktrees;
   expect(rows).toEqual([
     {
       source: 'workspace',

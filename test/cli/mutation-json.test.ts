@@ -95,27 +95,27 @@ test('repo remove --json: the record as it stood, the remote carried as the undo
 });
 
 test('project open --json: the opened floor', () => {
-  // Floor 1 is the standing workspace project, established by create (0018).
+  // Floor 0 is the ground floor, outside the ordinary sequence (0018, 0041).
   const result = runWard(['project', 'open', 'agent-output', '--json'], ws);
   expect(result.exitCode).toBe(0);
   const project = validated('project open', projectOpenShape, result.stdout);
-  expect(project).toMatchObject({ floor: 2, slug: 'agent-output', state: 'active' });
+  expect(project).toMatchObject({ floor: 1, slug: 'agent-output', state: 'active' });
   expect(typeof project.openedAt).toBe('string');
 });
 
 test('task open --json: the record as written, optional fields omitted', () => {
   const result = runWard(
-    ['task', 'open', 'json-output', '--project', '2', '--purpose', 'mutation reports', '--json'],
+    ['task', 'open', 'json-output', '--project', '1', '--purpose', 'mutation reports', '--json'],
     ws,
   );
   expect(result.exitCode).toBe(0);
   const task = validated('task open', taskMutationShape, result.stdout);
   expect(task).toMatchObject({
     code: 't1',
-    address: 'f2t1', // the room composed with its floor (0036)
+    address: 'f1t1', // the room composed with its floor (0036)
     slug: 'json-output',
     state: 'active',
-    floor: 2,
+    floor: 1,
     purpose: 'mutation reports',
     prs: [],
   });
@@ -128,11 +128,11 @@ test('worktree create --json: identity flat, like the worktree list rows', () =>
   expect(result.exitCode).toBe(0);
   expect(validated('worktree create', worktreeCreateShape, result.stdout)).toMatchObject({
     task: 't1',
-    address: 'f2t1',
+    address: 'f1t1',
     repo: 'demo',
     branch: 'json-output',
     disposition: 'deliverable',
-    path: 'worktrees/f2t1-json-output',
+    path: 'worktrees/f1t1-json-output',
   });
 });
 
@@ -146,7 +146,7 @@ test('session open --json: the session record, handle included', () => {
     id: 'json-output-1@test',
     task: 't1',
     purpose: 'drive the feature',
-    workingDirectory: 'worktrees/f2t1-json-output',
+    workingDirectory: 'worktrees/f1t1-json-output',
     handle: 'claude:run',
     state: 'open',
   });
@@ -174,11 +174,11 @@ test('task pause / resume --json: the state transition as recorded', () => {
 test('the human renderings are byte-identical without the flag (pause, resume)', () => {
   const paused = runWard(['task', 'pause', 't1'], ws);
   expect(paused.exitCode).toBe(0);
-  expect(paused.stdout).toBe('paused f2t1 — json-output\n');
+  expect(paused.stdout).toBe('paused f1t1 — json-output\n');
 
   const resumed = runWard(['task', 'resume', 't1'], ws);
   expect(resumed.exitCode).toBe(0);
-  expect(resumed.stdout).toBe('resumed f2t1 — json-output\n');
+  expect(resumed.stdout).toBe('resumed f1t1 — json-output\n');
 });
 
 test('worktree rebase --json: per-worktree rows; current when already atop', () => {
@@ -186,17 +186,17 @@ test('worktree rebase --json: per-worktree rows; current when already atop', () 
   expect(result.exitCode).toBe(0);
   const report = validated('worktree rebase', worktreeRebaseShape, result.stdout);
   expect(report.task).toBe('t1');
-  expect(report.address).toBe('f2t1');
+  expect(report.address).toBe('f1t1');
   expect(report.reports).toMatchObject([
-    { repo: 'demo', branch: 'json-output', path: 'worktrees/f2t1-json-output', outcome: 'current' },
+    { repo: 'demo', branch: 'json-output', path: 'worktrees/f1t1-json-output', outcome: 'current' },
   ]);
 });
 
 test('the derivation echo moves to stderr under --json — stdout stays one document', () => {
-  const wtDir = join(ws, 'worktrees', 'f2t1-json-output');
+  const wtDir = join(ws, 'worktrees', 'f1t1-json-output');
   const result = runWard(['task', 'pr', 'https://example.com/pr/2', '--json'], wtDir);
   expect(result.exitCode).toBe(0);
-  expect(result.stderr).toContain('task f2t1 — from the working directory');
+  expect(result.stderr).toContain('task f1t1 — from the working directory');
   expect(validated('task pr', taskMutationShape, result.stdout).prs).toEqual([
     PR_URL,
     'https://example.com/pr/2',
@@ -222,7 +222,7 @@ test('task close --json, forge unavailable: the named trust survives in the step
   expect(typeof report.task.closedAt).toBe('string');
   const steps = new Map(report.steps.map((step) => [step.step, step.detail]));
   expect(steps.get('pr set')).toBe("forge unavailable — trusting the stated outcome 'delivered'");
-  expect(steps.get('worktree worktrees/f2t1-json-output')).toBe('removed');
+  expect(steps.get('worktree worktrees/f1t1-json-output')).toBe('removed');
   expect(steps.get('record')).toBe('closed with outcome delivered');
 });
 

@@ -89,8 +89,8 @@ test('the row records the invocation scope, anchor-shaped: task, repo, workspace
 
   const table: ReadonlyArray<[string, string]> = [
     [ws, 'workspace'],
-    [join(ws, record.path), 'task:t1'],
-    [join(ws, record.path, 'src'), 'task:t1'],
+    [join(ws, record.path), 'task:f0t1'],
+    [join(ws, record.path, 'src'), 'task:f0t1'],
     [join(ws, 'repos', 'demo'), 'repo:demo'],
   ];
   for (const [dir, expected] of table) {

@@ -46,10 +46,13 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   [`06-workspace-lifecycle.md`](../../intent/01-concepts/06-workspace-lifecycle.md), drop the
   parenthetical that keeps bare tasks as the cheapest one-off (its point — that the standing project
   is not a new requirement on unrelated odd jobs — survives in the sentence about what the project
-  is _for_). Consequentially: the two walkthrough sentences and the glossary's _Identity_ row that
-  illustrate identity with a bare workspace-unique task code should say the address composes its
-  floor, with the bare code as the shorthand — the shape
-  [0036](../0036-floor-addressed-tasks/README.md) already built.
+  is _for_). Consequentially,
+  [`04-walkthrough-delivering-work.md`](../../intent/04-walkthrough-delivering-work.md) — where the
+  task is opened — should say that a task always sits on a floor, and which floor it lands on when
+  none is named. The other half of those sentences, that a task's address **composes** its floor
+  with its room, is already on the queue as [0036](../0036-floor-addressed-tasks/spec-feedback.md)'s
+  SF-001 and is deliberately not re-proposed here: that one settles the spelling, this one settles
+  the container.
 
 - **Status:** pending.
 

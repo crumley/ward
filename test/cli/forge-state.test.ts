@@ -29,7 +29,7 @@ test('status --json live: per-PR forge state, the exact in-review rule, needs-yo
   const status = JSON.parse(result.stdout);
   expect(() => statusShape.parse(status)).not.toThrow(); // the live doc honors the contract
 
-  const [t1, t2, t3] = status.bareTasks;
+  const [t1, t2, t3] = status.projects[0].tasks;
   expect(t1.forge).toEqual([
     { url: PR_MERGED, state: 'merged' },
     { url: PR_CHANGES, state: 'open', reviewDecision: 'changes-requested' },
@@ -39,8 +39,8 @@ test('status --json live: per-PR forge state, the exact in-review rule, needs-yo
   expect(t2.inReview).toBe(false); // fully merged: linked PRs, but no longer in review
   expect(t3.forge).toBeUndefined(); // nothing linked, nothing to report
   expect(status.needsYou).toEqual([
-    { task: 't1', address: 't1', reason: 'changes-requested', pr: PR_CHANGES },
-    { task: 't2', address: 't2', reason: 'awaiting-close' },
+    { task: 't1', address: 'f0t1', reason: 'changes-requested', pr: PR_CHANGES },
+    { task: 't2', address: 'f0t2', reason: 'awaiting-close' },
   ]);
 });
 
@@ -48,12 +48,14 @@ test('status human rendering live: PR summaries on the task lines, the needs-you
   const result = runWardEnv(['status'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain(
-    't1 first [active · in-review] — prs: 1 open (changes requested) · 1 merged',
+    'f0t1 first [active · in-review] — prs: 1 open (changes requested) · 1 merged',
   );
-  expect(result.stdout).toContain('t2 second [active] — prs: 1 merged');
+  expect(result.stdout).toContain('f0t2 second [active] — prs: 1 merged');
   expect(result.stdout).toContain('needs you');
-  expect(result.stdout).toContain('task t1 — changes requested on ' + PR_CHANGES);
-  expect(result.stdout).toContain('task t2 — PR set fully merged; close it: ward task close t2');
+  expect(result.stdout).toContain('task f0t1 — changes requested on ' + PR_CHANGES);
+  expect(result.stdout).toContain(
+    'task f0t2 — PR set fully merged; close it: ward task close f0t2',
+  );
   expect(result.stdout).not.toContain('unavailable');
 });
 
@@ -68,9 +70,9 @@ test('task list carries the same live forge state, both renderings', () => {
 
   const human = runWardEnv(['task', 'list'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
   expect(human.stdout).toContain(
-    't1 first [active · in-review] — prs: 1 open (changes requested) · 1 merged',
+    'f0t1 first (floor 0) [active · in-review] — prs: 1 open (changes requested) · 1 merged',
   );
-  expect(human.stdout).toContain('t2 second [active] — prs: 1 merged');
+  expect(human.stdout).toContain('f0t2 second (floor 0) [active] — prs: 1 merged');
 });
 
 test('a declared agent gets the same live content as a human, without ANSI', () => {
@@ -88,7 +90,7 @@ test('without gh, status renders everything it renders today and marks the forge
   const result = runWard(['status'], ws); // runWard pins WARD_GH to an impossible path
   expect(result.exitCode).toBe(0);
   expect(result.stderr).toBe('');
-  expect(result.stdout).toContain('t1 first [active · in-review]'); // the approximation stands
+  expect(result.stdout).toContain('f0t1 first [active · in-review]'); // the approximation stands
   expect(result.stdout).toContain('t2 second [active · in-review]'); // merged, but unknowable now
   expect(result.stdout).toContain('t3 third [active]');
   expect(result.stdout).toContain('forge state unavailable (gh)');
@@ -100,7 +102,7 @@ test('without gh, the JSON omits every forge-state field — vanished, never nul
   const result = runWard(['status', '--json'], ws);
   expect(result.exitCode).toBe(0);
   const status = JSON.parse(result.stdout);
-  for (const task of status.bareTasks) {
+  for (const task of status.projects[0].tasks) {
     expect('forge' in task).toBe(false);
   }
   expect('needsYou' in status).toBe(false);
@@ -163,7 +165,7 @@ test('an open PR on a non-main base with no mappable repository warns nothing; J
   const json = runWardEnv(['status', '--json'], ws, { NO_COLOR: '1', WARD_GH: stacked });
   const status = JSON.parse(json.stdout);
   expect(() => statusShape.parse(status)).not.toThrow();
-  expect(status.bareTasks[0].forge).toEqual([
+  expect(status.projects[0].tasks[0].forge).toEqual([
     { url: PR_MERGED, state: 'merged', baseRefName: 'main' },
     {
       url: PR_CHANGES,
@@ -173,8 +175,8 @@ test('an open PR on a non-main base with no mappable repository warns nothing; J
     },
   ]);
   expect(status.needsYou).toEqual([
-    { task: 't1', address: 't1', reason: 'changes-requested', pr: PR_CHANGES },
-    { task: 't2', address: 't2', reason: 'awaiting-close' },
+    { task: 't1', address: 'f0t1', reason: 'changes-requested', pr: PR_CHANGES },
+    { task: 't2', address: 'f0t2', reason: 'awaiting-close' },
   ]);
   // The human summary stays a count line — the base belongs to needs-you,
   // which stays silent here rather than guessing at an unmappable URL.

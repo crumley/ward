@@ -57,8 +57,8 @@ test('restore --json: one document alone on stdout, valid under the registered s
   expect(report.root).toBe(realpathSync(clone)); // the cwd's real path (macOS /var)
   expect(report.repositories).toMatchObject([{ name: 'demo', outcome: 'restored' }]);
   expect(report.worktrees).toMatchObject([
-    { task: 't1', repo: 'demo', branch: 'feature-work', outcome: 'restored' },
-    { task: 't2', source: 'workspace', branch: 'steward/steward-work', outcome: 'restored' },
+    { task: 'f0t1', repo: 'demo', branch: 'feature-work', outcome: 'restored' },
+    { task: 'f0t2', source: 'workspace', branch: 'steward/steward-work', outcome: 'restored' },
   ]);
   expect(report.worktrees[0]?.source).toBeUndefined(); // absent, never null (0019's XOR)
   expect(report.worktrees[1]?.repo).toBeUndefined();
@@ -72,7 +72,7 @@ test('a lost branch: the document names it, the record survives, the exit is 1',
   const result = runWard(['workspace', 'restore', '--json'], clone);
   expect(result.exitCode).toBe(1); // the verb completed and reported; the verdict is $?
   const report = workspaceRestoreShape.parse(JSON.parse(result.stdout));
-  expect(report.worktrees).toMatchObject([{ task: 't1', branch: 'unpushed', outcome: 'lost' }]);
+  expect(report.worktrees).toMatchObject([{ task: 'f0t1', branch: 'unpushed', outcome: 'lost' }]);
   expect(report.worktrees[0]?.detail).toContain('reachable nowhere');
   expect(
     existsSync(
