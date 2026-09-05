@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { WardError } from '../../src/errors.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { readTasks } from '../../src/workspace/scan.ts';
 import { scopeFromCwd } from '../../src/workspace/scope.ts';
 import {
@@ -36,7 +37,7 @@ test('a workspace worktree: branched from main, record encoding, the root never 
   expect(record.repo).toBeUndefined();
   expect(record.branch).toBe('steward/steward-work');
   expect(record.disposition).toBe('deliverable');
-  expect(record.path).toBe('worktrees/t1-steward-steward-work');
+  expect(record.path).toBe('worktrees/f0t1-steward-steward-work');
   // The root checkout IS the main-line checkout and never leaves it.
   expect(gitOrThrow(ws, 'symbolic-ref', '--short', 'HEAD').stdout.trim()).toBe(mainLine);
   // Only tracked files materialize: the record is there, the world is not.
@@ -47,7 +48,8 @@ test('a workspace worktree: branched from main, record encoding, the root never 
   expect(existsSync(join(copy, 'worktrees'))).toBe(false);
   // Record-first: the copy includes its own worktree record, and the branch
   // starts zero commits behind the main line.
-  const ownRecord = 'tasks/t1-steward-work/worktrees/workspace--steward-steward-work.md';
+  const ownRecord =
+    'projects/0-workspace/tasks/t1-steward-work/worktrees/workspace--steward-steward-work.md';
   expect(existsSync(join(copy, ownRecord))).toBe(true);
   expect(gitOrThrow(ws, 'rev-list', '--count', `${mainLine}..${record.branch}`).stdout.trim()).toBe(
     '0',
@@ -267,7 +269,7 @@ beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
   await createWorkspace(ws);
-  await openTask(ws, 'steward-work', {});
+  await openTask(ws, 'steward-work', { floor: GROUND_FLOOR });
   mainLine = workspaceMainLine(ws);
 });
 

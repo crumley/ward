@@ -70,7 +70,7 @@ test('task list and project list carry the same window and the same flag', () =>
 
   const projects = JSON.parse(runWard(['project', 'list', '--json'], ws).stdout);
   expect(projects.hidden).toEqual({ tasks: 1, projects: 1, settledAfterDays: 7 });
-  expect(projects.projects.map((p: { floor: number }) => p.floor)).toEqual([1, 2]);
+  expect(projects.projects.map((p: { floor: number }) => p.floor)).toEqual([0, 2]);
 
   const human = runWard(['project', 'list'], ws);
   expect(human.stdout).toContain(

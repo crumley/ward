@@ -10,6 +10,12 @@
 > the rollup.
 >
 > **Status:** accepted · **Started:** 2026-08-15
+>
+> **Partially superseded by [0041](../0041-ground-floor/README.md):** the standing project's floor
+> is no longer allocated like any project's — it is the **reserved** floor 0 in every workspace, so
+> that the one project every workspace has can be named from outside any of them. Everything else
+> here stands: the `standing` marker written only by creation, the converge that carries the project
+> to a workspace without one, and the honest `active` rollup over an empty floor.
 
 The intent settled _that_ every workspace carries a home for its own stewardship — established at
 creation, never closing, concentrating "what has been done _to_ this workspace?" in one place. This

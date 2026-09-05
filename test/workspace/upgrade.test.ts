@@ -14,6 +14,7 @@ import { baselinesType, workspaceRecordType } from '../../src/store/types.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { sha256OfText } from '../../src/workspace/lineage.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import {
   mergeWorkspaceBranch,
   recordedWorkspaceMainLine,
@@ -50,12 +51,12 @@ async function regressToLiveShape(root: string): Promise<void> {
 test('the live-workspace fixture upgrades deterministically, end to end through the 0019 rails', async () => {
   await regressToLiveShape(ws);
   expect(recordedWorkspaceMainLine(ws)).toBeUndefined();
-  await openTask(ws, 'upgrade-ward', {});
+  await openTask(ws, 'upgrade-ward', { floor: GROUND_FLOOR });
   const { record: worktree } = await createWorkspaceWorktree(ws, 't1');
 
   const report = await upgradeWorkspace(ws, 't1');
   expect(report.outcome).toBe('upgraded');
-  expect(report.task).toBe('t1');
+  expect(report.task).toBe('f0t1');
   expect(report.branch).toBe(worktree.branch);
   expect(report.commit).toBeDefined();
   expect(report.residue).toEqual([]);
@@ -122,7 +123,7 @@ test('a customized artifact is left byte-identical and named as reconciliation r
   await Bun.write(join(ws, 'AGENTS.md'), customized);
   gitOrThrow(ws, 'add', '-A');
   gitOrThrow(ws, 'commit', '-m', 'Customize the guidance (test fixture)');
-  await openTask(ws, 'upgrade-ward', {});
+  await openTask(ws, 'upgrade-ward', { floor: GROUND_FLOOR });
   const { record: worktree } = await createWorkspaceWorktree(ws, 't1');
 
   const report = await upgradeWorkspace(ws, 't1');
@@ -151,7 +152,7 @@ test('a missing artifact is installed, and a pre-0017 workspace gains the CLAUDE
   rmSync(join(ws, 'CLAUDE.md')); // the pre-0017 shape: no bridge at all
   gitOrThrow(ws, 'add', '-A');
   gitOrThrow(ws, 'commit', '-m', 'Remove guidance (test fixture)');
-  await openTask(ws, 'upgrade-ward', {});
+  await openTask(ws, 'upgrade-ward', { floor: GROUND_FLOOR });
   const { record: worktree } = await createWorkspaceWorktree(ws, 't1');
 
   const report = await upgradeWorkspace(ws, 't1');
@@ -172,7 +173,7 @@ test("a CLAUDE.md of the human's own is kept and named as residue, never rewritt
   writeFileSync(join(ws, 'CLAUDE.md'), 'my own claude guidance\n');
   gitOrThrow(ws, 'add', '-A');
   gitOrThrow(ws, 'commit', '-m', 'Own CLAUDE.md (test fixture)');
-  await openTask(ws, 'upgrade-ward', {});
+  await openTask(ws, 'upgrade-ward', { floor: GROUND_FLOOR });
   const { record: worktree } = await createWorkspaceWorktree(ws, 't1');
 
   const report = await upgradeWorkspace(ws, 't1');
@@ -187,12 +188,12 @@ test("a CLAUDE.md of the human's own is kept and named as residue, never rewritt
 });
 
 test('the upgrade refuses a task with no workspace worktree, naming the 0019 rail to build first', async () => {
-  await openTask(ws, 'upgrade-ward', {});
-  expect(upgradeWorkspace(ws, 't1')).rejects.toThrow(/ward worktree create t1 --workspace/);
+  await openTask(ws, 'upgrade-ward', { floor: GROUND_FLOOR });
+  expect(upgradeWorkspace(ws, 't1')).rejects.toThrow(/ward worktree create f0t1 --workspace/);
 });
 
 test('the upgrade refuses a dirty candidate copy before writing anything', async () => {
-  await openTask(ws, 'upgrade-ward', {});
+  await openTask(ws, 'upgrade-ward', { floor: GROUND_FLOOR });
   const { record: worktree } = await createWorkspaceWorktree(ws, 't1');
   writeFileSync(join(ws, worktree.path, 'stray.txt'), 'uncommitted\n');
   expect(upgradeWorkspace(ws, 't1')).rejects.toThrow(/uncommitted changes/);

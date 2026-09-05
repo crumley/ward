@@ -185,9 +185,16 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '56e5346e859eb390249c93f3c32d096a6ef732c1033fdd5af3bdbc294d300d27',
         era: 'design 0038 (machine-bound sessions)',
       },
-      // Current since design 0037: a floor may claim repositories as a routing
-      // default, `task open --repo` records and places, and `worktree create`
-      // reads the task's single recorded repository.
+      // design 0037 — a floor may claim repositories as a routing default,
+      // `task open --repo` records and places, and `worktree create` reads the
+      // task's single recorded repository; `tasks/` was still described as the
+      // home of bare tasks opened directly under the workspace.
+      {
+        sha256: 'e1a0d2748cb10105e1358ef6809f796fb70e03d48ab84881d3ff4843eb21e528',
+        era: 'design 0037 (repository affinity)',
+      },
+      // Current since design 0041: floor 0 is the ground floor, every task
+      // lives on a floor, and `tasks/` holds legacy bare tasks only.
     ],
   },
 ];

@@ -26,6 +26,7 @@ import {
   unregisterWorkspace,
 } from '../../src/global/registry.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { createWorkspaceWorktree } from '../../src/workspace/worktrees.ts';
@@ -68,7 +69,7 @@ test('a path that does not exist is refused, never resolved by walking up past i
 });
 
 test('a stewardship copy is not a second workspace, so it cannot be registered', async () => {
-  await openTask(alpha, 'steward-thing', {});
+  await openTask(alpha, 'steward-thing', { floor: GROUND_FLOOR });
   const { record } = await createWorkspaceWorktree(alpha, 't1');
   await expect(registerWorkspace(join(alpha, record.path), state)).rejects.toThrow(
     /this directory is a stewardship copy/,

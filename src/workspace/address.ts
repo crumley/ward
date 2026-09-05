@@ -1,6 +1,8 @@
 // The task address (design/0036-floor-addressed-tasks/): a task on a floor is
-// addressed `f<floor>t<room>` — `f3t1` is room 1 on floor 3 — and a bare task
-// (no floor) keeps `t<room>`, which IS its full address. The address is
+// addressed `f<floor>t<room>` — `f3t1` is room 1 on floor 3, and `f0t1` is
+// room 1 on the ground floor (design/0041-ground-floor/) — while a LEGACY
+// bare task (no floor, opened under `tasks/` before every task had a floor)
+// keeps `t<room>`, which IS its full address. The address is
 // DERIVED, never stored: the record keeps carrying the room as its `code`,
 // and the floor is already known from containment (the task's directory under
 // `projects/<floor>-<slug>/tasks/`) and from the optional `floor` field, so
@@ -14,7 +16,7 @@
 import { WardError } from '../errors.ts';
 
 /**
- * Rooms on a floor, and in the bare pool: `t1`…`t99`.
+ * Rooms on a floor, and in the legacy bare pool: `t1`…`t99`.
  *
  * Two digits keeps a floor address at five characters (`f3t22`), which is
  * what makes it sayable and typable — the identity constraint that pays for
@@ -47,7 +49,7 @@ const ADDRESS = /^(?:f(\d+))?t(\d+)$/;
 const PROJECT_DIR = /^projects\/(\d+)-/;
 
 /**
- * The floor a task sits on, or undefined for a bare task. Containment
+ * The floor a task sits on, or undefined for a legacy bare task. Containment
  * answers first — the directory is where the task actually IS, and a record
  * whose `floor` field disagreed with its location would be describing
  * somewhere else — with the record's optional field as the fallback for a
@@ -66,7 +68,8 @@ export function taskRoom(task: AddressedTask): number | undefined {
 }
 
 /**
- * The address Ward speaks: `f3t22` for a floor task, `t18` for a bare one.
+ * The address Ward speaks: `f3t22` for a floor task, `t18` for a legacy bare
+ * one.
  * Every human-facing identity line and every `address` field in `--json`
  * comes through here, so the two audiences can never be told different
  * addresses for the same task (§8).
@@ -90,7 +93,9 @@ export function parseTaskAddress(input: string): TaskAddress | null {
   const room = Number.parseInt(match[2] ?? '', 10);
   if (room < 1 || room > ROOMS_PER_FLOOR) return null;
   const floor = match[1] === undefined ? undefined : Number.parseInt(match[1], 10);
-  if (floor !== undefined && floor < 1) return null;
+  // Floor 0 is the ground floor (design/0041-ground-floor/), so `f0t7` is an
+  // address like any other; a negative floor cannot be spelled at all.
+  if (floor !== undefined && floor < 0) return null;
   return floor === undefined ? { room } : { floor, room };
 }
 
@@ -99,8 +104,8 @@ export function requireTaskAddress(input: string): TaskAddress {
   const parsed = parseTaskAddress(input);
   if (parsed === null) {
     throw new WardError(
-      `'${input}' is not a task address — floor tasks are f<floor>t<room> (f3t1) and bare ` +
-        `tasks are t<room> (t18), rooms 1–${ROOMS_PER_FLOOR} (see: ward task list)`,
+      `'${input}' is not a task address — floor tasks are f<floor>t<room> (f3t1) and legacy ` +
+        `bare tasks are t<room> (t18), rooms 1–${ROOMS_PER_FLOOR} (see: ward task list)`,
     );
   }
   return parsed;

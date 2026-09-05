@@ -18,6 +18,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { resolveOpenTask } from '../../src/workspace/scan.ts';
 import { openSession, readSessions } from '../../src/workspace/sessions.ts';
@@ -36,7 +37,7 @@ const REMOTE_URL = 'https://forge.example/demo';
 const PR = 'https://forge.example/demo/pull/24';
 
 test('the incident replay: a PR merged into a dead base refuses the close, before any teardown', async () => {
-  await openTask(ws, 'entry', {});
+  await openTask(ws, 'entry', { floor: GROUND_FLOOR });
   const { record: wt } = await createWorktree(ws, 't1', 'demo');
   const wtDir = join(ws, wt.path);
   await commitAndPush(wtDir, 'entry', 'work.txt');
@@ -72,7 +73,7 @@ test('the incident replay: a PR merged into a dead base refuses the close, befor
 });
 
 test('a merge commit that reached the main line closes — verified against the refreshed tip', async () => {
-  await openTask(ws, 'entry', {});
+  await openTask(ws, 'entry', { floor: GROUND_FLOOR });
   const { record: wt } = await createWorktree(ws, 't1', 'demo');
   const wtDir = join(ws, wt.path);
   await commitAndPush(wtDir, 'entry', 'work.txt');
@@ -95,7 +96,7 @@ test('a merge commit that reached the main line closes — verified against the 
 });
 
 test('a merged PR with no merge commit cannot be verified — the trust is named, never guessed', async () => {
-  await openTask(ws, 'entry', {});
+  await openTask(ws, 'entry', { floor: GROUND_FLOOR });
   await addTaskPr(ws, 't1', PR);
   process.env.WARD_GH = writeFakeGh(scratch, `gh-${caseId}`, {
     responses: { [PR]: { state: 'MERGED' } },
@@ -111,7 +112,7 @@ test('a merged PR with no merge commit cannot be verified — the trust is named
 
 test('a PR no registered repository can answer for is trusted aloud', async () => {
   const elsewhere = 'https://elsewhere.example/other/pull/9';
-  await openTask(ws, 'entry', {});
+  await openTask(ws, 'entry', { floor: GROUND_FLOOR });
   await addTaskPr(ws, 't1', elsewhere);
   process.env.WARD_GH = writeFakeGh(scratch, `gh-${caseId}`, {
     responses: { [elsewhere]: { state: 'MERGED', mergeCommit: '1'.repeat(40) } },
@@ -126,7 +127,7 @@ test('a PR no registered repository can answer for is trusted aloud', async () =
 });
 
 test('a refresh that cannot run degrades to named trust, never to a false "unreachable"', async () => {
-  await openTask(ws, 'entry', {});
+  await openTask(ws, 'entry', { floor: GROUND_FLOOR });
   const { record: wt } = await createWorktree(ws, 't1', 'demo');
   await commitAndPush(join(ws, wt.path), 'entry', 'work.txt');
   await addTaskPr(ws, 't1', PR);
@@ -147,7 +148,7 @@ test('a refresh that cannot run degrades to named trust, never to a false "unrea
 });
 
 test('a reachable answer stays sound even when the refresh fails — history is only gained', async () => {
-  await openTask(ws, 'entry', {});
+  await openTask(ws, 'entry', { floor: GROUND_FLOOR });
   const { record: wt } = await createWorktree(ws, 't1', 'demo');
   const wtDir = join(ws, wt.path);
   await commitAndPush(wtDir, 'entry', 'work.txt');
@@ -166,7 +167,7 @@ test('a reachable answer stays sound even when the refresh fails — history is 
 });
 
 test('the refusal reaches the CLI as an error exit, like every gate', async () => {
-  await openTask(ws, 'entry', {});
+  await openTask(ws, 'entry', { floor: GROUND_FLOOR });
   const { record: wt } = await createWorktree(ws, 't1', 'demo');
   await commitAndPush(join(ws, wt.path), 'entry', 'work.txt');
   await addTaskPr(ws, 't1', PR);

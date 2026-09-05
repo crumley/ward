@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { verbPath } from '../../src/cli/telemetry.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { closeSession, openSession, openWorkspaceSession } from '../../src/workspace/sessions.ts';
 import { closeTask, openTask } from '../../src/workspace/tasks.ts';
@@ -76,18 +77,18 @@ test('task-addressed verbs complete to OPEN task codes, the slug as the cue', ()
   for (const argv of table) {
     expect(offers(argv)).toEqual(
       expect.arrayContaining([
-        { text: 't1', description: 'alpha-task' },
-        { text: 't2', description: 'beta-task' },
+        { text: 'f0t1', description: 'alpha-task' },
+        { text: 'f0t2', description: 'beta-task' },
       ]),
     );
     // A closed task's code is reused after close, so offering it would name
     // either nothing or somebody else's task.
-    expect(words(argv)).not.toContain('t3');
+    expect(words(argv)).not.toContain('f0t3');
   }
 });
 
 test('only candidates that start with the prefix come back', () => {
-  expect(offers(['task', 'pause', 't1'])).toEqual([{ text: 't1', description: 'alpha-task' }]);
+  expect(offers(['task', 'pause', 'f0t1'])).toEqual([{ text: 'f0t1', description: 'alpha-task' }]);
   expect(offers(['task', 'pause', 'zz'])).toEqual([]);
 });
 
@@ -160,7 +161,7 @@ test('outside a workspace the callback answers empty and exit 0 — never an err
 test('a completion callback writes no telemetry row; generating the script writes one', async () => {
   const fresh = join(scratch, 'telemetry-ws');
   await createWorkspace(fresh);
-  await openTask(fresh, 'counted', {});
+  await openTask(fresh, 'counted', { floor: GROUND_FLOOR });
 
   for (const argv of [
     [''],
@@ -258,9 +259,9 @@ beforeAll(async () => {
   await addRepository(ws, remote, 'demo');
 
   // t1 open, t2 open, t3 closed — the code a suggester must not offer.
-  await openTask(ws, 'alpha-task', {});
-  await openTask(ws, 'beta-task', {});
-  await openTask(ws, 'gone-task', {});
+  await openTask(ws, 'alpha-task', { floor: GROUND_FLOOR });
+  await openTask(ws, 'beta-task', { floor: GROUND_FLOOR });
+  await openTask(ws, 'gone-task', { floor: GROUND_FLOOR });
   await closeTask(ws, 't3', 'abandoned');
 
   // One open session and one closed, so `session close` has both to sort —

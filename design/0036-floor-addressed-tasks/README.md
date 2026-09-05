@@ -8,6 +8,11 @@
 > they dropped and how to see it.
 >
 > **Status:** built — awaiting review · **Started:** 2026-09-04
+>
+> **Partially superseded by [0041](../0041-ground-floor/README.md):** the bare pool is no longer a
+> destination — every task now opens on a floor, and `tasks/` holds only the tasks opened before
+> that. The bare address itself is untouched: a legacy bare task is still addressed `t<room>`, and
+> the bare room is still the shorthand this entry built.
 
 A task code is allocated as the smallest room no open task holds, workspace-wide, and every
 task-addressed verb resolves a bare code against the open set. Two failures follow from that, and

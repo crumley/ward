@@ -50,15 +50,17 @@ export type HiddenShape = z.infer<typeof hiddenShape>;
 export const taskShape = z.strictObject({
   code: z.string(),
   /**
-   * The task's full address — `f3t22` on a floor, `t18` in the bare pool
-   * (0036). Derived from `code` and the floor, never stored, and the string a
-   * task-addressed verb should be given: a bare `code` is a shorthand that
-   * resolves only while it is unique among the workspace's open tasks.
+   * The task's full address — `f3t22` on a floor, `f0t1` on the ground floor,
+   * `t18` for a legacy bare task (0036, 0041). Derived from `code` and the
+   * floor, never stored, and the string a task-addressed verb should be given:
+   * a bare `code` is a shorthand that resolves only while it is unique among
+   * the workspace's open tasks.
    */
   address: z.string(),
   slug: z.string(),
   state: workStateSchema,
-  floor: z.number().int().positive().optional(),
+  /** The floor — 0 is the ground floor (0041); absent only on a legacy bare task. */
+  floor: z.number().int().nonnegative().optional(),
   purpose: z.string().optional(),
   /** The registered repositories this task touches, recorded at open (0037). */
   repositories: z.array(z.string()).optional(),
@@ -137,7 +139,8 @@ export const statusShape = z.strictObject({
   workspace: workStateSchema,
   projects: z.array(
     z.strictObject({
-      floor: z.number().int().positive(),
+      /** The floor number — 0 is the ground floor, the standing project's (0041). */
+      floor: z.number().int().nonnegative(),
       slug: z.string(),
       state: workStateSchema,
       derived: workStateSchema,
@@ -146,6 +149,7 @@ export const statusShape = z.strictObject({
       tasks: z.array(statusTaskShape),
     }),
   ),
+  /** Legacy bare tasks under `tasks/` — read, never written again (0041). */
   bareTasks: z.array(statusTaskShape),
   /** This machine's name (0038) — which sessions below can be resumed here. */
   machine: z.string(),
@@ -161,7 +165,8 @@ export type StatusShape = z.infer<typeof statusShape>;
 export const projectListShape = z.strictObject({
   projects: z.array(
     z.strictObject({
-      floor: z.number().int().positive(),
+      /** The floor number — 0 is the ground floor, the standing project's (0041). */
+      floor: z.number().int().nonnegative(),
       slug: z.string(),
       state: workStateSchema,
       derived: workStateSchema,
@@ -391,12 +396,13 @@ export type ProjectOpenShape = z.infer<typeof projectOpenShape>;
  * them so an agent can act on the same fact the human is told.
  */
 export const projectClaimShape = z.strictObject({
-  floor: z.number().int().positive(),
+  /** The floor number — 0 is the ground floor, which may claim like any other (0041). */
+  floor: z.number().int().nonnegative(),
   slug: z.string(),
   repository: z.string(),
   outcome: z.enum(['claimed', 'moved', 'satisfied', 'released', 'absent']),
   /** The floor the claim came from — present exactly when it moved. */
-  from: z.number().int().positive().optional(),
+  from: z.number().int().nonnegative().optional(),
   /** The floor's claims after the change, in sorted order. */
   repositories: z.array(z.string()),
   /** Open tasks touching the repository that stay where they are (claim only). */
@@ -404,7 +410,7 @@ export const projectClaimShape = z.strictObject({
     z.strictObject({
       address: z.string(),
       slug: z.string(),
-      floor: z.number().int().positive().optional(),
+      floor: z.number().int().nonnegative().optional(),
     }),
   ),
 });
@@ -422,7 +428,8 @@ export const taskMutationShape = z.strictObject({
   address: z.string(),
   slug: z.string(),
   state: workStateSchema,
-  floor: z.number().int().positive().optional(),
+  /** The floor — 0 is the ground floor (0041); absent only on a legacy bare task. */
+  floor: z.number().int().nonnegative().optional(),
   purpose: z.string().optional(),
   /** The registered repositories this task touches (0037). */
   repositories: z.array(z.string()).optional(),

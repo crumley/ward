@@ -8,6 +8,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { createWorktree } from '../../src/workspace/worktrees.ts';
@@ -17,9 +18,9 @@ test('inferred inside the worktree: the echoed task, then the per-worktree repor
   advanceRemote('advance.txt', 'main moved\n');
   const result = runWard(['worktree', 'rebase'], wtDir);
   expect(result.exitCode).toBe(0);
-  expect(result.stdout).toContain('task t1 — from the working directory');
+  expect(result.stdout).toContain('task f0t1 — from the working directory');
   expect(result.stdout).toContain('rebased');
-  expect(result.stdout).toContain('worktrees/t1-feature');
+  expect(result.stdout).toContain('worktrees/f0t1-feature');
 });
 
 test('a declared agent is refused the inference; with an explicit code it proceeds', () => {
@@ -67,16 +68,16 @@ test('a dirty worktree is a respected refusal, not a failure — exit 0', () => 
 });
 
 test('a task with no worktrees says so and succeeds', async () => {
-  await openTask(ws, 'bare', {});
+  await openTask(ws, 'bare', { floor: GROUND_FLOOR });
   const result = runWard(['worktree', 'rebase', 't2'], ws);
   expect(result.exitCode).toBe(0);
-  expect(result.stdout).toContain('no worktrees on task t2');
+  expect(result.stdout).toContain('no worktrees on task f0t2');
 });
 
 // -- setup ----------------------------------------------------------------
 // A fresh workspace per test (the verbs mutate) with one registered
 // repository `demo` on branch `main` and one bare task t1 `feature` whose
-// worktree is worktrees/t1-feature.
+// worktree is worktrees/f0t1-feature.
 
 let scratch: string;
 let remote: string;
@@ -112,7 +113,7 @@ beforeEach(async () => {
   gitOrThrow(seed, 'commit', '-m', 'seed');
   gitOrThrow(seed, 'push', '-u', 'origin', 'main');
   await addRepository(ws, remote, 'demo');
-  await openTask(ws, 'feature', {});
+  await openTask(ws, 'feature', { floor: GROUND_FLOOR });
   const { record } = await createWorktree(ws, 't1', 'demo');
   wtDir = join(ws, record.path);
 });

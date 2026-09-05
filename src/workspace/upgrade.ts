@@ -39,7 +39,7 @@ import { taskAddress } from './address.ts';
 import { git, gitOrThrow } from './git.ts';
 import { inspectClaudeGuidance } from './layout.ts';
 import { classifyArtifact, INSTALLED_ARTIFACT_LINEAGE, sha256OfText } from './lineage.ts';
-import { findStandingProject } from './projects.ts';
+import { requireGroundFloor } from './projects.ts';
 import { type Publication, publishStewardshipBranch } from './publish.ts';
 import { commitRecords, type FoundTask, readTasks, resolveOpenTask } from './scan.ts';
 import { refuseStewardshipCopy, resolveWorkspaceMainLine } from './steward.ts';
@@ -556,16 +556,17 @@ function refuseSecondUpgrade(
 }
 
 /**
- * The stewardship task Ward opens for itself. Its home is the standing
- * workspace project where the workspace has one (0018: "the home for work on
- * the workspace itself — upgrades, migrations, reflections"); on a workspace
- * created before that project existed it opens as a bare task, which is the
- * honest elision rather than a faked floor.
+ * The stewardship task Ward opens for itself. Its home is the ground floor —
+ * the standing workspace project (0018: "the home for work on the workspace
+ * itself — upgrades, migrations, reflections"), fixed at floor 0 by
+ * design/0041-ground-floor/. A workspace that has none is refused with the
+ * converge remedy rather than served from the bare pool: an upgrade that
+ * opened its own vehicle in the legacy pool would be the tool writing the
+ * shape it exists to move the workspace away from.
  */
 async function deriveUpgradeTask(root: string): Promise<FoundTask> {
-  const standing = await findStandingProject(root);
   return openTask(root, DERIVED_SLUG, {
-    ...(standing === undefined ? {} : { floor: standing.record.floor }),
+    floor: await requireGroundFloor(root),
     purpose: `Bring the workspace's installed artifacts to the defaults ward ${pkg.version} ships`,
     stewardship: 'upgrade',
   });

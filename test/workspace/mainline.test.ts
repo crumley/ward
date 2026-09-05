@@ -12,6 +12,7 @@ import { workspaceRecordType } from '../../src/store/types.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import {
   mergeWorkspaceBranch,
   recordedWorkspaceMainLine,
@@ -113,7 +114,7 @@ test('doctor: a detached root, and a recorded branch that no longer exists, both
 // -- the rails aim at the recorded name -------------------------------------
 
 test('a stewardship worktree branches from the recorded main line, not a drifted root', async () => {
-  await openTask(ws, 'steward-work', {});
+  await openTask(ws, 'steward-work', { floor: GROUND_FLOOR });
   const recordedTip = gitOrThrow(ws, 'rev-parse', mainLine).stdout.trim();
   gitOrThrow(ws, 'switch', '-c', 'experiment');
   const { record } = await createWorkspaceWorktree(ws, 't1');
@@ -123,7 +124,7 @@ test('a stewardship worktree branches from the recorded main line, not a drifted
 });
 
 test('the gated merge refuses a drifted root, and lands after the way back', async () => {
-  await openTask(ws, 'steward-work', {});
+  await openTask(ws, 'steward-work', { floor: GROUND_FLOOR });
   const { record } = await createWorkspaceWorktree(ws, 't1');
   const copy = join(ws, record.path);
   writeFileSync(join(copy, 'note.md'), 'stewardship change\n');

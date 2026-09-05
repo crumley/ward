@@ -8,6 +8,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { readSessions } from '../../src/workspace/sessions.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
@@ -38,14 +39,14 @@ test('session open with no TASK is workspace scope, even inside a worktree (0029
   expect(result.stdout).toContain('opened session workspace-1@test');
   const workspaceSessions = await readSessions(ws, '');
   expect(workspaceSessions[0]).toMatchObject({ scope: 'workspace', workingDirectory: '.' });
-  expect(await readSessions(ws, 'tasks/t1-feature')).toEqual([]);
+  expect(await readSessions(ws, 'projects/0-workspace/tasks/t1-feature')).toEqual([]);
 });
 
 test('session open TASK records the task session, the worktree as its directory', async () => {
   const result = runWard(['session', 'open', 't1', '--purpose', 'drive the feature'], wtDir);
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('opened session feature-1@test');
-  const sessions = await readSessions(ws, 'tasks/t1-feature');
+  const sessions = await readSessions(ws, 'projects/0-workspace/tasks/t1-feature');
   expect(sessions[0]?.workingDirectory).toBe('worktrees/t1-feature');
 });
 
@@ -150,7 +151,7 @@ beforeEach(async () => {
   ws = join(scratch, `ws-${caseId}`);
   await createWorkspace(ws);
   await addRepository(ws, remote, 'demo');
-  await openTask(ws, 'feature', {});
+  await openTask(ws, 'feature', { floor: GROUND_FLOOR });
   const { record } = await createWorktree(ws, 't1', 'demo');
   wtDir = join(ws, record.path);
 });

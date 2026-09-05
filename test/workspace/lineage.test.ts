@@ -52,6 +52,12 @@ test('the AGENTS.md 0029 supersedes is in history — every workspace still on i
   expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
     'ef5ffe607886ca2fea68c54f7cf72a138c5058316116b49a78d664ffa58ac510', // 7fa9656 (design 0029)
   );
+  // …and the 0037 manifest, superseded by design/0041-ground-floor/: every
+  // workspace still carrying the affinity-era default upgrades to the one
+  // that names the ground floor.
+  expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
+    'e1a0d2748cb10105e1358ef6809f796fb70e03d48ab84881d3ff4843eb21e528', // design 0037
+  );
 });
 
 // The maintenance guard-rail: the lineage's history is maintained by hand, so
@@ -61,7 +67,7 @@ test('the AGENTS.md 0029 supersedes is in history — every workspace still on i
 // exactly the bookkeeping that keeps every shipped default recognizable.
 test('the current defaults are pinned; changing one must move its old hash into history', () => {
   expect(sha256OfText(AGENTS_MD)).toBe(
-    'e1a0d2748cb10105e1358ef6809f796fb70e03d48ab84881d3ff4843eb21e528', // since design 0037
+    'dfc613e4b70a5f2b3c853827c01256615923ca3c245b44f49dcf54589e8c6963', // since design 0041
   );
   expect(sha256OfText(WARD_INTERNAL_README)).toBe(
     '6f10845611635508f006727f83bdc2222d840a9da972393781662c9f6ff04ac4', // since 65f1e8b (0013)

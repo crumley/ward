@@ -142,20 +142,20 @@ for (const row of claudeRows) {
   });
 }
 
-// -- standing project (design/0018-standing-workspace-project/) ------------
-// Creation establishes the workspace's own project; a pre-0018 workspace
-// lacks it — the same migration-target shape as the missing CLAUDE.md above:
-// info carrying the converge remedy, doctor never creating it itself, and no
-// state ever failing the run.
+// -- the ground floor (design/0018-…, design/0041-ground-floor/) -----------
+// Creation establishes the workspace's own project at floor 0; a pre-0018
+// workspace lacks it — the same migration-target shape as the missing
+// CLAUDE.md above: info carrying the converge remedy, doctor never creating
+// it itself, and no state ever failing the run.
 
-test('standing project — fresh workspace: ok, naming its floor', async () => {
+test('standing project — fresh workspace: ok, naming the ground floor', async () => {
   const ws = join(scratch, 'ws-standing-ok');
   await createWorkspace(ws);
   const report = await runDoctor(ws);
   const finding = report.workspace.find((f) => f.check === 'standing project');
   expect(finding).toMatchObject({
     severity: 'ok',
-    message: expect.stringContaining('floor 1 (projects/1-workspace/)'),
+    message: expect.stringContaining('floor 0 (projects/0-workspace/)'),
   });
   expect(report.healthy).toBe(true);
 });
@@ -163,7 +163,7 @@ test('standing project — fresh workspace: ok, naming its floor', async () => {
 test('standing project — absent (the pre-0018 shape): info carrying the converge remedy', async () => {
   const ws = join(scratch, 'ws-standing-absent');
   await createWorkspace(ws);
-  rmSync(join(ws, 'projects', '1-workspace'), { recursive: true });
+  rmSync(join(ws, 'projects', '0-workspace'), { recursive: true });
   const report = await runDoctor(ws);
   const finding = report.workspace.find((f) => f.check === 'standing project');
   expect(finding).toMatchObject({

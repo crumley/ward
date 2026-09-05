@@ -55,7 +55,7 @@ import { claimsOf } from './affinity.ts';
 import { sha256OfFile } from './baselines.ts';
 import { git, gitAvailable, gitIdentityConfigured, hasCommits } from './git.ts';
 import { discoverWorkspace, IGNORE_LINES, inspectClaudeGuidance } from './layout.ts';
-import { findStandingProject, readProjects } from './projects.ts';
+import { findStandingProject, GROUND_FLOOR, readProjects } from './projects.ts';
 import { checkoutPath, listRepositoryNames } from './repos.ts';
 import { readTasks } from './scan.ts';
 import { readTaskWorktrees } from './worktrees.ts';
@@ -620,6 +620,7 @@ async function workspaceChecks(
   findings.push(...(await baselineChecks(root)));
   findings.push(claudeGuidanceFinding(root));
   findings.push(await standingProjectFinding(root));
+  findings.push(...(await legacyBareTaskFinding(root)));
   findings.push(...(await claimFindings(root)));
 
   // The agent configuration, resolved from the record just validated above
@@ -940,37 +941,103 @@ function claudeGuidanceFinding(root: string): Finding {
 
 /**
  * The standing workspace project
- * (design/0018-standing-workspace-project/): established by creation, so its
- * absence is the pre-0018 workspace — a migration target exactly like 0017's
- * missing CLAUDE.md, bridged the same way: info, never warn (nothing is
- * broken, ordinary work is unaffected), carrying the converge remedy doctor
- * itself never runs (report-only, the repair posture). An unreadable project
- * record surfaces as error through the same conversion checkDocument applies
- * — doctor reports what it cannot read rather than guessing past it.
+ * (design/0018-standing-workspace-project/), which is the **ground floor** —
+ * floor 0 in every workspace (design/0041-ground-floor/). Three states worth
+ * reporting, and each names the act that settles it, never runs it (doctor is
+ * report-only):
+ * - absent — the pre-0018 workspace, a migration target exactly like 0017's
+ *   missing CLAUDE.md, bridged the same way: info, never warn (nothing is
+ *   broken, ordinary work is unaffected). It is also the state in which
+ *   `ward task open` has nowhere to put a task, so the converge remedy here is
+ *   the same string that refusal carries.
+ * - on floor `N ≥ 1` — a workspace created by ward 0018–0040. Converge moves
+ *   it down when it holds no open task, so that case is `info`: nothing is
+ *   wrong, one command completes it. With an open task the move is blocked —
+ *   the addresses would change under work in flight — so it is a `warn`, and
+ *   the remedy is the order the two acts have to happen in.
+ * - on floor 0 — ok.
+ *
+ * An unreadable project record surfaces as error through the same conversion
+ * checkDocument applies — doctor reports what it cannot read rather than
+ * guessing past it.
  */
 async function standingProjectFinding(root: string): Promise<Finding> {
   const check = 'standing project';
   try {
     const standing = await findStandingProject(root);
-    return standing === undefined
+    if (standing === undefined) {
+      return {
+        check,
+        severity: 'info',
+        message:
+          'no ground floor — no standing workspace project, the home for upgrades, migrations, ' +
+          `and reflections and where a task with no floor of its own opens; establish it: ` +
+          `ward workspace create ${root}`,
+      };
+    }
+    if (standing.record.floor === GROUND_FLOOR) {
+      return {
+        check,
+        severity: 'ok',
+        message: `floor ${GROUND_FLOOR} (${standing.dir}/) — the ground floor, the workspace's own`,
+      };
+    }
+    const open = (await readTasks(root)).filter(
+      (task) => task.dir.startsWith(`${standing.dir}/tasks/`) && task.record.state !== 'closed',
+    );
+    const preamble =
+      `the workspace's own project is on floor ${standing.record.floor} (${standing.dir}/); ` +
+      `the ground floor is floor ${GROUND_FLOOR}`;
+    return open.length === 0
       ? {
           check,
           severity: 'info',
-          message:
-            'no standing workspace project — the home for upgrades, migrations, and ' +
-            `reflections; establish it: ward workspace create ${root} ` +
-            '(a future workspace upgrade will carry it)',
+          message: `${preamble} — converge to move it down: ward workspace create ${root}`,
         }
       : {
           check,
-          severity: 'ok',
-          message: `floor ${standing.record.floor} (${standing.dir}/) — the workspace's own project`,
+          severity: 'warn',
+          message:
+            `${preamble}, and it cannot move while it holds open work: ` +
+            `${open.map((task) => `${taskAddress(task)} (${task.record.slug})`).join(', ')} ` +
+            `would change address. Close them, then converge: ward workspace create ${root}`,
         };
   } catch (error) {
     if (error instanceof WardError) {
       return { check, severity: 'error', message: error.message };
     }
     throw error;
+  }
+}
+
+/**
+ * The legacy bare tasks (design/0041-ground-floor/): tasks under `tasks/` at
+ * the root, opened before every task had a floor. Counted, with **no remedy**
+ * — they are history and are meant to stay exactly where they are. Moving one
+ * would renumber its room into the ground floor's sequence and break every
+ * path that names it: its worktree directories, its branch names, and the
+ * transcripts and briefs that quote them. Info, never warn: nothing is wrong
+ * with a workspace that has them, they list and resolve as they always did,
+ * and they settle out of the glance like any other task.
+ */
+async function legacyBareTaskFinding(root: string): Promise<Finding[]> {
+  const check = 'legacy bare tasks';
+  try {
+    const bare = (await readTasks(root)).filter((task) => task.dir.startsWith('tasks/'));
+    if (bare.length === 0) return [];
+    const open = bare.filter((task) => task.record.state !== 'closed').length;
+    return [
+      {
+        check,
+        severity: 'info',
+        message:
+          `${bare.length} task${bare.length === 1 ? '' : 's'} under tasks/ from before the ` +
+          `ground floor (${open} still open) — addressed t<room>, read and never written again`,
+      },
+    ];
+  } catch (error) {
+    if (!(error instanceof WardError)) throw error;
+    return [{ check, severity: 'error', message: error.message }];
   }
 }
 

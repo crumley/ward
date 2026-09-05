@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import { git, gitOrThrow } from '../../src/workspace/git.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import {
   addRepository,
   checkoutPath,
@@ -129,9 +130,9 @@ test('removing an unregistered name is refused legibly', async () => {
 
 test('remove is refused while an open task worktree stands on the repository', async () => {
   await addRepository(ws, remote);
-  await openTask(ws, 'holder', {});
+  await openTask(ws, 'holder', { floor: GROUND_FLOOR });
   await createWorktree(ws, 't1', 'origin-repo');
-  expect(removeRepository(ws, 'origin-repo')).rejects.toThrow(/open task t1/);
+  expect(removeRepository(ws, 'origin-repo')).rejects.toThrow(/open task f0t1/);
   expect(existsSync(checkoutPath(ws, 'origin-repo'))).toBe(true); // untouched
 
   // The close tears the worktree down; its branch, holding nothing the

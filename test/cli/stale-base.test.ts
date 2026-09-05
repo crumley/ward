@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { statusShape } from '../../src/cli/schema.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { addTaskPr, openTask } from '../../src/workspace/tasks.ts';
 import {
@@ -144,7 +145,7 @@ beforeAll(async () => {
   // Adoption reads the seed's origin, so the record carries the forge URL.
   gitOrThrow(seed, 'remote', 'set-url', 'origin', REMOTE_URL);
   await addRepository(ws, seed, 'demo');
-  await openTask(ws, 'entry', {});
+  await openTask(ws, 'entry', { floor: GROUND_FLOOR });
   await addTaskPr(ws, 't1', PR);
 });
 

@@ -8,6 +8,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { scopeFromCwd } from '../../src/workspace/scope.ts';
 import { closeTask, openTask } from '../../src/workspace/tasks.ts';
@@ -17,23 +18,23 @@ import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
 const rows: readonly { name: string; dir: () => string; task: string | null }[] = [
   {
     name: "a worktree's root resolves to its task",
-    dir: () => join(ws, 'worktrees/t1-feature'),
+    dir: () => join(ws, 'worktrees/f0t1-feature'),
     task: 't1',
   },
   {
     name: 'a directory nested deep inside a worktree resolves the same',
-    dir: () => join(ws, 'worktrees/t1-feature/deep/down'),
+    dir: () => join(ws, 'worktrees/f0t1-feature/deep/down'),
     task: 't1',
   },
   {
     name: "a second task's worktree resolves to the second task",
-    dir: () => join(ws, 'worktrees/t2-other'),
+    dir: () => join(ws, 'worktrees/f0t2-other'),
     task: 't2',
   },
   { name: 'the workspace root implies no task', dir: () => ws, task: null },
   {
     name: 'the record tree is not the worktree it describes',
-    dir: () => join(ws, 'tasks/t1-feature/worktrees'),
+    dir: () => join(ws, 'projects/0-workspace/tasks/t1-feature/worktrees'),
     task: null,
   },
   {
@@ -43,7 +44,7 @@ const rows: readonly { name: string; dir: () => string; task: string | null }[] 
   },
   {
     name: "a closed task's stale record claims nothing, even if the directory returns",
-    dir: () => join(ws, 'worktrees/t3-gone'),
+    dir: () => join(ws, 'worktrees/f0t3-gone'),
     task: null,
   },
   { name: 'a directory outside the workspace implies no task', dir: () => outside, task: null },
@@ -57,8 +58,8 @@ for (const row of rows) {
 }
 
 test('the resolved scope carries the claiming worktree record', async () => {
-  const scope = await scopeFromCwd(ws, join(ws, 'worktrees/t1-feature/deep/down'));
-  expect(scope?.worktree.path).toBe('worktrees/t1-feature');
+  const scope = await scopeFromCwd(ws, join(ws, 'worktrees/f0t1-feature/deep/down'));
+  expect(scope?.worktree.path).toBe('worktrees/f0t1-feature');
   expect(scope?.worktree.repo).toBe('demo');
   expect(scope?.task.record.slug).toBe('feature');
 });
@@ -91,15 +92,15 @@ beforeAll(async () => {
   gitOrThrow(seed, 'push', '-u', 'origin', 'main');
   await addRepository(ws, remote, 'demo');
 
-  await openTask(ws, 'feature', {});
+  await openTask(ws, 'feature', { floor: GROUND_FLOOR });
   await createWorktree(ws, 't1', 'demo');
-  await openTask(ws, 'other', {});
+  await openTask(ws, 'other', { floor: GROUND_FLOOR });
   await createWorktree(ws, 't2', 'demo', 'other');
-  await openTask(ws, 'gone', {});
+  await openTask(ws, 'gone', { floor: GROUND_FLOOR });
   await createWorktree(ws, 't3', 'demo', 'gone');
   await closeTask(ws, 't3', 'abandoned');
-  mkdirSync(join(ws, 'worktrees/t3-gone'), { recursive: true });
-  mkdirSync(join(ws, 'worktrees/t1-feature/deep/down'), { recursive: true });
+  mkdirSync(join(ws, 'worktrees/f0t3-gone'), { recursive: true });
+  mkdirSync(join(ws, 'worktrees/f0t1-feature/deep/down'), { recursive: true });
 });
 
 afterAll(() => {

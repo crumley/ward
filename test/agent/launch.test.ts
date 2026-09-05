@@ -18,6 +18,7 @@ import { readDocument, writeDocument } from '../../src/store/document.ts';
 import { type SessionRecord, workspaceRecordType } from '../../src/store/types.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { defaultWorkspaceSessionPurpose, readSessions } from '../../src/workspace/sessions.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import {
@@ -95,11 +96,11 @@ test("the default purpose is the record's own instant, to the second", () => {
 });
 
 test('a task session still states its purpose — refused before any record is written', async () => {
-  await openTask(ws, 'feature', {});
+  await openTask(ws, 'feature', { floor: GROUND_FLOOR });
   const refused = ward(['session', 'open', 't1']);
   expect(refused.exitCode).toBe(1);
   expect(refused.stderr).toContain('ward session open t1 --purpose TEXT');
-  expect(await readSessions(ws, 'tasks/t1-feature')).toEqual([]);
+  expect(await readSessions(ws, 'projects/0-workspace/tasks/t1-feature')).toEqual([]);
   expect(runs()).toEqual([]); // nothing launched
 });
 
@@ -263,17 +264,20 @@ test('a resume that cannot start records resume-failed, with its cause', async (
 });
 
 test('resume works on a manually recorded task session — any claude: handle', async () => {
-  await openTask(ws, 'feature', {});
+  await openTask(ws, 'feature', { floor: GROUND_FLOOR });
   ward(['session', 'open', 't1', '--purpose', 'hand-recorded', '--handle', 'claude:abc-123']);
   fabricateTranscript('abc-123', ws);
   const resumed = ward(['session', 'resume', 'feature-1@test']);
   expect(resumed.exitCode).toBe(0);
   expect(runs()[0]?.argv).toEqual(['--resume', 'abc-123']);
-  expect(eventsOf(await readSessions(ws, 'tasks/t1-feature'))).toEqual(['opened', 'resumed']);
+  expect(eventsOf(await readSessions(ws, 'projects/0-workspace/tasks/t1-feature'))).toEqual([
+    'opened',
+    'resumed',
+  ]);
 });
 
 test('a session Ward cannot re-attach to is refused by name, never guessed at', async () => {
-  await openTask(ws, 'feature', {});
+  await openTask(ws, 'feature', { floor: GROUND_FLOOR });
   ward(['session', 'open', 't1', '--purpose', 'no handle']);
   const noHandle = ward(['session', 'resume', 'feature-1@test']);
   expect(noHandle.exitCode).toBe(1);
@@ -358,9 +362,9 @@ test('--handle at workspace scope records without launching', async () => {
 });
 
 test('a session record written before 0029 still parses, closes, and locates', async () => {
-  await openTask(ws, 'feature', {});
+  await openTask(ws, 'feature', { floor: GROUND_FLOOR });
   // Exactly the front matter a pre-0029 ward wrote: a task, no scope, no events.
-  const dir = join(ws, 'tasks', 't1-feature', 'sessions');
+  const dir = join(ws, 'projects', '0-workspace', 'tasks', 't1-feature', 'sessions');
   mkdirSync(dir, { recursive: true });
   writeFileSync(
     join(dir, 'feature-1.md'),
@@ -388,7 +392,7 @@ test('a session record written before 0029 still parses, closes, and locates', a
 });
 
 test('ids climb and never repeat — a closed record is never written over', async () => {
-  await openTask(ws, 'workspace-ish', {});
+  await openTask(ws, 'workspace-ish', { floor: GROUND_FLOOR });
   ward(['session', 'open', '--purpose', 'first']);
   ward(['session', 'open', '--purpose', 'second', '--handle', 'claude:two']);
   expect((await readSessions(ws, '')).map((record) => record.id)).toEqual([
@@ -415,7 +419,7 @@ test('ids climb and never repeat — a closed record is never written over', asy
 // transcript lookups never touch the developer's own.
 
 const LEGACY_TAIL = [
-  'workingDirectory: worktrees/t1-feature',
+  'workingDirectory: worktrees/f0t1-feature',
   'handle: claude:legacy-run',
   'state: open',
   'openedAt: "2026-08-01T00:00:00.000Z"',
