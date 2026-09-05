@@ -9,7 +9,20 @@ import { withStoreLock } from '../store/lock.ts';
 import { type ProjectRecord, projectRecordType } from '../store/types.ts';
 import { commitRecords, projectDirs, requireSlug } from './scan.ts';
 
-export async function openProject(root: string, slugInput: string): Promise<ProjectRecord> {
+export interface OpenProjectOptions {
+  /**
+   * Repositories the new floor claims (design/0037-repo-floor-affinity/) — a
+   * routing default recorded at open, so the first task against a repository
+   * can already be placed by it. Validated by the caller.
+   */
+  readonly repositories?: readonly string[];
+}
+
+export async function openProject(
+  root: string,
+  slugInput: string,
+  options: OpenProjectOptions = {},
+): Promise<ProjectRecord> {
   const slug = requireSlug(slugInput);
   // Allocation through commit is the serialized critical section (§17): the
   // floor scan must not race another writer's, and the commit must not race
@@ -21,10 +34,12 @@ export async function openProject(root: string, slugInput: string): Promise<Proj
     // (design/0018-standing-workspace-project/).
     const floor = nextFloor(root);
     const dir = `projects/${floor}-${slug}`;
+    const claims = [...(options.repositories ?? [])].sort();
     const record: ProjectRecord = {
       type: 'project',
       floor,
       slug,
+      ...(claims.length === 0 ? {} : { repositories: claims }),
       state: 'active',
       openedAt: new Date().toISOString(),
     };
@@ -32,7 +47,11 @@ export async function openProject(root: string, slugInput: string): Promise<Proj
       data: record,
       body:
         `Floor ${floor}: the \`${slug}\` project. Its tasks live in \`tasks/\` beside this ` +
-        'record, and its status is derived from theirs, never stored here.',
+        'record, and its status is derived from theirs, never stored here.' +
+        (claims.length === 0
+          ? ''
+          : ` It claims ${claims.join(', ')}: a routing default for tasks opened against those ` +
+            'repositories, never a restriction on what its tasks may touch.'),
     });
     commitRecords(root, `Open project ${slug} (floor ${floor})`, dir);
     return record;

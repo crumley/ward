@@ -28,6 +28,7 @@ import {
   type WorktreeRecord,
 } from '../store/types.ts';
 import { taskAddress } from '../workspace/address.ts';
+import type { ClaimReport, ReleaseReport } from '../workspace/affinity.ts';
 import type { CreateReport } from '../workspace/create.ts';
 import type { DoctorReport } from '../workspace/doctor.ts';
 import type { AddReport, RefreshReport, RemoveReport } from '../workspace/repos.ts';
@@ -40,6 +41,7 @@ import type { RebaseReport, WorktreeListing, WorktreeStatus } from '../workspace
 import type {
   DoctorShape,
   PrForgeShape,
+  ProjectClaimShape,
   ProjectListShape,
   ProjectOpenShape,
   RepoAddShape,
@@ -92,6 +94,7 @@ export function taskJson(
     state: record.state,
     ...(record.floor === undefined ? {} : { floor: record.floor }),
     ...(record.purpose === undefined ? {} : { purpose: record.purpose }),
+    ...(record.repositories === undefined ? {} : { repositories: record.repositories }),
     prs: record.prs,
     ...(record.outcome === undefined ? {} : { outcome: record.outcome }),
     inReview,
@@ -147,6 +150,9 @@ export function statusJson(report: StatusReport): StatusShape {
       slug: project.project.slug,
       state: project.project.state,
       derived: project.derived,
+      ...(project.project.repositories === undefined
+        ? {}
+        : { repositories: project.project.repositories }),
       tasks: project.tasks.map(statusTaskJson),
     })),
     bareTasks: report.bareTasks.map(statusTaskJson),
@@ -195,6 +201,9 @@ export function projectListJson(
       state: entry.record.state,
       derived: entry.derived,
       taskCount: entry.taskCount,
+      ...(entry.record.repositories === undefined
+        ? {}
+        : { repositories: entry.record.repositories }),
       openedAt: entry.record.openedAt,
       ...(entry.record.closedAt === undefined ? {} : { closedAt: entry.record.closedAt }),
     })),
@@ -341,7 +350,34 @@ export function projectOpenJson(record: ProjectRecord): ProjectOpenShape {
     floor: record.floor,
     slug: record.slug,
     state: record.state,
+    ...(record.repositories === undefined ? {} : { repositories: record.repositories }),
     openedAt: record.openedAt,
+  };
+}
+
+/**
+ * `project claim` and `project release` (design/0037-repo-floor-affinity/) —
+ * one shape for both: the floor's claims as they now stand, plus what the
+ * change left behind. `staying` is empty on a release, which never moves
+ * routing away from work in flight.
+ */
+export function projectClaimJson(
+  report: ClaimReport | ReleaseReport,
+  staying: ClaimReport['staying'] = [],
+): ProjectClaimShape {
+  const from = 'from' in report ? report.from : undefined;
+  return {
+    floor: report.project.floor,
+    slug: report.project.slug,
+    repository: report.repository,
+    outcome: report.outcome,
+    ...(from === undefined ? {} : { from }),
+    repositories: [...(report.project.repositories ?? [])],
+    staying: staying.map((task) => ({
+      address: task.address,
+      slug: task.slug,
+      ...(task.floor === undefined ? {} : { floor: task.floor }),
+    })),
   };
 }
 
@@ -358,6 +394,7 @@ export function taskMutationJson(record: TaskRecord, address: string): TaskMutat
     state: record.state,
     ...(record.floor === undefined ? {} : { floor: record.floor }),
     ...(record.purpose === undefined ? {} : { purpose: record.purpose }),
+    ...(record.repositories === undefined ? {} : { repositories: record.repositories }),
     prs: record.prs,
     ...(record.outcome === undefined ? {} : { outcome: record.outcome }),
     openedAt: record.openedAt,

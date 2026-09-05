@@ -41,6 +41,15 @@ import { emitShellLayer } from '../shell/layer.ts';
 import { FISH_SHORTHAND_NAMES, findShorthand } from '../shell/shorthands.ts';
 import type { SessionRecord, TaskRecord, WorkState } from '../store/types.ts';
 import { taskAddress } from '../workspace/address.ts';
+import {
+  type ClaimReport,
+  claimRepository,
+  type Placement,
+  placeByAffinity,
+  recordedRepository,
+  releaseRepository,
+  requireRegistered,
+} from '../workspace/affinity.ts';
 import { createWorkspace, type StepReport } from '../workspace/create.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
@@ -53,7 +62,7 @@ import {
   removeRepository,
 } from '../workspace/repos.ts';
 import { restoreConverged, restoreWorkspace } from '../workspace/restore.ts';
-import { readTasks } from '../workspace/scan.ts';
+import { readTasks, resolveOpenTask } from '../workspace/scan.ts';
 import { scopeFromCwd } from '../workspace/scope.ts';
 import {
   closeSession,
@@ -92,6 +101,7 @@ import { callerIsAgent } from './caller.ts';
 import {
   doctorJson,
   printJson,
+  projectClaimJson,
   projectListJson,
   projectOpenJson,
   repoAddJson,
@@ -122,6 +132,7 @@ import { allSchemasJson, verbSchemaJson } from './schema.ts';
 import { askToClose, type ExitHistory, exitDecision, type OnExit } from './session-exit.ts';
 import {
   anyRepoName,
+  floorNumber,
   repoName,
   schemaVerb,
   sessionId,
@@ -478,9 +489,34 @@ const project = command(
       object({
         action: constant('project-open'),
         slug: argument(string({ metavar: 'SLUG' })),
+        repo: multiple(option('--repo', repoName())),
         json: jsonFlag(),
       }),
-      { brief: message`Open a project; it takes the next floor number.` },
+      {
+        brief: message`Open a project; it takes the next floor number. --repo claims a repository for it.`,
+      },
+    ),
+    command(
+      'claim',
+      object({
+        action: constant('project-claim'),
+        floor: argument(floorNumber()),
+        repo: argument(repoName()),
+        json: jsonFlag(),
+      }),
+      {
+        brief: message`Claim a repository for a floor: the routing default for tasks opened against it.`,
+      },
+    ),
+    command(
+      'release',
+      object({
+        action: constant('project-release'),
+        floor: argument(floorNumber()),
+        repo: argument(string({ metavar: 'NAME' })),
+        json: jsonFlag(),
+      }),
+      { brief: message`Drop a floor's claim on a repository.` },
     ),
     command(
       'list',
@@ -500,10 +536,13 @@ const task = command(
         action: constant('task-open'),
         slug: argument(string({ metavar: 'SLUG' })),
         project: optional(option('--project', integer({ metavar: 'FLOOR' }))),
+        repo: multiple(option('--repo', repoName())),
         purpose: optional(option('--purpose', string({ metavar: 'TEXT' }))),
         json: jsonFlag(),
       }),
-      { brief: message`Open a task, bare or under a project floor.` },
+      {
+        brief: message`Open a task, bare or under a floor — --repo records what it touches and can place it.`,
+      },
     ),
     command('list', object({ action: constant('task-list'), all: allFlag(), json: jsonFlag() }), {
       brief: message`List tasks, open and closed — settled ones hidden unless --all.`,
@@ -812,13 +851,45 @@ try {
         await cmdRepoList(result.json);
         break;
       case 'project-open': {
-        const record = await openProject(await requireMutableWorkspace(), result.slug);
+        const root = await requireMutableWorkspace();
+        // Validated before anything is written: a claim on an unregistered
+        // name routes nothing, so it is a bad argument, not a stored fact.
+        for (const name of result.repo) requireRegistered(root, name);
+        const record = await openProject(root, result.slug, { repositories: result.repo });
         if (result.json) {
           printJson(projectOpenJson(record));
           break;
         }
         console.log(
-          `${pc.green('opened')} floor ${pc.bold(String(record.floor))} — ${record.slug}`,
+          `${pc.green('opened')} floor ${pc.bold(String(record.floor))} — ${record.slug}` +
+            (record.repositories === undefined
+              ? ''
+              : pc.dim(` (claims ${record.repositories.join(', ')})`)),
+        );
+        break;
+      }
+      case 'project-claim': {
+        const root = await requireMutableWorkspace();
+        const report = await claimRepository(root, result.floor, result.repo);
+        if (result.json) {
+          printJson(projectClaimJson(report, report.staying));
+          break;
+        }
+        renderClaim(report);
+        break;
+      }
+      case 'project-release': {
+        const root = await requireMutableWorkspace();
+        const report = await releaseRepository(root, result.floor, result.repo);
+        if (result.json) {
+          printJson(projectClaimJson(report));
+          break;
+        }
+        console.log(
+          report.outcome === 'absent'
+            ? pc.dim(`floor ${report.project.floor} does not claim ${report.repository}`)
+            : `${pc.yellow('released')} ${report.repository} from floor ` +
+                `${pc.bold(String(report.project.floor))} — ${report.project.slug}`,
         );
         break;
       }
@@ -826,8 +897,12 @@ try {
         await cmdProjectList(result.all, result.json);
         break;
       case 'task-open': {
-        const opened = await openTask(await requireMutableWorkspace(), result.slug, {
-          ...(result.project === undefined ? {} : { floor: result.project }),
+        const root = await requireMutableWorkspace();
+        for (const name of result.repo) requireRegistered(root, name);
+        const placement = await placeTask(root, result.project, result.repo);
+        const opened = await openTask(root, result.slug, {
+          ...(placement.floor === undefined ? {} : { floor: placement.floor }),
+          ...(result.repo.length === 0 ? {} : { repositories: result.repo }),
           ...(result.purpose === undefined ? {} : { purpose: result.purpose }),
         });
         if (result.json) {
@@ -836,7 +911,7 @@ try {
         }
         console.log(
           `${pc.green('opened')} ${pc.bold(taskAddress(opened))} — ${opened.record.slug}` +
-            (opened.record.floor === undefined ? '' : pc.dim(` (floor ${opened.record.floor})`)),
+            (placement.note === undefined ? '' : pc.dim(` (${placement.note})`)),
         );
         break;
       }
@@ -894,16 +969,25 @@ try {
           'ward worktree create ADDRESS --repo NAME | --workspace',
           result.json,
         );
-        if (result.workspace === (result.repo !== undefined)) {
+        // With no `--repo` and no `--workspace`, the task's own record can
+        // answer — but only when it names exactly one repository
+        // (design/0037-repo-floor-affinity/). Several, or none, is not a guess
+        // Ward gets to make, and the refusal is the one that always stood.
+        const repo =
+          result.repo ??
+          (result.workspace
+            ? undefined
+            : recordedRepository(await resolveOpenTask(target.root, target.code)));
+        if (result.workspace === (repo !== undefined)) {
           throw new WardError(
             'name the worktree source: --repo NAME for a registered repository, or ' +
               "--workspace for the workspace's own (exactly one of the two)",
           );
         }
         const created =
-          result.repo === undefined
+          repo === undefined
             ? await createWorkspaceWorktree(target.root, target.code, result.branch)
-            : await createWorktree(target.root, target.code, result.repo, result.branch);
+            : await createWorktree(target.root, target.code, repo, result.branch);
         if (result.json) {
           printJson(
             worktreeCreateJson(created.task.record.code, taskAddress(created.task), created.record),
@@ -1722,6 +1806,60 @@ function renderHidden(hidden: HiddenSummary, command: string): void {
   );
 }
 
+/**
+ * Where a `task open` lands (design/0037-repo-floor-affinity/). An explicit
+ * `--project` always wins — the human named the floor, and a default that
+ * could override an instruction would not be a default. When it disagrees
+ * with the affinity, the echo says so rather than silently doing the right
+ * thing for an unstated reason. With no `--project`, the claim routes.
+ */
+async function placeTask(
+  root: string,
+  project: number | undefined,
+  repositories: readonly string[],
+): Promise<Placement> {
+  if (project === undefined) return placeByAffinity(root, repositories);
+  if (repositories.length === 0) return { floor: project };
+  const byAffinity = await placeByAffinity(root, repositories).catch(() => ({}) as Placement);
+  if (byAffinity.floor === undefined || byAffinity.floor === project) return { floor: project };
+  return {
+    floor: project,
+    note: `floor ${project} as named — affinity would have said floor ${byAffinity.floor}`,
+  };
+}
+
+/**
+ * A claim's report: what moved, and — the part that must never be silent —
+ * the open tasks touching the repository that stay on the floors they were
+ * opened on. Routing changed; placement did not, and only the human can
+ * decide whether that is fine.
+ */
+function renderClaim(report: ClaimReport): void {
+  const floor = pc.bold(String(report.project.floor));
+  if (report.outcome === 'satisfied') {
+    console.log(pc.dim(`floor ${report.project.floor} already claims ${report.repository}`));
+  } else if (report.outcome === 'moved') {
+    console.log(
+      `${pc.green('moved')} ${report.repository} from floor ${report.from} to floor ${floor} — ` +
+        report.project.slug,
+    );
+  } else {
+    console.log(
+      `${pc.green('claimed')} ${report.repository} for floor ${floor} — ` + report.project.slug,
+    );
+  }
+  if (report.outcome === 'satisfied' || report.staying.length === 0) return;
+  const named = report.staying.map((task) => `${task.address} (${task.slug})`).join(', ');
+  console.log(
+    pc.dim(
+      `ward now routes to floor ${report.project.floor}; ${report.staying.length} open ` +
+        `task${report.staying.length === 1 ? '' : 's'} touching it ` +
+        `${report.staying.length === 1 ? 'remains' : 'remain'} where ` +
+        `${report.staying.length === 1 ? 'it was' : 'they were'} opened: ${named}`,
+    ),
+  );
+}
+
 function renderState(state: WorkState): string {
   return { active: pc.green('active'), paused: pc.yellow('paused'), closed: pc.dim('closed') }[
     state
@@ -1769,9 +1907,13 @@ async function cmdProjectList(all: boolean, json: boolean): Promise<void> {
     return;
   }
   for (const entry of entries) {
+    const claims =
+      entry.record.repositories === undefined
+        ? ''
+        : ` · repos: ${entry.record.repositories.join(', ')}`;
     console.log(
       `  floor ${pc.bold(String(entry.record.floor))} — ${entry.record.slug} ` +
-        `[${renderState(entry.derived)}] ${pc.dim(`(${entry.taskCount} tasks)`)}`,
+        `[${renderState(entry.derived)}] ${pc.dim(`(${entry.taskCount} tasks${claims})`)}`,
     );
   }
   renderHidden(hidden, 'ward project list --all');

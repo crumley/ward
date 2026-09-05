@@ -51,10 +51,11 @@ import {
   workspaceRecordType,
 } from '../store/types.ts';
 import { taskAddress } from './address.ts';
+import { claimsOf } from './affinity.ts';
 import { sha256OfFile } from './baselines.ts';
 import { git, gitAvailable, gitIdentityConfigured, hasCommits } from './git.ts';
 import { discoverWorkspace, IGNORE_LINES, inspectClaudeGuidance } from './layout.ts';
-import { findStandingProject } from './projects.ts';
+import { findStandingProject, readProjects } from './projects.ts';
 import { checkoutPath, listRepositoryNames } from './repos.ts';
 import { readTasks } from './scan.ts';
 import { readTaskWorktrees } from './worktrees.ts';
@@ -619,6 +620,7 @@ async function workspaceChecks(
   findings.push(...(await baselineChecks(root)));
   findings.push(claudeGuidanceFinding(root));
   findings.push(await standingProjectFinding(root));
+  findings.push(...(await claimFindings(root)));
 
   // The agent configuration, resolved from the record just validated above
   // and the global config already read — never from a second read of either.
@@ -970,6 +972,40 @@ async function standingProjectFinding(root: string): Promise<Finding> {
     }
     throw error;
   }
+}
+
+/**
+ * Claims that point at nothing (design/0037-repo-floor-affinity/): a floor
+ * claiming a repository the workspace no longer has registered. Warn, never
+ * error — a dangling claim breaks nothing, it simply routes nothing, and the
+ * ordinary way to reach one is registering a repository, claiming it, and
+ * later removing it (design/0033-repo-remove/). Both remedies are named,
+ * because only the human knows which they meant: put the repository back, or
+ * drop the claim.
+ */
+async function claimFindings(root: string): Promise<Finding[]> {
+  const check = 'floor claims';
+  const registered = new Set(listRepositoryNames(root));
+  const findings: Finding[] = [];
+  try {
+    for (const project of await readProjects(root)) {
+      for (const name of claimsOf(project.record)) {
+        if (registered.has(name)) continue;
+        findings.push({
+          check,
+          severity: 'warn',
+          message:
+            `floor ${project.record.floor} (${project.record.slug}) claims '${name}', which is ` +
+            `not registered — nothing routes to it. Drop the claim: ward project release ` +
+            `${project.record.floor} ${name}; or register it: ward repo add SOURCE --name ${name}`,
+        });
+      }
+    }
+  } catch (error) {
+    if (!(error instanceof WardError)) throw error;
+    return [{ check, severity: 'error', message: error.message }];
+  }
+  return findings;
 }
 
 /**

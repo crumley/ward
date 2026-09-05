@@ -35,6 +35,13 @@ export interface OpenTaskOptions {
   readonly floor?: number;
   readonly purpose?: string;
   /**
+   * The registered repositories this task touches
+   * (design/0037-repo-floor-affinity/). Recorded on the task, and — when no
+   * floor was named — what the floor was derived from. Validated by the
+   * caller: the CLI refuses an unregistered name before anything is written.
+   */
+  readonly repositories?: readonly string[];
+  /**
    * The stewardship act this task carries, when Ward derived the task itself
    * (design/0030-upgrade-self-service/). Never set from the CLI's `task open`:
    * the marker means "Ward built this vehicle", and only Ward's own derivation
@@ -93,6 +100,9 @@ export async function openTask(
       ...(options.floor === undefined ? {} : { floor: options.floor }),
       ...(options.purpose === undefined ? {} : { purpose: options.purpose }),
       ...(options.stewardship === undefined ? {} : { stewardship: options.stewardship }),
+      ...(options.repositories === undefined || options.repositories.length === 0
+        ? {}
+        : { repositories: [...options.repositories] }),
       prs: [],
       openedAt: new Date().toISOString(),
     };

@@ -143,6 +143,12 @@ the SF's disposition is appended in its entry, remove the line here.
 - **SF-002** — [0036](0036-floor-addressed-tasks/spec-feedback.md): the attention surface has no
   rule for forgetting settled work, and none for which spelling Ward should speak when a noun has
   both a full address and a shorthand.
+- **SF-001** — [0037](0037-repo-floor-affinity/spec-feedback.md): a project has no recorded
+  relationship to repositories, and the domain model does not say a container may hold one as a
+  routing default — nor what happens to placed work when such a judgment changes.
+- **SF-002** — [0037](0037-repo-floor-affinity/spec-feedback.md): the "low floors recur, high floors
+  are transient" convention has nowhere to live — it reads like intent but is unbuildable under the
+  monotonic-floors rule.
 - **SF-001** — [0038](0038-machine-bound-sessions/spec-feedback.md): uniqueness among open sessions
   is too weak — a reused id overwrites a closed session's record, and two machines sharing a
   workspace mint the same one.

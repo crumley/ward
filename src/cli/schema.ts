@@ -60,6 +60,8 @@ export const taskShape = z.strictObject({
   state: workStateSchema,
   floor: z.number().int().positive().optional(),
   purpose: z.string().optional(),
+  /** The registered repositories this task touches, recorded at open (0037). */
+  repositories: z.array(z.string()).optional(),
   prs: z.array(z.string()),
   outcome: z.enum(['delivered', 'abandoned']).optional(),
   inReview: z.boolean(),
@@ -139,6 +141,8 @@ export const statusShape = z.strictObject({
       slug: z.string(),
       state: workStateSchema,
       derived: workStateSchema,
+      /** The repositories this floor claims — a routing default (0037). */
+      repositories: z.array(z.string()).optional(),
       tasks: z.array(statusTaskShape),
     }),
   ),
@@ -162,6 +166,8 @@ export const projectListShape = z.strictObject({
       state: workStateSchema,
       derived: workStateSchema,
       taskCount: z.number().int().nonnegative(),
+      /** The repositories this floor claims — a routing default (0037). */
+      repositories: z.array(z.string()).optional(),
       openedAt: z.string(),
       closedAt: z.string().optional(),
     }),
@@ -370,9 +376,39 @@ export const projectOpenShape = z.strictObject({
   floor: z.number().int().positive(),
   slug: z.string(),
   state: workStateSchema,
+  /** Repositories claimed at open — a routing default, absent when none (0037). */
+  repositories: z.array(z.string()).optional(),
   openedAt: z.string(),
 });
 export type ProjectOpenShape = z.infer<typeof projectOpenShape>;
+
+/**
+ * `project claim` and `project release` (design/0037-repo-floor-affinity/):
+ * one shape for both, because both answer the same question — which floor now
+ * claims this repository, and what did the change leave behind. `staying` is
+ * the consequence a moved claim must not hide: open tasks touching the
+ * repository stay on the floors they were opened on, and the document names
+ * them so an agent can act on the same fact the human is told.
+ */
+export const projectClaimShape = z.strictObject({
+  floor: z.number().int().positive(),
+  slug: z.string(),
+  repository: z.string(),
+  outcome: z.enum(['claimed', 'moved', 'satisfied', 'released', 'absent']),
+  /** The floor the claim came from — present exactly when it moved. */
+  from: z.number().int().positive().optional(),
+  /** The floor's claims after the change, in sorted order. */
+  repositories: z.array(z.string()),
+  /** Open tasks touching the repository that stay where they are (claim only). */
+  staying: z.array(
+    z.strictObject({
+      address: z.string(),
+      slug: z.string(),
+      floor: z.number().int().positive().optional(),
+    }),
+  ),
+});
+export type ProjectClaimShape = z.infer<typeof projectClaimShape>;
 
 /**
  * The task record as a mutation wrote it — shared by `task open`, `task
@@ -388,6 +424,8 @@ export const taskMutationShape = z.strictObject({
   state: workStateSchema,
   floor: z.number().int().positive().optional(),
   purpose: z.string().optional(),
+  /** The registered repositories this task touches (0037). */
+  repositories: z.array(z.string()).optional(),
   prs: z.array(z.string()),
   outcome: z.enum(['delivered', 'abandoned']).optional(),
   openedAt: z.string(),
@@ -765,6 +803,8 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'repo refresh': repoRefreshShape,
   'repo remove': repoRemoveShape,
   'project open': projectOpenShape,
+  'project claim': projectClaimShape,
+  'project release': projectClaimShape,
   'task open': taskMutationShape,
   'task pause': taskMutationShape,
   'task resume': taskMutationShape,

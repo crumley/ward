@@ -91,6 +91,19 @@ export const projectSchema = z.object({
    * project single. Optional so every pre-0018 record stays valid unchanged.
    */
   standing: z.literal(true).optional(),
+  /**
+   * The registered repositories this floor claims
+   * (design/0037-repo-floor-affinity/): a routing default for `ward task
+   * open --repo NAME`, not a rule about what the floor's tasks may touch.
+   * It is stored at the project rather than derived from its tasks because
+   * it is a JUDGMENT about where work on a repository belongs — the one kind
+   * of thing the domain model allows a container to record
+   * (intent/01-concepts/00-domain-model.md, Status) — and it must answer
+   * before the floor holds any task at all, which is exactly when a
+   * derivation from its tasks would answer nothing. Optional, so every record
+   * written before this entry stays valid unchanged.
+   */
+  repositories: z.array(z.string().min(1)).optional(),
   state: workStateSchema,
   openedAt: z.string().min(1),
   closedAt: z.string().min(1).optional(),
@@ -120,6 +133,16 @@ export const taskSchema = z.object({
    * so every record written before this entry stays valid unchanged.
    */
   stewardship: z.enum(['upgrade']).optional(),
+  /**
+   * The registered repositories this task touches
+   * (design/0037-repo-floor-affinity/), recorded at open from `--repo NAME`.
+   * It is what `ward worktree create` reads when no repository is named, and
+   * what the floor was derived from when affinity placed the task. Not
+   * derivable from the worktrees: a task records what it is FOR before any
+   * worktree exists, and it may finish without ever creating one. Optional,
+   * so every record written before this entry stays valid unchanged.
+   */
+  repositories: z.array(z.string().min(1)).optional(),
   /** The PR-link set: URLs only — review state is the forge's truth, read live. */
   prs: z.array(z.string().min(1)),
   outcome: z.enum(['delivered', 'abandoned']).optional(),

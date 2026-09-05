@@ -46,6 +46,12 @@ operated with the \`ward\` CLI and tracked in git.
 - \`ward status\`, \`ward task list\`, and \`ward project list\` show what is in flight: work
   closed more than a week ago drops off the listing, and \`--all\` brings it back. A closed task
   is shown by its slug, not its room — the room belongs to whoever holds it next.
+- **A floor may claim repositories** (\`ward project claim FLOOR NAME\`, \`ward project release
+  FLOOR NAME\`, or \`--repo\` at \`ward project open\`). A claim is a **routing default**, never
+  a rule about what a floor's tasks may touch: \`ward task open SLUG --repo NAME\` records what
+  the task touches and, with no \`--project\`, opens it on the claiming floor. \`--project\`
+  always wins. Moving a claim changes where new work lands and leaves open tasks where they are —
+  Ward says so when it moves one.
 - Work is never committed to a repository's main line directly; changes travel through a worktree
   and a pull request.
 - When a main line moves under work in progress, \`ward worktree rebase\` replays the task's
@@ -128,7 +134,9 @@ You may be reading this from the workspace root or from inside a task worktree u
   task-addressed verb, read from \`address\` in \`--json\` (\`ward task list --json\` says what
   exists; its \`hidden\` block says what the settled-work window left out).
 - **Work in the task's worktree** under \`worktrees/\`, never in \`repos/\` — the canonical
-  checkouts are reference copies of each repository's main line.
+  checkouts are reference copies of each repository's main line. \`ward worktree create ADDRESS\`
+  needs no \`--repo\` when the task record names exactly one repository; with none or several
+  recorded, name it.
 - **Stay atop the main line.** When it moves, \`ward worktree rebase ADDRESS\` rebases the task's
   worktrees onto the refreshed tip. A dirty tree is refused; a conflict is aborted and reported
   with the tree left as found — resolving it is your work, then rerun. It never pushes: publish

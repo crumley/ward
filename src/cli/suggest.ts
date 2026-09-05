@@ -24,12 +24,13 @@
 import { message, text } from '@optique/core/message';
 import type { NonEmptyString } from '@optique/core/nonempty';
 import type { Suggestion } from '@optique/core/parser';
-import { string, type ValueParser } from '@optique/core/valueparser';
+import { integer, string, type ValueParser } from '@optique/core/valueparser';
 import { listWorkspaces } from '../global/registry.ts';
 import { repoCandidates } from '../shell/candidates.ts';
 import { taskAddress } from '../workspace/address.ts';
 import { git } from '../workspace/git.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
+import { readProjects } from '../workspace/projects.ts';
 import { listRepositories } from '../workspace/repos.ts';
 import { readTasks } from '../workspace/scan.ts';
 import { describeScope, readAllSessions, readOpenSessions } from '../workspace/sessions.ts';
@@ -111,6 +112,53 @@ export function taskIdentity(metavar: 'ADDRESS' | 'TASK'): ValueParser<'async', 
         .map((task) => ({ text: taskAddress(task), description: task.record.slug })),
     ),
   );
+}
+
+/**
+ * Open floor numbers — the FLOOR a claim is made or dropped on
+ * (design/0037-repo-floor-affinity/), with the project's slug as the cue, so
+ * the human picks the floor by what it is for rather than by remembering a
+ * number. Closed floors are not offered: they take no tasks, so a claim on
+ * one routes nothing.
+ *
+ * A number-valued argument that suggests: the suggester wraps `integer()`
+ * rather than `string()`, so what the verb ACCEPTS is unchanged (a bad value
+ * is optique's own parse error) and only the menu is added.
+ */
+export function floorNumber(): ValueParser<'async', number> {
+  const base = integer({ metavar: 'FLOOR' });
+  return {
+    ...base,
+    mode: 'async',
+    parse: (input) => Promise.resolve(base.parse(input)),
+    async *suggest(prefix: string): AsyncIterable<Suggestion> {
+      let found: readonly Candidate[];
+      try {
+        const root = discoverWorkspace(process.cwd());
+        found =
+          root === null
+            ? []
+            : (await readProjects(root))
+                .filter((project) => project.record.state !== 'closed')
+                .map((project) => ({
+                  text: String(project.record.floor),
+                  description: project.record.slug,
+                }));
+      } catch {
+        return;
+      }
+      for (const candidate of found) {
+        if (!candidate.text.startsWith(prefix)) continue;
+        yield {
+          kind: 'literal',
+          text: candidate.text,
+          ...(candidate.description === undefined
+            ? {}
+            : { description: message`${text(candidate.description)}` }),
+        };
+      }
+    },
+  };
 }
 
 /** Registered repository names — `--repo NAME` and `repo refresh NAME`, with the main line as cue. */
