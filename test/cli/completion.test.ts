@@ -104,17 +104,17 @@ test('`session close|resume ID` complete to OPEN session ids — closed stays cl
   for (const verb of ['close', 'resume']) {
     expect(offers(['session', verb, ''])).toEqual(
       expect.arrayContaining([
-        { text: 'alpha-task-1', description: 'task t1' },
+        { text: 'alpha-task-1@test', description: 'task t1' },
         // A workspace-scope session says so instead of naming a task it has not got.
-        { text: 'workspace-1', description: 'workspace scope' },
+        { text: 'workspace-1@test', description: 'workspace scope' },
       ]),
     );
-    expect(words(['session', verb, ''])).not.toContain('beta-task-1');
+    expect(words(['session', verb, ''])).not.toContain('beta-task-1@test');
   }
 });
 
 test('`session locate ID` offers closed ids too — reflection reads finished work', () => {
-  expect(words(['session', 'locate', ''])).toContain('beta-task-1');
+  expect(words(['session', 'locate', ''])).toContain('beta-task-1@test');
 });
 
 test('`workspace merge BRANCH` completes to branches the main line does not hold', () => {
@@ -267,7 +267,7 @@ beforeAll(async () => {
   // plus one at workspace scope, whose cue is its scope rather than a task.
   await openSession(ws, 't1', 'suggest the open one', {});
   await openSession(ws, 't2', 'and not this one', {});
-  await closeSession(ws, 'beta-task-1');
+  await closeSession(ws, 'beta-task-1@test');
   await openWorkspaceSession(ws, 'the workspace itself', { handle: 'claude:ws-run' });
 
   // A stewardship branch carrying a commit the main line lacks — the only

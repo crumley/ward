@@ -177,6 +177,33 @@ test('doctor --json carries the resolution as data, an absent key without a valu
   expect(launcher.agent?.command).toEqual({ provenance: 'global', value: ['npx', 'claude'] });
 });
 
+test('doctor names this machine, and the layer that named it', async () => {
+  // Machine-level (design/0038-machine-bound-sessions/): the name is the
+  // second half of every session id allocated here, so "what would my next
+  // session be called?" is answerable before opening one to find out.
+  expect(finding((await runDoctor(root)).machine, 'machine')).toEqual({
+    check: 'machine',
+    severity: 'ok',
+    message: "named 'test' (from WARD_MACHINE) — session ids allocated here end '@test'",
+  });
+
+  // Configured, with the suite's override out of the way — and normalized to
+  // the slug alphabet, because the name goes inside an id and a filename.
+  mkdirSync(configHome, { recursive: true });
+  writeFileSync(join(configHome, 'config.md'), '---\ntype: ward-config\nmachine: My Box\n---\n');
+  const configured = await runDoctor(root, { WARD_MACHINE: '' });
+  expect(configured.machineName).toEqual({ name: 'my-box', source: 'configured' });
+  expect(finding(configured.machine, 'machine').message).toContain("named 'my-box' (configured)");
+
+  // Nothing configured: this machine's own hostname — answered outside a
+  // workspace too, where only the machine half of doctor exists.
+  writeFileSync(join(configHome, 'config.md'), '---\ntype: ward-config\n---\n');
+  const derived = await runDoctor(scratch, { WARD_MACHINE: '' });
+  expect(derived.workspaceRoot).toBeNull();
+  expect(derived.machineName.source).toBe('hostname');
+  expect(derived.machineName.name).toMatch(/^[a-z0-9-]+$/);
+});
+
 // -- setup -----------------------------------------------------------------
 
 let scratch: string;

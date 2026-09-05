@@ -35,7 +35,7 @@ test('session open with no TASK is workspace scope, even inside a worktree (0029
   });
   expect(result.exitCode).toBe(0);
   expect(result.stdout).not.toContain('from the working directory');
-  expect(result.stdout).toContain('opened session workspace-1');
+  expect(result.stdout).toContain('opened session workspace-1@test');
   const workspaceSessions = await readSessions(ws, '');
   expect(workspaceSessions[0]).toMatchObject({ scope: 'workspace', workingDirectory: '.' });
   expect(await readSessions(ws, 'tasks/t1-feature')).toEqual([]);
@@ -44,7 +44,7 @@ test('session open with no TASK is workspace scope, even inside a worktree (0029
 test('session open TASK records the task session, the worktree as its directory', async () => {
   const result = runWard(['session', 'open', 't1', '--purpose', 'drive the feature'], wtDir);
   expect(result.exitCode).toBe(0);
-  expect(result.stdout).toContain('opened session feature-1');
+  expect(result.stdout).toContain('opened session feature-1@test');
   const sessions = await readSessions(ws, 'tasks/t1-feature');
   expect(sessions[0]?.workingDirectory).toBe('worktrees/t1-feature');
 });

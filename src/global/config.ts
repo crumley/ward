@@ -30,6 +30,16 @@ export const globalConfigSchema = z.object({
    * the broad default ("every session I want … my default model to be Fable").
    */
   agent: agentSettingsSchema.optional(),
+  /**
+   * `machine` — what this computer is called in a session id
+   * (design/0038-machine-bound-sessions/). The global layer is its only home:
+   * how a machine is named is a fact about the machine, not about a
+   * workspace, and a workspace record carrying it would travel to a machine
+   * where it is false. Any non-empty string is accepted and normalized to the
+   * slug alphabet by `machineName` — one definition of what a machine name
+   * may contain, applied to configured and derived names alike.
+   */
+  machine: z.string().min(1).optional(),
   repo: z
     .object({
       refresh: z
@@ -66,6 +76,14 @@ export interface GlobalConfig {
    * exactly backwards. An unset block reads as `{}`: nothing configured.
    */
   readonly agent: AgentSettings;
+  /**
+   * The machine name AS WRITTEN — the second subtree this file does not
+   * resolve, for a variation on the same reason: its default is not a
+   * constant but a reading of THIS machine (the hostname), which belongs
+   * where the ladder and the override live (src/global/machine.ts), not in a
+   * table of Ward's opinions.
+   */
+  readonly machine: string | undefined;
   readonly repo: { readonly refresh: { readonly stash: boolean } };
 }
 
@@ -76,7 +94,11 @@ export interface GlobalConfig {
  * stated in the same spirit one layer up (AGENT_DEFAULTS), for the reason
  * above; `{}` here is "no agent preferences", not "the agent defaults".
  */
-export const CONFIG_DEFAULTS: GlobalConfig = { agent: {}, repo: { refresh: { stash: false } } };
+export const CONFIG_DEFAULTS: GlobalConfig = {
+  agent: {},
+  machine: undefined,
+  repo: { refresh: { stash: false } },
+};
 
 /** The settings as resolved for this invocation — never throws (§20). */
 export async function readConfig(dir: string = configDir()): Promise<GlobalConfig> {
@@ -100,6 +122,7 @@ function resolveConfig(read: GlobalRead<GlobalConfigRecord>): GlobalConfig {
   const record = read.document.data;
   return {
     agent: record.agent ?? CONFIG_DEFAULTS.agent,
+    machine: record.machine,
     repo: {
       refresh: { stash: record.repo?.refresh?.stash ?? CONFIG_DEFAULTS.repo.refresh.stash },
     },

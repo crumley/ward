@@ -7,9 +7,18 @@
 // answers: in-review means ≥1 OPEN PR (intent's exact rule) rather than the
 // has-linked-PRs approximation, and the report carries the derived `needs
 // you` items — nothing stored either way.
+import { resolve } from 'node:path';
 import type { PrForgeState } from '../forge/gh.ts';
 import { type ForgeProbe, prBelongsToRemote, probeForge } from '../forge/gh.ts';
-import type { ProjectRecord, RepositoryRecord, TaskRecord, WorkState } from '../store/types.ts';
+import { readMachine } from '../global/machine.ts';
+import { claudeNativeId, locateClaudeRun } from '../harness/claude.ts';
+import type {
+  ProjectRecord,
+  RepositoryRecord,
+  SessionRecord,
+  TaskRecord,
+  WorkState,
+} from '../store/types.ts';
 import { taskAddress } from './address.ts';
 import { type FoundProject, readProjects } from './projects.ts';
 import { listRepositories } from './repos.ts';
@@ -243,10 +252,42 @@ export interface HiddenSummary {
   readonly settledAfterDays: number;
 }
 
+/**
+ * Whether a session's harness history is on THIS machine — read from the
+ * local filesystem alone, never from a network or a harness process, so the
+ * sessions block costs status one `existsSync` per open workspace session.
+ * `unlocatable` is the honest third answer: a session with no handle, or one
+ * another harness minted, has nothing this build knows how to look for.
+ */
+export type SessionHistory = 'found' | 'gone' | 'unlocatable';
+
+/**
+ * One open workspace-scope session, as `status` reports it
+ * (design/0038-machine-bound-sessions/). Task sessions stay on their task
+ * lines, where their work is; these have no task row to sit on, which is the
+ * gap 0029 deferred until there was more than one case in hand.
+ */
+export interface SessionStatus {
+  readonly id: string;
+  readonly purpose: string;
+  /** The machine it ran on — absent on a record written before 0038. */
+  readonly machine?: string;
+  readonly openedAt: string;
+  readonly history: SessionHistory;
+}
+
 export interface StatusReport {
   readonly workspace: WorkState;
   readonly projects: readonly ProjectStatus[];
   readonly bareTasks: readonly TaskStatus[];
+  /**
+   * This machine's name (design/0038-machine-bound-sessions/) — what makes
+   * the sessions below readable: which of them can be resumed here, and which
+   * belong to a computer that is not this one.
+   */
+  readonly machine: string;
+  /** The OPEN workspace-scope sessions — the ones no task line can carry. */
+  readonly sessions: readonly SessionStatus[];
   /** Present exactly when the forge answered — its absence marks forge state unavailable. */
   readonly needsYou?: readonly NeedsYouEntry[];
   /** What the settled-work window omitted from the listing above (0036). */
@@ -331,9 +372,35 @@ export async function statusReport(
     workspace,
     projects: projectStatuses,
     bareTasks: bareStatuses,
+    machine: (await readMachine()).name,
+    sessions: workspaceSessions(root, await readSessions(root, '')),
     ...(probe.live ? { needsYou: deriveNeedsYou(all, repositories) } : {}),
     hidden: { tasks: hiddenTasks, projects: hiddenProjects, settledAfterDays: SETTLED_AFTER_DAYS },
   };
+}
+
+/**
+ * The open workspace-scope sessions, each with the one derived fact that says
+ * what can be done about it: whether its history is here. Closed sessions are
+ * left out — closed stays closed, and a list that grew forever would stop
+ * being read (that is what makes this a status line and not a session log).
+ */
+function workspaceSessions(root: string, records: readonly SessionRecord[]): SessionStatus[] {
+  return records
+    .filter((record) => record.state === 'open')
+    .map((record) => ({
+      id: record.id,
+      purpose: record.purpose,
+      ...(record.machine === undefined ? {} : { machine: record.machine }),
+      openedAt: record.openedAt,
+      history: sessionHistory(root, record),
+    }));
+}
+
+function sessionHistory(root: string, record: SessionRecord): SessionHistory {
+  const nativeId = record.handle === undefined ? null : claudeNativeId(record.handle);
+  if (nativeId === null) return 'unlocatable';
+  return locateClaudeRun(nativeId, resolve(root, record.workingDirectory)).outcome;
 }
 
 async function taskStatuses(

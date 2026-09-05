@@ -70,6 +70,8 @@ import {
   type NeedsYouEntry,
   openPrUrls,
   SETTLED_AFTER_DAYS,
+  type SessionStatus,
+  type StatusReport,
   settledProject,
   settledTask,
   statusReport,
@@ -117,6 +119,7 @@ import {
 } from './json.ts';
 import { refreshDisplay } from './progress.ts';
 import { allSchemasJson, verbSchemaJson } from './schema.ts';
+import { askToClose, type ExitHistory, exitDecision, type OnExit } from './session-exit.ts';
 import {
   anyRepoName,
   repoName,
@@ -171,6 +174,22 @@ function allFlag() {
   return option('--all', {
     description: message`Include settled work — tasks and floors closed more than a week ago.`,
   });
+}
+
+/**
+ * `--on-exit` (design/0038-machine-bound-sessions/): the answer to the
+ * question Ward asks when a foreground run exits, given in advance. `ask` is
+ * the default and degrades to `keep` wherever asking is impossible — a
+ * declared agent, a `--json` invocation, a caller with no terminal — so every
+ * non-interactive invocation keeps the behavior it has always had.
+ */
+function onExitFlag() {
+  return withDefault(
+    option('--on-exit', choice(['ask', 'keep', 'close']), {
+      description: message`When the run exits: ask whether to close the session (default, humans at a terminal only), keep it open, or close it.`,
+    }),
+    'ask' as const,
+  );
 }
 
 const workspaceCreate = command(
@@ -607,6 +626,7 @@ const session = command(
         ),
         handle: optional(option('--handle', string({ metavar: 'TEXT' }))),
         dir: optional(option('--dir', string({ metavar: 'PATH' }))),
+        onExit: onExitFlag(),
         json: jsonFlag(),
       }),
       {
@@ -618,6 +638,7 @@ const session = command(
       object({
         action: constant('session-resume'),
         id: argument(sessionId()),
+        onExit: onExitFlag(),
         json: jsonFlag(),
       }),
       { brief: message`Re-attach to a session's agent run, in the directory it ran in.` },
@@ -911,10 +932,17 @@ try {
         await cmdWorktreeList(result.json);
         break;
       case 'session-open':
-        await cmdSessionOpen(result.task, result.purpose, result.handle, result.dir, result.json);
+        await cmdSessionOpen(
+          result.task,
+          result.purpose,
+          result.handle,
+          result.dir,
+          result.onExit,
+          result.json,
+        );
         break;
       case 'session-resume':
-        await cmdSessionResume(result.id, result.json);
+        await cmdSessionResume(result.id, result.onExit, result.json);
         break;
       case 'session-locate':
         await cmdSessionLocate(result.id, result.json);
@@ -1892,6 +1920,7 @@ async function cmdSessionOpen(
   purpose: string | undefined,
   handle: string | undefined,
   dir: string | undefined,
+  onExit: OnExit,
   json: boolean,
 ): Promise<void> {
   const root = await requireMutableWorkspace();
@@ -1937,9 +1966,11 @@ async function cmdSessionOpen(
         `ward session resume ${record.id}`,
     );
   }
-  renderStillOpen(record.id, json);
+  await afterRun(root, record.id, onExit, json);
   // The run's verdict is the invocation's: ward wrapped it, and swallowing a
-  // nonzero exit would tell a script the agent succeeded when it did not.
+  // nonzero exit would tell a script the agent succeeded when it did not. The
+  // question is asked first — the human answers about the session, then the
+  // exit code answers for the run.
   if (run.exitCode !== 0) process.exit(run.exitCode);
 }
 
@@ -1949,7 +1980,7 @@ async function cmdSessionOpen(
  * ground has already appended `resume-failed` with its cause by the time this
  * refuses, so the trail says what happened either way.
  */
-async function cmdSessionResume(id: string, json: boolean): Promise<void> {
+async function cmdSessionResume(id: string, onExit: OnExit, json: boolean): Promise<void> {
   const root = await requireMutableWorkspace();
   const { record, run } = await resumeSession(root, id, (resumed) => {
     if (json) printJson(sessionMutationJson(resumed));
@@ -1967,7 +1998,7 @@ async function cmdSessionResume(id: string, json: boolean): Promise<void> {
         `ward session locate ${record.id}`,
     );
   }
-  renderStillOpen(record.id, json);
+  await afterRun(root, record.id, onExit, json);
   if (run.exitCode !== 0) process.exit(run.exitCode);
 }
 
@@ -1984,7 +2015,14 @@ async function cmdSessionLocate(id: string, json: boolean): Promise<void> {
     printJson(sessionLocateJson(location));
     return;
   }
-  const where = pc.dim(`(${location.handle}, ran in ${location.record.workingDirectory})`);
+  // The machine is named where the record has one: "gone" means gone HERE,
+  // and which computer holds the history is the difference between a thread
+  // that is lost and one that is simply somewhere else.
+  const machine = location.record.machine;
+  const where = pc.dim(
+    `(${location.handle}, ran ${machine === undefined ? '' : `on ${machine} `}` +
+      `in ${location.record.workingDirectory})`,
+  );
   if (location.outcome === 'found') {
     console.log(`${pc.green('found')} ${location.path} ${where}`);
     return;
@@ -2007,6 +2045,76 @@ function renderSessionOpened(record: SessionRecord, json: boolean): void {
     `${pc.green('opened')} session ${pc.bold(record.id)} ` +
       pc.dim(`(${describeScope(record)}, in ${record.workingDirectory})`),
   );
+}
+
+/**
+ * The moment after a foreground run exits (design/0038-machine-bound-sessions/).
+ * The session is open — an exit is not a close — and the only party who knows
+ * whether the thread is done is the human who just left it. So where one is
+ * demonstrably present (a terminal on both ends, no `--json`, no declared
+ * agent) Ward asks them once, with the default set by what the run left
+ * behind; everywhere else it prints the still-open line it always printed.
+ *
+ * The close, when it comes, is `closeSession` — the same `closed` event and
+ * the same journal commit as `ward session close`, because a session closed
+ * from this question is not a lesser kind of closed.
+ */
+async function afterRun(root: string, id: string, onExit: OnExit, json: boolean): Promise<void> {
+  const history = await runHistory(root, id);
+  const decision = exitDecision({
+    history,
+    tty: process.stdin.isTTY === true && process.stdout.isTTY === true,
+    agent: callerIsAgent(),
+    json,
+    onExit,
+  });
+  if (decision === 'keep') {
+    renderStillOpen(id, json);
+    return;
+  }
+  if (decision !== 'close') {
+    // One line of what Ward knows, then the question. The line is the reason
+    // the default is what it is, said out loud, so Enter is an informed key.
+    console.log(
+      history === 'gone'
+        ? pc.dim('\nthe run left no history (nothing to resume)')
+        : pc.dim(
+            `\nhistory at ${await historyPath(root, id)} — resume later with: ` +
+              `ward session resume ${id}`,
+          ),
+    );
+    if (!(await askToClose(`Close session ${pc.bold(id)}?`, decision === 'ask-default-yes'))) {
+      renderStillOpen(id, json);
+      return;
+    }
+  }
+  await closeSession(root, id);
+  // Under --json stdout already carries the invocation's one document (0005),
+  // and a second one would break that contract for the scripts that read it.
+  if (!json) console.log(`${pc.dim('closed')} session ${pc.bold(id)}`);
+}
+
+/**
+ * Whether the run left a history behind. A session Ward cannot resolve a
+ * handle for — none recorded, or another harness's — is `unlocatable` rather
+ * than an error: the question is about closing a session, and refusing to ask
+ * it because the harness is unknown would be the tail wagging the dog.
+ */
+async function runHistory(root: string, id: string): Promise<ExitHistory> {
+  try {
+    return (await locateSession(root, id)).outcome;
+  } catch {
+    return 'unlocatable';
+  }
+}
+
+/** Where the history was found — named in the line that precedes the question. */
+async function historyPath(root: string, id: string): Promise<string> {
+  try {
+    return (await locateSession(root, id)).path;
+  } catch {
+    return 'the harness';
+  }
 }
 
 /**
@@ -2033,6 +2141,7 @@ async function cmdStatus(all: boolean, json: boolean): Promise<void> {
   console.log(`Workspace: ${renderState(report.workspace)}\n`);
   if (report.projects.length === 0 && report.bareTasks.length === 0) {
     console.log(pc.dim('nothing in flight — an empty workspace is active, not idle'));
+    renderSessions(report);
     renderHidden(report.hidden, 'ward status --all');
     return;
   }
@@ -2051,6 +2160,7 @@ async function cmdStatus(all: boolean, json: boolean): Promise<void> {
       console.log(renderTaskStatus(task));
     }
   }
+  renderSessions(report);
   const allTasks = [
     ...report.projects.flatMap((project) => project.tasks),
     ...report.bareTasks,
@@ -2063,6 +2173,35 @@ async function cmdStatus(all: boolean, json: boolean): Promise<void> {
       console.log(`  ${pc.yellow('!')} ${renderNeedsYou(entry)}`);
     }
   }
+}
+
+/**
+ * The open workspace-scope sessions (design/0038-machine-bound-sessions/).
+ * Task sessions ride their task lines, where their work is; these have no
+ * task row to sit on, and until this block they were visible only to
+ * `session locate` and the records themselves. Each row says the one thing
+ * that decides what to do with it: the history is here (resume), it is on
+ * another machine (go there), or there is none (close it — with the command
+ * to hand, since the whole point is that nothing is worth resuming).
+ */
+function renderSessions(report: StatusReport): void {
+  if (report.sessions.length === 0) return;
+  console.log(`\n${pc.bold('sessions')}`);
+  for (const session of report.sessions) {
+    console.log(
+      `  ${pc.bold(session.id)} — ${session.purpose} ${pc.dim(`(${sessionNote(report.machine, session)})`)}`,
+    );
+  }
+}
+
+function sessionNote(here: string, session: SessionStatus): string {
+  const machine = session.machine;
+  if (session.history === 'found') return 'history here';
+  const elsewhere = machine !== undefined && machine !== here;
+  if (elsewhere) return `on ${machine} — resume it there`;
+  const whose = machine === undefined ? 'machine unrecorded · ' : '';
+  if (session.history === 'unlocatable') return `${whose}no harness handle`;
+  return `${whose}history gone — close with: ward session close ${session.id}`;
 }
 
 function renderTaskStatus(status: TaskStatus): string {

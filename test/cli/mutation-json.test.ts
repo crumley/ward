@@ -143,7 +143,7 @@ test('session open --json: the session record, handle included', () => {
   );
   expect(result.exitCode).toBe(0);
   expect(validated('session open', sessionMutationShape, result.stdout)).toMatchObject({
-    id: 'json-output-1',
+    id: 'json-output-1@test',
     task: 't1',
     purpose: 'drive the feature',
     workingDirectory: 'worktrees/f2t1-json-output',
@@ -204,10 +204,10 @@ test('the derivation echo moves to stderr under --json — stdout stays one docu
 });
 
 test('session close --json: closed, with closedAt recorded', () => {
-  const result = runWard(['session', 'close', 'json-output-1', '--json'], ws);
+  const result = runWard(['session', 'close', 'json-output-1@test', '--json'], ws);
   expect(result.exitCode).toBe(0);
   const session = validated('session close', sessionMutationShape, result.stdout);
-  expect(session).toMatchObject({ id: 'json-output-1', state: 'closed' });
+  expect(session).toMatchObject({ id: 'json-output-1@test', state: 'closed' });
   expect(typeof session.closedAt).toBe('string');
 });
 

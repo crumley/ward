@@ -19,6 +19,7 @@ import {
   globalConfigType,
   inspectConfig,
 } from '../global/config.ts';
+import { type MachineName, machineName } from '../global/machine.ts';
 import { configDir } from '../global/paths.ts';
 import {
   listWorkspaces,
@@ -82,6 +83,14 @@ export interface DoctorReport {
    * they cannot disagree.
    */
   readonly agent: ResolvedAgentConfig | null;
+  /**
+   * What this machine is called and which layer named it
+   * (design/0038-machine-bound-sessions/) — machine-level, so it is answered
+   * outside a workspace too. Carried as structure beside the finding that
+   * renders it, the same two-audiences arrangement `agent` uses: one
+   * resolution feeds both, so the line and the data cannot disagree.
+   */
+  readonly machineName: MachineName;
   readonly healthy: boolean;
 }
 
@@ -90,13 +99,21 @@ export async function runDoctor(cwd: string): Promise<DoctorReport> {
   // state, and the workspace section resolves the agent block out of it
   // against the workspace record. Two reads could disagree; one cannot.
   const config = await inspectConfig(configDir());
-  const machine = await machineChecks(cwd, config);
+  const name = machineName(config.config.machine);
+  const machine = await machineChecks(cwd, config, name);
   const workspaceRoot = discoverWorkspace(cwd);
   const inside =
     workspaceRoot === null ? null : await workspaceChecks(workspaceRoot, config.config);
   const workspace = inside?.findings ?? [];
   const healthy = [...machine, ...workspace].every((finding) => finding.severity !== 'error');
-  return { machine, workspaceRoot, workspace, agent: inside?.agent ?? null, healthy };
+  return {
+    machine,
+    workspaceRoot,
+    workspace,
+    agent: inside?.agent ?? null,
+    machineName: name,
+    healthy,
+  };
 }
 
 /** The global config as doctor read it: the resolved settings and the file's own state. */
@@ -104,8 +121,13 @@ type ConfigInspection = { config: GlobalConfig; read: GlobalRead<GlobalConfigRec
 
 // -- machine preconditions ------------------------------------------------
 
-async function machineChecks(cwd: string, config: ConfigInspection): Promise<Finding[]> {
+async function machineChecks(
+  cwd: string,
+  config: ConfigInspection,
+  name: MachineName,
+): Promise<Finding[]> {
   const findings: Finding[] = [];
+  findings.push(machineNameFinding(name));
   if (gitAvailable()) {
     const version = git(cwd, '--version')
       .stdout.trim()
@@ -141,6 +163,27 @@ async function machineChecks(cwd: string, config: ConfigInspection): Promise<Fin
   findings.push(await workspaceRegistryFinding());
   findings.push(...registryLockFindings());
   return findings;
+}
+
+/**
+ * What this machine is called (design/0038-machine-bound-sessions/), and
+ * where the name came from. Reported because the name is not cosmetic: it is
+ * the second half of every session id allocated here (`workspace-7@gcp`), so
+ * "what would my next session be called, and why?" must be answerable without
+ * opening a session to find out. Never worse than `ok` — the name always
+ * resolves, by construction.
+ */
+function machineNameFinding(name: MachineName): Finding {
+  const origin = {
+    override: 'from WARD_MACHINE',
+    configured: 'configured',
+    hostname: "from this machine's hostname",
+  }[name.source];
+  return {
+    check: 'machine',
+    severity: 'ok',
+    message: `named '${name.name}' (${origin}) — session ids allocated here end '@${name.name}'`,
+  };
 }
 
 /**

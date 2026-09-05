@@ -41,6 +41,13 @@ export const WARD_GLOBAL_ENV = ((): Readonly<Record<string, string>> => {
     WARD_CONFIG_DIR: join(dir, 'config'),
     WARD_STATE_DIR: join(dir, 'state'),
     XDG_CONFIG_HOME: join(dir, 'xdg-config'),
+    // The machine a test's session ids are allocated on
+    // (design/0038-machine-bound-sessions/). Pinned for the same reason the
+    // git identity is: without it every id would carry the developer's
+    // hostname and no assertion about one could be written down. `test` is
+    // deliberately not a plausible hostname, so a real machine's name showing
+    // up in an expectation is visible as the mistake it is.
+    WARD_MACHINE: 'test',
   };
 })();
 

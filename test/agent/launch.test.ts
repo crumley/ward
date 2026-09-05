@@ -36,14 +36,17 @@ const DEFAULT_PURPOSE = /^Coordinating work · opened \d{4}-\d{2}-\d{2}T\d{2}:\d
 test('open with no TASK: the record first, then the agent, in the workspace root', async () => {
   const opened = ward(['session', 'open', '--purpose', 'run the workspace']);
   expect(opened.exitCode).toBe(0);
-  expect(opened.stdout).toContain('opened session workspace-1');
+  expect(opened.stdout).toContain('opened session workspace-1@test');
   expect(opened.stdout).toContain('launching the agent in .');
 
   const [record] = await readSessions(ws, '');
   expect(record).toMatchObject({
-    id: 'workspace-1',
+    id: 'workspace-1@test',
     scope: 'workspace',
     state: 'open',
+    // The machine is on the record, not merely spelled in the id: the id is a
+    // presentation of the fact (design/0038-machine-bound-sessions/).
+    machine: 'test',
     workingDirectory: '.',
     purpose: 'run the workspace',
   });
@@ -54,7 +57,7 @@ test('open with no TASK: the record first, then the agent, in the workspace root
   // The stub looked for `sessions/workspace-1.md` from inside its own launch
   // and found it: the record precedes the process, always.
   expect(run?.recordSeen).toBe(true);
-  expect(run?.wardAgent).toBe('workspace-1'); // born declared
+  expect(run?.wardAgent).toBe('workspace-1@test'); // born declared
   expect(run?.cwd).toBe(ws);
   expect(run?.argv[0]).toBe('--session-id');
   expect(run?.argv[1]).toMatch(UUID);
@@ -68,7 +71,7 @@ test('open with no TASK and no --purpose: the launch runs, and the record states
   // behalf, stamped with the record's own opening instant.
   const opened = ward(['session', 'open']);
   expect(opened.exitCode).toBe(0);
-  expect(opened.stdout).toContain('opened session workspace-1');
+  expect(opened.stdout).toContain('opened session workspace-1@test');
   expect(runs()[0]?.recordSeen).toBe(true);
   const [launched] = await readSessions(ws, '');
   expect(launched?.scope).toBe('workspace');
@@ -143,13 +146,14 @@ test("agent.command is how the harness is invoked here: its words first, then Wa
   expect(run?.argv[1]).toBe('--session-id');
   expect(run?.argv[2]).toMatch(UUID);
   expect(run?.argv.slice(3)).toEqual(['--dangerously-skip-permissions']);
-  expect(run?.wardAgent).toBe('workspace-1');
+  expect(run?.wardAgent).toBe('workspace-1@test');
   expect(run?.recordSeen).toBe(true);
 
   // A resume goes through the same command — the launcher is a property of
   // this machine, needed exactly as much the second time.
   const nativeId = run?.argv[2] ?? '';
-  expect(ward(['session', 'resume', 'workspace-1'], { bin: null }).exitCode).toBe(0);
+  fabricateTranscript(nativeId, ws);
+  expect(ward(['session', 'resume', 'workspace-1@test'], { bin: null }).exitCode).toBe(0);
   expect(runs()[1]?.argv).toEqual([
     'claude',
     '--resume',
@@ -180,7 +184,12 @@ test('--json: one document, emitted before the run takes the terminal', () => {
   const result = ward(['session', 'open', '--purpose', 'machine-readable', '--json']);
   expect(result.exitCode).toBe(0);
   const document = sessionMutationShape.parse(JSON.parse(result.stdout));
-  expect(document).toMatchObject({ id: 'workspace-1', scope: 'workspace', state: 'open' });
+  expect(document).toMatchObject({
+    id: 'workspace-1@test',
+    scope: 'workspace',
+    machine: 'test',
+    state: 'open',
+  });
   expect(document.task).toBeUndefined();
   expect(document.events).toEqual([{ event: 'opened', at: expect.any(String) }]);
   expect(runs()[0]?.recordSeen).toBe(true);
@@ -191,8 +200,10 @@ test("the run's exit code is the invocation's, and the session stays open", asyn
   expect(result.exitCode).toBe(3);
   // An exit is not a close (open ≠ running) — the record still says open, and
   // the affordance says how to pick it back up.
-  expect(result.stdout).toContain('session workspace-1 is still open — an exit is not a close');
-  expect(result.stdout).toContain('ward session resume workspace-1');
+  expect(result.stdout).toContain(
+    'session workspace-1@test is still open — an exit is not a close',
+  );
+  expect(result.stdout).toContain('ward session resume workspace-1@test');
   expect((await readSessions(ws, ''))[0]?.state).toBe('open');
 });
 
@@ -203,7 +214,7 @@ test('a harness that will not start: refused legibly, with the record standing',
   expect(result.exitCode).toBe(1);
   expect(result.stdout).toContain('opened session workspace-1'); // written before the attempt
   expect(result.stderr).toContain('the agent did not start');
-  expect(result.stderr).toContain('ward session resume workspace-1');
+  expect(result.stderr).toContain('ward session resume workspace-1@test');
   const [record] = await readSessions(ws, '');
   expect(record).toMatchObject({ state: 'open', scope: 'workspace' });
 });
@@ -214,10 +225,14 @@ test('resume: the same id, in the recorded directory, with the attempt recorded'
   writeGlobalConfig({ model: 'fable', args: ['--dangerously-skip-permissions'] });
   ward(['session', 'open', '--purpose', 'resume me']);
   const nativeId = runs()[0]?.argv[1] ?? '';
+  // Resume locates first (design/0038-machine-bound-sessions/): a run that left
+  // no history is refused rather than respawned, so a resume this suite means
+  // to succeed needs the transcript the harness would have written.
+  fabricateTranscript(nativeId, ws);
 
-  const resumed = ward(['session', 'resume', 'workspace-1']);
+  const resumed = ward(['session', 'resume', 'workspace-1@test']);
   expect(resumed.exitCode).toBe(0);
-  expect(resumed.stdout).toContain('resuming session workspace-1');
+  expect(resumed.stdout).toContain('resuming session workspace-1@test');
   // The model is NOT passed — the run restores its own — while the
   // per-invocation args ride along.
   expect(runs()[1]?.argv).toEqual(['--resume', nativeId, '--dangerously-skip-permissions']);
@@ -227,7 +242,7 @@ test('resume: the same id, in the recorded directory, with the attempt recorded'
   // Under --json the mutation report is the record with the attempt on it,
   // emitted before the run takes the terminal — the same posture as open.
   const document = sessionMutationShape.parse(
-    JSON.parse(ward(['session', 'resume', 'workspace-1', '--json']).stdout),
+    JSON.parse(ward(['session', 'resume', 'workspace-1@test', '--json']).stdout),
   );
   expect(document.state).toBe('open');
   expect(document.events?.map((event) => event.event)).toEqual(['opened', 'resumed', 'resumed']);
@@ -235,7 +250,8 @@ test('resume: the same id, in the recorded directory, with the attempt recorded'
 
 test('a resume that cannot start records resume-failed, with its cause', async () => {
   ward(['session', 'open', '--purpose', 'resume me']);
-  const failed = ward(['session', 'resume', 'workspace-1'], { bin: '/nonexistent/claude' });
+  fabricateTranscript(runs()[0]?.argv[1] ?? '', ws);
+  const failed = ward(['session', 'resume', 'workspace-1@test'], { bin: '/nonexistent/claude' });
   expect(failed.exitCode).toBe(1);
   expect(failed.stderr).toContain('the agent did not start');
 
@@ -249,7 +265,8 @@ test('a resume that cannot start records resume-failed, with its cause', async (
 test('resume works on a manually recorded task session — any claude: handle', async () => {
   await openTask(ws, 'feature', {});
   ward(['session', 'open', 't1', '--purpose', 'hand-recorded', '--handle', 'claude:abc-123']);
-  const resumed = ward(['session', 'resume', 'feature-1']);
+  fabricateTranscript('abc-123', ws);
+  const resumed = ward(['session', 'resume', 'feature-1@test']);
   expect(resumed.exitCode).toBe(0);
   expect(runs()[0]?.argv).toEqual(['--resume', 'abc-123']);
   expect(eventsOf(await readSessions(ws, 'tasks/t1-feature'))).toEqual(['opened', 'resumed']);
@@ -258,12 +275,12 @@ test('resume works on a manually recorded task session — any claude: handle', 
 test('a session Ward cannot re-attach to is refused by name, never guessed at', async () => {
   await openTask(ws, 'feature', {});
   ward(['session', 'open', 't1', '--purpose', 'no handle']);
-  const noHandle = ward(['session', 'resume', 'feature-1']);
+  const noHandle = ward(['session', 'resume', 'feature-1@test']);
   expect(noHandle.exitCode).toBe(1);
   expect(noHandle.stderr).toContain('has no harness handle');
 
   ward(['session', 'open', 't1', '--purpose', 'foreign', '--handle', 'codex:xyz']);
-  const foreign = ward(['session', 'resume', 'feature-2']);
+  const foreign = ward(['session', 'resume', 'feature-2@test']);
   expect(foreign.exitCode).toBe(1);
   expect(foreign.stderr).toContain('no harness Ward has can resolve');
   expect(runs()).toEqual([]); // neither ever reached a spawn
@@ -275,13 +292,13 @@ test('locate: gone and found are distinct outcomes, both exit 0', () => {
   ward(['session', 'open', '--purpose', 'locate me']);
   const nativeId = runs()[0]?.argv[1] ?? '';
 
-  const gone = ward(['session', 'locate', 'workspace-1']);
+  const gone = ward(['session', 'locate', 'workspace-1@test']);
   expect(gone.exitCode).toBe(0);
   expect(gone.stdout).toContain('gone');
   expect(gone.stdout).toContain('the harness owns retention');
 
   fabricateTranscript(nativeId, ws);
-  const found = ward(['session', 'locate', 'workspace-1']);
+  const found = ward(['session', 'locate', 'workspace-1@test']);
   expect(found.exitCode).toBe(0);
   expect(found.stdout).toContain('found');
   expect(found.stdout).toContain(join(claudeHome, 'projects', mungeCwd(ws), `${nativeId}.jsonl`));
@@ -293,16 +310,17 @@ test('locate --json: the handle, the address, and the outcome as data', () => {
   fabricateTranscript(nativeId, ws);
 
   const document = sessionLocateShape.parse(
-    JSON.parse(ward(['session', 'locate', 'workspace-1', '--json']).stdout),
+    JSON.parse(ward(['session', 'locate', 'workspace-1@test', '--json']).stdout),
   );
   expect(document).toEqual({
-    id: 'workspace-1',
+    id: 'workspace-1@test',
     scope: 'workspace',
     state: 'open',
     handle: `claude:${nativeId}`,
     harness: 'claude',
     nativeId,
     workingDirectory: '.',
+    machine: 'test',
     outcome: 'found',
     path: join(claudeHome, 'projects', mungeCwd(ws), `${nativeId}.jsonl`),
   });
@@ -312,14 +330,14 @@ test('a closed session still locates — reflection reads finished work', () => 
   ward(['session', 'open', '--purpose', 'closed later']);
   const nativeId = runs()[0]?.argv[1] ?? '';
   fabricateTranscript(nativeId, ws);
-  expect(ward(['session', 'close', 'workspace-1']).exitCode).toBe(0);
+  expect(ward(['session', 'close', 'workspace-1@test']).exitCode).toBe(0);
 
   const document = sessionLocateShape.parse(
-    JSON.parse(ward(['session', 'locate', 'workspace-1', '--json']).stdout),
+    JSON.parse(ward(['session', 'locate', 'workspace-1@test', '--json']).stdout),
   );
   expect(document).toMatchObject({ state: 'closed', outcome: 'found' });
   // …but resuming it is refused: closed stays closed.
-  expect(ward(['session', 'resume', 'workspace-1']).exitCode).toBe(1);
+  expect(ward(['session', 'resume', 'workspace-1@test']).exitCode).toBe(1);
 });
 
 // -- the record-only paths, and what came before ----------------------------
@@ -334,7 +352,7 @@ test('--handle at workspace scope records without launching', async () => {
     'claude:existing',
   ]);
   expect(result.exitCode).toBe(0);
-  expect(result.stdout).toContain('opened session workspace-1 (workspace scope, in .)');
+  expect(result.stdout).toContain('opened session workspace-1@test (workspace scope, in .)');
   expect(runs()).toEqual([]); // nothing was started
   expect((await readSessions(ws, ''))[0]?.handle).toBe('claude:existing');
 });
@@ -358,6 +376,7 @@ test('a session record written before 0029 still parses, closes, and locates', a
     JSON.parse(ward(['session', 'locate', 'feature-1', '--json']).stdout),
   );
   expect(located).toMatchObject({ scope: 'task', task: 't1', outcome: 'gone' });
+  expect(located.machine).toBeUndefined(); // unrecorded, never guessed
 
   const closed = sessionMutationShape.parse(
     JSON.parse(ward(['session', 'close', 'feature-1', '--json']).stdout),
@@ -368,19 +387,26 @@ test('a session record written before 0029 still parses, closes, and locates', a
   expect(closed.events).toEqual([{ event: 'closed', at: expect.any(String) }]);
 });
 
-test('ids stay unique among open sessions across scopes', async () => {
+test('ids climb and never repeat — a closed record is never written over', async () => {
   await openTask(ws, 'workspace-ish', {});
   ward(['session', 'open', '--purpose', 'first']);
   ward(['session', 'open', '--purpose', 'second', '--handle', 'claude:two']);
   expect((await readSessions(ws, '')).map((record) => record.id)).toEqual([
-    'workspace-1',
-    'workspace-2',
+    'workspace-1@test',
+    'workspace-2@test',
   ]);
-  // …and the discriminator is reused once the first closes.
-  expect(ward(['session', 'close', 'workspace-1']).exitCode).toBe(0);
+  // Closing frees nothing (design/0038-machine-bound-sessions/): the next open
+  // takes the next number, so the closed session's record — its handle, its
+  // trail — is still there to be read.
+  expect(ward(['session', 'close', 'workspace-1@test']).exitCode).toBe(0);
   ward(['session', 'open', '--purpose', 'third', '--handle', 'claude:three']);
-  const open = (await readSessions(ws, '')).filter((record) => record.state === 'open');
-  expect(open.map((record) => record.id).sort()).toEqual(['workspace-1', 'workspace-2']);
+  const all = await readSessions(ws, '');
+  expect(all.map((record) => record.id)).toEqual([
+    'workspace-1@test',
+    'workspace-2@test',
+    'workspace-3@test',
+  ]);
+  expect(all[0]).toMatchObject({ state: 'closed', purpose: 'first' });
 });
 
 // -- scaffolding ------------------------------------------------------------
