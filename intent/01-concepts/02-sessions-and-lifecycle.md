@@ -50,6 +50,13 @@ none running; resume is what turns open-but-not-running back into running. **Why
 recovery reasons about what is _open_ from the record, not about what happens to be _running_ in
 some terminal — so the lights going out never loses a thread.
 
+**Running is per machine, and the record says which machine.** A thread is bound to the machine
+holding its harness history (`../02-subsystems/03-agent-harness.md`, where locate is answered per
+machine), so a session open in a workspace shared by two computers can be turned into a run on one
+of them and not the other. The session's recorded **machine** (the minimum, below) is what makes
+that answerable: without it, a resume on the wrong machine is attempted, fails at the harness, and
+records an attempt that never had a chance.
+
 It follows that only **open** and **closed** are ever **stored** on the session record. _Running_ is
 a **derived live overlay** — a fact about a process attached right now, read from the live layer —
 the same shape as `in-review` on a task (`00-domain-model.md`, a derived overlay, not a stored
@@ -99,6 +106,14 @@ clean it looked.
 - **Closed stays closed — and closing stays deliberate.** No reboot or sweep ever revives a closed
   session, and nothing closes an open one on the session's behalf: a thread Ward can no longer
   resume stays **open and visible** (_Recovery_, the three outcomes) rather than being tidied away.
+  Ward may, however, **ask**: when a run exits with its human demonstrably present — a foreground
+  run they just left — the shell may ask whether the thread is done, stating what it found and
+  proposing an answer. The answer, default included, is **the human's close, never Ward's**, and
+  every caller who is not there to answer (an agent, a machine-readable invocation, anything without
+  a terminal) keeps the session open. **Why the distinction holds:** what the guarantee forbids is
+  machinery deciding a thread is finished; a question decides nothing — it spends the one moment the
+  human's answer is free rather than accumulating threads only they can settle
+  (`../02-subsystems/07-human-shell.md`, which owns when such a question may be asked).
 - **Open ≠ running.** A session can be open without a process attached; resume is what
   (re-)attaches. Stored state is `open` or `closed` only — _running_ is derived from the live
   attachment, never persisted. The record, not the process, is authoritative.
@@ -109,9 +124,13 @@ clean it looked.
 
 Each scope keeps a **session log**: an append-only record of the sessions that have run at that
 scope, with enough metadata per entry to support recovery, resumption, and reflection. At minimum an
-entry captures: the identity, the working directory, the **harness handle**, the model, when it
-opened/closed, its current stored state (`open` or `closed`), and its **purpose** — a link to the
-brief or dispatch that opened it, or a one-line goal when neither exists. **Why purpose is part of
+entry captures: the identity, the working directory, the **harness handle**, the **machine** the
+session ran on, the model, when it opened/closed, its current stored state (`open` or `closed`), and
+its **purpose** — a link to the brief or dispatch that opened it, or a one-line goal when neither
+exists. **Why the machine is part of the minimum:** the handle is machine-independent in form and
+machine-bound in fact — the harness keeps the run's history on the computer that produced it — so a
+record without it cannot say **where** a thread can be resumed, and recovery reading a workspace on
+a second machine cannot tell a thread it may re-attach from one it cannot. **Why purpose is part of
 the minimum:** "what was this thread trying to do" must be answerable from the record alone — the
 harness history says it at length, but the record must not depend on a transcript that may no longer
 resolve (`../02-subsystems/03-agent-harness.md`).
@@ -222,9 +241,10 @@ improved by reflection, and a struggling recovery is concentrated evidence of ex
 reflection exists to find (`04-reflection-and-evolution.md`, which treats a completed recovery as a
 trigger). (The record's form is a _how_ — `../02-subsystems/00-metadata-store.md`.)
 
-Because session ids are **unique among open sessions workspace-wide** (`00-domain-model.md`,
-Identity), recovery addresses each session by its **bare id** — no scope qualifier is needed to tell
-two threads apart, even when sibling scopes reuse a slug.
+Because session ids are **unique over the workspace's history, across the machines that share it**
+(`00-domain-model.md`, Identity), recovery addresses each session by its **bare id** — no scope
+qualifier is needed to tell two threads apart, even when sibling scopes reuse a slug, and no id ever
+addresses two sessions.
 
 The result: a human returns from a reboot to a workspace that has restored the threads genuinely in
 flight — their sessions, their waits, and their setup — and nothing else, and that has **already
@@ -234,13 +254,16 @@ remember it.
 ## Canonical home for
 
 - **The session lifecycle** — open / close / resume / wake — and the **open ≠ running** distinction
-  (stored state is `open | closed`; _running_ is a derived live overlay, never persisted).
-- **The lifecycle guarantees** — resume is idempotent, closed stays closed, the record (not the
-  process) is authoritative, and the record is kept current.
+  (stored state is `open | closed`; _running_ is a derived live overlay, never persisted, and it is
+  **per machine** — the record names the machine that can turn open into running).
+- **The lifecycle guarantees** — resume is idempotent, closed stays closed and closing stays
+  deliberate (the shell may **ask** a present human; it never decides), the record (not the process)
+  is authoritative, and the record is kept current.
 - **The per-scope session log** (append-only; "enough metadata" to recover, including each session's
-  **purpose**, and — conditioned on a source existing — its **persona** once a cast exists and its
-  **usage** where the harness exposes it; **lifecycle events** — opened / resumed / resume-failed
-  with cause / closed — so failure is a recorded fact, never a silent retry).
+  **purpose** and the **machine** it ran on, and — conditioned on a source existing — its
+  **persona** once a cast exists and its **usage** where the harness exposes it; **lifecycle
+  events** — opened / resumed / resume-failed with cause / closed — so failure is a recorded fact,
+  never a silent retry).
 - **Recovery** — the cold-start orchestration that restores the in-flight threads (re-validating
   setup for **live** anchors only; addressing sessions by their workspace-unique bare id) — itself a
   **recorded episode** (wakes re-armed/fired, the rounds' conclusions) — and its **three per-thread

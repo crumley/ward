@@ -389,16 +389,22 @@ is that room codes run as a simple per-floor sequence (opening order on the floo
 task.
 
 Where global uniqueness genuinely is needed, it can be composed (e.g. floor number + room code). A
-**session** takes the middle path: its id is allocated **unique among the open sessions in the
-workspace** — if a name is taken, the next gets a discriminator (`riley-1`, then `riley-2`) — so a
-**bare session id is a sufficient address** for every operation that touches it (resume, close,
-dispatch, recovery), without dragging a scope qualifier through every call. **Why workspace-unique
-rather than scope-relative:** a scope-relative id is ambiguous the moment two scopes both hold a
-`riley-1`, which forces every session operation to carry `(scope, id)` — a sign the model, not the
-intent, was wrong; making the id as unique as a bare address needs (and no more) keeps the APIs
-single-keyed and the identity still memorable. Uniqueness is only among _open_ sessions and only
-workspace-wide, sized to in-flight cardinality; over history a reused id is disambiguated by time
-and context like every other code.
+**session** composes: its id is **unique over the workspace's history, across the machines that
+share it** — the slug, a **discriminator that is never reused**, and the **machine** the session ran
+on (`riley-1@mbp`, then `riley-2@mbp`) — so a **bare session id is a sufficient address** for every
+operation that touches it (resume, close, dispatch, recovery), without dragging a scope qualifier
+through every call. **Why workspace-unique rather than scope-relative:** a scope-relative id is
+ambiguous the moment two scopes both hold a `riley-1`, which forces every session operation to carry
+`(scope, id)` — a sign the model, not the intent, was wrong; keeping the APIs single-keyed is what
+the bare address buys. **Why over history rather than among the open sessions, and why the machine
+is in it:** unlike a room code, a session id is also the address of the **session's record**.
+Handing a closed session's discriminator to a new one overwrites that record — the handle, the
+events, the purpose — which spends _closed stays closed_ (`02-sessions-and-lifecycle.md`) on an id
+nobody needed to recycle, and "time and context" cannot disambiguate a record that no longer exists.
+And a workspace **travels**: two machines sharing one are two allocators, each reading its own view,
+so an id that does not name its machine is minted twice and the two records collide when the
+workspace syncs. A **room** may reuse its code precisely because it is a slot that empties and
+refills, not a record; a session is a record, so its id is permanent.
 
 A **task follows the same rule, for the same reason**: its code is allocated **unique among the open
 tasks in the workspace**, so a bare task code is a sufficient address for every lifecycle operation
@@ -418,16 +424,16 @@ remember.
 
 **What gets an identity** (current intent):
 
-| Thing     | Identity                                                                                                                                                  |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Project   | slug + code; the **code is a floor number** (`1`, `2`, `3…`) — **monotonic, never reused**                                                                |
-| Task      | slug + code, **unique among open tasks workspace-wide** (a bare code addresses it); when remote-linked, also **referenceable by its remote work-item id** |
-| Room      | **floor number + room code** (`4A12`), by memorable convention; addresses the room workspace-wide without naming its task or anchor                       |
-| Session   | slug + code, **unique among open sessions workspace-wide** (a bare id addresses it)                                                                       |
-| Worktree  | natural key (repository + branch); its **disposition** is an attribute, not identity                                                                      |
-| Workdir   | natural key (task + name); scope-relative is enough                                                                                                       |
-| Workspace | the root itself; identified by location                                                                                                                   |
-| Artifact  | addressed by scope + type + name                                                                                                                          |
+| Thing     | Identity                                                                                                                                                            |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Project   | slug + code; the **code is a floor number** (`1`, `2`, `3…`) — **monotonic, never reused**                                                                          |
+| Task      | slug + code, **unique among open tasks workspace-wide** (a bare code addresses it); when remote-linked, also **referenceable by its remote work-item id**           |
+| Room      | **floor number + room code** (`4A12`), by memorable convention; addresses the room workspace-wide without naming its task or anchor                                 |
+| Session   | slug + code + **the machine it ran on**, unique over the workspace's history across the machines sharing it — the code is **never reused** (a bare id addresses it) |
+| Worktree  | natural key (repository + branch); its **disposition** is an attribute, not identity                                                                                |
+| Workdir   | natural key (task + name); scope-relative is enough                                                                                                                 |
+| Workspace | the root itself; identified by location                                                                                                                             |
+| Artifact  | addressed by scope + type + name                                                                                                                                    |
 
 A session also stores a **harness handle** — the locator for its underlying harness run — but that
 is a recorded _attribute_, not a second identity (like a task's remote-work-item link;
