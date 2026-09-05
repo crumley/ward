@@ -25,9 +25,11 @@ earns its keep; you never create an empty container for ceremony's sake. "Earns 
 **checkable test per level**, applied at any time — not only at creation:
 
 - The **task is the universal quantum.** Every unit of work is a task, however small — the cheapest
-  one-off is a bare task directly under the workspace with one elided session. A task record is one
-  document, cheap enough to always exist; artifact ownership, status rollup, and recovery
-  enumeration all key off it.
+  one-off is one task on the **ground floor** with one elided session
+  ([`06-workspace-lifecycle.md`](06-workspace-lifecycle.md), _The standing workspace project_). No
+  level is faked there: the ground floor exists in every workspace by intent, for the workspace's
+  own work, and is not created for the one-off's sake. A task record is one document, cheap enough
+  to always exist; artifact ownership, status rollup, and recovery enumeration all key off it.
 - A **project** exists when success is more than "are the tasks done" — when the work has its own
   definition of adding up to something.
 - An **anchor** exists when the work needs a place on disk — code to change, data to wrangle. A task
@@ -376,11 +378,12 @@ in their head, say it, and type it**, and an agent can **infer what is meant giv
 — not that every code is unique across the entire machine. Two design commitments follow:
 
 - **Lean on memorable conventions, not entropy.** Borrow the hospital metaphor: a **project is a
-  floor**, addressed by a **floor number** (`1`, `2`, `3…`, starting at 1); its **rooms carry the
-  floor number plus a room code** — e.g. `4A12` is room `A12` on floor `4` — so a room's address
-  already names its floor and its room in a few keystrokes. "The resident on `4A12`" costs no
-  lookup. A convention that mirrors the structure beats a random string. **Why:** memorability _is_
-  context management — a name you can hold in your head costs no lookup.
+  floor**, addressed by a **floor number** (ordinary floors `1`, `2`, `3…`, starting at 1; `0` is
+  reserved — below); its **rooms carry the floor number plus a room code** — e.g. `4A12` is room
+  `A12` on floor `4` — so a room's address already names its floor and its room in a few keystrokes.
+  "The resident on `4A12`" costs no lookup. A convention that mirrors the structure beats a random
+  string. **Why:** memorability _is_ context management — a name you can hold in your head costs no
+  lookup.
 - **Size codes to real cardinality.** A person is not working on a thousand projects at once, and a
   hospital floor does not have ten thousand rooms. Identifiers should carry only as many
   digits/prefixes as the realistic number of _in-flight_ things requires. **Why:** this is personal,
@@ -451,11 +454,20 @@ and never reused, so Ward cannot allocate "the next low floor" without breaking 
 historical room addresses trustworthy; the convention is a workspace's practice, and belongs in its
 own guidance.
 
+**Floor `0` is reserved for the standing workspace project**
+([`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)) — the one address every workspace shares.
+**Why reserved rather than allocated:** it is the one project every workspace has, and things
+written _outside_ any single workspace need to name it — a default Ward ships, a brief written once
+and read in three workspaces. A number allocated per workspace is a different number in each, so no
+such text could name it and be right twice. Ordinary floors are unaffected: they are allocated
+monotonically from `1`, and never reused. Moving an existing standing project onto floor `0` retires
+the number it vacated, like any other closed floor.
+
 **What gets an identity** (current intent):
 
 | Thing     | Identity                                                                                                                                                                       |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Project   | slug + code; the **code is a floor number** (`1`, `2`, `3…`) — **monotonic, never reused**                                                                                     |
+| Project   | slug + code; the **code is a floor number** (`1`, `2`, `3…`) — **monotonic, never reused**; floor **`0` is reserved** for the standing workspace project                       |
 | Task      | slug + **floor number + room** (`f3t1`); the bare room is a **shorthand while unique** among open tasks; when remote-linked, also **referenceable by its remote work-item id** |
 | Room      | **floor number + room code** (`4A12`), by memorable convention; addresses the room workspace-wide without naming its task or anchor                                            |
 | Session   | slug + code + **the machine it ran on**, unique over the workspace's history across the machines sharing it — the code is **never reused** (a bare id addresses it)            |
