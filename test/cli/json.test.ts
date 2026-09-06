@@ -16,17 +16,17 @@ test('status --json: one parseable document carrying the derived rollup', () => 
   const status = JSON.parse(result.stdout);
   expect(status.workspace).toBe('active');
   expect(status.bareTasks).toEqual([]);
-  // projects/1-workspace sorts first: the standing project, empty and honestly
-  // active, one ordinary row (design/0018-standing-workspace-project/).
+  // The ground floor leads: the standing project, empty and honestly active,
+  // then one ordinary row (design/0018-…, design/0041-ground-floor/).
   expect(status.projects[0]).toMatchObject({
-    floor: 1,
+    floor: 0,
     slug: 'workspace',
     state: 'active',
     derived: 'active',
     tasks: [],
   });
   const project = status.projects[1];
-  expect(project.floor).toBe(2);
+  expect(project.floor).toBe(1);
   expect(project.slug).toBe('agent-output');
   expect(project.state).toBe('active');
   expect(project.derived).toBe('active');
@@ -34,7 +34,7 @@ test('status --json: one parseable document carrying the derived rollup', () => 
   expect(task.code).toBe('t1');
   expect(task.slug).toBe('json-output');
   expect(task.state).toBe('active');
-  expect(task.floor).toBe(2);
+  expect(task.floor).toBe(1);
   expect(task.purpose).toBe('machine-readable output');
   expect(task.prs).toEqual([PR_URL]);
   expect(task.inReview).toBe(true);
@@ -53,9 +53,9 @@ test('task list --json: the record plus the derived in-review overlay', () => {
   const tasks = listing.tasks;
   expect(tasks.length).toBe(1);
   expect(tasks[0].code).toBe('t1');
-  expect(tasks[0].address).toBe('f2t1'); // the room composed with its floor (0036)
+  expect(tasks[0].address).toBe('f1t1'); // the room composed with its floor (0036)
   expect(listing.hidden).toEqual({ tasks: 0, projects: 0, settledAfterDays: 7 });
-  expect(tasks[0].floor).toBe(2);
+  expect(tasks[0].floor).toBe(1);
   expect(tasks[0].prs).toEqual([PR_URL]);
   expect(tasks[0].inReview).toBe(true);
   expect(typeof tasks[0].openedAt).toBe('string');
@@ -64,8 +64,8 @@ test('task list --json: the record plus the derived in-review overlay', () => {
 test('project list --json: stored state, derived status, task count', () => {
   const projects = JSON.parse(runWard(['project', 'list', '--json'], ws).stdout).projects;
   expect(projects).toMatchObject([
-    { floor: 1, slug: 'workspace', state: 'active', derived: 'active', taskCount: 0 },
-    { floor: 2, slug: 'agent-output', state: 'active', derived: 'active', taskCount: 1 },
+    { floor: 0, slug: 'workspace', state: 'active', derived: 'active', taskCount: 0 },
+    { floor: 1, slug: 'agent-output', state: 'active', derived: 'active', taskCount: 1 },
   ]);
 });
 
@@ -74,11 +74,11 @@ test('worktree list --json: identity, disposition, and presence on disk', () => 
   expect(worktrees).toMatchObject([
     {
       task: 't1',
-      address: 'f2t1',
+      address: 'f1t1',
       repo: 'demo',
       branch: 'json-output',
       disposition: 'deliverable',
-      path: 'worktrees/f2t1-json-output',
+      path: 'worktrees/f1t1-json-output',
       present: true,
     },
   ]);
@@ -112,8 +112,8 @@ test('doctor --json: findings as data, healthy as the verdict, exit code kept', 
 test('the human rendering is unchanged by the flag existing', () => {
   const result = runWard(['status'], ws);
   expect(result.stdout).toContain('Workspace: active');
-  expect(result.stdout).toContain('floor 1 — workspace');
-  expect(result.stdout).toContain('floor 2 — agent-output');
+  expect(result.stdout).toContain('floor 0 — workspace (ground floor)');
+  expect(result.stdout).toContain('floor 1 — agent-output');
   expect(result.stdout).not.toContain('{');
 });
 
@@ -140,7 +140,7 @@ test('a fresh workspace already lists its standing project — never an empty se
   const result = runWard(['project', 'list', '--json'], emptyWs);
   expect(result.exitCode).toBe(0);
   expect(JSON.parse(result.stdout)).toMatchObject({
-    projects: [{ floor: 1, slug: 'workspace', state: 'active', derived: 'active', taskCount: 0 }],
+    projects: [{ floor: 0, slug: 'workspace', state: 'active', derived: 'active', taskCount: 0 }],
     hidden: { tasks: 0, projects: 0, settledAfterDays: 7 },
   });
 });
@@ -173,9 +173,9 @@ beforeAll(async () => {
   gitOrThrow(seed, 'push', '-u', 'origin', 'main');
 
   runWard(['repo', 'add', remote, '--name', 'demo'], ws);
-  runWard(['project', 'open', 'agent-output'], ws); // floor 2 — the standing project holds 1
+  runWard(['project', 'open', 'agent-output'], ws); // floor 1 — the ground floor is 0
   runWard(
-    ['task', 'open', 'json-output', '--project', '2', '--purpose', 'machine-readable output'],
+    ['task', 'open', 'json-output', '--project', '1', '--purpose', 'machine-readable output'],
     ws,
   );
   runWard(['worktree', 'create', 't1', '--repo', 'demo'], ws);

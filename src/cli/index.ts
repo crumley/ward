@@ -53,7 +53,12 @@ import {
 import { createWorkspace, type StepReport } from '../workspace/create.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
-import { openProject, readProjects } from '../workspace/projects.ts';
+import {
+  GROUND_FLOOR,
+  openProject,
+  readProjects,
+  requireGroundFloor,
+} from '../workspace/projects.ts';
 import type { Publication } from '../workspace/publish.ts';
 import {
   addRepository,
@@ -901,7 +906,7 @@ try {
         for (const name of result.repo) requireRegistered(root, name);
         const placement = await placeTask(root, result.project, result.repo);
         const opened = await openTask(root, result.slug, {
-          ...(placement.floor === undefined ? {} : { floor: placement.floor }),
+          floor: placement.floor ?? (await requireGroundFloor(root)),
           ...(result.repo.length === 0 ? {} : { repositories: result.repo }),
           ...(result.purpose === undefined ? {} : { purpose: result.purpose }),
         });
@@ -911,7 +916,7 @@ try {
         }
         console.log(
           `${pc.green('opened')} ${pc.bold(taskAddress(opened))} — ${opened.record.slug}` +
-            (placement.note === undefined ? '' : pc.dim(` (${placement.note})`)),
+            renderPlacement(placement, opened.record.floor),
         );
         break;
       }
@@ -1807,11 +1812,28 @@ function renderHidden(hidden: HiddenSummary, command: string): void {
 }
 
 /**
+ * How the floor was chosen, said out loud (§20). A floor the caller did not
+ * name is never silent: affinity says which claim routed it, and the ground
+ * floor says it took the task because nothing else did — beside the hint that
+ * would place the next one elsewhere (design/0041-ground-floor/).
+ */
+function renderPlacement(placement: Placement, floor: number | undefined): string {
+  const parts = [
+    ...(placement.floor === undefined ? [`floor ${floor} — the ground floor`] : []),
+    ...(placement.note === undefined ? [] : [placement.note]),
+  ];
+  return parts.length === 0 ? '' : pc.dim(` (${parts.join('; ')})`);
+}
+
+/**
  * Where a `task open` lands (design/0037-repo-floor-affinity/). An explicit
  * `--project` always wins — the human named the floor, and a default that
  * could override an instruction would not be a default. When it disagrees
  * with the affinity, the echo says so rather than silently doing the right
- * thing for an unstated reason. With no `--project`, the claim routes.
+ * thing for an unstated reason. With no `--project`, the claim routes; with
+ * neither, the caller falls back to the ground floor
+ * (design/0041-ground-floor/), which is what a `Placement` with no floor now
+ * means — every task lives on a floor.
  */
 async function placeTask(
   root: string,
@@ -1858,6 +1880,17 @@ function renderClaim(report: ClaimReport): void {
         `${report.staying.length === 1 ? 'it was' : 'they were'} opened: ${named}`,
     ),
   );
+}
+
+/**
+ * The ground floor says what it is on the line that names it
+ * (design/0041-ground-floor/): floor 0 is not just the first row, it is the
+ * floor every workspace has and the home of work on the workspace itself, and
+ * a reader who has never seen this workspace before should not have to infer
+ * that from the slug.
+ */
+function groundFloorNote(project: { readonly floor: number }): string {
+  return project.floor === GROUND_FLOOR ? pc.dim(' (ground floor)') : '';
 }
 
 function renderState(state: WorkState): string {
@@ -1912,8 +1945,9 @@ async function cmdProjectList(all: boolean, json: boolean): Promise<void> {
         ? ''
         : ` · repos: ${entry.record.repositories.join(', ')}`;
     console.log(
-      `  floor ${pc.bold(String(entry.record.floor))} — ${entry.record.slug} ` +
-        `[${renderState(entry.derived)}] ${pc.dim(`(${entry.taskCount} tasks${claims})`)}`,
+      `  floor ${pc.bold(String(entry.record.floor))} — ${entry.record.slug}` +
+        `${groundFloorNote(entry.record)} [${renderState(entry.derived)}] ` +
+        pc.dim(`(${entry.taskCount} tasks${claims})`),
     );
   }
   renderHidden(hidden, 'ward project list --all');
@@ -2289,8 +2323,8 @@ async function cmdStatus(all: boolean, json: boolean): Promise<void> {
   }
   for (const project of report.projects) {
     console.log(
-      `${pc.bold(`floor ${project.project.floor}`)} — ${project.project.slug} ` +
-        `[${renderState(project.derived)}]`,
+      `${pc.bold(`floor ${project.project.floor}`)} — ${project.project.slug}` +
+        `${groundFloorNote(project.project)} [${renderState(project.derived)}]`,
     );
     for (const task of project.tasks) {
       console.log(renderTaskStatus(task));

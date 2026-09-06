@@ -16,11 +16,12 @@ operated with the \`ward\` CLI and tracked in git.
 - \`catalog.md\` — the artifact types this workspace can produce.
 - \`CLAUDE.md\` — a relative symlink to this AGENTS.md, so a harness that looks for that name
   reads the same guidance: one source of truth, nothing duplicated to drift.
-- \`projects/\` — project records (floors), each with its tasks nested beside it. One is the
-  standing workspace project (slug \`workspace\`, marked \`standing: true\` in its record): the
-  home for work on the workspace itself — upgrades, migrations, reflections — and the one
-  project that never closes.
-- \`tasks/\` — bare tasks opened directly under the workspace (levels are elided, not faked).
+- \`projects/\` — project records (floors), each with its tasks nested beside it. Floor 0,
+  \`projects/0-workspace/\`, is the **ground floor**: the standing workspace project (marked
+  \`standing: true\` in its record), home for work on the workspace itself — upgrades,
+  migrations, reflections — and where a task with no floor of its own opens. It is the one
+  project that never closes, and it is floor 0 in every workspace. Ordinary floors run from 1.
+- \`tasks/\` — legacy bare tasks from before the ground floor: read, never written.
 - \`sessions/\` — sessions opened at **workspace scope**: the ones responsible for the workspace
   itself rather than for any one task. A task's sessions live beside its task record instead.
 - \`repositories/\` — the records of registered repositories (one document each).
@@ -36,10 +37,11 @@ operated with the \`ward\` CLI and tracked in git.
 
 - Run \`ward doctor\` to check machine preconditions and the record's integrity.
 - Records are markdown with typed front matter — read them directly; that is what they are for.
-- **A task is addressed \`f<floor>t<room>\`** — \`f3t1\` is room 1 on floor 3 — and a task with no
-  floor is addressed \`t<room>\`. Spelling is case-insensitive. A bare \`t1\` is a shorthand that
-  works while exactly one open task holds that room; when several do, Ward names them and asks
-  for one.
+- **A task is addressed \`f<floor>t<room>\`** — \`f3t1\` is room 1 on floor 3, \`f0t1\` room 1 on
+  the ground floor. Every task lives on a floor; only legacy bare tasks, opened before the ground
+  floor existed, carry a bare \`t<room>\`. Spelling is case-insensitive. A bare \`t1\` is also a
+  shorthand that works while exactly one open task holds that room; when several do, Ward names
+  them and asks for one.
 - Standing inside a task's worktree, task-addressed verbs need no address — Ward derives the task
   from the working directory (\`ward task pr URL\`, \`ward worktree rebase\`) and echoes what it
   derived. An explicit address always works, and \`ward task close\` always takes one.
@@ -150,6 +152,19 @@ You may be reading this from the workspace root or from inside a task worktree u
 
 This file is yours: sharpen it as the workspace learns how it likes to work.
 `;
+
+/**
+ * The body of the standing workspace project's record. A constant since its
+ * floor is one (design/0041-ground-floor/): the ground floor is floor 0 in
+ * every workspace, so the sentence that describes it is the same everywhere,
+ * and creation and relocation write the identical text.
+ */
+export const STANDING_PROJECT_BODY =
+  'Floor 0: the standing workspace project — the ground floor, and the home for work on the ' +
+  'workspace itself (upgrades and their reconciliation, migrations, reflection adoption). ' +
+  'Established at creation, and the one project that never closes: its arc is the ' +
+  "workspace's own, which has no terminal state. Tasks opened with no floor of their own land " +
+  'here.';
 
 export const WARD_INTERNAL_README = `# Ward store internals
 

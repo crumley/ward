@@ -160,6 +160,12 @@ the SF's disposition is appended in its entry, remove the line here.
   — `gone` here is not the same fact as gone everywhere.
 - **SF-005** — [0038](0038-machine-bound-sessions/spec-feedback.md): the interactive rules cover a
   mode the human enters, not a moment they are demonstrably already in.
+- **SF-001** — [0041](0041-ground-floor/spec-feedback.md): the cheapest one-off is illustrated as a
+  bare task under the workspace, which is the one shape the build no longer produces.
+- **SF-002** — [0041](0041-ground-floor/spec-feedback.md): floor numbers are allocated monotonically
+  from 1, with no room for a reserved number the standing project could always occupy.
+- **SF-003** — [0041](0041-ground-floor/spec-feedback.md): the standing project's identity is
+  "allocated like any project's", which cannot be named by anything written outside one workspace.
 
 Entries 0001–0029 predate this queue and their SFs carry dispositions unevenly — some settled in
 their own text, some settled by later intent edits without a disposition line, some genuinely open.

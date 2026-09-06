@@ -38,7 +38,7 @@ test('bare and human: the derived vehicle, the pull request, and the four acts t
   const report = workspaceUpgradeShape.parse(JSON.parse(result.stdout));
   expect(report.vehicle).toBe('derived');
   expect(report.outcome).toBe('upgraded');
-  expect(report.task).toBe('f1t1'); // the standing floor's room 1 (0036)
+  expect(report.task).toBe('f0t1'); // the ground floor's room 1 (0036, 0041)
   expect(report.branch).toBe('steward/workspace-upgrade');
   expect(report.commit).toBeDefined();
   expect(report.artifacts.find((a) => a.path === 'AGENTS.md')?.action).toBe('upgraded');
@@ -52,7 +52,7 @@ test('bare and human: the derived vehicle, the pull request, and the four acts t
   const listing = JSON.parse(ward(ws, ['task', 'list', '--json'], {}).stdout) as {
     tasks: { address: string; prs: string[] }[];
   };
-  expect(listing.tasks.find((task) => task.address === 'f1t1')?.prs).toEqual([PR_URL]);
+  expect(listing.tasks.find((task) => task.address === 'f0t1')?.prs).toEqual([PR_URL]);
 
   // What remains is the human's, in the order they do it — and the landing act
   // is the LOCAL gated merge, never the forge's button.
@@ -60,14 +60,14 @@ test('bare and human: the derived vehicle, the pull request, and the four acts t
     ['review', undefined],
     ['merge', 'ward workspace merge steward/workspace-upgrade'],
     ['publish', `git push origin ${mainLine}`],
-    ['close', 'ward task close f1t1'],
+    ['close', 'ward task close f0t1'],
   ]);
   expect(report.remaining[0]?.detail).toContain(PR_URL);
 
   // The derivation is echoed, never silent — and under --json it echoes on
   // stderr, so stdout carries one document alone (0005/0006).
-  expect(result.stderr).toContain('task f1t1 — opened for this upgrade');
-  expect(result.stderr).toContain('worktree worktrees/f1t1-steward-workspace-upgrade');
+  expect(result.stderr).toContain('task f0t1 — opened for this upgrade');
+  expect(result.stderr).toContain('worktree worktrees/f0t1-steward-workspace-upgrade');
   expect(report.derived?.map((step) => step.step)).toEqual(['task', 'worktree']);
 });
 
@@ -76,12 +76,12 @@ test('the human rendering names the same acts, and the second run is refused, na
 
   const rendered = ward(ws, ['workspace', 'upgrade'], { WARD_GH: gh });
   expect(rendered.exitCode).toBe(0);
-  expect(rendered.stdout).toContain('task f1t1 — opened for this upgrade');
+  expect(rendered.stdout).toContain('task f0t1 — opened for this upgrade');
   expect(rendered.stdout).toContain('upgraded  AGENTS.md');
   expect(rendered.stdout).toContain(`pull request ${PR_URL}`);
   expect(rendered.stdout).toContain('what remains is yours');
   expect(rendered.stdout).toContain('ward workspace merge steward/workspace-upgrade');
-  expect(rendered.stdout).toContain('ward task close f1t1');
+  expect(rendered.stdout).toContain('ward task close f0t1');
 
   // One open upgrade task per workspace: the second run refuses, exit 1 with
   // stdout empty, naming the task and the two ways out.
@@ -89,16 +89,16 @@ test('the human rendering names the same acts, and the second run is refused, na
   expect(again.exitCode).toBe(1);
   expect(again.stdout).toBe('');
   expect(again.stderr).toContain('already in flight');
-  expect(again.stderr).toContain('task f1t1 holds 1 commit');
+  expect(again.stderr).toContain('task f0t1 holds 1 commit');
   expect(again.stderr).toContain('ward workspace merge steward/workspace-upgrade');
-  expect(again.stderr).toContain('ward task close f1t1 --outcome abandoned');
+  expect(again.stderr).toContain('ward task close f0t1 --outcome abandoned');
 
   // And the acts it named land it: merge, then the delivered close.
   expect(ward(ws, ['workspace', 'merge', 'steward/workspace-upgrade'], {}).exitCode).toBe(0);
   expect(readFileSync(join(ws, 'AGENTS.md'), 'utf8')).not.toBe(LEGACY_AGENTS_MD);
   // The PR is linked and the fake forge reports it merged, so the close gate
   // resolves the PR set and the reachability check verifies the branch.
-  const closed = ward(ws, ['task', 'close', 'f1t1', '--json'], { WARD_GH: ghMerged });
+  const closed = ward(ws, ['task', 'close', 'f0t1', '--json'], { WARD_GH: ghMerged });
   expect(closed.exitCode).toBe(0);
   const steps = (JSON.parse(closed.stdout) as { steps: { step: string; detail: string }[] }).steps;
   // Two reachability steps here — the forge PR's and the workspace worktree's;
@@ -159,7 +159,7 @@ test('forge failure: the task, the worktree, and the commit stand, and the failu
   expect(result.exitCode).toBe(0); // the upgrade did its act; the forge is optional (§20)
   const report = workspaceUpgradeShape.parse(JSON.parse(result.stdout));
   expect(report.outcome).toBe('upgraded');
-  expect(report.task).toBe('f1t1'); // the standing floor's room 1 (0036)
+  expect(report.task).toBe('f0t1'); // the ground floor's room 1 (0036, 0041)
   expect(report.commit).toBeDefined();
   expect(report.pullRequest?.outcome).toBe('failed');
   expect(report.pullRequest?.detail).toContain('the forge said no');
@@ -185,7 +185,7 @@ test('workspace upgrade TASK is unchanged: no push, no pull request, the task th
   expect(result.exitCode).toBe(0);
   const report = workspaceUpgradeShape.parse(JSON.parse(result.stdout));
   expect(report.vehicle).toBe('given');
-  expect(report.task).toBe('t1'); // a bare task: its room IS its address
+  expect(report.task).toBe('f0t1'); // the ground floor took it: no floor was named
   expect(report.branch).toBe('steward/adopt-defaults');
   expect(report.derived).toBeUndefined();
   expect(report.pullRequest).toBeUndefined();
@@ -194,7 +194,10 @@ test('workspace upgrade TASK is unchanged: no push, no pull request, the task th
   expect(remoteBranches(ws)).toEqual([]);
   // And the task the human opened carries no derived marker, so it never
   // blocks a later self-service run — detection is what Ward itself wrote.
-  const record = readFileSync(join(ws, 'tasks', 't1-adopt-defaults', 'task.md'), 'utf8');
+  const record = readFileSync(
+    join(ws, 'projects', '0-workspace', 'tasks', 't1-adopt-defaults', 'task.md'),
+    'utf8',
+  );
   expect(record).not.toContain('stewardship');
 });
 

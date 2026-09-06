@@ -14,45 +14,45 @@ import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts'
 test('project open --repo claims at open; project list shows the claims', () => {
   expect(runWard(['project', 'open', 'toolchain', '--repo', 'demo'], ws).exitCode).toBe(0);
   const listed = runWard(['project', 'list'], ws);
-  expect(listed.stdout).toContain('floor 2 — toolchain [active] (0 tasks · repos: demo)');
+  expect(listed.stdout).toContain('floor 1 — toolchain [active] (0 tasks · repos: demo)');
 
   const json = JSON.parse(runWard(['project', 'list', '--json'], ws).stdout);
-  expect(json.projects[1]).toMatchObject({ floor: 2, repositories: ['demo'] });
+  expect(json.projects[1]).toMatchObject({ floor: 1, repositories: ['demo'] });
 });
 
 test('project claim --json: the floor, the claims, and what stays behind', () => {
-  runWard(['project', 'open', 'first'], ws); // floor 2
-  runWard(['project', 'open', 'second'], ws); // floor 3
-  expect(runWard(['project', 'claim', '2', 'demo'], ws).stdout).toContain(
-    'claimed demo for floor 2 — first',
+  runWard(['project', 'open', 'first'], ws); // floor 1
+  runWard(['project', 'open', 'second'], ws); // floor 2
+  expect(runWard(['project', 'claim', '1', 'demo'], ws).stdout).toContain(
+    'claimed demo for floor 1 — first',
   );
-  runWard(['task', 'open', 'in-flight', '--project', '2', '--repo', 'demo'], ws);
+  runWard(['task', 'open', 'in-flight', '--project', '1', '--repo', 'demo'], ws);
 
-  const moved = runWard(['project', 'claim', '3', 'demo'], ws);
+  const moved = runWard(['project', 'claim', '2', 'demo'], ws);
   expect(moved.exitCode).toBe(0);
-  expect(moved.stdout).toContain('moved demo from floor 2 to floor 3 — second');
+  expect(moved.stdout).toContain('moved demo from floor 1 to floor 2 — second');
   expect(moved.stdout).toContain(
-    'ward now routes to floor 3; 1 open task touching it remains where it was opened: ' +
-      'f2t1 (in-flight)',
+    'ward now routes to floor 2; 1 open task touching it remains where it was opened: ' +
+      'f1t1 (in-flight)',
   );
 
-  const json = runWard(['project', 'claim', '3', 'demo', '--json'], ws);
+  const json = runWard(['project', 'claim', '2', 'demo', '--json'], ws);
   expect(projectClaimShape.parse(JSON.parse(json.stdout))).toEqual({
-    floor: 3,
+    floor: 2,
     slug: 'second',
     repository: 'demo',
     outcome: 'satisfied',
     repositories: ['demo'],
-    staying: [{ address: 'f2t1', slug: 'in-flight', floor: 2 }],
+    staying: [{ address: 'f1t1', slug: 'in-flight', floor: 1 }],
   });
 });
 
 test('project release drops the claim, and releasing what is not held converges', () => {
   runWard(['project', 'open', 'first', '--repo', 'demo'], ws);
-  expect(runWard(['project', 'release', '2', 'demo'], ws).stdout).toContain(
-    'released demo from floor 2 — first',
+  expect(runWard(['project', 'release', '1', 'demo'], ws).stdout).toContain(
+    'released demo from floor 1 — first',
   );
-  const again = runWard(['project', 'release', '2', 'demo', '--json'], ws);
+  const again = runWard(['project', 'release', '1', 'demo', '--json'], ws);
   expect(again.exitCode).toBe(0);
   expect(projectClaimShape.parse(JSON.parse(again.stdout))).toMatchObject({
     outcome: 'absent',
@@ -62,7 +62,7 @@ test('project release drops the claim, and releasing what is not held converges'
 
 test('a claim on an unregistered name is refused and writes nothing', () => {
   runWard(['project', 'open', 'first'], ws);
-  const refused = runWard(['project', 'claim', '2', 'nonesuch'], ws);
+  const refused = runWard(['project', 'claim', '1', 'nonesuch'], ws);
   expect(refused.exitCode).toBe(1);
   expect(refused.stdout).toBe('');
   expect(refused.stderr).toContain("no repository named 'nonesuch' is registered");
@@ -72,30 +72,33 @@ test('task open --repo routes to the claiming floor and says why', () => {
   runWard(['project', 'open', 'toolchain', '--repo', 'demo'], ws);
   const opened = runWard(['task', 'open', 'a-feature', '--repo', 'demo'], ws);
   expect(opened.exitCode).toBe(0);
-  expect(opened.stdout).toContain('opened f2t1 — a-feature (floor 2 by affinity: demo)');
+  expect(opened.stdout).toContain('opened f1t1 — a-feature (floor 1 by affinity: demo)');
 
   const json = runWard(['task', 'open', 'another', '--repo', 'demo', '--json'], ws);
   expect(taskMutationShape.parse(JSON.parse(json.stdout))).toMatchObject({
-    address: 'f2t2',
-    floor: 2,
+    address: 'f1t2',
+    floor: 1,
     repositories: ['demo'],
   });
 });
 
-test('with no claimant the task stays bare, and the hint names the fix', () => {
+test('with no claimant the task lands on the ground floor, and the hint names the fix', () => {
   const opened = runWard(['task', 'open', 'unrouted', '--repo', 'demo'], ws);
   expect(opened.exitCode).toBe(0);
+  // Both halves are said (design/0041-ground-floor/): where it went, and what
+  // would have routed it somewhere deliberate.
   expect(opened.stdout).toContain(
-    'opened t1 — unrouted (no floor claims demo — ward project claim FLOOR demo)',
+    'opened f0t1 — unrouted (floor 0 — the ground floor; ' +
+      'no floor claims demo — ward project claim FLOOR demo)',
   );
 });
 
 test('--project always wins, and the echo says the affinity disagreed', () => {
-  runWard(['project', 'open', 'claiming', '--repo', 'demo'], ws); // floor 2
-  runWard(['project', 'open', 'elsewhere'], ws); // floor 3
-  const opened = runWard(['task', 'open', 'placed', '--project', '3', '--repo', 'demo'], ws);
+  runWard(['project', 'open', 'claiming', '--repo', 'demo'], ws); // floor 1
+  runWard(['project', 'open', 'elsewhere'], ws); // floor 2
+  const opened = runWard(['task', 'open', 'placed', '--project', '2', '--repo', 'demo'], ws);
   expect(opened.stdout).toContain(
-    'opened f3t1 — placed (floor 3 as named — affinity would have said floor 2)',
+    'opened f2t1 — placed (floor 2 as named — affinity would have said floor 1)',
   );
 });
 
@@ -108,7 +111,7 @@ test('two repositories claimed by different floors refuse, naming both', () => {
   expect(refused.stderr).toContain('ward task open SLUG --project FLOOR');
   // Named explicitly, the same open proceeds.
   const placed = runWard(
-    ['task', 'open', 'crosses', '--project', '2', '--repo', 'demo', '--repo', 'other'],
+    ['task', 'open', 'crosses', '--project', '1', '--repo', 'demo', '--repo', 'other'],
     ws,
   );
   expect(placed.exitCode).toBe(0);
@@ -117,14 +120,14 @@ test('two repositories claimed by different floors refuse, naming both', () => {
 test("worktree create with no --repo uses the task's single recorded repository", () => {
   runWard(['project', 'open', 'toolchain', '--repo', 'demo'], ws);
   runWard(['task', 'open', 'a-feature', '--repo', 'demo'], ws);
-  const created = runWard(['worktree', 'create', 'f2t1'], ws);
+  const created = runWard(['worktree', 'create', 'f1t1'], ws);
   expect(created.exitCode).toBe(0);
-  expect(created.stdout).toContain('created worktrees/f2t1-a-feature');
-  expect(existsSync(join(ws, 'worktrees', 'f2t1-a-feature'))).toBe(true);
+  expect(created.stdout).toContain('created worktrees/f1t1-a-feature');
+  expect(existsSync(join(ws, 'worktrees', 'f1t1-a-feature'))).toBe(true);
 
   // Two recorded, and Ward does not choose: the refusal that always stood.
-  runWard(['task', 'open', 'crosses', '--project', '2', '--repo', 'demo', '--repo', 'other'], ws);
-  const refused = runWard(['worktree', 'create', 'f2t2'], ws);
+  runWard(['task', 'open', 'crosses', '--project', '1', '--repo', 'demo', '--repo', 'other'], ws);
+  const refused = runWard(['worktree', 'create', 'f1t2'], ws);
   expect(refused.exitCode).toBe(1);
   expect(refused.stderr).toContain('name the worktree source');
 });

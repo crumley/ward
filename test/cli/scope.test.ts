@@ -8,6 +8,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { readSessions } from '../../src/workspace/sessions.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
@@ -38,21 +39,21 @@ test('session open with no TASK is workspace scope, even inside a worktree (0029
   expect(result.stdout).toContain('opened session workspace-1@test');
   const workspaceSessions = await readSessions(ws, '');
   expect(workspaceSessions[0]).toMatchObject({ scope: 'workspace', workingDirectory: '.' });
-  expect(await readSessions(ws, 'tasks/t1-feature')).toEqual([]);
+  expect(await readSessions(ws, 'projects/0-workspace/tasks/t1-feature')).toEqual([]);
 });
 
 test('session open TASK records the task session, the worktree as its directory', async () => {
   const result = runWard(['session', 'open', 't1', '--purpose', 'drive the feature'], wtDir);
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('opened session feature-1@test');
-  const sessions = await readSessions(ws, 'tasks/t1-feature');
-  expect(sessions[0]?.workingDirectory).toBe('worktrees/t1-feature');
+  const sessions = await readSessions(ws, 'projects/0-workspace/tasks/t1-feature');
+  expect(sessions[0]?.workingDirectory).toBe('worktrees/f0t1-feature');
 });
 
 test('task pr, inferred: one argument is the URL, the task comes from the location', () => {
   const result = runWard(['task', 'pr', PR_URL], join(wtDir, 'src'));
   expect(result.exitCode).toBe(0);
-  expect(result.stdout).toContain('task t1 — from the working directory');
+  expect(result.stdout).toContain('task f0t1 — from the working directory');
   expect(result.stdout).toContain(`linked ${PR_URL}`);
   const tasks = JSON.parse(runWard(['task', 'list', '--json'], ws).stdout).tasks;
   expect(tasks[0].prs).toEqual([PR_URL]);
@@ -68,17 +69,17 @@ test('task pr keeps its explicit two-argument form', () => {
 test('pause and resume, inferred from inside the worktree', () => {
   const paused = runWard(['task', 'pause'], wtDir);
   expect(paused.exitCode).toBe(0);
-  expect(paused.stdout).toContain('paused t1 — feature');
+  expect(paused.stdout).toContain('paused f0t1 — feature');
   const resumed = runWard(['task', 'resume'], wtDir);
   expect(resumed.exitCode).toBe(0);
-  expect(resumed.stdout).toContain('resumed t1 — feature');
+  expect(resumed.stdout).toContain('resumed f0t1 — feature');
 });
 
 test('worktree create, inferred: a second worktree for the task the caller stands in', () => {
   const result = runWard(['worktree', 'create', '--repo', 'demo', '--branch', 'second'], wtDir);
   expect(result.exitCode).toBe(0);
-  expect(result.stdout).toContain('task t1 — from the working directory');
-  expect(result.stdout).toContain('created worktrees/t1-second');
+  expect(result.stdout).toContain('task f0t1 — from the working directory');
+  expect(result.stdout).toContain('created worktrees/f0t1-second');
   const worktrees = JSON.parse(runWard(['worktree', 'list', '--json'], ws).stdout);
   expect(worktrees.map((w: { task: string; branch: string }) => `${w.task}:${w.branch}`)).toEqual([
     't1:feature',
@@ -103,13 +104,13 @@ test('a declared agent is refused the inference, even standing inside the worktr
 test('a declared agent with an explicit code proceeds as ever', () => {
   const result = runWardEnv(['task', 'pause', 't1'], wtDir, { WARD_AGENT: '1' });
   expect(result.exitCode).toBe(0);
-  expect(result.stdout).toContain('paused t1 — feature');
+  expect(result.stdout).toContain('paused f0t1 — feature');
 });
 
 test('an explicit code wins from anywhere, with nothing echoed', () => {
   const result = runWard(['task', 'pause', 't1'], ws);
   expect(result.exitCode).toBe(0);
-  expect(result.stdout).toContain('paused t1 — feature');
+  expect(result.stdout).toContain('paused f0t1 — feature');
   expect(result.stdout).not.toContain('from the working directory');
 });
 
@@ -150,7 +151,7 @@ beforeEach(async () => {
   ws = join(scratch, `ws-${caseId}`);
   await createWorkspace(ws);
   await addRepository(ws, remote, 'demo');
-  await openTask(ws, 'feature', {});
+  await openTask(ws, 'feature', { floor: GROUND_FLOOR });
   const { record } = await createWorktree(ws, 't1', 'demo');
   wtDir = join(ws, record.path);
 });

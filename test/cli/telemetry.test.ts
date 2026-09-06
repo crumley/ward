@@ -11,6 +11,7 @@ import { verbPath } from '../../src/cli/telemetry.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { createWorktree } from '../../src/workspace/worktrees.ts';
@@ -83,13 +84,13 @@ test('the row records the invocation scope, anchor-shaped: task, repo, workspace
   gitOrThrow(seed, 'commit', '-m', 'seed');
   gitOrThrow(seed, 'push', '-u', 'origin', 'main');
   await addRepository(ws, remote, 'demo');
-  await openTask(ws, 'scoped', {});
+  await openTask(ws, 'scoped', { floor: GROUND_FLOOR });
   const { record } = await createWorktree(ws, 't1', 'demo');
 
   const table: ReadonlyArray<[string, string]> = [
     [ws, 'workspace'],
-    [join(ws, record.path), 'task:t1'],
-    [join(ws, record.path, 'src'), 'task:t1'],
+    [join(ws, record.path), 'task:f0t1'],
+    [join(ws, record.path, 'src'), 'task:f0t1'],
     [join(ws, 'repos', 'demo'), 'repo:demo'],
   ];
   for (const [dir, expected] of table) {

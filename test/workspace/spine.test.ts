@@ -7,7 +7,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
-import { openProject } from '../../src/workspace/projects.ts';
+import { GROUND_FLOOR, openProject } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { readTasks, resolveOpenTask } from '../../src/workspace/scan.ts';
 import { closeSession, openSession, readSessions } from '../../src/workspace/sessions.ts';
@@ -17,10 +17,10 @@ import { createWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
 
 test('the bootstrap loop: project → task → worktree → work → merge → delivered close', async () => {
-  // Floor 1 is the standing workspace project, established at creation
-  // (design/0018-standing-workspace-project/); opened projects start at 2.
-  expect((await openProject(ws, 'agent-output')).floor).toBe(2);
-  const task = await openTask(ws, 'json-output', { floor: 2, purpose: 'machine-readable output' });
+  // Floor 0 is the ground floor, established at creation and outside the
+  // ordinary sequence (design/0041-ground-floor/); opened projects start at 1.
+  expect((await openProject(ws, 'agent-output')).floor).toBe(1);
+  const task = await openTask(ws, 'json-output', { floor: 1, purpose: 'machine-readable output' });
   expect(task.record.code).toBe('t1');
 
   const { record: wt } = await createWorktree(ws, 't1', 'demo');
@@ -55,7 +55,7 @@ test('the bootstrap loop: project → task → worktree → work → merge → d
 });
 
 test('a refused close mutates nothing: sessions stay open, worktrees stay', async () => {
-  await openTask(ws, 'risky', {});
+  await openTask(ws, 'risky', { floor: GROUND_FLOOR });
   const { record: wt } = await createWorktree(ws, 't1', 'demo');
   await openSession(ws, 't1', 'do work', {});
   const wtDir = join(ws, wt.path);
@@ -71,7 +71,7 @@ test('a refused close mutates nothing: sessions stay open, worktrees stay', asyn
 });
 
 test('unmerged local-only commits refuse a delivered close; abandoned discards them', async () => {
-  await openTask(ws, 'dead-end', {});
+  await openTask(ws, 'dead-end', { floor: GROUND_FLOOR });
   const { record: wt } = await createWorktree(ws, 't1', 'demo');
   const wtDir = join(ws, wt.path);
   await Bun.write(join(wtDir, 'experiment.txt'), 'x\n');
@@ -86,28 +86,28 @@ test('unmerged local-only commits refuse a delivered close; abandoned discards t
 });
 
 test('floors are monotonic and never reused, even past a closed project', async () => {
-  await openProject(ws, 'first'); // floor 2 — the standing project holds 1
-  const t = await openTask(ws, 'only', { floor: 2 });
+  await openProject(ws, 'first'); // floor 1 — the ground floor is 0, outside the sequence
+  const t = await openTask(ws, 'only', { floor: 1 });
   await closeTask(ws, t.record.code, 'abandoned');
-  expect((await openProject(ws, 'second')).floor).toBe(3);
-  expect((await openProject(ws, 'third')).floor).toBe(4);
+  expect((await openProject(ws, 'second')).floor).toBe(2);
+  expect((await openProject(ws, 'third')).floor).toBe(3);
 });
 
 test('rooms run in opening order: a closed room is not handed straight back', async () => {
-  const a = await openTask(ws, 'one', {});
-  const b = await openTask(ws, 'two', {});
+  const a = await openTask(ws, 'one', { floor: GROUND_FLOOR });
+  const b = await openTask(ws, 'two', { floor: GROUND_FLOOR });
   expect([a.record.code, b.record.code]).toEqual(['t1', 't2']);
   await closeTask(ws, 't1', 'abandoned');
   // The freed room stays free until the sequence comes round to it again
   // (design/0036-floor-addressed-tasks/): reuse-on-close is what let one
   // code name two tasks seconds apart.
-  expect((await openTask(ws, 'three', {})).record.code).toBe('t3');
+  expect((await openTask(ws, 'three', { floor: GROUND_FLOOR })).record.code).toBe('t3');
   expect((await readTasks(ws)).length).toBe(3); // the closed record remains
 });
 
 test('pause and resume route attention; the PR overlay follows the set', async () => {
-  await openProject(ws, 'p'); // floor 2 — the standing project holds 1
-  await openTask(ws, 'a', { floor: 2 });
+  await openProject(ws, 'p'); // floor 1 — the ground floor is 0, outside the sequence
+  await openTask(ws, 'a', { floor: 1 });
   const derivedP = async () =>
     (await statusReport(ws)).projects.find((project) => project.project.slug === 'p');
   await setTaskState(ws, 't1', 'paused');
@@ -120,7 +120,7 @@ test('pause and resume route attention; the PR overlay follows the set', async (
 });
 
 test('session ids name the machine and climb; a closed number is never handed out again', async () => {
-  await openTask(ws, 'chat', {});
+  await openTask(ws, 'chat', { floor: GROUND_FLOOR });
   const first = await openSession(ws, 't1', 'first', {});
   const second = await openSession(ws, 't1', 'second', {});
   expect([first.id, second.id]).toEqual(['chat-1@test', 'chat-2@test']);

@@ -32,7 +32,15 @@ import { resolveWorkspaceMainLine } from './steward.ts';
 import { readTaskWorktrees } from './worktrees.ts';
 
 export interface OpenTaskOptions {
-  readonly floor?: number;
+  /**
+   * The floor the task opens on — REQUIRED since design/0041-ground-floor/:
+   * every task lives on a floor, and a caller with nothing else to say passes
+   * the ground floor (`requireGroundFloor`). It is the caller's to resolve, not
+   * this module's to default, because the two callers resolve it differently:
+   * the CLI weighs `--project` against repository affinity first, and the
+   * derived stewardship task always takes the ground floor.
+   */
+  readonly floor: number;
   readonly purpose?: string;
   /**
    * The registered repositories this task touches
@@ -63,7 +71,8 @@ export async function openTask(
     const container = await taskContainer(root, options.floor);
     // Rooms run as a per-container sequence in opening order
     // (design/0036-floor-addressed-tasks/): every floor has its own, and so
-    // does the bare pool. The cursor is the container's most recently opened
+    // does the legacy bare pool, which is read but never written again
+    // (design/0041-ground-floor/). The cursor is the container's most recently opened
     // task — open or closed, because the sequence is about the order rooms
     // were HANDED OUT, not about what is in flight — and it is read from the
     // records, never stored (§17).
@@ -86,7 +95,7 @@ export async function openTask(
     );
     if (room === 0) {
       throw new WardError(
-        `${describeContainer(options.floor)} has no free room — every one of the ` +
+        `floor ${options.floor} has no free room — every one of the ` +
           `${ROOMS_PER_FLOOR} rooms is held by an open task; close or pause one first`,
       );
     }
@@ -97,7 +106,7 @@ export async function openTask(
       code,
       slug,
       state: 'active',
-      ...(options.floor === undefined ? {} : { floor: options.floor }),
+      floor: options.floor,
       ...(options.purpose === undefined ? {} : { purpose: options.purpose }),
       ...(options.stewardship === undefined ? {} : { stewardship: options.stewardship }),
       ...(options.repositories === undefined || options.repositories.length === 0
@@ -110,8 +119,8 @@ export async function openTask(
     await writeDocument(root, taskRecordType(dir), {
       data: record,
       body:
-        `The \`${slug}\` task, addressed \`${address}\` while open — room \`${code}\`` +
-        `${options.floor === undefined ? ', in the bare pool' : ` on floor ${options.floor}`}. ` +
+        `The \`${slug}\` task, addressed \`${address}\` while open — room \`${code}\` on ` +
+        `floor ${options.floor}. ` +
         'Its worktree and session records nest beside this document; its status is stored here, ' +
         'at the leaf.',
     });
@@ -132,11 +141,6 @@ function mostRecentRoom(tasks: readonly FoundTask[]): number | undefined {
     if (latest === undefined || task.record.openedAt > latest.record.openedAt) latest = task;
   }
   return latest === undefined ? undefined : taskRoom(latest);
-}
-
-/** What a full container is called in its refusal: a floor, or the bare pool. */
-function describeContainer(floor: number | undefined): string {
-  return floor === undefined ? 'the bare task pool' : `floor ${floor}`;
 }
 
 export async function setTaskState(

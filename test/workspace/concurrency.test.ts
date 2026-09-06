@@ -13,6 +13,7 @@ import { storeLockPath } from '../../src/store/lock.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { readTasks } from '../../src/workspace/scan.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import {
@@ -55,7 +56,9 @@ test('five concurrent task opens through the CLI: unique codes, every record, li
 }, 30_000);
 
 test('concurrent module-level opens serialize the allocation scan', async () => {
-  const opened = await Promise.all([1, 2, 3, 4].map((n) => openTask(ws, `inproc-${n}`, {})));
+  const opened = await Promise.all(
+    [1, 2, 3, 4].map((n) => openTask(ws, `inproc-${n}`, { floor: GROUND_FLOOR })),
+  );
   expect(opened.map((task) => task.record.code).sort()).toEqual(['t1', 't2', 't3', 't4']);
   expect(gitOrThrow(ws, 'rev-list', '--count', 'HEAD').stdout.trim()).toBe('5');
 });
@@ -66,7 +69,7 @@ test('a stale lock left by a crashed writer is taken over, legibly', async () =>
 
   const result = runWard(['task', 'open', 'after-crash'], ws);
   expect(result.exitCode).toBe(0);
-  expect(result.stdout).toContain('opened t1 — after-crash');
+  expect(result.stdout).toContain('opened f0t1 — after-crash');
   expect(result.stderr).toContain('took over a stale store lock');
   expect(result.stderr).toContain(String(deadPid));
   expect(existsSync(storeLockPath(ws))).toBe(false); // released after the write

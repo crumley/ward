@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { git, gitOrThrow } from '../../src/workspace/git.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository, checkoutPath } from '../../src/workspace/repos.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { createWorktree, rebaseTaskWorktrees } from '../../src/workspace/worktrees.ts';
@@ -106,7 +107,7 @@ test('a missing worktree and a wrong checked-out branch are legible failures', a
 // -- setup ----------------------------------------------------------------
 // A fresh workspace per test with one registered repository `demo` (bare
 // remote, branch `main`), one bare task t1 `feature`, and its worktree at
-// worktrees/t1-feature. Remote movement goes through a staging clone —
+// worktrees/f0t1-feature. Remote movement goes through a staging clone —
 // exactly the state a merged PR leaves behind (design/0004-work-spine/).
 
 let scratch: string;
@@ -150,7 +151,7 @@ beforeEach(async () => {
   gitOrThrow(seed, 'commit', '-m', 'seed');
   gitOrThrow(seed, 'push', '-u', 'origin', 'main');
   await addRepository(ws, remote, 'demo');
-  await openTask(ws, 'feature', {});
+  await openTask(ws, 'feature', { floor: GROUND_FLOOR });
   const { record } = await createWorktree(ws, 't1', 'demo');
   wt = join(ws, record.path);
 });

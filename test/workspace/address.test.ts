@@ -16,7 +16,7 @@ import {
   taskFloor,
 } from '../../src/workspace/address.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
-import { openProject } from '../../src/workspace/projects.ts';
+import { GROUND_FLOOR, openProject } from '../../src/workspace/projects.ts';
 import { resolveOpenTask } from '../../src/workspace/scan.ts';
 import { closeTask, openTask } from '../../src/workspace/tasks.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
@@ -61,7 +61,8 @@ const parses: ReadonlyArray<{ input: string; parsed: { floor?: number; room: num
   { input: 'f3', parsed: null },
   { input: 't0', parsed: null }, // rooms start at 1
   { input: 't100', parsed: null }, // and stop at the ceiling
-  { input: 'f0t1', parsed: null }, // floors start at 1
+  { input: 'f0t1', parsed: { floor: 0, room: 1 } }, // the ground floor (0041)
+  { input: 'f-1t1', parsed: null }, // and there is nothing below it
   { input: 'json-output', parsed: null },
   { input: '', parsed: null },
 ];
@@ -114,51 +115,53 @@ test('a blocked room is skipped too — a closed task’s directory is never ove
 // -- allocation against a workspace shaped like a real one ----------------
 
 test('each container keeps its own sequence, continuing from its most recent task', async () => {
-  // A floor whose rooms ran to t21 and a bare pool that ran to t4 — the shape
-  // this scheme has to continue from without renumbering anything.
-  await openProject(ws, 'toolchain'); // floor 2
-  await openProject(ws, 'delivery'); // floor 3
-  await seedTask(ws, 'projects/3-delivery/tasks', 21, 'old-work', '2026-08-30T00:00:00.000Z');
+  // A floor whose rooms ran to t21, a legacy bare pool that ran to t4, and a
+  // ground floor that has handed out nothing — the shape this scheme has to
+  // continue from without renumbering anything.
+  await openProject(ws, 'toolchain'); // floor 1
+  await openProject(ws, 'delivery'); // floor 2
+  await seedTask(ws, 'projects/2-delivery/tasks', 21, 'old-work', '2026-08-30T00:00:00.000Z');
   await seedTask(ws, 'tasks', 4, 'old-bare', '2026-09-01T00:00:00.000Z');
 
-  const onFloor = await openTask(ws, 'next-up', { floor: 3 });
-  expect(taskAddress(onFloor)).toBe('f3t22');
-  const bare = await openTask(ws, 'next-bare', {});
-  expect(taskAddress(bare)).toBe('t5');
+  const onFloor = await openTask(ws, 'next-up', { floor: 2 });
+  expect(taskAddress(onFloor)).toBe('f2t22');
+  // The ground floor's sequence is its own, and the legacy pool's t4 is no
+  // part of it (design/0041-ground-floor/).
+  expect(taskAddress(await openTask(ws, 'next-here', { floor: GROUND_FLOOR }))).toBe('f0t1');
   // A floor that has handed out nothing starts its own sequence at 1.
-  expect(taskAddress(await openTask(ws, 'fresh-floor', { floor: 2 }))).toBe('f2t1');
+  expect(taskAddress(await openTask(ws, 'fresh-floor', { floor: 1 }))).toBe('f1t1');
 });
 
 test('the same room on two floors is two tasks, each addressable', async () => {
-  await openProject(ws, 'a'); // floor 2
-  await openProject(ws, 'b'); // floor 3
-  await openTask(ws, 'left', { floor: 2 });
-  await openTask(ws, 'right', { floor: 3 });
+  await openProject(ws, 'a'); // floor 1
+  await openProject(ws, 'b'); // floor 2
+  await openTask(ws, 'left', { floor: 1 });
+  await openTask(ws, 'right', { floor: 2 });
 
-  expect((await resolveOpenTask(ws, 'f2t1')).record.slug).toBe('left');
-  expect((await resolveOpenTask(ws, 'F3T1')).record.slug).toBe('right'); // case-folded
+  expect((await resolveOpenTask(ws, 'f1t1')).record.slug).toBe('left');
+  expect((await resolveOpenTask(ws, 'F2T1')).record.slug).toBe('right'); // case-folded
 });
 
 test('a bare room is a shorthand: unique resolves, ambiguous refuses by name', async () => {
-  await openProject(ws, 'a'); // floor 2
-  await openTask(ws, 'only-one', { floor: 2 });
+  await openProject(ws, 'a'); // floor 1
+  await openTask(ws, 'only-one', { floor: 1 });
   expect((await resolveOpenTask(ws, 't1')).record.slug).toBe('only-one');
 
-  await openProject(ws, 'b'); // floor 3
-  await openTask(ws, 'the-other', { floor: 3 });
+  await openProject(ws, 'b'); // floor 2
+  await openTask(ws, 'the-other', { floor: 2 });
   expect(resolveOpenTask(ws, 't1')).rejects.toThrow(
-    /t1 is ambiguous — f2t1 \(only-one\), f3t1 \(the-other\); name one/,
+    /t1 is ambiguous — f1t1 \(only-one\), f2t1 \(the-other\); name one/,
   );
   // The full address still resolves, which is the point of refusing.
-  expect((await resolveOpenTask(ws, 'f3t1')).record.slug).toBe('the-other');
+  expect((await resolveOpenTask(ws, 'f2t1')).record.slug).toBe('the-other');
 });
 
 test('closing one candidate makes the shorthand unique again', async () => {
-  await openProject(ws, 'a'); // floor 2
-  await openProject(ws, 'b'); // floor 3
-  await openTask(ws, 'left', { floor: 2 });
-  await openTask(ws, 'right', { floor: 3 });
-  await closeTask(ws, 'f2t1', 'abandoned');
+  await openProject(ws, 'a'); // floor 1
+  await openProject(ws, 'b'); // floor 2
+  await openTask(ws, 'left', { floor: 1 });
+  await openTask(ws, 'right', { floor: 2 });
+  await closeTask(ws, 'f1t1', 'abandoned');
   expect((await resolveOpenTask(ws, 't1')).record.slug).toBe('right');
 });
 

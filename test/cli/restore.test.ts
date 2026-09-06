@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { mutationVerbShapes, workspaceRestoreShape } from '../../src/cli/schema.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { createWorkspaceWorktree, createWorktree } from '../../src/workspace/worktrees.ts';
@@ -28,8 +29,8 @@ test('the fresh-clone flow: restore re-materializes, doctor reads clean', () => 
   // The spawned CLI stands at the clone's real path (macOS /var → /private/var).
   expect(result.stdout).toContain(`Restoring workspace at ${realpathSync(clone)}`);
   expect(result.stdout).toContain('restored  demo (cloned from');
-  expect(result.stdout).toContain('worktrees/t1-feature-work');
-  expect(result.stdout).toContain('worktrees/t2-steward-steward-work');
+  expect(result.stdout).toContain('worktrees/f0t1-feature-work');
+  expect(result.stdout).toContain('worktrees/f0t2-steward-steward-work');
   expect(result.stdout).toContain('no open session records');
   expect(result.stdout).toContain('Workspace restored — 3 restored, 0 already satisfied.');
   expect(existsSync(join(clone, 'repos/demo/seed.txt'))).toBe(true);
@@ -56,8 +57,8 @@ test('restore --json: one document alone on stdout, valid under the registered s
   expect(report.root).toBe(realpathSync(clone)); // the cwd's real path (macOS /var)
   expect(report.repositories).toMatchObject([{ name: 'demo', outcome: 'restored' }]);
   expect(report.worktrees).toMatchObject([
-    { task: 't1', repo: 'demo', branch: 'feature-work', outcome: 'restored' },
-    { task: 't2', source: 'workspace', branch: 'steward/steward-work', outcome: 'restored' },
+    { task: 'f0t1', repo: 'demo', branch: 'feature-work', outcome: 'restored' },
+    { task: 'f0t2', source: 'workspace', branch: 'steward/steward-work', outcome: 'restored' },
   ]);
   expect(report.worktrees[0]?.source).toBeUndefined(); // absent, never null (0019's XOR)
   expect(report.worktrees[1]?.repo).toBeUndefined();
@@ -71,9 +72,13 @@ test('a lost branch: the document names it, the record survives, the exit is 1',
   const result = runWard(['workspace', 'restore', '--json'], clone);
   expect(result.exitCode).toBe(1); // the verb completed and reported; the verdict is $?
   const report = workspaceRestoreShape.parse(JSON.parse(result.stdout));
-  expect(report.worktrees).toMatchObject([{ task: 't1', branch: 'unpushed', outcome: 'lost' }]);
+  expect(report.worktrees).toMatchObject([{ task: 'f0t1', branch: 'unpushed', outcome: 'lost' }]);
   expect(report.worktrees[0]?.detail).toContain('reachable nowhere');
-  expect(existsSync(join(clone, 'tasks/t1-doomed-work/worktrees/demo--unpushed.md'))).toBe(true);
+  expect(
+    existsSync(
+      join(clone, 'projects/0-workspace/tasks/t1-doomed-work/worktrees/demo--unpushed.md'),
+    ),
+  ).toBe(true);
 
   const human = runWard(['workspace', 'restore'], clone);
   expect(human.exitCode).toBe(1);
@@ -83,7 +88,7 @@ test('a lost branch: the document names it, the record survives, the exit is 1',
 });
 
 test('restore refuses inside a stewardship copy, naming the enclosing workspace', () => {
-  const copy = join(ws, 'worktrees/t2-steward-steward-work');
+  const copy = join(ws, 'worktrees/f0t2-steward-steward-work');
   const result = runWard(['workspace', 'restore'], copy);
   expect(result.exitCode).toBe(1);
   expect(result.stdout).toBe('');
@@ -121,14 +126,14 @@ beforeAll(async () => {
   ws = join(scratch, 'original');
   await createWorkspace(ws);
   await addRepository(ws, makeRemote('remote-main'), 'demo');
-  await openTask(ws, 'feature-work', {});
+  await openTask(ws, 'feature-work', { floor: GROUND_FLOOR });
   await createWorktree(ws, 't1', 'demo');
-  const worktree = join(ws, 'worktrees/t1-feature-work');
+  const worktree = join(ws, 'worktrees/f0t1-feature-work');
   writeFileSync(join(worktree, 'work.txt'), 'the work\n');
   gitOrThrow(worktree, 'add', '-A');
   gitOrThrow(worktree, 'commit', '-m', 'the work');
   gitOrThrow(worktree, 'push', '-u', 'origin', 'feature-work');
-  await openTask(ws, 'steward-work', {});
+  await openTask(ws, 'steward-work', { floor: GROUND_FLOOR });
   const { record } = await createWorkspaceWorktree(ws, 't2');
   const copy = join(ws, record.path);
   writeFileSync(join(copy, 'stewardship-note.md'), 'a deliberate change\n');
@@ -138,9 +143,9 @@ beforeAll(async () => {
   lostWs = join(scratch, 'original-lost');
   await createWorkspace(lostWs);
   await addRepository(lostWs, makeRemote('remote-lost'), 'demo');
-  await openTask(lostWs, 'doomed-work', {});
+  await openTask(lostWs, 'doomed-work', { floor: GROUND_FLOOR });
   await createWorktree(lostWs, 't1', 'demo', 'unpushed');
-  const doomed = join(lostWs, 'worktrees/t1-unpushed');
+  const doomed = join(lostWs, 'worktrees/f0t1-unpushed');
   writeFileSync(join(doomed, 'doomed.txt'), 'never pushed\n');
   gitOrThrow(doomed, 'add', '-A');
   gitOrThrow(doomed, 'commit', '-m', 'doomed');

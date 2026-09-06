@@ -9,6 +9,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository, refreshRepositories } from '../../src/workspace/repos.ts';
 import { statusReport } from '../../src/workspace/status.ts';
 import { closeTask, openTask } from '../../src/workspace/tasks.ts';
@@ -86,15 +87,16 @@ test('a worktree missing on disk is unreadable — honest absence, not a failure
 });
 
 test('statusReport carries worktrees per non-closed task and never asks settled work', async () => {
-  await openTask(ws, 'bare', {});
+  await openTask(ws, 'second', { floor: GROUND_FLOOR });
   const report = await statusReport(ws);
-  const [t1, t2] = report.bareTasks;
+  // Both tasks are on the ground floor, which leads the listing (0041).
+  const [t1, t2] = report.projects[0]?.tasks ?? [];
   expect(t1?.worktrees?.map((s) => s.freshness)).toEqual(['current']);
-  expect(t1?.worktrees?.[0]?.record.path).toBe('worktrees/t1-feature');
+  expect(t1?.worktrees?.[0]?.record.path).toBe('worktrees/f0t1-feature');
   expect(t2?.worktrees).toEqual([]); // none recorded — the honest empty, not absence
 
   await closeTask(ws, 't2', 'abandoned');
-  const closed = (await statusReport(ws)).bareTasks.find((s) => s.task.state === 'closed');
+  const closed = (await statusReport(ws)).projects[0]?.tasks.find((s) => s.task.state === 'closed');
   expect(closed?.worktrees).toBeUndefined(); // settled at close; not asked again
 });
 
@@ -117,7 +119,7 @@ test('without git on PATH the rows keep their identity and freshness vanishes', 
 // -- setup ----------------------------------------------------------------
 // A fresh workspace per test with one registered repository `demo` (bare
 // remote, branch `main`), one bare task t1 `feature`, and its worktree at
-// worktrees/t1-feature — the rebase suite's scaffold, read instead of mutated.
+// worktrees/f0t1-feature — the rebase suite's scaffold, read instead of mutated.
 
 let scratch: string;
 let remote: string;
@@ -155,7 +157,7 @@ beforeEach(async () => {
   gitOrThrow(seed, 'commit', '-m', 'seed');
   gitOrThrow(seed, 'push', '-u', 'origin', 'main');
   await addRepository(ws, remote, 'demo');
-  taskDir = (await openTask(ws, 'feature', {})).dir;
+  taskDir = (await openTask(ws, 'feature', { floor: GROUND_FLOOR })).dir;
   const { record } = await createWorktree(ws, 't1', 'demo');
   wt = join(ws, record.path);
 });

@@ -78,36 +78,74 @@ export function repositoryRecordType(name: string): DocumentType<RepositoryRecor
 export const workStateSchema = z.enum(['active', 'paused', 'closed']);
 export type WorkState = z.infer<typeof workStateSchema>;
 
-export const projectSchema = z.object({
-  type: z.literal('project'),
-  floor: z.number().int().positive(),
-  slug: z.string().min(1),
+export const projectSchema = z
+  .object({
+    type: z.literal('project'),
+    /**
+     * The floor number (design/0041-ground-floor/). **Floor 0 is reserved**
+     * for the standing workspace project — the ground floor, at
+     * `projects/0-workspace/` in every workspace — and ordinary floors run
+     * monotonically from 1. Reserved rather than allocated because a number
+     * that differs per workspace cannot be named by anything Ward authors:
+     * the manifest, a default, a brief written once and read everywhere.
+     */
+    floor: z.number().int().nonnegative(),
+    slug: z.string().min(1),
+    /**
+     * The standing workspace project's marker
+     * (design/0018-standing-workspace-project/): present-and-true on exactly
+     * the one project that is the workspace's own — the home for stewardship
+     * work, the project that never closes. Written only by workspace creation;
+     * `ward project open` never writes it, which is what keeps the standing
+     * project single. Optional so every pre-0018 record stays valid unchanged.
+     */
+    standing: z.literal(true).optional(),
+    /**
+     * The floor this project stood on before it was relocated to the ground
+     * floor (design/0041-ground-floor/). Written only by the converge step
+     * that moves a pre-0041 standing project down to floor 0, and read only
+     * by the allocator: floor numbers are monotonic and never reused
+     * (intent/01-concepts/00-domain-model.md, Identity), so the number the
+     * project vacated has to stay retired, and the record is the only place
+     * that can still say it once the directory is gone.
+     */
+    previousFloor: z.number().int().positive().optional(),
+    /**
+     * The registered repositories this floor claims
+     * (design/0037-repo-floor-affinity/): a routing default for `ward task
+     * open --repo NAME`, not a rule about what the floor's tasks may touch.
+     * It is stored at the project rather than derived from its tasks because
+     * it is a JUDGMENT about where work on a repository belongs — the one kind
+     * of thing the domain model allows a container to record
+     * (intent/01-concepts/00-domain-model.md, Status) — and it must answer
+     * before the floor holds any task at all, which is exactly when a
+     * derivation from its tasks would answer nothing. Optional, so every record
+     * written before this entry stays valid unchanged.
+     */
+    repositories: z.array(z.string().min(1)).optional(),
+    state: workStateSchema,
+    openedAt: z.string().min(1),
+    closedAt: z.string().min(1).optional(),
+  })
   /**
-   * The standing workspace project's marker
-   * (design/0018-standing-workspace-project/): present-and-true on exactly
-   * the one project that is the workspace's own — the home for stewardship
-   * work, the project that never closes. Written only by workspace creation;
-   * `ward project open` never writes it, which is what keeps the standing
-   * project single. Optional so every pre-0018 record stays valid unchanged.
+   * The reserved number belongs to the standing workspace project and to
+   * nothing else (design/0041-ground-floor/): floor 0 IS the ground floor, so
+   * a record claiming that number without the marker is refused outright — it
+   * would give the workspace a second, unmarked ground floor that every
+   * caller would then have to decide whether to believe.
+   *
+   * The converse — the marker on a floor ≥ 1 — is deliberately NOT refused
+   * here: that is exactly the shape every workspace created by ward 0018–0040
+   * carries, and a schema that rejected it would make those workspaces
+   * unreadable by the very verbs that fix them (converge relocates the floor;
+   * doctor names it with its remedy). A legacy standing floor is a state to
+   * report, not a record to refuse.
    */
-  standing: z.literal(true).optional(),
-  /**
-   * The registered repositories this floor claims
-   * (design/0037-repo-floor-affinity/): a routing default for `ward task
-   * open --repo NAME`, not a rule about what the floor's tasks may touch.
-   * It is stored at the project rather than derived from its tasks because
-   * it is a JUDGMENT about where work on a repository belongs — the one kind
-   * of thing the domain model allows a container to record
-   * (intent/01-concepts/00-domain-model.md, Status) — and it must answer
-   * before the floor holds any task at all, which is exactly when a
-   * derivation from its tasks would answer nothing. Optional, so every record
-   * written before this entry stays valid unchanged.
-   */
-  repositories: z.array(z.string().min(1)).optional(),
-  state: workStateSchema,
-  openedAt: z.string().min(1),
-  closedAt: z.string().min(1).optional(),
-});
+  .refine((record) => record.floor !== 0 || record.standing === true, {
+    message:
+      'floor 0 is reserved for the standing workspace project — a project record on floor 0 ' +
+      'must carry `standing: true`',
+  });
 export type ProjectRecord = z.infer<typeof projectSchema>;
 
 export function projectRecordType(dir: string): DocumentType<ProjectRecord> {
@@ -119,7 +157,14 @@ export const taskSchema = z.object({
   code: z.string().min(1),
   slug: z.string().min(1),
   state: workStateSchema,
-  floor: z.number().int().positive().optional(),
+  /**
+   * The floor the task sits on — 0 for the ground floor
+   * (design/0041-ground-floor/), where every task with no floor named of its
+   * own now opens. Optional because a legacy bare task, opened under `tasks/`
+   * before the ground floor existed, carries no floor at all and never will:
+   * those records are read exactly as they were written (design/0036).
+   */
+  floor: z.number().int().nonnegative().optional(),
   purpose: z.string().min(1).optional(),
   /**
    * The stewardship act this task exists to carry

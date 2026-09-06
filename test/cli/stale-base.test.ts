@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { statusShape } from '../../src/cli/schema.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { addTaskPr, openTask } from '../../src/workspace/tasks.ts';
 import {
@@ -46,7 +47,7 @@ test('the incident prequel: an open PR on a retired stacked base warns, with bas
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('needs you');
   expect(result.stdout).toContain(
-    `  ! task t1 — PR ${PR} is based on '${RETIRED}', not the main line 'main' — ` +
+    `  ! task f0t1 — PR ${PR} is based on '${RETIRED}', not the main line 'main' — ` +
       'merging as-is delivers into a branch that may never land (the close gate would refuse it); ' +
       `retarget first: gh pr edit ${PR} --base main`,
   );
@@ -62,7 +63,7 @@ test('the same warning in --json: the needsYou entry carries pr, base, and mainL
   expect(() => statusShape.parse(status)).not.toThrow();
   expect(status.needsYou).toEqual([
     {
-      address: 't1',
+      address: 'f0t1',
       task: 't1',
       reason: 'stale-base',
       pr: PR,
@@ -71,7 +72,7 @@ test('the same warning in --json: the needsYou entry carries pr, base, and mainL
     },
   ]);
   // The per-PR row carries the raw datum the warning was derived from.
-  expect(status.bareTasks[0].forge).toEqual([
+  expect(status.projects[0].tasks[0].forge).toEqual([
     { url: PR, state: 'open', reviewDecision: 'approved', baseRefName: RETIRED },
   ]);
 });
@@ -92,7 +93,7 @@ test("a merged PR's base is history — the close gate owns that end, not the gl
   });
   const json = runWardEnv(['status', '--json'], ws, { NO_COLOR: '1', WARD_GH: fake });
   expect(JSON.parse(json.stdout).needsYou).toEqual([
-    { task: 't1', address: 't1', reason: 'awaiting-close' },
+    { task: 't1', address: 'f0t1', reason: 'awaiting-close' },
   ]);
   const human = runWardEnv(['status'], ws, { NO_COLOR: '1', WARD_GH: fake });
   expect(human.stdout).not.toContain('is based on');
@@ -144,7 +145,7 @@ beforeAll(async () => {
   // Adoption reads the seed's origin, so the record carries the forge URL.
   gitOrThrow(seed, 'remote', 'set-url', 'origin', REMOTE_URL);
   await addRepository(ws, seed, 'demo');
-  await openTask(ws, 'entry', {});
+  await openTask(ws, 'entry', { floor: GROUND_FLOOR });
   await addTaskPr(ws, 't1', PR);
 });
 

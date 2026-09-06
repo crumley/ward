@@ -1,7 +1,7 @@
 // Workspace creation as a list of idempotent establishment steps, each
 // check-then-do — which is what makes re-running create the update path
 // rather than a second mechanism (intent/01-concepts/06-workspace-lifecycle.md).
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, renameSync, statSync } from 'node:fs';
 import { appendFile, mkdir, readdir, readFile, symlink } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
@@ -13,16 +13,26 @@ import {
   catalogType,
   projectRecordType,
   seededArtifactTypes,
+  taskRecordType,
   workspaceRecordType,
 } from '../store/types.ts';
+import { taskAddress } from './address.ts';
 import { sha256OfFile } from './baselines.ts';
 import { git, gitAvailable, gitOrThrow, hasCommits } from './git.ts';
 import { IGNORE_LINES, inspectClaudeGuidance, MARKER_DIR, SCOPE_DIRS } from './layout.ts';
-import { findStandingProject, nextFloor, STANDING_PROJECT_SLUG } from './projects.ts';
+import {
+  type FoundProject,
+  findStandingProject,
+  GROUND_FLOOR,
+  GROUND_FLOOR_DIR,
+  STANDING_PROJECT_SLUG,
+} from './projects.ts';
+import { readTasks } from './scan.ts';
 import { warnJournalOffMainLine, workspaceMainLine } from './steward.ts';
 import {
   AGENTS_MD,
   CATALOG_BODY,
+  STANDING_PROJECT_BODY,
   WARD_INTERNAL_README,
   WORKSPACE_RECORD_BODY,
 } from './templates.ts';
@@ -217,40 +227,144 @@ async function establishScopeDirs(ctx: CreateContext): Promise<StepReport> {
  * Every workspace carries one standing project for work on the workspace
  * itself — upgrades, migrations, reflection adoption
  * (intent/01-concepts/06-workspace-lifecycle.md, The standing workspace
- * project). Its identity is allocated like any project's: the next floor
- * number — floor 1 in a fresh workspace, next-available on the converge run
- * that carries it to a pre-0018 workspace (the 0017 migration-target
- * pattern). Resolution is by the record's `standing` marker, written here and
- * nowhere else. The record gets no baseline entry: it is a record the store
- * validates by schema, not an installed artifact whose customization a
- * fingerprint must detect. The store lock is already held by createWorkspace,
- * so the allocation scan and write happen inline, not through openProject.
+ * project). Its identity is FIXED, not allocated: **floor 0**, at
+ * `projects/0-workspace/`, in every workspace (design/0041-ground-floor/).
+ * A reserved number is what makes the ground floor referable — Ward's own
+ * defaults, and any guidance written once and read in every workspace, can
+ * name one address and be right everywhere, which an allocated number can
+ * never be. Resolution is still by the record's `standing` marker, written
+ * here and nowhere else.
+ *
+ * Three states, all convergent:
+ * - no standing project: establish it at floor 0.
+ * - one on floor 0: satisfied.
+ * - one on floor `N ≥ 1` (every workspace created by ward 0018–0040): RELOCATE
+ *   it to floor 0 when it holds no open task, recording `N` as its
+ *   `previousFloor` so the number stays retired — floors are monotonic and
+ *   never reused, and after the move no directory carries `N` any more.
+ *   Relocation moves addresses, which is safe for closed tasks and only for
+ *   them: a closed task's worktrees were torn down at its close, so no path on
+ *   disk and no live branch is named by the old address. With an open task
+ *   under it the step reports satisfied and names the floor; doctor carries
+ *   the remedy.
+ *
+ * The record gets no baseline entry: it is a record the store validates by
+ * schema, not an installed artifact whose customization a fingerprint must
+ * detect. The store lock is already held by createWorkspace, so the write
+ * happens inline, not through openProject.
  */
 async function establishStandingProject(ctx: CreateContext): Promise<StepReport> {
   const step = 'standing project';
   const existing = await findStandingProject(ctx.root);
-  if (existing !== undefined) {
+  if (existing !== undefined && existing.record.floor === GROUND_FLOOR) {
     return { step, outcome: 'satisfied', detail: `${existing.dir}/` };
   }
-  const floor = nextFloor(ctx.root);
-  const dir = `projects/${floor}-${STANDING_PROJECT_SLUG}`;
-  await writeDocument(ctx.root, projectRecordType(dir), {
+  if (existing !== undefined) return relocateStandingProject(ctx, existing);
+  await writeDocument(ctx.root, projectRecordType(GROUND_FLOOR_DIR), {
     data: {
       type: 'project',
-      floor,
+      floor: GROUND_FLOOR,
       slug: STANDING_PROJECT_SLUG,
       standing: true,
       state: 'active',
       openedAt: new Date().toISOString(),
     },
-    body:
-      `Floor ${floor}: the standing workspace project — the home for work on the workspace ` +
-      'itself (upgrades and their reconciliation, migrations, reflection adoption). ' +
-      'Established at creation, and the one project that never closes: its arc is the ' +
-      "workspace's own, which has no terminal state.",
+    body: STANDING_PROJECT_BODY,
   });
-  ctx.establishedPaths.push(`${dir}/project.md`);
-  return { step, outcome: 'established', detail: `${dir}/` };
+  ctx.establishedPaths.push(`${GROUND_FLOOR_DIR}/project.md`);
+  return { step, outcome: 'established', detail: `${GROUND_FLOOR_DIR}/` };
+}
+
+/**
+ * Carry a pre-0041 standing project down to the ground floor, or say why it
+ * stays. The directory moves whole — its closed tasks travel with it — and
+ * every record that named the old floor is rewritten, so nothing on disk is
+ * left describing an address that no longer exists (§16). An open task blocks
+ * the move because its address would change under work in flight: its
+ * worktree paths, its branch names, and every brief and PR that quotes them
+ * were written against the old floor.
+ */
+async function relocateStandingProject(
+  ctx: CreateContext,
+  existing: FoundProject,
+): Promise<StepReport> {
+  const step = 'standing project';
+  const from = existing.record.floor;
+  const own = (await readTasks(ctx.root)).filter((task) =>
+    task.dir.startsWith(`${existing.dir}/tasks/`),
+  );
+  const open = own.filter((task) => task.record.state !== 'closed');
+  if (open.length > 0) {
+    return {
+      step,
+      outcome: 'satisfied',
+      detail:
+        `${existing.dir}/ — floor ${from}, not the ground floor; ` +
+        `${open.map((task) => taskAddress(task)).join(', ')} still open (close, then converge)`,
+    };
+  }
+  if (existsSync(join(ctx.root, GROUND_FLOOR_DIR))) {
+    throw new WardError(
+      `cannot move the standing project to ${GROUND_FLOOR_DIR}: that directory already exists — ` +
+        'move or remove it, then re-run',
+    );
+  }
+  moveTracked(ctx.root, existing.dir, GROUND_FLOOR_DIR);
+  const record = await readDocument(ctx.root, projectRecordType(GROUND_FLOOR_DIR));
+  // `previousFloor` is what keeps `from` retired once its directory is gone:
+  // floor numbers are never reused, and after the move the record is the only
+  // thing that can still say the number was spent.
+  await writeDocument(ctx.root, projectRecordType(GROUND_FLOOR_DIR), {
+    data: {
+      ...record.data,
+      floor: GROUND_FLOOR,
+      previousFloor: from,
+      // The directory the ground floor occupies is a constant, so the record's
+      // slug is normalized with it: a record and a directory that named
+      // different things would be the drift this move exists to end.
+      slug: STANDING_PROJECT_SLUG,
+    },
+    body: STANDING_PROJECT_BODY,
+  });
+  // The tasks moved with the directory; their records still name the old
+  // floor, and a record describing somewhere it is not is exactly the drift
+  // this move exists to end.
+  for (const task of own) {
+    const dir = `${GROUND_FLOOR_DIR}/${task.dir.slice(`${existing.dir}/`.length)}`;
+    const document = await readDocument(ctx.root, taskRecordType(dir));
+    if (document.data.floor === undefined) continue;
+    await writeDocument(ctx.root, taskRecordType(dir), {
+      data: { ...document.data, floor: GROUND_FLOOR },
+      body: document.body,
+    });
+  }
+  // Only the destination is staged here: `git mv` already staged the removal
+  // of the old path, and an untracked directory has nothing to stage — either
+  // way, naming a path that matches no index entry would fail the add.
+  ctx.establishedPaths.push(GROUND_FLOOR_DIR);
+  return {
+    step,
+    outcome: 'established',
+    detail: `${GROUND_FLOOR_DIR}/ — moved from floor ${from}, which stays retired`,
+  };
+}
+
+/**
+ * Move a record directory within the workspace, through git when git already
+ * tracks it so the journal reads as a rename, and through the filesystem
+ * otherwise (a fresh create has no repository yet, and an uncommitted
+ * directory has nothing for git to rename).
+ */
+function moveTracked(root: string, from: string, to: string): void {
+  const tracked =
+    existsSync(join(root, '.git')) &&
+    hasCommits(root) &&
+    git(root, 'ls-files', '--error-unmatch', '--', from).exitCode === 0;
+  if (tracked) {
+    gitOrThrow(root, 'mv', from, to);
+    return;
+  }
+  renameSync(join(root, from), join(root, to));
 }
 
 /**

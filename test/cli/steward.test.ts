@@ -18,6 +18,7 @@ import {
 import { verbPath } from '../../src/cli/telemetry.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
+import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { workspaceMainLine } from '../../src/workspace/steward.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { createWorkspaceWorktree } from '../../src/workspace/worktrees.ts';
@@ -28,7 +29,7 @@ import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts'
 test('worktree create --workspace: the stewardship worktree, both renderings', () => {
   const human = runWard(['worktree', 'create', 't1', '--workspace'], ws);
   expect(human.exitCode).toBe(0);
-  expect(human.stdout).toContain('created worktrees/t1-steward-steward-work');
+  expect(human.stdout).toContain('created worktrees/f0t1-steward-steward-work');
   expect(human.stdout).toContain("the workspace's own repository");
   expect(human.stdout).toContain('branch steward/steward-work');
 
@@ -38,11 +39,11 @@ test('worktree create --workspace: the stewardship worktree, both renderings', (
   const doc = worktreeCreateShape.parse(JSON.parse(json.stdout));
   expect(doc).toEqual({
     task: 't1',
-    address: 't1',
+    address: 'f0t1',
     source: 'workspace',
     branch: 'steward/steward-work',
     disposition: 'deliverable',
-    path: 'worktrees/t1-steward-steward-work',
+    path: 'worktrees/f0t1-steward-steward-work',
     createdAt: doc.createdAt,
   });
   expect(Object.keys(doc)).not.toContain('repo');
@@ -204,11 +205,11 @@ test('status reads workspace-worktree freshness against the workspace main line'
   const status = runWard(['status'], ws);
   expect(status.exitCode).toBe(0);
   expect(status.stdout).toContain(
-    `${record.path} — behind ${mainLine} by 1 commit — rebase with: ward worktree rebase t1`,
+    `${record.path} — behind ${mainLine} by 1 commit — rebase with: ward worktree rebase f0t1`,
   );
 
   const doc = statusShape.parse(JSON.parse(runWard(['status', '--json'], ws).stdout));
-  const rows = doc.bareTasks.find((task) => task.code === 't1')?.worktrees;
+  const rows = doc.projects[0]?.tasks.find((task) => task.code === 't1')?.worktrees;
   expect(rows).toEqual([
     {
       source: 'workspace',
@@ -264,7 +265,7 @@ beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
   await createWorkspace(ws);
-  await openTask(ws, 'steward-work', {});
+  await openTask(ws, 'steward-work', { floor: GROUND_FLOOR });
   mainLine = workspaceMainLine(ws);
 });
 
