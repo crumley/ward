@@ -318,8 +318,10 @@ the workspace rather than in it.
 - **It never closes.** The workspace has no terminal state (_A workspace is not closed_, below), and
   this is the one project whose arc _is_ the workspace's own — the guaranteed instance of an
   **ongoing project** ([`00-domain-model.md`](00-domain-model.md), Project). Its identity is
-  allocated like any project's ([`00-domain-model.md`](00-domain-model.md), Identity); the concrete
-  address form is [`design/`](../../design/)'s.
+  **fixed, and the same in every workspace** — the reserved floor `0`
+  ([`00-domain-model.md`](00-domain-model.md), Identity) — which is what lets anything written
+  outside a workspace refer to it at all: a default Ward ships, a brief read in several workspaces.
+  The concrete address form is [`design/`](../../design/)'s.
 - **And the rollup consequence is blessed, not accidental.** With a standing project in every
   workspace, the workspace-level status derives `active` over an empty standing project — **a
   workspace is never done being a workspace**, and the status now says so plainly instead of reading
@@ -328,9 +330,10 @@ the workspace rather than in it.
   workspace?" — every upgrade adjudicated, every migration, every reflection adopted — is answered
   by one project's record, in the same place in every workspace (§3).
 
-(Bare tasks directly under the workspace remain what they are — the cheapest one-off
-([`00-domain-model.md`](00-domain-model.md)); the standing project is where workspace-directed work
-belongs, not a new requirement on unrelated odd jobs.)
+(The standing project is where workspace-**directed** work belongs; it is not a new requirement on
+unrelated odd jobs, which stay ordinary tasks like any other — opened on the ground floor when they
+have no floor of their own, which is the cheapest one-off
+([`00-domain-model.md`](00-domain-model.md)).)
 
 ## How a workspace evolves: what Ward installs, and how it survives your changes
 
