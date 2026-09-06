@@ -42,7 +42,12 @@ binding the concepts to any one of them_ (§5).
   — never an error lost in a retry — so Ward records the resolution failure on the session
   (`../01-concepts/02-sessions-and-lifecycle.md`, lifecycle events). _Why:_ reflection must know
   what it **cannot** read; a silently unresolvable handle masquerades as a history nobody happened
-  to open.
+  to open. **Locate is answered per machine:** a harness keeps a run's history on the machine that
+  produced it, so a handle found nowhere **here** is gone here even when another machine holds it.
+  _Why it matters:_ the two causes of a gone answer call for different acts — a discarded history is
+  permanent, a history on another computer is reached by going there — and the session's recorded
+  **machine** (`../01-concepts/02-sessions-and-lifecycle.md`, the session-log minimum) is what lets
+  the caller tell them apart.
 - **Integrate behind a thin adapter** exposing a small fixed surface — _start / handle / resume /
   locate_ — with everything Ward-specific staying in Ward. _Why:_ a narrow adapter is what lets a
   new harness be added without touching the role model, the session model, or the store.
@@ -83,7 +88,8 @@ binding the concepts to any one of them_ (§5).
 
 - The **agent-harness contract**: a thin, swappable adapter exposing start / handle / resume /
   locate, with optional fork, honoring an externally-chosen model — and passing an **unmade** choice
-  through as unmade, so the harness's own default stands.
+  through as unmade, so the harness's own default stands. **Locate answers per machine**: found or
+  gone **here**.
 - The **ordering of handle and run**: assigned before start wherever the harness accepts a supplied
   run id, recorded as the first act after start where it does not.
 

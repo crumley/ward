@@ -154,9 +154,12 @@ relevant slice (and reflected in tests and code).
   with runtime-validated schemas, the catalog itself a validated document
   ([`../02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md)).
 - **Identity edges closed.** **Task codes** are workspace-unique among _open_ tasks — a bare code
-  addresses every lifecycle operation, mirroring the session rule. **Floor numbers are monotonic and
-  never reused** — the floor is the root of room addresses recorded in provenance, so reuse would
-  poison the historical record
+  addresses every lifecycle operation. **Session ids** go further: unique over the workspace's
+  history, **across the machines that share it** — slug, a never-reused discriminator, and the
+  machine the session ran on — because a session id is also the address of the session's **record**,
+  and a workspace is allocated from on every machine holding a clone. **Floor numbers are monotonic
+  and never reused** — the floor is the root of room addresses recorded in provenance, so reuse
+  would poison the historical record
   ([`../01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md)).
 - **The append-vs-rewrite tension resolved as the two-zone model.** Context assembles as a stable,
   append-only, cache-shared **prefix** followed by a **mutable tail** where rewrites are legal;

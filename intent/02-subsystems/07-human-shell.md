@@ -62,10 +62,23 @@ principle (§8) and feeds the compounding loop
     only forbid a cheaper surface that delivers the same deliberately-chosen pick — the constraint
     serves the human's delight, and must never argue against a surface that delivers it.
 
-  _Asymmetry (§8):_ both mechanisms are **human-audience** affordances; an **agent** caller (which
+  **The three constraints govern every interactive moment this layer takes, not only the picker** —
+  and **deliberate entry is satisfied by demonstrable presence** as well as by an argument the human
+  typed. The case that establishes it: when a **foreground run the human just exited** returns the
+  terminal, the shell may ask them one thing about it — whether that session is done
+  ([`../01-concepts/02-sessions-and-lifecycle.md`](../01-concepts/02-sessions-and-lifecycle.md),
+  where the answer is the human's close and never Ward's). The other two constraints hold literally
+  and unchanged: a **deterministic default**, the question **pre-answerable** so any invocation can
+  settle it in advance, and nothing ever asked of an agent caller or of one whose streams are not
+  terminals. _Why presence counts:_ what the entry rule protects against is a prompt springing from
+  a missing argument, which makes the same invocation blocking for one caller and failing for
+  another; a foreground run the human started and left is not ambiguous about who is there, and it
+  is the one moment their answer costs them nothing to give.
+
+  _Asymmetry (§8):_ all of these are **human-audience** affordances; an **agent** caller (which
   declares itself, below) passes explicit context and gets **deterministic** handling — a missing
   argument outside the picker is a deterministic error naming the fix, never a blocking interactive
-  prompt.
+  prompt, and a question a present human would be asked is simply not asked of it.
 - **"What needs me?" is a first-class query.** What the surface presents is **everything waiting on
   the human**, from two springs: the requests **addressed** to them — gated actions awaiting
   authority (§18), toil the machinery surfaced (what is blocked, conflicted, ready —
@@ -206,10 +219,12 @@ principle (§8) and feeds the compounding loop
 
 - The **human-shell contract** (thin CLI plumbing), the **noun/verb CLI shape**, **interactive
   resolution and autocomplete of missing/ambiguous arguments** (a delightful, human-audience
-  affordance), the **"what needs me?" attention surface** (one glanceable, deduplicated answer over
-  the recorded requests to the human), **workspace/scope-awareness from any working directory**,
-  **file inputs for long free-text arguments**, the **`doctor` self-diagnosis** capability (its
-  _surface_ — what it checks is
+  affordance) and the **three constraints that govern every interactive moment** — deliberate entry
+  (satisfied by demonstrable presence), a deterministic result for every non-interactive invocation,
+  and unreachable by an agent caller — the **"what needs me?" attention surface** (one glanceable,
+  deduplicated answer over the recorded requests to the human), **workspace/scope-awareness from any
+  working directory**, **file inputs for long free-text arguments**, the **`doctor` self-diagnosis**
+  capability (its _surface_ — what it checks is
   [`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)'s),
   **surfacing version skew through the attention surface rather than as output chatter**,
   **opinionated global + workspace-local configuration** (workspace overrides global **per key**;
