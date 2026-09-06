@@ -50,7 +50,8 @@ import {
   releaseRepository,
   requireRegistered,
 } from '../workspace/affinity.ts';
-import { createWorkspace, type StepReport } from '../workspace/create.ts';
+import type { StepReport } from '../workspace/converge.ts';
+import { createWorkspace } from '../workspace/create.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
 import {
@@ -216,7 +217,7 @@ const workspaceCreate = command(
     json: jsonFlag(),
   }),
   {
-    brief: message`Create a Ward workspace at PATH (re-running converges).`,
+    brief: message`Create a Ward workspace at PATH (a path that already is one is refused).`,
   },
 );
 
@@ -1266,6 +1267,12 @@ function renderUpgrade(report: UpgradeReport, json: boolean): void {
           pc.dim(`(branch ${report.branch}, in ${report.path})`) +
           '\n',
   );
+  // Phase 1 first, in create's step style: the record's own shape is what
+  // phase 2 stands on, and it is reported whether or not a vehicle followed.
+  for (const step of report.converged) {
+    console.log(`  ${renderOutcome(step)}  ${step.step} ${pc.dim(`(${step.detail})`)}`);
+  }
+  if (report.converged.length > 0) console.log('');
   for (const artifact of report.artifacts) {
     console.log(
       `  ${renderUpgradeAction(artifact.action)}  ${artifact.path} ${pc.dim(`(${artifact.detail})`)}`,
@@ -1286,7 +1293,14 @@ function renderUpgrade(report: UpgradeReport, json: boolean): void {
     }
   }
   if (report.outcome === 'current') {
-    console.log(`\n${pc.dim('nothing to upgrade — everything already current')}`);
+    // Converging something and finding the artifacts current is work done, not
+    // nothing to do — the two phases answer separately.
+    const established = report.converged.filter((step) => step.outcome === 'established').length;
+    console.log(
+      established === 0
+        ? `\n${pc.dim('nothing to upgrade — everything already current')}`
+        : `\nrecord converged — ${established} established; installed artifacts already current`,
+    );
   } else {
     console.log(`\ncommitted ${pc.bold(report.commit ?? '?')} on ${report.branch}`);
   }

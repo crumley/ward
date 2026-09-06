@@ -644,7 +644,9 @@ async function workspaceChecks(
       : {
           check: 'ignore policy',
           severity: 'warn',
-          message: `.gitignore is missing ${missingIgnores.join(', ')} — re-run ward workspace create to converge`,
+          message:
+            `.gitignore is missing ${missingIgnores.join(', ')} — ` +
+            'bring the workspace to this release: ward workspace upgrade',
         },
   );
 
@@ -655,7 +657,9 @@ async function workspaceChecks(
       : {
           check: 'version control',
           severity: 'warn',
-          message: 'workspace is not tracked in git — re-run ward workspace create to converge',
+          message:
+            'workspace is not tracked in git — bring the workspace to this release: ' +
+            'ward workspace upgrade',
         },
   );
   if (record !== null && tracked) {
@@ -855,8 +859,7 @@ async function baselineChecks(root: string): Promise<Finding[]> {
     findings.push({
       check: 'installed baselines',
       severity: 'info',
-      message:
-        'no baseline record — created by an older ward; re-run ward workspace create to start one',
+      message: 'no baseline record — created by an older ward; ward workspace upgrade starts one',
     });
     return findings;
   }
@@ -871,7 +874,7 @@ async function baselineChecks(root: string): Promise<Finding[]> {
         severity: 'warn',
         message:
           'installed artifact is missing — deliberate departure, or drift; ' +
-          'ward workspace create reinstalls the default',
+          'ward workspace upgrade reinstalls the default',
       });
       continue;
     }
@@ -948,9 +951,11 @@ function claudeGuidanceFinding(root: string): Finding {
  * - absent — the pre-0018 workspace, a migration target exactly like 0017's
  *   missing CLAUDE.md, bridged the same way: info, never warn (nothing is
  *   broken, ordinary work is unaffected). It is also the state in which
- *   `ward task open` has nowhere to put a task, so the converge remedy here is
- *   the same string that refusal carries.
- * - on floor `N ≥ 1` — a workspace created by ward 0018–0040. Converge moves
+ *   `ward task open` has nowhere to put a task, so the update remedy here is
+ *   the same string that refusal carries
+ *   (design/0042-upgrade-owns-convergence/: every remedy for a workspace that
+ *   already exists names `ward workspace upgrade`).
+ * - on floor `N ≥ 1` — a workspace created by ward 0018–0040. The update moves
  *   it down when it holds no open task, so that case is `info`: nothing is
  *   wrong, one command completes it. With an open task the move is blocked —
  *   the addresses would change under work in flight — so it is a `warn`, and
@@ -971,8 +976,8 @@ async function standingProjectFinding(root: string): Promise<Finding> {
         severity: 'info',
         message:
           'no ground floor — no standing workspace project, the home for upgrades, migrations, ' +
-          `and reflections and where a task with no floor of its own opens; establish it: ` +
-          `ward workspace create ${root}`,
+          'and reflections and where a task with no floor of its own opens; establish it: ' +
+          'ward workspace upgrade',
       };
     }
     if (standing.record.floor === GROUND_FLOOR) {
@@ -992,7 +997,7 @@ async function standingProjectFinding(root: string): Promise<Finding> {
       ? {
           check,
           severity: 'info',
-          message: `${preamble} — converge to move it down: ward workspace create ${root}`,
+          message: `${preamble} — update to move it down: ward workspace upgrade`,
         }
       : {
           check,
@@ -1000,7 +1005,7 @@ async function standingProjectFinding(root: string): Promise<Finding> {
           message:
             `${preamble}, and it cannot move while it holds open work: ` +
             `${open.map((task) => `${taskAddress(task)} (${task.record.slug})`).join(', ')} ` +
-            `would change address. Close them, then converge: ward workspace create ${root}`,
+            'would change address. Close them, then update: ward workspace upgrade',
         };
   } catch (error) {
     if (error instanceof WardError) {
@@ -1082,8 +1087,8 @@ async function claimFindings(root: string): Promise<Finding[]> {
  * checkout standing elsewhere is ordinary record↔disk drift with a name,
  * instead of quietly redefining what the main line is (0019's SF-001). An
  * unrecorded name is the pre-0020 workspace: info, never warn — nothing is
- * broken, every rail falls back to the live root read — carrying the upgrade
- * and converge remedies doctor itself never runs. Drift is warn, not error:
+ * broken, every rail falls back to the live root read — carrying the update
+ * remedy doctor itself never runs. Drift is warn, not error:
  * the journal proceeds loudly and the rails aim at the recorded name, so the
  * workspace still operates; the remedy is one `git switch`.
  */
@@ -1095,7 +1100,7 @@ function mainLineFinding(root: string, recorded: string | undefined): Finding {
       severity: 'info',
       message:
         'no recorded main-line name — created by an older ward; a workspace upgrade records ' +
-        `it (ward workspace upgrade TASK), as does re-running ward workspace create ${root}`,
+        'it: ward workspace upgrade',
     };
   }
   if (git(root, 'rev-parse', '--verify', '--quiet', `refs/heads/${recorded}`).exitCode !== 0) {
@@ -1246,7 +1251,7 @@ async function checkDocument<T>(
       findings.push({
         check,
         severity: 'error',
-        message: `${type.relPath} is missing — re-run ward workspace create to converge`,
+        message: `${type.relPath} is missing — bring the workspace to this release: ward workspace upgrade`,
       });
     } else {
       throw error;

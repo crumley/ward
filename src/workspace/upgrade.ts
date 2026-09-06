@@ -14,14 +14,27 @@
 // record-first invariants all hold because they are 0019's, reused.
 //
 // Who builds that vehicle is the split design/0030-upgrade-self-service/ adds.
-// `upgradeWorkspace(root, TASK)` is unchanged: the caller named the task, and
-// this module writes into it and stops — the composable primitive, and a
-// declared agent's only path. `selfServiceUpgrade(root)` is the bare **human**
-// path: it derives and opens the stewardship task itself, creates the
-// worktree, runs the same upgrade, publishes the branch for review, and ends
-// by naming what remains — review, merge, close — because those three are the
-// human's, and Ward's part is to make them one glance away rather than four
-// commands of ceremony the verb could have derived.
+// `upgradeWorkspace(root, TASK)` is the composable primitive and a declared
+// agent's only path: the caller named the task, and this module writes into it
+// and stops. `selfServiceUpgrade(root)` is the bare **human** path: it derives
+// and opens the stewardship task itself, creates the worktree, runs the same
+// upgrade, publishes the branch for review, and ends by naming what remains —
+// review, merge, close — because those three are the human's, and Ward's part
+// is to make them one glance away rather than four commands of ceremony the
+// verb could have derived.
+//
+// Both paths run TWO phases, in this order
+// (design/0042-upgrade-owns-convergence/):
+//
+//  1. **Converge the record** — `convergeWorkspace(root)` on the workspace
+//     root, directly, as one journal commit under the store lock, before any
+//     vehicle exists. These are record and bookkeeping writes and they CANNOT
+//     ride the vehicle: the stewardship task itself opens on the ground floor,
+//     so the ground floor has to exist before a vehicle can.
+//  2. **Reconcile the installed artifacts** — the deterministic artifact pass
+//     above, through the stewardship worktree, exactly as 0020 and 0030 built
+//     it. No default moved means no vehicle: same-version runs converge and
+//     adjudicate nothing.
 import { existsSync } from 'node:fs';
 import { symlink } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -36,6 +49,7 @@ import {
   workspaceRecordType,
 } from '../store/types.ts';
 import { taskAddress } from './address.ts';
+import { convergeWorkspace, type StepReport } from './converge.ts';
 import { git, gitOrThrow } from './git.ts';
 import { inspectClaudeGuidance } from './layout.ts';
 import { classifyArtifact, INSTALLED_ARTIFACT_LINEAGE, sha256OfText } from './lineage.ts';
@@ -80,6 +94,13 @@ export interface RemainingAct {
 
 export interface UpgradeReport {
   readonly vehicle: VehicleOrigin;
+  /**
+   * Phase 1: the establishment steps run against the workspace root itself,
+   * with what each one found. Always present — every run converges, and a run
+   * that converged something and found the artifacts current is reporting work
+   * done, not "nothing to do".
+   */
+  readonly converged: readonly StepReport[];
   /** Present exactly when `vehicle` is not `none`. */
   readonly task?: string;
   /** Present exactly when `vehicle` is not `none`. */
@@ -119,10 +140,24 @@ export interface UpgradeReport {
  * stewardship branch — artifacts, backfilled baselines, the recorded main
  * line, and the stamp arrive together or not at all (the baseline moves with
  * the artifact it fingerprints, intent/01-concepts/06-workspace-lifecycle.md).
- * Convergent: a second run finds everything current and commits nothing.
+ * Convergent throughout: a second run converges to `satisfied` and finds every
+ * artifact current, committing nothing on either line.
  */
 export async function upgradeWorkspace(root: string, taskCode: string): Promise<UpgradeReport> {
   refuseStewardshipCopy(root); // the upgrade is the enclosing workspace's act
+  // Phase 1, before the task is even resolved: the record's shape is what a
+  // stewardship vehicle stands on, so it cannot wait for one to be built.
+  const converged = await convergeWorkspace(root);
+  return { ...(await reconcileArtifacts(root, taskCode)), converged: converged.steps };
+}
+
+/**
+ * Phase 2: the deterministic artifact pass, in TASK's stewardship worktree.
+ */
+async function reconcileArtifacts(
+  root: string,
+  taskCode: string,
+): Promise<Omit<UpgradeReport, 'converged'>> {
   const task = await resolveOpenTask(root, taskCode);
   const worktree = requireWorkspaceWorktree(root, task, await readTaskWorktrees(root, task.dir));
   const copy = join(root, worktree.path);
@@ -170,7 +205,7 @@ async function upgradeInCopy(
   branch: string,
   worktreePath: string,
   copy: string,
-): Promise<UpgradeReport> {
+): Promise<Omit<UpgradeReport, 'converged'>> {
   const assessment = await assessUpgrade(root, copy, true);
 
   // One commit carries the whole act — or nothing needed doing.
@@ -463,13 +498,20 @@ export async function selfServiceUpgrade(
   const existing = await findOpenUpgradeTask(root);
   refuseSecondUpgrade(root, mainLine, existing);
 
-  // Would an upgrade change anything? Asked of the ROOT, read-only, before any
-  // vehicle exists: an empty stewardship task, worktree, branch, and pull
+  // Phase 1. It runs before the probe as well as before the vehicle: converge
+  // backfills record fields the probe would otherwise read as artifact work,
+  // and it is what puts the ground floor under the task the probe may go on to
+  // derive.
+  const converged = await convergeWorkspace(root);
+
+  // Would the artifacts change anything? Asked of the ROOT, read-only, before
+  // any vehicle exists: an empty stewardship task, worktree, branch, and pull
   // request would read as work where there is none.
   const probe = await assessUpgrade(root, root, false);
   if (probe.changed.length === 0) {
     return {
       vehicle: 'none',
+      converged: converged.steps,
       outcome: 'current',
       ...probe.report,
       remaining: existing === undefined ? [] : [abandonEmptyUpgradeTask(existing.task)],
@@ -503,7 +545,7 @@ export async function selfServiceUpgrade(
       `(off ${mainLine})`,
   });
 
-  const report = await upgradeWorkspace(root, taskAddress(task));
+  const report = await reconcileArtifacts(root, taskAddress(task));
   const branch = report.branch ?? worktree.branch;
   const publication = await publishStewardshipBranch(root, {
     branch,
@@ -518,6 +560,7 @@ export async function selfServiceUpgrade(
   return {
     ...report,
     vehicle: 'derived',
+    converged: converged.steps,
     derived,
     pullRequest: publication,
     remaining: remainingActs(report, branch, taskAddress(task), publication),
@@ -559,10 +602,10 @@ function refuseSecondUpgrade(
  * The stewardship task Ward opens for itself. Its home is the ground floor —
  * the standing workspace project (0018: "the home for work on the workspace
  * itself — upgrades, migrations, reflections"), fixed at floor 0 by
- * design/0041-ground-floor/. A workspace that has none is refused with the
- * converge remedy rather than served from the bare pool: an upgrade that
- * opened its own vehicle in the legacy pool would be the tool writing the
- * shape it exists to move the workspace away from.
+ * design/0041-ground-floor/. `requireGroundFloor` can no longer fail here:
+ * phase 1 established the floor before this ran, which is the whole reason the
+ * converge runs first (design/0042-upgrade-owns-convergence/). Before that
+ * ordering, this verb refused the workspaces it exists to move forward.
  */
 async function deriveUpgradeTask(root: string): Promise<FoundTask> {
   return openTask(root, DERIVED_SLUG, {
@@ -635,7 +678,7 @@ function landAndClose(branch: string, code: string): RemainingAct[] {
  * on the human's behalf, which this verb never does.
  */
 function remainingActs(
-  report: UpgradeReport,
+  report: Omit<UpgradeReport, 'converged'>,
   branch: string,
   code: string,
   publication: Publication,
@@ -682,7 +725,11 @@ function remainingActs(
  * reviewer who presses the forge's merge button would create a merge commit
  * the workspace root does not have and diverge the very record under review.
  */
-function pullRequestBody(report: UpgradeReport, branch: string, code: string): string {
+function pullRequestBody(
+  report: Omit<UpgradeReport, 'converged'>,
+  branch: string,
+  code: string,
+): string {
   const rows = report.artifacts.map(
     (artifact) => `- \`${artifact.path}\` — **${artifact.action}**: ${artifact.detail}`,
   );

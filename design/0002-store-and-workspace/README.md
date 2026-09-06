@@ -5,6 +5,11 @@
 > workspace can exist, converge, and report its own health.
 >
 > **Status:** accepted · **Started:** 2026-08-02
+>
+> **Partially superseded by [0042](../0042-upgrade-owns-convergence/README.md):** `workspace create`
+> no longer converges an existing workspace — it refuses one, naming `ward workspace upgrade`, which
+> runs the same establishment steps as its first phase. Everything else here stands: the store, the
+> check-then-do steps and their outcomes, the single convergence commit, and the lite `doctor`.
 
 This is the first of three entries that together reach the **bootstrap loop**: a workspace that
 contains the `ward` repository and in which the next Ward iteration is delivered as a Ward task —

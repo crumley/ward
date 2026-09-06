@@ -160,7 +160,7 @@ test('standing project — fresh workspace: ok, naming the ground floor', async 
   expect(report.healthy).toBe(true);
 });
 
-test('standing project — absent (the pre-0018 shape): info carrying the converge remedy', async () => {
+test('standing project — absent (the pre-0018 shape): info carrying the update remedy', async () => {
   const ws = join(scratch, 'ws-standing-absent');
   await createWorkspace(ws);
   rmSync(join(ws, 'projects', '0-workspace'), { recursive: true });
@@ -168,7 +168,7 @@ test('standing project — absent (the pre-0018 shape): info carrying the conver
   const finding = report.workspace.find((f) => f.check === 'standing project');
   expect(finding).toMatchObject({
     severity: 'info',
-    message: expect.stringContaining(`ward workspace create ${ws}`),
+    message: expect.stringContaining('ward workspace upgrade'),
   });
   expect(report.healthy).toBe(true); // report-only: absence is a bridge, not a failure
 });

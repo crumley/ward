@@ -1,12 +1,13 @@
 // The acceptance scenarios of design/0002-store-and-workspace/, end to end
-// through the spawned CLI: create produces a valid workspace, re-run
-// converges without changes, and doctor reports machine checks outside a
-// workspace, health inside one, and corruption loudly.
+// through the spawned CLI: create produces a valid workspace, a second create
+// on the same path is refused with the verb that owns updating it
+// (design/0042-upgrade-owns-convergence/), and doctor reports machine checks
+// outside a workspace, health inside one, and corruption loudly.
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { git } from '../../src/workspace/git.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { applyGitTestEnv, makeTempDir, NO_GH, removeDir, runWard, runWardEnv } from '../helpers.ts';
 
 test('workspace create produces a valid workspace with a first commit', () => {
   const result = runWard(['workspace', 'create', ws], outside);
@@ -19,11 +20,27 @@ test('workspace create produces a valid workspace with a first commit', () => {
   expect(git(ws, 'rev-list', '--count', 'HEAD').stdout.trim()).toBe('1');
 });
 
-test('re-running create converges: exit 0, all satisfied, clean tree', () => {
+test('re-running create is refused, naming upgrade — nothing written, nothing committed', () => {
   const result = runWard(['workspace', 'create', ws], outside);
-  expect(result.exitCode).toBe(0);
-  expect(result.stdout).toContain('0 established, 13 already satisfied');
+  expect(result.exitCode).toBe(1);
+  expect(result.stdout).toBe(''); // a refusal emits no document, on either rendering
+  expect(result.stderr).toContain(`${ws} is already a Ward workspace`);
+  expect(result.stderr).toContain('ward workspace upgrade');
   expect(git(ws, 'status', '--porcelain').stdout).toBe('');
+  expect(git(ws, 'rev-list', '--count', 'HEAD').stdout.trim()).toBe('1');
+});
+
+// The update owns convergence, and it says what it converged even when the
+// installed artifacts were already current: converging is work done.
+test('workspace upgrade on a current workspace converges and manufactures no vehicle', () => {
+  // The bare form is the human's; the caller environment is pinned so the
+  // suite's own WARD_AGENT can never turn this into the agent refusal (0005).
+  const result = runWardEnv(['workspace', 'upgrade'], ws, { NO_COLOR: '1', WARD_GH: NO_GH });
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout).toContain('satisfied');
+  expect(result.stdout).toContain('standing project');
+  expect(result.stdout).toContain('nothing to upgrade — everything already current');
+  expect(git(ws, 'rev-list', '--count', 'HEAD').stdout.trim()).toBe('1');
 });
 
 test('doctor outside any workspace runs machine checks only', () => {

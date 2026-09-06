@@ -15,7 +15,8 @@ import {
   taskRecordType,
 } from '../../src/store/types.ts';
 import { taskAddress } from '../../src/workspace/address.ts';
-import { createWorkspace, type StepReport } from '../../src/workspace/create.ts';
+import { convergeWorkspace, type StepReport } from '../../src/workspace/converge.ts';
+import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import { git } from '../../src/workspace/git.ts';
 import {
@@ -75,7 +76,7 @@ test('converge on a pre-0018 workspace establishes floor 0 beside floors 1–5',
   const ws = await pre0018Workspace('converge-establish', 5);
   expect(await findStandingProject(ws)).toBeUndefined();
 
-  const report = await createWorkspace(ws);
+  const report = await convergeWorkspace(ws);
   expect(outcome(report.steps, 'standing project')).toBe('established');
   expect((await findStandingProject(ws))?.record.floor).toBe(GROUND_FLOOR);
   // The ordinary sequence is untouched: the reserved number is not in it.
@@ -88,7 +89,7 @@ test('converge relocates a floor-1 standing project holding only closed tasks', 
   const closed = await openTask(ws, 'old-stewardship', { floor: 1 });
   await closeTask(ws, taskAddress(closed), 'abandoned');
 
-  const report = await createWorkspace(ws);
+  const report = await convergeWorkspace(ws);
   expect(outcome(report.steps, 'standing project')).toBe('established');
   expect(detail(report.steps, 'standing project')).toContain('moved from floor 1');
 
@@ -113,7 +114,7 @@ test('an open task blocks the move: converge says so, doctor carries the ordered
   const ws = await legacyStandingWorkspace('blocked', 1);
   await openTask(ws, 'in-flight', { floor: 1 });
 
-  const report = await createWorkspace(ws);
+  const report = await convergeWorkspace(ws);
   expect(outcome(report.steps, 'standing project')).toBe('satisfied');
   expect(detail(report.steps, 'standing project')).toContain('f1t1');
   expect((await findStandingProject(ws))?.record.floor).toBe(1); // exactly as it was
@@ -121,7 +122,7 @@ test('an open task blocks the move: converge says so, doctor carries the ordered
   const finding = (await runDoctor(ws)).workspace.find((f) => f.check === 'standing project');
   expect(finding?.severity).toBe('warn');
   expect(finding?.message).toContain('f1t1 (in-flight)');
-  expect(finding?.message).toContain(`Close them, then converge: ward workspace create ${ws}`);
+  expect(finding?.message).toContain('Close them, then update: ward workspace upgrade');
   expect((await runDoctor(ws)).healthy).toBe(true); // report-only: a migration state, not a fault
 });
 
@@ -130,7 +131,7 @@ test('a legacy standing floor with nothing open is info, not warn — one comman
   const finding = (await runDoctor(ws)).workspace.find((f) => f.check === 'standing project');
   expect(finding?.severity).toBe('info');
   expect(finding?.message).toContain('the ground floor is floor 0');
-  expect(finding?.message).toContain(`ward workspace create ${ws}`);
+  expect(finding?.message).toContain('ward workspace upgrade');
 });
 
 // -- every task lives on a floor -------------------------------------------
@@ -150,7 +151,7 @@ test('a task with no floor named opens on the ground floor, worktree path and al
 test('with no ground floor the open is refused, never served from the bare pool', async () => {
   const ws = await pre0018Workspace('no-ground-floor', 2);
   expect(requireGroundFloor(ws)).rejects.toThrow(
-    `no ground floor — establish it: ward workspace create ${ws}`,
+    'no ground floor — establish it: ward workspace upgrade',
   );
   expect(existsSync(join(ws, 'tasks'))).toBe(true); // reserved, and left empty
   expect((await readTasks(ws)).length).toBe(0);

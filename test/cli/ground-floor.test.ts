@@ -37,18 +37,18 @@ test('status and project list lead with the ground floor, named as one', () => {
   expect(projects.map((project: { floor: number }) => project.floor)).toEqual([0, 1]);
 });
 
-test('a workspace with no ground floor refuses the open, with the converge remedy', () => {
+test('a workspace with no ground floor refuses the open, with the update remedy', () => {
   const ws = workspace('no-ground-floor');
   removeDir(join(ws, 'projects', '0-workspace'));
   const refused = runWard(['task', 'open', 'nowhere-to-go'], ws);
   expect(refused.exitCode).not.toBe(0);
   expect(refused.stdout).toBe(''); // a refusal emits no document, on either rendering
-  expect(refused.stderr).toContain(`no ground floor — establish it: ward workspace create ${ws}`);
+  expect(refused.stderr).toContain('no ground floor — establish it: ward workspace upgrade');
   // Doctor names the same state with the same remedy — one answer, two surfaces.
   const doctor = JSON.parse(runWard(['doctor', '--json'], ws).stdout);
   const finding = doctor.workspace.find((f: { check: string }) => f.check === 'standing project');
   expect(finding.severity).toBe('info');
-  expect(finding.message).toContain(`ward workspace create ${ws}`);
+  expect(finding.message).toContain('ward workspace upgrade');
 });
 
 // -- setup ------------------------------------------------------------------

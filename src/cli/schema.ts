@@ -325,8 +325,12 @@ export type DoctorShape = z.infer<typeof doctorShape>;
 // state the verb just recorded (§16), while the read shapes carry derived
 // overlays (inReview, live forge state) computed at read time.
 
-/** One establishment step of `workspace create` (0002): check-then-do, named. */
-const createStepShape = z.strictObject({
+/**
+ * One establishment step of the convergence both `workspace create` and
+ * `workspace upgrade` run (0002; design/0042-upgrade-owns-convergence/):
+ * check-then-do, named, with what the step found.
+ */
+const convergeStepShape = z.strictObject({
   step: z.string(),
   outcome: z.enum(['established', 'satisfied']),
   detail: z.string(),
@@ -334,7 +338,7 @@ const createStepShape = z.strictObject({
 
 export const workspaceCreateShape = z.strictObject({
   root: z.string(),
-  steps: z.array(createStepShape),
+  steps: z.array(convergeStepShape),
 });
 export type WorkspaceCreateShape = z.infer<typeof workspaceCreateShape>;
 
@@ -568,8 +572,9 @@ export type WorkspaceRestoreShape = z.infer<typeof workspaceRestoreShape>;
  * - `derived` — the bare-human path built the vehicle. Adds `derived` (the
  *   steps it echoed) and `pullRequest` (the forge review surface, or its
  *   absence with the reason).
- * - `none` — the workspace was already current, so nothing was manufactured:
+ * - `none` — no installed default had moved, so nothing was manufactured:
  *   `task`, `branch`, and `path` are all absent, and `outcome` is `current`.
+ *   `converged` still reports what phase 1 did.
  *
  * `task`/`branch`/`path` leaving the required set is the one non-additive
  * evolution here, taken now while the only consumers are this repository's own
@@ -578,6 +583,13 @@ export type WorkspaceRestoreShape = z.infer<typeof workspaceRestoreShape>;
  */
 export const workspaceUpgradeShape = z.strictObject({
   vehicle: z.enum(['given', 'derived', 'none']),
+  /**
+   * Phase 1: the convergence run against the workspace root, step by step
+   * (design/0042-upgrade-owns-convergence/). Always present, on every
+   * `vehicle` — including `none`, where the workspace's record may still have
+   * been brought forward while its installed artifacts were already current.
+   */
+  converged: z.array(convergeStepShape),
   /** Present exactly when `vehicle` is not `none`. */
   task: z.string().optional(),
   /** Present exactly when `vehicle` is not `none`. */

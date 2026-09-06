@@ -6,6 +6,12 @@
 > added to.
 >
 > **Status:** built — awaiting review · **Started:** 2026-09-05
+>
+> **Amended by [0042](../0042-upgrade-owns-convergence/README.md):** the converge this entry
+> describes is now run by `ward workspace upgrade`, so every remedy quoted below —
+> `no ground floor — establish it: ward workspace create ROOT` and doctor's relocation findings —
+> names `ward workspace upgrade` instead, without its path argument. The steps, the relocation, and
+> the refusal are unchanged.
 
 The workspace record carries two address forms and two task containers. A task on a floor is `f3t22`
 under `projects/3-…/tasks/`; a bare task is `t7` under `tasks/` at the root

@@ -1,7 +1,7 @@
 // Installed baselines (design/0005-agent-audience/): create fingerprints
-// what it installs, re-runs converge, a re-installed artifact replaces its
-// entry, and doctor reads the record without ever failing the workspace over
-// it — customization is the yours-tier working as intended
+// what it installs, a converge run leaves them alone, a re-installed artifact
+// replaces its entry, and doctor reads the record without ever failing the
+// workspace over it — customization is the yours-tier working as intended
 // (intent/01-concepts/06-workspace-lifecycle.md).
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { rmSync } from 'node:fs';
@@ -10,6 +10,7 @@ import pkg from '../../package.json' with { type: 'json' };
 import { readDocument } from '../../src/store/document.ts';
 import { baselinesType } from '../../src/store/types.ts';
 import { sha256OfFile } from '../../src/workspace/baselines.ts';
+import { convergeWorkspace } from '../../src/workspace/converge.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { type DoctorReport, runDoctor } from '../../src/workspace/doctor.ts';
 import { git } from '../../src/workspace/git.ts';
@@ -29,10 +30,10 @@ test('a fresh create fingerprints every installed artifact', async () => {
   }
 });
 
-test('re-running create leaves the baselines byte-identical', async () => {
+test('re-converging leaves the baselines byte-identical', async () => {
   await createWorkspace(root);
   const before = await Bun.file(join(root, baselinesType.relPath)).text();
-  const report = await createWorkspace(root);
+  const report = await convergeWorkspace(root);
   expect(stepOutcome(report.steps, 'installed baselines')).toBe('satisfied');
   expect(await Bun.file(join(root, baselinesType.relPath)).text()).toBe(before);
 });
@@ -41,7 +42,7 @@ test('a re-installed artifact replaces its entry, never duplicates it', async ()
   await createWorkspace(root);
   rmSync(join(root, 'AGENTS.md'));
   git(root, 'commit', '-am', 'human removed guidance');
-  await createWorkspace(root);
+  await convergeWorkspace(root);
   const { artifacts } = (await readDocument(root, baselinesType)).data;
   const entries = artifacts.filter((artifact) => artifact.path === 'AGENTS.md');
   expect(entries.length).toBe(1);
@@ -67,12 +68,14 @@ test('doctor: a missing installed artifact is a warning, and report-only', async
   expect(report.healthy).toBe(true); // report-only: nothing repaired, nothing failed
 });
 
-test('no baseline record: doctor points at converge, and converge starts one', async () => {
+test('no baseline record: doctor points at the update, and a converge starts one', async () => {
   await createWorkspace(root);
   rmSync(join(root, baselinesType.relPath));
   git(root, 'commit', '-am', 'simulate a workspace created before baselines');
-  expect(findingFor(await runDoctor(root), 'installed baselines')?.severity).toBe('info');
-  const report = await createWorkspace(root);
+  const finding = findingFor(await runDoctor(root), 'installed baselines');
+  expect(finding?.severity).toBe('info');
+  expect(finding?.message).toContain('ward workspace upgrade');
+  const report = await convergeWorkspace(root);
   expect(stepOutcome(report.steps, 'installed baselines')).toBe('established');
   // Nothing was installed by this run, so nothing can honestly be fingerprinted:
   // pre-existing artifacts have unknown provenance and stay unrecorded.
