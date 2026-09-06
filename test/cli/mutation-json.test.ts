@@ -19,6 +19,7 @@ import {
   taskCloseShape,
   taskMutationShape,
   workspaceCreateShape,
+  workspaceUpgradeShape,
   worktreeCreateShape,
   worktreeRebaseShape,
 } from '../../src/cli/schema.ts';
@@ -26,6 +27,7 @@ import { gitOrThrow } from '../../src/workspace/git.ts';
 import {
   applyGitTestEnv,
   makeTempDir,
+  NO_GH,
   removeDir,
   runWard,
   runWardEnv,
@@ -55,11 +57,20 @@ test('workspace create --json: the establishment report, one document alone on s
   expect(report.steps.every((step) => step.outcome === 'established')).toBe(true);
 });
 
-test('re-running create converges — satisfied is legible in the document', () => {
-  const result = runWard(['workspace', 'create', ws, '--json'], scratch);
+test('workspace upgrade --json: the converge steps ride the document, satisfied and legible', () => {
+  // Pinned caller environment: the bare form is the human's, and the suite's
+  // own WARD_AGENT would otherwise turn this into the agent refusal (0005).
+  const result = runWardEnv(['workspace', 'upgrade', '--json'], ws, {
+    NO_COLOR: '1',
+    WARD_GH: NO_GH,
+  });
   expect(result.exitCode).toBe(0);
-  const report = validated('workspace create', workspaceCreateShape, result.stdout);
-  expect(report.steps.every((step) => step.outcome === 'satisfied')).toBe(true);
+  const report = validated('workspace upgrade', workspaceUpgradeShape, result.stdout);
+  expect(report.vehicle).toBe('none'); // no default moved, so no vehicle
+  expect(report.outcome).toBe('current');
+  expect(report.converged.length).toBe(12);
+  expect(report.converged.every((step) => step.outcome === 'satisfied')).toBe(true);
+  expect(report.converged.map((step) => step.step)).toContain('standing project');
 });
 
 test('repo add --json: the record as written plus how the run converged', () => {

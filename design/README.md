@@ -166,6 +166,10 @@ the SF's disposition is appended in its entry, remove the line here.
   from 1, with no room for a reserved number the standing project could always occupy.
 - **SF-003** — [0041](0041-ground-floor/spec-feedback.md): the standing project's identity is
   "allocated like any project's", which cannot be named by anything written outside one workspace.
+- **SF-001** — [0042](0042-upgrade-owns-convergence/spec-feedback.md): re-running creation is stated
+  as the update path, and a creation that also converges an existing workspace can no longer be one.
+- **SF-002** — [0042](0042-upgrade-owns-convergence/spec-feedback.md): the update owns the record's
+  shape as well as the installed artifacts, and the three-operations map does not say so.
 
 Entries 0001–0029 predate this queue and their SFs carry dispositions unevenly — some settled in
 their own text, some settled by later intent edits without a disposition line, some genuinely open.

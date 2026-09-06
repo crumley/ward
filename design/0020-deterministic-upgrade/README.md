@@ -11,6 +11,12 @@
 > carry it home.
 >
 > **Status:** accepted · **Started:** 2026-08-16
+>
+> **Partially superseded by [0042](../0042-upgrade-owns-convergence/README.md):** the deferral that
+> left the standing-project and ignore-policy convergence to `workspace create` is taken up — those
+> steps are now the upgrade's own first phase, run against the workspace root. Everything else here
+> stands: the lineage, the untouched-versus-customized classification, the baseline backfill, the
+> recorded main-line name, and the stewardship vehicle the artifact pass still rides.
 
 The owner's directive, verbatim: "i dont want manual edits on the workspace. i want the ward tool to
 deterministically upgrade it and only use an agent to generate changes when the user has

@@ -91,7 +91,11 @@ test('the live-workspace fixture upgrades deterministically, end to end through 
   ]);
   expect((await readDocument(copy, workspaceRecordType)).data.mainLine).toBe(mainLine);
   expect(await Bun.file(join(ws, 'AGENTS.md')).text()).toBe(LEGACY_AGENTS_MD);
-  expect(recordedWorkspaceMainLine(ws)).toBeUndefined();
+  // Except the record's own shape: phase 1 backfilled the main-line name on
+  // the main line itself, because that is journal, not stewardship
+  // (design/0042-upgrade-owns-convergence/).
+  expect(recordedWorkspaceMainLine(ws)).toBe(mainLine);
+  expect(report.converged.map((step) => step.step)).toContain('workspace main line');
 
   // Convergence: a second run finds everything current and commits nothing.
   const tip = gitOrThrow(copy, 'rev-parse', 'HEAD').stdout.trim();
@@ -146,7 +150,13 @@ test('a customized artifact is left byte-identical and named as reconciliation r
   expect(await Bun.file(join(ws, 'AGENTS.md')).text()).toBe(customized);
 });
 
-test('a missing artifact is installed, and a pre-0017 workspace gains the CLAUDE.md bridge', async () => {
+// A missing installed artifact and a missing 0017 bridge are RE-ESTABLISHED BY
+// PHASE 1, on the main line, before phase 2 ever looks: restoring Ward's own
+// default where the human's copy is absent overwrites nothing of theirs, so it
+// is journal rather than stewardship (design/0042-upgrade-owns-convergence/).
+// Phase 2's `installed` verdict remains what answers a candidate copy that is
+// itself missing the artifact.
+test('a missing artifact and a missing CLAUDE.md bridge are re-established by phase 1', async () => {
   await regressToLiveShape(ws);
   rmSync(join(ws, 'AGENTS.md'));
   rmSync(join(ws, 'CLAUDE.md')); // the pre-0017 shape: no bridge at all
@@ -156,15 +166,19 @@ test('a missing artifact is installed, and a pre-0017 workspace gains the CLAUDE
   const { record: worktree } = await createWorkspaceWorktree(ws, 't1');
 
   const report = await upgradeWorkspace(ws, 't1');
-  expect(report.artifacts.find((a) => a.path === 'AGENTS.md')?.action).toBe('installed');
-  expect(report.artifacts.find((a) => a.path === 'CLAUDE.md')?.action).toBe('installed');
-  const copy = join(ws, worktree.path);
-  expect(await Bun.file(join(copy, 'AGENTS.md')).text()).toBe(AGENTS_MD);
-  expect(lstatSync(join(copy, 'CLAUDE.md')).isSymbolicLink()).toBe(true);
-
-  await mergeWorkspaceBranch(ws, worktree.branch);
+  const converged = new Map(report.converged.map((step) => [step.step, step.outcome]));
+  expect(converged.get('agent guidance')).toBe('established');
+  expect(converged.get('claude guidance')).toBe('established');
+  expect(await Bun.file(join(ws, 'AGENTS.md')).text()).toBe(AGENTS_MD);
   expect(lstatSync(join(ws, 'CLAUDE.md')).isSymbolicLink()).toBe(true);
   expect(await Bun.file(join(ws, 'CLAUDE.md')).text()).toBe(AGENTS_MD);
+
+  // The candidate copy predates that commit, so phase 2 still answers for it.
+  const copy = join(ws, worktree.path);
+  expect(report.artifacts.find((a) => a.path === 'AGENTS.md')?.action).toBe('installed');
+  expect(report.artifacts.find((a) => a.path === 'CLAUDE.md')?.action).toBe('installed');
+  expect(await Bun.file(join(copy, 'AGENTS.md')).text()).toBe(AGENTS_MD);
+  expect(lstatSync(join(copy, 'CLAUDE.md')).isSymbolicLink()).toBe(true);
 });
 
 test("a CLAUDE.md of the human's own is kept and named as residue, never rewritten", async () => {

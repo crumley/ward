@@ -485,6 +485,11 @@ export function workspaceRestoreJson(report: RestoreReport): WorkspaceRestoreSha
 export function workspaceUpgradeJson(report: UpgradeReport): WorkspaceUpgradeShape {
   return {
     vehicle: report.vehicle,
+    converged: report.converged.map((step) => ({
+      step: step.step,
+      outcome: step.outcome,
+      detail: step.detail,
+    })),
     ...(report.task === undefined ? {} : { task: report.task }),
     ...(report.branch === undefined ? {} : { branch: report.branch }),
     ...(report.path === undefined ? {} : { path: report.path }),

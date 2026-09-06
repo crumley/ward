@@ -9,6 +9,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readDocument, writeDocument } from '../../src/store/document.ts';
 import { workspaceRecordType } from '../../src/store/types.ts';
+import { convergeWorkspace } from '../../src/workspace/converge.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
@@ -43,7 +44,7 @@ test('creation records the main-line name from the repository, in the workspace 
 
 test('converge backfills an unrecorded name, and the convergence commit carries it', async () => {
   await dropRecordedMainLine(ws);
-  const report = await createWorkspace(ws);
+  const report = await convergeWorkspace(ws);
   const step = report.steps.find((s) => s.step === 'workspace main line');
   expect(step).toMatchObject({ outcome: 'established', detail: mainLine });
   expect(recordedWorkspaceMainLine(ws)).toBe(mainLine);
@@ -53,7 +54,7 @@ test('converge backfills an unrecorded name, and the convergence commit carries 
 
 test('converge never re-records over a drifted root: the record is the truth, drift is drift', async () => {
   gitOrThrow(ws, 'switch', '-c', 'elsewhere');
-  const report = await createWorkspace(ws);
+  const report = await convergeWorkspace(ws);
   const step = report.steps.find((s) => s.step === 'workspace main line');
   expect(step).toMatchObject({ outcome: 'satisfied', detail: mainLine });
   expect(recordedWorkspaceMainLine(ws)).toBe(mainLine); // not silently moved to 'elsewhere'
@@ -71,13 +72,13 @@ test('doctor: the root on its recorded main line reads ok, naming the branch', a
   expect(report.healthy).toBe(true);
 });
 
-test('doctor: an unrecorded name is the pre-0020 workspace — info, pointing at upgrade and converge', async () => {
+test('doctor: an unrecorded name is the pre-0020 workspace — info, pointing at the update', async () => {
   await dropRecordedMainLine(ws);
   const report = await runDoctor(ws);
   const finding = report.workspace.find((f) => f.check === 'workspace main line');
   expect(finding?.severity).toBe('info');
   expect(finding?.message ?? '').toContain('ward workspace upgrade');
-  expect(finding?.message ?? '').toContain(`ward workspace create ${ws}`);
+  expect(finding?.message ?? '').not.toContain('ward workspace create');
   expect(report.healthy).toBe(true); // report-only: nothing is broken
 });
 

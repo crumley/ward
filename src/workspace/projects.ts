@@ -160,7 +160,7 @@ export function floorOf(projectDir: string): number {
 export async function requireGroundFloor(root: string): Promise<number> {
   const standing = await findStandingProject(root);
   if (standing === undefined) {
-    throw new WardError(`no ground floor — establish it: ward workspace create ${root}`);
+    throw new WardError('no ground floor — establish it: ward workspace upgrade');
   }
   return standing.record.floor;
 }
