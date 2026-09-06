@@ -75,10 +75,11 @@ the workspace's first git commit (§15).
 > so an upgrade can tell a deliberate change from an untouched default and **reconcile** rather than
 > clobber.
 
-> _Run it twice._ Asked to create a workspace where one already exists, Ward **converges** — it
-> validates what is there, adds what is missing, and leaves customized artifacts alone — because
-> that is the update path, not a second mechanism (`01-concepts/06-workspace-lifecycle.md`;
-> `00-foundation/01-principles.md` §6). Nothing is adjudicated: at the same version no default has
+> _Run it twice._ Asked to create a workspace where one already exists, Ward **refuses** and names
+> the update — creation is one-time, and convergence belongs to the operation that asks whether this
+> workspace is the generation this CLI expects (`01-concepts/06-workspace-lifecycle.md`). The update
+> converges: it validates what is there, adds what is missing, and leaves customized artifacts alone
+> (`00-foundation/01-principles.md` §6). Nothing is adjudicated: at the same version no default has
 > moved, so the only differences are the human's own, and reconciliation triggers on **a default
 > that moved**, never on a file that merely differs.
 
