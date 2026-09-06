@@ -68,16 +68,24 @@ human or agent — needs for the workspace to be **self-sufficient** from its fi
   below); a workspace that becomes tracked only later has an untracked origin no rollback can reach.
 - **Its repository set** — possibly empty (_The repository set_, below).
 
-**Re-running creation on an existing workspace converges; it does not clobber.** Creation is a
-lifecycle operation and inherits idempotency
-([`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §6): asked to create a
-workspace where one already exists, Ward validates what is present, adds what is missing, and leaves
-customized artifacts alone — it is the update path (_How a workspace evolves_, below), not a second
-mechanism. **Why:** "did I already init this?" must never be a dangerous question.
+**Creation is one-time, and a path that is already a workspace is refused — never clobbered.**
+Creation acts on a **location** a human deliberately chose, so it operates only where no workspace
+stands. Asked to create one where a workspace already exists, Ward **refuses** and names the
+operation that owns bringing an existing workspace forward — **update** (_Putting a workspace
+right_, below; _How a workspace evolves_, below).
 
-Nothing is adjudicated in that case, and the reason is the trigger rule below: re-creating at the
-**same version** means no default has moved, so the only differences are the human's own edits, and
-asking them to adjudicate those would be the nagging this slice forbids everywhere else.
+**Why:** "did I already init this?" must never be a dangerous question, and a refusal that says what
+to run instead answers it safely. Convergence is not given up; it moves to where the map already put
+it. Update is the operation whose question is "is this workspace the generation this CLI expects?",
+and giving creation a second job that another operation already owns is what leaves a workspace with
+two remedies for one condition and no way to say which is meant.
+
+Convergence itself keeps every property it had, under update: it inherits idempotency
+([`../00-foundation/01-principles.md`](../00-foundation/01-principles.md) §6) — it validates what is
+present, adds what is missing, and leaves customized artifacts alone — and nothing is adjudicated at
+the **same version**, because the trigger rule below is a default that moved, so the only
+differences are the human's own edits and asking them to adjudicate those would be the nagging this
+slice forbids everywhere else.
 
 ### What a workspace never holds
 
@@ -339,6 +347,16 @@ Ward ships on its own timeline; a workspace is created by some version and then 
 installed at creation therefore has a second life: it must move forward as Ward moves, **without
 undoing what the workspace has become**. This section owns that arc — what is installed, who owns
 it, how divergence is found, and what "upgraded" is allowed to mean.
+
+**Two halves move forward, not one, and they move differently.** The **record's own shape** — the
+standing project and its floor, the ignore policy, the reserved directories, the guidance bridge,
+the recorded main-line name, the record of what was installed — is Ward's bookkeeping, with nothing
+of the human's inside it to adjudicate, so it is **converged directly** on the workspace's own main
+line as **journal** (_The workspace's own main line_, above). The **installed artifacts** are what
+the human is expected to have made their own, so they are **reconciled through the gated vehicle**
+as **stewardship**. The rest of this section is about the second half; the ordering between them is
+not a matter of tidiness, because the reconciliation task itself must open on the standing project's
+floor — the record's shape has to be converged before a vehicle for the artifacts can exist at all.
 
 ### Compose first; reconcile only what composition cannot separate
 
@@ -617,11 +635,11 @@ What this slice owns beyond the stamp and the update/migrate paths above is **be
 Three operations converge a workspace toward good order. They overlap enough to be confused, so the
 division of labor is stated here once:
 
-| Operation                 | Asks                                                                              | Owns                                                                                                                                                                                                                                                |
-| ------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Recovery** (cold start) | "Which threads were in flight, and are they back?"                                | Re-establishing live work from the record ([`02-sessions-and-lifecycle.md`](02-sessions-and-lifecycle.md), Recovery); its CLI verb reads as `attach` ([`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md), verbs read true). |
-| **Doctor**                | "Can this machine run this workspace, and does the record still match the world?" | Preconditions and integrity (above).                                                                                                                                                                                                                |
-| **Update / migrate**      | "Is this workspace the generation this CLI expects?"                              | Aligning the workspace with a new Ward, reconciling what diverged (above).                                                                                                                                                                          |
+| Operation                 | Asks                                                                              | Owns                                                                                                                                                                                                                                                                                    |
+| ------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Recovery** (cold start) | "Which threads were in flight, and are they back?"                                | Re-establishing live work from the record ([`02-sessions-and-lifecycle.md`](02-sessions-and-lifecycle.md), Recovery); its CLI verb reads as `attach` ([`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md), verbs read true).                                     |
+| **Doctor**                | "Can this machine run this workspace, and does the record still match the world?" | Preconditions and integrity (above).                                                                                                                                                                                                                                                    |
+| **Update / migrate**      | "Is this workspace the generation this CLI expects?"                              | Bringing **any existing workspace, whatever version made it**, to the shape this Ward expects: the record's shape **converged** directly (journal), the installed artifacts **reconciled** through the gated vehicle (above). At the same version it converges and adjudicates nothing. |
 
 **Why three and not one:** they run at different moments, on different evidence, with different
 risk. Recovery runs after every reboot and touches live state; doctor is safe to run at any time and
@@ -648,8 +666,9 @@ read as an omission rather than a decision.
 - **Workspace creation** — that it is a deliberate, located act; **what creation establishes** (the
   metadata root, the version stamp, the **guidance an agent needs to work here** — the root
   `AGENTS.md` and Ward's workspace skill — Ward's defaults as workspace-owned artifacts, version
-  control over itself, the repository set); that re-running it **converges** rather than clobbers;
-  and that **credentials are never workspace state**.
+  control over itself, the repository set); that it is **one-time** — a path that is already a
+  workspace is **refused**, never clobbered, and the refusal names the update path; and that
+  **credentials are never workspace state**.
 - **The repository set's lifecycle** — deliberate registration recording remote and main line; the
   **contained canonical checkout** (inside the workspace, one per repository, independent of every
   worktree, ignored by the workspace's own git); the main line read from the repository rather than
@@ -699,7 +718,9 @@ read as an omission rather than a decision.
   as a "what needs me?" item rather than a nag, and migration as a gated act that rides version
   control — including that **artifact reconciliation does not block the workspace** the way
   structural migration does, or the upgrade machinery would deadlock on itself.
-- **The recovery / doctor / update map** — what each owns and how they compose. (Recovery itself is
+- **The recovery / doctor / update map** — what each owns and how they compose, including that
+  **update owns convergence of the record's shape** as well as reconciliation of the installed
+  artifacts, and that the two travel differently (journal versus stewardship). (Recovery itself is
   [`02-sessions-and-lifecycle.md`](02-sessions-and-lifecycle.md)'s; its `attach` verb is
   [`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md)'s.)
 - **That a workspace has no terminal state.**
