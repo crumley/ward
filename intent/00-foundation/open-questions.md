@@ -153,13 +153,15 @@ relevant slice (and reflected in tests and code).
   **artifact types** are an open set — seeded with **brief**, **decision**, **note** — registered
   with runtime-validated schemas, the catalog itself a validated document
   ([`../02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md)).
-- **Identity edges closed.** **Task codes** are workspace-unique among _open_ tasks — a bare code
-  addresses every lifecycle operation. **Session ids** go further: unique over the workspace's
-  history, **across the machines that share it** — slug, a never-reused discriminator, and the
-  machine the session ran on — because a session id is also the address of the session's **record**,
-  and a workspace is allocated from on every machine holding a clone. **Floor numbers are monotonic
-  and never reused** — the floor is the root of room addresses recorded in provenance, so reuse
-  would poison the historical record
+- **Identity edges closed.** A **task's address composes floor + room** (`f3t1`), exactly as a
+  room's does; the **bare room is a shorthand** accepted while it is unique among open tasks, and
+  rooms run **in opening order** round a floor rather than being reissued on close. **Session ids**
+  go further: unique over the workspace's history, **across the machines that share it** — slug, a
+  never-reused discriminator, and the machine the session ran on — because a session id is also the
+  address of the session's **record**, and a workspace is allocated from on every machine holding a
+  clone. **Floor numbers are monotonic and never reused** — the floor is the root of room addresses
+  recorded in provenance, so reuse would poison the historical record — and their **ordering carries
+  no semantics Ward assigns**
   ([`../01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md)).
 - **The append-vs-rewrite tension resolved as the two-zone model.** Context assembles as a stable,
   append-only, cache-shared **prefix** followed by a **mutable tail** where rewrites are legal;
