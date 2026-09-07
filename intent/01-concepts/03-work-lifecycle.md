@@ -182,9 +182,18 @@ A unit of work is delivered through one or more **pull requests** — potentiall
 repositories a task touches. Ward treats the PR set as part of the task's state and drives it to
 done:
 
-1. **Track PRs.** For each: identity, status (open / changes requested / approved / merged), and
-   what remains before it can merge.
-2. **Guide to merge.** At any moment Ward answers "what is left to complete this task?"
+1. **Track PRs.** For each: identity, status (open / changes requested / approved / merged / closed
+   unmerged), **the verdict of whatever automated checks the forge runs on it**, and what remains
+   before it can merge. Review state and check state are **read from the forge when the question is
+   asked and never stored** — the same reason `in-review` is derived rather than written (Task
+   states, below; `../00-foundation/01-principles.md` §17): both change without anyone touching the
+   record, so a stored copy is stale on arrival. **Why the checks count:** what most often stands
+   between a pull request and its merge is neither its state nor its review — a PR that is open,
+   approved, and failing its checks is not waiting on a reviewer, and a surface that reports only
+   state and review says it is.
+2. **Guide to merge.** At any moment Ward answers "what is left to complete this task?" —
+   **derived** from that live state together with the workspace's own record (the anchors the work
+   sits in, the PR set), never from a stored summary of either.
 3. **Decide what artifacts to keep elsewhere.** Closing a task includes deciding whether any of its
    **artifacts** should also be captured beyond the workspace — committed into the worktree's files,
    posted to a remote issue, or promoted to a project-level artifact (`00-domain-model.md`).
