@@ -54,6 +54,7 @@ import type { StepReport } from '../workspace/converge.ts';
 import { createWorkspace } from '../workspace/create.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
+import { closeCommand, rebaseCommand } from '../workspace/next.ts';
 import {
   GROUND_FLOOR,
   openProject,
@@ -91,6 +92,7 @@ import {
   settledTask,
   statusReport,
   type TaskStatus,
+  taskDetail,
 } from '../workspace/status.ts';
 import { mergeWorkspaceBranch, refuseStewardshipCopy } from '../workspace/steward.ts';
 import { addTaskPr, closeTask, openTask, setTaskState } from '../workspace/tasks.ts';
@@ -122,6 +124,7 @@ import {
   taskCloseJson,
   taskListJson,
   taskMutationJson,
+  taskShowJson,
   workspaceCreateJson,
   workspaceListJson,
   workspaceMergeJson,
@@ -553,6 +556,22 @@ const task = command(
     command('list', object({ action: constant('task-list'), all: allFlag(), json: jsonFlag() }), {
       brief: message`List tasks, open and closed — settled ones hidden unless --all.`,
     }),
+    // The one-screen answer (design/0043-task-next-surface/): where one task
+    // stands, and the single next step derived from it. A read verb — no
+    // lock, no writes — so it resolves closed tasks too, behind the same
+    // settled-work window every glanceable surface obeys.
+    command(
+      'show',
+      object({
+        action: constant('task-show'),
+        code: optional(argument(taskIdentity('ADDRESS'))),
+        all: allFlag(),
+        json: jsonFlag(),
+      }),
+      {
+        brief: message`Where one task stands and what comes next. ADDRESS is inferred inside a task's worktree.`,
+      },
+    ),
     command(
       'pause',
       object({
@@ -924,6 +943,16 @@ try {
       case 'task-list':
         await cmdTaskList(result.all, result.json);
         break;
+      case 'task-show': {
+        const target = await resolveTaskTarget(
+          result.code,
+          'ward task show ADDRESS',
+          result.json,
+          'read',
+        );
+        await cmdTaskShow(target.root, target.code, result.all, result.json);
+        break;
+      }
       case 'task-pause': {
         const target = await resolveTaskTarget(result.code, 'ward task pause ADDRESS', result.json);
         const paused = await setTaskState(target.root, target.code, 'paused');
@@ -1650,15 +1679,18 @@ interface TaskTarget {
  * derivation is visible. A declared agent is refused the inference and a
  * caller standing nowhere claimed gets a deterministic error naming the fix —
  * never a prompt (design/0006-scope-from-cwd/).
+ *
+ * `access` says which workspace resolution applies: a mutation carries the
+ * stewardship-copy guard, a read does not — reading against a stewardship
+ * copy is exactly what that copy is for (design/0019-stewardship-worktrees/).
  */
 async function resolveTaskTarget(
   explicit: string | undefined,
   usage: string,
   json = false,
+  access: 'read' | 'write' = 'write',
 ): Promise<TaskTarget> {
-  // Every caller of this resolver is a mutation, so the stewardship-copy
-  // guard rides the workspace resolution (design/0019-stewardship-worktrees/).
-  const root = await requireMutableWorkspace();
+  const root = access === 'write' ? await requireMutableWorkspace() : await requireWorkspace();
   if (explicit !== undefined) return { root, code: explicit };
   if (callerIsAgent()) {
     throw new WardError(
@@ -2009,6 +2041,64 @@ async function cmdTaskList(all: boolean, json: boolean): Promise<void> {
     !probe.live,
     tasks.map((task) => task.record),
   );
+}
+
+/**
+ * `ward task show ADDRESS` (design/0043-task-next-surface/): one task, one
+ * screen, ending in the single line that says what to do now. The blocks run
+ * in the order the question is asked — what is this, what is out for review,
+ * where is the work, who is on it, what next — and each is skipped when it is
+ * empty rather than printed as a heading over nothing.
+ */
+async function cmdTaskShow(root: string, code: string, all: boolean, json: boolean): Promise<void> {
+  const detail = await taskDetail(root, code, { all });
+  if (json) {
+    printJson(taskShowJson(detail));
+    return;
+  }
+  const { status } = detail;
+  const record = status.task;
+  console.log(
+    `${pc.bold(status.address)} ${record.slug} [${renderState(record.state)}` +
+      `${status.inReview ? pc.cyan(' · in-review') : ''}` +
+      `${record.state === 'closed' && record.outcome !== undefined ? pc.dim(` · ${record.outcome}`) : ''}]`,
+  );
+  const floor =
+    detail.project === undefined
+      ? 'legacy bare task (no floor)'
+      : `${detail.project.floor} — ${detail.project.slug}${detail.project.floor === GROUND_FLOOR ? ' (ground floor)' : ''}`;
+  renderField('floor', floor);
+  if (record.purpose !== undefined) renderField('purpose', record.purpose);
+  if (record.repositories !== undefined) renderField('repos', record.repositories.join(', '));
+  renderField('opened', record.openedAt);
+  if (record.closedAt !== undefined) renderField('closed', record.closedAt);
+
+  if (record.prs.length > 0) {
+    console.log(`\n${pc.bold('pull requests')}`);
+    for (const line of renderPrLines(record.prs, status.forge)) console.log(line);
+  }
+  if (status.worktrees !== undefined && status.worktrees.length > 0) {
+    console.log(`\n${pc.bold('worktrees')}`);
+    for (const worktree of status.worktrees) {
+      console.log(renderWorktreeFreshness(status.address, worktree));
+    }
+  }
+  if (detail.sessions.length > 0) {
+    console.log(`\n${pc.bold('sessions')}`);
+    for (const session of detail.sessions) {
+      console.log(
+        `    ${pc.bold(session.id)} — ${session.purpose} ` +
+          pc.dim(`(${sessionNote(detail.machine, session)})`),
+      );
+    }
+  }
+  console.log(`\n${pc.bold('next')}\n    ${detail.next.text}`);
+  renderForgeUnavailable(status.forge === undefined, [record]);
+}
+
+/** A header field: an aligned dim label, the value plain. */
+function renderField(label: string, value: string): void {
+  console.log(`  ${pc.dim(label.padEnd(8))} ${value}`);
 }
 
 async function cmdTaskClose(
@@ -2394,19 +2484,64 @@ function sessionNote(here: string, session: SessionStatus): string {
   return `${whose}history gone — close with: ward session close ${session.id}`;
 }
 
+/**
+ * One task in `status`: the identity line, then a line per linked pull
+ * request, then a line per worktree. The PR set is no longer summarized as a
+ * count on the identity line (design/0043-task-next-surface/) — the lines
+ * below carry everything the count carried and the URL besides, and stating
+ * the same fact twice is the one-home rule broken inside a single block. A
+ * CLOSED task keeps its one-line form: its PR set was resolved at the close,
+ * and there is nothing left to open.
+ */
 function renderTaskStatus(status: TaskStatus): string {
-  const prs = status.forge === undefined ? '' : pc.dim(` — prs: ${forgeSummary(status.forge)}`);
   const sessions =
     status.openSessions.length === 0
       ? ''
       : pc.dim(` — sessions: ${status.openSessions.join(', ')}`);
   const lines = [
-    `  ${renderTaskIdentity(status.task, status.address, status.inReview)}${prs}${sessions}`,
+    `  ${renderTaskIdentity(status.task, status.address, status.inReview)}${sessions}`,
   ];
+  if (status.task.state !== 'closed') {
+    for (const line of renderPrLines(status.task.prs, status.forge)) lines.push(line);
+  }
   for (const worktree of status.worktrees ?? []) {
     lines.push(renderWorktreeFreshness(status.address, worktree));
   }
   return lines.join('\n');
+}
+
+/**
+ * One line per linked pull request, in PR-set order: the URL plain — the link
+ * is the point, and dimming the thing the human came to click would be
+ * exactly backwards — then its live state, dim, beside it. When the forge did
+ * not answer, the URL still prints, with `state unknown`: a surface that
+ * showed nothing rather than a link would spend the read and return less than
+ * the record already holds (§20).
+ */
+function renderPrLines(urls: readonly string[], forge?: readonly PrForgeState[]): string[] {
+  return urls.map((url) => {
+    const state = forge?.find((pr) => pr.url === url);
+    return `    ${url} ${pc.dim(`— ${prStateNote(state)}`)}`;
+  });
+}
+
+/** A PR's live state in one phrase — `open · review: … · checks: …`, or the resolved word. */
+function prStateNote(state: PrForgeState | undefined): string {
+  if (state === undefined || state.state === 'unknown') return 'state unknown';
+  if (state.state === 'merged') return 'merged';
+  if (state.state === 'closed') return 'closed unmerged';
+  return `open · review: ${renderReview(state.reviewDecision)} · checks: ${state.checks ?? 'unknown'}`;
+}
+
+/**
+ * The review decision as the human says it. `review-required` and an absent
+ * decision are the same fact at this surface — nobody has ruled yet — so both
+ * read `none yet` rather than exposing the forge's two spellings of nothing.
+ */
+function renderReview(decision: PrForgeState['reviewDecision']): string {
+  if (decision === 'approved') return 'approved';
+  if (decision === 'changes-requested') return 'changes requested';
+  return 'none yet';
 }
 
 /**
@@ -2423,7 +2558,7 @@ function renderWorktreeFreshness(address: string, status: WorktreeStatus): strin
   const detail = status.detail ?? status.freshness;
   if (status.freshness === 'current') return head + pc.dim(detail);
   if (status.freshness === 'behind') {
-    return head + pc.yellow(detail) + pc.dim(` — rebase with: ward worktree rebase ${address}`);
+    return head + pc.yellow(detail) + pc.dim(` — rebase with: ${rebaseCommand(address)}`);
   }
   if (status.freshness === 'unreadable') return head + pc.red(detail);
   return head + pc.yellow(detail); // dirty | drifted — occupancy and drift, in warning color
@@ -2464,7 +2599,7 @@ function renderNeedsYou(entry: NeedsYouEntry): string {
     case 'awaiting-close':
       return (
         `task ${pc.bold(entry.address)} — PR set fully merged; ` +
-        `close it: ward task close ${entry.address}`
+        `close it: ${closeCommand(entry.address)}`
       );
     case 'changes-requested':
       return `task ${pc.bold(entry.address)} — changes requested on ${entry.pr ?? 'a linked PR'}`;

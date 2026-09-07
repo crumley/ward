@@ -30,6 +30,12 @@ export const prForgeShape = z.strictObject({
   reviewDecision: z.enum(['approved', 'changes-requested', 'review-required']).optional(),
   /** The branch the PR targets, as the forge reports it; absent when unreported (0014). */
   baseRefName: z.string().optional(),
+  /**
+   * The check rollup, collapsed to one verdict (0043): `none` means the PR
+   * has no checks, which is not the same fact as the field being absent —
+   * absent means the forge reported no rollup at all.
+   */
+  checks: z.enum(['passing', 'failing', 'pending', 'none']).optional(),
 });
 export type PrForgeShape = z.infer<typeof prForgeShape>;
 
@@ -192,6 +198,60 @@ export const taskListShape = z.strictObject({
   hidden: hiddenShape,
 });
 export type TaskListShape = z.infer<typeof taskListShape>;
+
+/**
+ * The derived next step (design/0043-task-next-surface/): `reason` is the
+ * rung of the ladder that matched — what an agent routes on — and `text` is
+ * the same answer as one imperative line, identical for both audiences (§8).
+ * `pr` and `path` carry the noun the step is about where it has one, so
+ * acting on the step never means parsing the sentence.
+ */
+export const nextShape = z.strictObject({
+  reason: z.enum([
+    'closed',
+    'resume',
+    'create-worktree',
+    'restore-worktree',
+    'commit-or-stash',
+    'rebase',
+    'open-pr',
+    'address-review',
+    'fix-checks',
+    'merge',
+    'await-review',
+    'close',
+    'forge-unknown',
+  ]),
+  text: z.string(),
+  pr: z.string().optional(),
+  path: z.string().optional(),
+});
+export type NextShape = z.infer<typeof nextShape>;
+
+/**
+ * `ward task show ADDRESS` (0043): one task in full — its record and derived
+ * state, the floor it sits on, its worktrees' freshness, its open sessions,
+ * and the next step. `worktrees` is absent on a closed task, whose worktrees
+ * settled at the close, exactly as it is in `status`.
+ */
+export const taskShowShape = z.strictObject({
+  task: taskShape,
+  /** The floor — absent only for a legacy bare task (0041). */
+  project: z
+    .strictObject({
+      floor: z.number().int().nonnegative(),
+      slug: z.string(),
+      state: workStateSchema,
+    })
+    .optional(),
+  worktrees: z.array(statusWorktreeShape).optional(),
+  /** This machine's name (0038) — which of the sessions below can be resumed here. */
+  machine: z.string(),
+  /** The task's OPEN sessions; closed ones stay closed and are not listed. */
+  sessions: z.array(statusSessionShape),
+  next: nextShape,
+});
+export type TaskShowShape = z.infer<typeof taskShowShape>;
 
 export const worktreeListShape = z.array(
   z.strictObject({
@@ -808,6 +868,7 @@ export const argumentReadVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'workspace path': workspacePathShape,
   'repo path': repoPathShape,
   'session locate': sessionLocateShape,
+  'task show': taskShowShape,
 };
 
 /**

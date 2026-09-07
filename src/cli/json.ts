@@ -33,7 +33,7 @@ import type { CreateReport } from '../workspace/create.ts';
 import type { DoctorReport } from '../workspace/doctor.ts';
 import type { AddReport, RefreshReport, RemoveReport } from '../workspace/repos.ts';
 import type { RestoreReport } from '../workspace/restore.ts';
-import type { HiddenSummary, StatusReport, TaskStatus } from '../workspace/status.ts';
+import type { HiddenSummary, StatusReport, TaskDetail, TaskStatus } from '../workspace/status.ts';
 import type { MergeReport } from '../workspace/steward.ts';
 import type { CloseReport } from '../workspace/tasks.ts';
 import type { UpgradeReport } from '../workspace/upgrade.ts';
@@ -59,6 +59,7 @@ import type {
   TaskListShape,
   TaskMutationShape,
   TaskShape,
+  TaskShowShape,
   WorkspaceCreateShape,
   WorkspaceListShape,
   WorkspaceMergeShape,
@@ -111,6 +112,7 @@ function prForgeJson(state: PrForgeState): PrForgeShape {
     state: state.state,
     ...(state.reviewDecision === undefined ? {} : { reviewDecision: state.reviewDecision }),
     ...(state.baseRefName === undefined ? {} : { baseRefName: state.baseRefName }),
+    ...(state.checks === undefined ? {} : { checks: state.checks }),
   };
 }
 
@@ -232,6 +234,45 @@ export function taskListJson(
       tasks: hidden.tasks,
       projects: hidden.projects,
       settledAfterDays: hidden.settledAfterDays,
+    },
+  };
+}
+
+/**
+ * `task show` (design/0043-task-next-surface/): the task's own document. It
+ * reuses the shared task shape rather than status's — `openSessions` would be
+ * a second, thinner spelling of the `sessions` block below it, and one home
+ * per fact holds inside a document too.
+ */
+export function taskShowJson(detail: TaskDetail): TaskShowShape {
+  const { status } = detail;
+  return {
+    task: taskJson(status.task, status.address, status.inReview, status.forge),
+    ...(detail.project === undefined
+      ? {}
+      : {
+          project: {
+            floor: detail.project.floor,
+            slug: detail.project.slug,
+            state: detail.project.state,
+          },
+        }),
+    ...(status.worktrees === undefined
+      ? {}
+      : { worktrees: status.worktrees.map(statusWorktreeJson) }),
+    machine: detail.machine,
+    sessions: detail.sessions.map((session) => ({
+      id: session.id,
+      purpose: session.purpose,
+      ...(session.machine === undefined ? {} : { machine: session.machine }),
+      openedAt: session.openedAt,
+      history: session.history,
+    })),
+    next: {
+      reason: detail.next.reason,
+      text: detail.next.text,
+      ...(detail.next.pr === undefined ? {} : { pr: detail.next.pr }),
+      ...(detail.next.path === undefined ? {} : { path: detail.next.path }),
     },
   };
 }
