@@ -119,8 +119,13 @@ You may be reading this from the workspace root or from inside a task worktree u
   legibly — rerun it. A lock left by a crashed process is taken over automatically, and
   \`ward doctor\` names a held or stale lock. Read verbs never wait on it.
 - **Read state as JSON.** \`ward status --json\` says where everything stands; every read verb
-  (\`status\`, \`project list\`, \`task list\`, \`worktree list\`, \`repo list\`, \`doctor\`)
-  accepts \`--json\`.
+  (\`status\`, \`project list\`, \`task list\`, \`task show ADDRESS\`, \`worktree list\`,
+  \`repo list\`, \`doctor\`) accepts \`--json\`.
+- **Ask one task where it stands.** \`ward task show ADDRESS\` puts a task on one screen: its
+  pull requests with live review and check state, its worktrees and their freshness, its open
+  sessions — and one **next** line, the single most useful thing to do now, derived from all of
+  it. Under \`--json\` the same answer carries \`next.reason\`, so you route on the rung rather
+  than on the sentence.
 - **Mutations report as JSON too.** Every mutation verb accepts \`--json\` and emits its report —
   steps, per-item outcomes, and any named trusts — as one document on stdout. A refusal (a gated
   close, a bad argument) emits no document: the error stays on stderr with a nonzero exit, so

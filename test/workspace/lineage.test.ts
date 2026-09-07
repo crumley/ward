@@ -58,6 +58,11 @@ test('the AGENTS.md 0029 supersedes is in history — every workspace still on i
   expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
     'e1a0d2748cb10105e1358ef6809f796fb70e03d48ab84881d3ff4843eb21e528', // design 0037
   );
+  // …and the 0041 manifest, superseded by design/0043-task-next-surface/,
+  // which added `ward task show` to the verbs the agent section names.
+  expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
+    'dfc613e4b70a5f2b3c853827c01256615923ca3c245b44f49dcf54589e8c6963', // design 0041
+  );
 });
 
 // The maintenance guard-rail: the lineage's history is maintained by hand, so
@@ -67,7 +72,7 @@ test('the AGENTS.md 0029 supersedes is in history — every workspace still on i
 // exactly the bookkeeping that keeps every shipped default recognizable.
 test('the current defaults are pinned; changing one must move its old hash into history', () => {
   expect(sha256OfText(AGENTS_MD)).toBe(
-    'dfc613e4b70a5f2b3c853827c01256615923ca3c245b44f49dcf54589e8c6963', // since design 0041
+    'c0edae70b25b0926f036491dad35154e5a8cea29766ed290f489795f6b3362b3', // since design 0043
   );
   expect(sha256OfText(WARD_INTERNAL_README)).toBe(
     '6f10845611635508f006727f83bdc2222d840a9da972393781662c9f6ff04ac4', // since 65f1e8b (0013)

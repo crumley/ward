@@ -356,6 +356,14 @@ function gitOnPath(): boolean {
   return Bun.which('git', { PATH: process.env.PATH ?? '' }) !== null;
 }
 
+/**
+ * The verdict a worktree whose directory is gone carries. A named constant
+ * because the next-step ladder (design/0043-task-next-surface/) matches on
+ * it: a missing worktree is unreadable for a reason with its own remedy, and
+ * two spellings of the same sentence would let the surfaces disagree.
+ */
+export const MISSING_ON_DISK = 'unreadable (missing on disk)';
+
 /** One task's worktrees with their freshness, in record order. A read: mutates nothing. */
 export async function worktreeStatuses(root: string, taskDir: string): Promise<WorktreeStatus[]> {
   const withGit = gitOnPath();
@@ -371,7 +379,7 @@ export async function worktreeStatuses(root: string, taskDir: string): Promise<W
 async function freshnessOf(root: string, record: WorktreeRecord): Promise<WorktreeStatus> {
   const worktree = join(root, record.path);
   if (!existsSync(worktree)) {
-    return { record, freshness: 'unreadable', detail: 'unreadable (missing on disk)' };
+    return { record, freshness: 'unreadable', detail: MISSING_ON_DISK };
   }
   const tree = git(worktree, 'status', '--porcelain');
   if (tree.exitCode !== 0) {

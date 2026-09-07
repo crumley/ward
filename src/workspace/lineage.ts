@@ -193,8 +193,15 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: 'e1a0d2748cb10105e1358ef6809f796fb70e03d48ab84881d3ff4843eb21e528',
         era: 'design 0037 (repository affinity)',
       },
-      // Current since design 0041: floor 0 is the ground floor, every task
-      // lives on a floor, and `tasks/` holds legacy bare tasks only.
+      // design 0041 — floor 0 is the ground floor, every task lives on a
+      // floor, and `tasks/` holds legacy bare tasks only; the agent section
+      // named no verb for asking where ONE task stands.
+      {
+        sha256: 'dfc613e4b70a5f2b3c853827c01256615923ca3c245b44f49dcf54589e8c6963',
+        era: 'design 0041 (ground floor)',
+      },
+      // Current since design 0043: `ward task show ADDRESS` is the one-task
+      // surface, and it joins the read verbs that accept `--json`.
     ],
   },
 ];

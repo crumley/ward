@@ -8,6 +8,7 @@
 // has-linked-PRs approximation, and the report carries the derived `needs
 // you` items — nothing stored either way.
 import { resolve } from 'node:path';
+import { WardError } from '../errors.ts';
 import type { PrForgeState } from '../forge/gh.ts';
 import { type ForgeProbe, prBelongsToRemote, probeForge } from '../forge/gh.ts';
 import { readMachine } from '../global/machine.ts';
@@ -19,7 +20,8 @@ import type {
   TaskRecord,
   WorkState,
 } from '../store/types.ts';
-import { taskAddress } from './address.ts';
+import { requireTaskAddress, taskAddress, taskFloor, taskRoom } from './address.ts';
+import { type NextStep, nextStep, prAttention } from './next.ts';
 import { type FoundProject, readProjects } from './projects.ts';
 import { listRepositories } from './repos.ts';
 import { type FoundTask, readTasks } from './scan.ts';
@@ -175,7 +177,10 @@ export function deriveNeedsYou(
     }
     for (const pr of forge) {
       if (pr.state !== 'open') continue;
-      if (pr.reviewDecision === 'changes-requested') {
+      // The same per-PR classification the next-step ladder derives from
+      // (design/0043-task-next-surface/): one home for "what is this PR
+      // waiting on", so the two surfaces cannot disagree about one PR.
+      if (prAttention(pr) === 'changes-requested') {
         entries.push({
           task: status.task.code,
           address: status.address,
@@ -386,6 +391,15 @@ export async function statusReport(
  * being read (that is what makes this a status line and not a session log).
  */
 function workspaceSessions(root: string, records: readonly SessionRecord[]): SessionStatus[] {
+  return openSessionStatuses(root, records);
+}
+
+/**
+ * The OPEN sessions of a scope, each with the one derived fact that says what
+ * can be done about it. Shared by the workspace block and by `task show`
+ * (design/0043-task-next-surface/), so a session reads the same either way.
+ */
+function openSessionStatuses(root: string, records: readonly SessionRecord[]): SessionStatus[] {
   return records
     .filter((record) => record.state === 'open')
     .map((record) => ({
@@ -426,4 +440,116 @@ async function taskStatuses(
     });
   }
   return statuses;
+}
+
+// -- one task, in full (design/0043-task-next-surface/) ---------------------
+// The same derivation the whole-workspace report runs, narrowed to one task
+// and completed with what a status row has no room for: the sessions with
+// their history, the floor the task sits on, and the derived next step. It
+// lives here rather than in a module of its own because it IS the status
+// derivation — a second module would be a second place for the rules to drift.
+
+export interface TaskDetail {
+  /** The task's status row, exactly as `status` derives it. */
+  readonly status: TaskStatus;
+  /** The floor the task sits on — absent only for a legacy bare task (0041). */
+  readonly project?: ProjectRecord;
+  /** This machine's name — what makes the session rows readable (0038). */
+  readonly machine: string;
+  /** The task's OPEN sessions, each saying whether its history is on this machine. */
+  readonly sessions: readonly SessionStatus[];
+  /** The one imperative line: what moves this task forward now. */
+  readonly next: NextStep;
+}
+
+/**
+ * One task in full, addressed as every task-addressed verb is addressed. A
+ * read: it takes no lock, writes nothing, and asks the forge exactly for this
+ * task's PR set rather than the workspace's.
+ */
+export async function taskDetail(
+  root: string,
+  input: string,
+  options: StatusOptions = {},
+): Promise<TaskDetail> {
+  const task = await resolveTaskForRead(root, input, options);
+  const probe = await probeForge(openPrUrls([task.record]));
+  const [status] = await taskStatuses(root, [task], probe);
+  if (status === undefined) throw new WardError(`could not read task ${input}`);
+  const floor = taskFloor(task);
+  const project =
+    floor === undefined
+      ? undefined
+      : (await readProjects(root)).find((found) => found.record.floor === floor)?.record;
+  return {
+    status,
+    ...(project === undefined ? {} : { project }),
+    machine: (await readMachine()).name,
+    sessions: openSessionStatuses(root, await readSessions(root, task.dir)),
+    next: nextStep({
+      record: task.record,
+      address: status.address,
+      ...(status.worktrees === undefined ? {} : { worktrees: status.worktrees }),
+      ...(status.forge === undefined ? {} : { forge: status.forge }),
+    }),
+  };
+}
+
+/**
+ * The task a READ verb is asking about — open work first, settled work behind
+ * the window.
+ *
+ * Resolution is the identity rule (0036) applied in order: a room addresses
+ * whoever holds it now, so an open task always wins, and only when no open
+ * task holds the address does a closed one answer. Closed work then obeys the
+ * same settled-work window every glanceable surface obeys — a task closed
+ * longer ago than the window is refused with `--all` named, never silently
+ * hidden (§20). Reading one named task is not a listing, so nothing is
+ * dropped for volume; what the window buys here is that an address whose room
+ * has been quiet for weeks is not answered as if it were live work.
+ */
+export async function resolveTaskForRead(
+  root: string,
+  input: string,
+  options: StatusOptions = {},
+  now: number = Date.now(),
+): Promise<FoundTask> {
+  const wanted = requireTaskAddress(input);
+  const matches = (await readTasks(root)).filter(
+    (task) =>
+      taskRoom(task) === wanted.room &&
+      (wanted.floor === undefined || taskFloor(task) === wanted.floor),
+  );
+  const open = matches.filter((task) => task.record.state !== 'closed');
+  const resolved = pickOne(open, input);
+  if (resolved !== undefined) return resolved;
+
+  const closed = matches.filter((task) => task.record.state === 'closed');
+  const shown =
+    options.all === true ? closed : closed.filter((task) => !settledTask(task.record, now));
+  const settledMatch = pickOne(shown, input);
+  if (settledMatch !== undefined) return settledMatch;
+  if (closed.length > 0) {
+    throw new WardError(
+      `${input.toLowerCase()} is closed and settled — closed more than ${SETTLED_AFTER_DAYS} ` +
+        `days ago, so it is off the glance; show it with: ward task show ${input.toLowerCase()} --all`,
+    );
+  }
+  throw new WardError(
+    wanted.floor === undefined
+      ? `no task has code '${input}' — see: ward task list`
+      : `no task at ${input.toLowerCase()} — floor ${wanted.floor} holds no task in room ` +
+          `${wanted.room} (see: ward task list)`,
+  );
+}
+
+/** Exactly one candidate, or none; several is a refusal that names every one. */
+function pickOne(matches: readonly FoundTask[], input: string): FoundTask | undefined {
+  if (matches.length === 0) return undefined;
+  if (matches.length === 1) return matches[0];
+  const named = matches
+    .map((task) => `${taskAddress(task)} (${task.record.slug})`)
+    .sort()
+    .join(', ');
+  throw new WardError(`${input.toLowerCase()} is ambiguous — ${named}; name one`);
 }

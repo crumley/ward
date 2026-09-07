@@ -21,6 +21,17 @@ import { existsSync } from 'node:fs';
 export type PrState = 'open' | 'merged' | 'closed' | 'unknown';
 export type PrReviewDecision = 'approved' | 'changes-requested' | 'review-required';
 
+/**
+ * The forge's whole check rollup for one PR, collapsed to the four answers a
+ * human acts on: `failing` if anything failed, else `pending` if anything is
+ * still running, else `passing` — and `none` when the PR has no checks at
+ * all, which is a different fact from "not asked" and must not read as green.
+ * Collapsing is deliberate: which job failed is the forge's page to show, and
+ * a per-check listing would put a CI dashboard on a glance
+ * (intent/02-subsystems/07-human-shell.md).
+ */
+export type PrChecks = 'passing' | 'failing' | 'pending' | 'none';
+
 export interface PrForgeState {
   readonly url: string;
   readonly state: PrState;
@@ -44,6 +55,13 @@ export interface PrForgeState {
    * absent stays absent, same convention as `reviewDecision`.
    */
   readonly baseRefName?: string;
+  /**
+   * The check rollup, collapsed — one more field in the same single
+   * `gh pr view` call, zero added forge cost, the same bargain
+   * `mergeCommit` and `baseRefName` struck. Omitted when the forge reports no
+   * rollup at all: absence stays absence, never a guessed verdict.
+   */
+  readonly checks?: PrChecks;
 }
 
 export interface ForgeProbe {
@@ -147,34 +165,74 @@ export async function probeForgeAuth(): Promise<ForgeAuth> {
   }
 }
 
-/** One PR via `gh pr view`; any failure — spawn, exit, deadline, parse — is null. */
+/**
+ * The fields one `gh pr view` asks for. `statusCheckRollup` is asked for in
+ * the SAME call as everything else, so the check verdict costs no extra forge
+ * round trip — but it is asked for **separably**, because a token can be
+ * allowed to read a pull request and not its checks: a fine-grained personal
+ * access token without the commit-statuses permission fails the whole
+ * GraphQL query rather than omitting one field. Bundling it unconditionally
+ * would trade working review state for check state on such a token, which is
+ * a worse answer than the one Ward already gave.
+ */
+const PR_FIELDS = 'state,reviewDecision,mergeCommit,baseRefName';
+const PR_FIELDS_WITH_CHECKS = `${PR_FIELDS},statusCheckRollup`;
+
+/**
+ * One PR via `gh pr view`; any failure — spawn, exit, deadline, parse — is
+ * null. The full field set is asked first and, when it fails, the core set is
+ * asked once more within what is left of the same deadline: the retry costs
+ * nothing on a healthy read (the first call answered) and buys back state and
+ * review on a token that may not read checks. The deadline is absolute across
+ * both attempts, so the probe's "never hangs past the deadline" promise is
+ * exactly as strong as it was with one call.
+ */
 async function readPr(gh: string, url: string, timeout: number): Promise<PrForgeState | null> {
+  const until = Date.now() + timeout;
+  const full = await viewPr(gh, url, PR_FIELDS_WITH_CHECKS, timeout);
+  const answer = full ?? (await retryWithoutChecks(gh, url, until));
+  if (answer === null) return null;
+  const decision = reviewDecision(answer);
+  const oid = mergeCommitOid(answer);
+  const base = baseRefName(answer);
+  const checks = checkRollup(answer);
+  return {
+    url,
+    state: prState(answer),
+    ...(decision === undefined ? {} : { reviewDecision: decision }),
+    ...(oid === undefined ? {} : { mergeCommit: oid }),
+    ...(base === undefined ? {} : { baseRefName: base }),
+    ...(checks === undefined ? {} : { checks }),
+  };
+}
+
+/** The second attempt, inside the remaining deadline — skipped when none is left. */
+async function retryWithoutChecks(gh: string, url: string, until: number): Promise<object | null> {
+  const remaining = until - Date.now();
+  if (remaining <= 0) return null;
+  return viewPr(gh, url, PR_FIELDS, remaining);
+}
+
+/** One `gh pr view` invocation, parsed — null on spawn, exit, deadline, or parse failure. */
+async function viewPr(
+  gh: string,
+  url: string,
+  fields: string,
+  timeout: number,
+): Promise<object | null> {
   try {
-    const proc = Bun.spawn(
-      [gh, 'pr', 'view', url, '--json', 'state,reviewDecision,mergeCommit,baseRefName'],
-      {
-        stdout: 'pipe',
-        stderr: 'ignore',
-        stdin: 'ignore',
-        env: { ...process.env },
-      },
-    );
+    const proc = Bun.spawn([gh, 'pr', 'view', url, '--json', fields], {
+      stdout: 'pipe',
+      stderr: 'ignore',
+      stdin: 'ignore',
+      env: { ...process.env },
+    });
     const deadline = setTimeout(() => proc.kill(), timeout);
     const [output] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
     clearTimeout(deadline);
     if (proc.exitCode !== 0) return null;
     const parsed: unknown = JSON.parse(output);
-    if (typeof parsed !== 'object' || parsed === null) return null;
-    const decision = reviewDecision(parsed);
-    const oid = mergeCommitOid(parsed);
-    const base = baseRefName(parsed);
-    return {
-      url,
-      state: prState(parsed),
-      ...(decision === undefined ? {} : { reviewDecision: decision }),
-      ...(oid === undefined ? {} : { mergeCommit: oid }),
-      ...(base === undefined ? {} : { baseRefName: base }),
-    };
+    return typeof parsed === 'object' && parsed !== null ? parsed : null;
   } catch {
     return null;
   }
@@ -212,6 +270,56 @@ function reviewDecision(answer: object): PrReviewDecision | undefined {
 function baseRefName(answer: object): string | undefined {
   const base = 'baseRefName' in answer ? answer.baseRefName : undefined;
   return typeof base === 'string' && base !== '' ? base : undefined;
+}
+
+/**
+ * gh reports `"statusCheckRollup"` as an array of check runs and status
+ * contexts — or null when the head commit has none at all. An empty array is
+ * `none` (a PR with no checks); anything else collapses by the worst verdict
+ * present, so one failure is `failing` no matter how many jobs are green.
+ */
+function checkRollup(answer: object): PrChecks | undefined {
+  const rollup = 'statusCheckRollup' in answer ? answer.statusCheckRollup : undefined;
+  if (!Array.isArray(rollup)) return undefined;
+  if (rollup.length === 0) return 'none';
+  let pending = false;
+  for (const entry of rollup) {
+    const verdict = checkVerdict(entry);
+    if (verdict === 'failing') return 'failing';
+    if (verdict === 'pending') pending = true;
+  }
+  return pending ? 'pending' : 'passing';
+}
+
+/**
+ * One rollup entry's verdict. The two shapes gh returns are read through one
+ * rule: a check run carries `conclusion` once it finishes (and null while it
+ * runs), a status context carries `state` — so the first of the two that says
+ * anything is the verdict, and saying nothing yet IS pending. An unrecognized
+ * verdict is pending rather than passing: the safe direction, since a green
+ * claim is the one this function must never make on a guess.
+ */
+function checkVerdict(entry: unknown): 'passing' | 'failing' | 'pending' {
+  if (typeof entry !== 'object' || entry === null) return 'pending';
+  const conclusion = 'conclusion' in entry ? entry.conclusion : undefined;
+  const state = 'state' in entry ? entry.state : undefined;
+  const verdict = typeof conclusion === 'string' && conclusion !== '' ? conclusion : state;
+  switch (verdict) {
+    case 'SUCCESS':
+    case 'NEUTRAL':
+    case 'SKIPPED':
+      return 'passing';
+    case 'FAILURE':
+    case 'ERROR':
+    case 'TIMED_OUT':
+    case 'CANCELLED':
+    case 'ACTION_REQUIRED':
+    case 'STARTUP_FAILURE':
+    case 'STALE':
+      return 'failing';
+    default:
+      return 'pending';
+  }
 }
 
 /** gh reports `"mergeCommit": {"oid": "…"}` for merged PRs, null otherwise. */

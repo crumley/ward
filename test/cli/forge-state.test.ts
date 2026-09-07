@@ -44,13 +44,20 @@ test('status --json live: per-PR forge state, the exact in-review rule, needs-yo
   ]);
 });
 
-test('status human rendering live: PR summaries on the task lines, the needs-you block', () => {
+// Since design/0043-task-next-surface/ the PR set is one LINE per PR under
+// the task, not a count beside it: the URL is the thing the human came for,
+// and the count said less in the same space.
+test('status human rendering live: a line per PR under the task, the needs-you block', () => {
   const result = runWardEnv(['status'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
   expect(result.exitCode).toBe(0);
+  expect(result.stdout).toContain('f0t1 first [active · in-review]\n');
+  expect(result.stdout).not.toContain('prs:'); // the count is gone from status
+  expect(result.stdout).toContain(`    ${PR_MERGED} — merged`);
   expect(result.stdout).toContain(
-    'f0t1 first [active · in-review] — prs: 1 open (changes requested) · 1 merged',
+    `    ${PR_CHANGES} — open · review: changes requested · checks: unknown`,
   );
-  expect(result.stdout).toContain('f0t2 second [active] — prs: 1 merged');
+  expect(result.stdout).toContain('f0t2 second [active]');
+  expect(result.stdout).toContain(`    ${PR_DONE} — merged`);
   expect(result.stdout).toContain('needs you');
   expect(result.stdout).toContain('task f0t1 — changes requested on ' + PR_CHANGES);
   expect(result.stdout).toContain(
@@ -95,7 +102,9 @@ test('without gh, status renders everything it renders today and marks the forge
   expect(result.stdout).toContain('t3 third [active]');
   expect(result.stdout).toContain('forge state unavailable (gh)');
   expect(result.stdout).not.toContain('needs you');
-  expect(result.stdout).not.toContain('prs:');
+  // The links still print — the URL is the record's, not the forge's, and a
+  // surface that showed nothing would return less than the record already has.
+  expect(result.stdout).toContain(`    ${PR_MERGED} — state unknown`);
 });
 
 test('without gh, the JSON omits every forge-state field — vanished, never null', () => {
@@ -178,8 +187,8 @@ test('an open PR on a non-main base with no mappable repository warns nothing; J
     { task: 't1', address: 'f0t1', reason: 'changes-requested', pr: PR_CHANGES },
     { task: 't2', address: 'f0t2', reason: 'awaiting-close' },
   ]);
-  // The human summary stays a count line — the base belongs to needs-you,
-  // which stays silent here rather than guessing at an unmappable URL.
+  // The base belongs to needs-you, which stays silent here rather than
+  // guessing at an unmappable URL — the PR lines carry state, not the base.
   const human = runWardEnv(['status'], ws, { NO_COLOR: '1', WARD_GH: stacked });
   expect(human.stdout).not.toContain('feature-x');
   expect(human.stdout).not.toContain('is based on');

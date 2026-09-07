@@ -180,8 +180,87 @@ test('duplicate URLs are asked once', async () => {
   const url = 'https://example.com/pr/1';
   const probe = await probeForge([url, url, url]);
   expect(probe.live).toBe(true);
-  expect((await Bun.file(log).text()).trim().split('\n')).toEqual([url]);
+  // One call, and the fields it asked for: everything rides the single call,
+  // the check rollup included (design/0043-task-next-surface/).
+  expect((await Bun.file(log).text()).trim().split('\n')).toEqual([
+    `${url} state,reviewDecision,mergeCommit,baseRefName,statusCheckRollup`,
+  ]);
 });
+
+// The build discovery behind the fallback (design/0043-task-next-surface/): a
+// fine-grained token may read a pull request and not its checks, and gh fails
+// the WHOLE query rather than omitting the field — so asking for checks
+// unconditionally would trade working review state for nothing.
+test('a token that cannot read checks still yields state and review, without checks', async () => {
+  const log = join(scratch, 'no-checks.log');
+  process.env.WARD_GH = writeFakeGh(scratch, 'gh-no-checks', {
+    responses: {
+      'https://example.com/pr/1': { state: 'OPEN', reviewDecision: 'APPROVED' },
+    },
+    checksForbidden: true,
+    logFile: log,
+  });
+  const probe = await probeForge(['https://example.com/pr/1']);
+  expect(probe.live).toBe(true);
+  expect(probe.states.get('https://example.com/pr/1')).toEqual({
+    url: 'https://example.com/pr/1',
+    state: 'open',
+    reviewDecision: 'approved',
+  });
+  // Two calls: the full field set, then the core one — and only because the
+  // first failed. A healthy read never makes the second.
+  const asked = (await Bun.file(log).text()).trim().split('\n');
+  expect(asked).toHaveLength(2);
+  expect(asked[0]).toContain('statusCheckRollup');
+  expect(asked[1]).not.toContain('statusCheckRollup');
+});
+
+// gh's rollup vocabulary in, one verdict out — worst-first over both shapes
+// it returns (a check run's conclusion, a status context's state).
+const rollups: ReadonlyArray<{ rollup: unknown[] | null; expected: string | undefined }> = [
+  { rollup: null, expected: undefined }, // the forge reported none at all
+  { rollup: [], expected: 'none' }, // the PR genuinely has no checks
+  { rollup: [{ status: 'COMPLETED', conclusion: 'SUCCESS' }], expected: 'passing' },
+  { rollup: [{ status: 'COMPLETED', conclusion: 'SKIPPED' }], expected: 'passing' },
+  { rollup: [{ state: 'SUCCESS' }], expected: 'passing' },
+  { rollup: [{ status: 'IN_PROGRESS', conclusion: null }], expected: 'pending' },
+  { rollup: [{ state: 'PENDING' }], expected: 'pending' },
+  { rollup: [{ status: 'COMPLETED', conclusion: 'WHAT_IS_THIS' }], expected: 'pending' },
+  { rollup: [{ status: 'COMPLETED', conclusion: 'FAILURE' }], expected: 'failing' },
+  { rollup: [{ state: 'ERROR' }], expected: 'failing' },
+  { rollup: [{ status: 'COMPLETED', conclusion: 'CANCELLED' }], expected: 'failing' },
+  {
+    rollup: [
+      { status: 'COMPLETED', conclusion: 'SUCCESS' },
+      { status: 'IN_PROGRESS', conclusion: null },
+    ],
+    expected: 'pending',
+  },
+  {
+    rollup: [
+      { status: 'IN_PROGRESS', conclusion: null },
+      { status: 'COMPLETED', conclusion: 'FAILURE' },
+    ],
+    expected: 'failing', // one failure decides, whatever else is still running
+  },
+];
+
+for (const [index, { rollup, expected }] of rollups.entries()) {
+  test(`check rollup ${JSON.stringify(rollup)} → ${expected}`, async () => {
+    process.env.WARD_GH = writeFakeGh(scratch, `gh-rollup-${index}`, {
+      responses: {
+        'https://example.com/pr/1': {
+          state: 'OPEN',
+          ...(rollup === null
+            ? {}
+            : { statusCheckRollup: rollup as ReadonlyArray<Record<string, string | null>> }),
+        },
+      },
+    });
+    const probe = await probeForge(['https://example.com/pr/1']);
+    expect(probe.states.get('https://example.com/pr/1')?.checks).toBe(expected as never);
+  });
+}
 
 test('a hung forge is cut at the deadline and degrades to live:false', async () => {
   process.env.WARD_GH = writeFakeGh(scratch, 'gh-hung', {

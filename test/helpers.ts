@@ -194,7 +194,21 @@ export interface FakeGhBehavior {
   /** Canned `pr view` answer per URL; 'error' exits 1. `mergeCommit` is the oid. */
   readonly responses: Record<
     string,
-    { state: string; reviewDecision?: string; mergeCommit?: string; baseRefName?: string } | 'error'
+    | {
+        state: string;
+        reviewDecision?: string;
+        mergeCommit?: string;
+        baseRefName?: string;
+        /**
+         * The check rollup, in gh's own vocabulary (design/0043-task-next-surface/):
+         * check runs as `{status, conclusion}` and status contexts as
+         * `{state}`, exactly as gh emits them, so the probe's collapse is what
+         * gets exercised. Omitted means gh reported no rollup at all (`null`) —
+         * which is what keeps every pre-0043 case answering exactly as it did.
+         */
+        statusCheckRollup?: ReadonlyArray<Record<string, string | null>>;
+      }
+    | 'error'
   >;
   /** `gh auth status` verdict — 'ok' exits 0, 'error' exits 1 (unset: 1). */
   readonly auth?: 'ok' | 'error';
@@ -211,6 +225,13 @@ export interface FakeGhBehavior {
    * Unset means 'error'.
    */
   readonly create?: string | 'error';
+  /**
+   * Model a token that may read a pull request but not its checks
+   * (design/0043-task-next-surface/): any `pr view` asking for
+   * `statusCheckRollup` fails outright, the way a fine-grained PAT without
+   * the commit-statuses permission makes the whole GraphQL query fail.
+   */
+  readonly checksForbidden?: boolean;
   /** Sleep before answering — the timeout tests hang the forge with this. */
   readonly delayMs?: number;
   /** Append each asked URL here, one per line — for call-count assertions. */
@@ -219,7 +240,7 @@ export interface FakeGhBehavior {
 
 /**
  * Write an executable fake `gh` for WARD_GH to point at: answers
- * `gh pr view URL --json state,reviewDecision,mergeCommit,baseRefName` from
+ * `gh pr view URL --json state,reviewDecision,mergeCommit,baseRefName,statusCheckRollup` from
  * the canned table, in gh's own vocabulary (OPEN/MERGED/CLOSED,
  * APPROVED/CHANGES_REQUESTED/…, mergeCommit as `{oid}` or null and
  * baseRefName as a string exactly as gh emits them), and `gh auth status` by
@@ -255,7 +276,12 @@ if (!(process.argv[4] ?? '').startsWith('http')) {
   process.exit(1);
 }
 const url = process.argv[4] ?? '';
-if (behavior.logFile) appendFileSync(behavior.logFile, url + '\\n');
+const fields = process.argv[6] ?? '';
+if (behavior.logFile) appendFileSync(behavior.logFile, url + ' ' + fields + '\\n');
+if (behavior.checksForbidden && fields.includes('statusCheckRollup')) {
+  console.error('GraphQL: Resource not accessible by personal access token');
+  process.exit(1);
+}
 if (behavior.delayMs) await Bun.sleep(behavior.delayMs);
 const answer = behavior.responses[url];
 if (answer === undefined || answer === 'error') {
@@ -267,6 +293,7 @@ console.log(JSON.stringify({
   mergeCommit: answer.mergeCommit ? { oid: answer.mergeCommit } : null,
   reviewDecision: answer.reviewDecision ?? '',
   state: answer.state,
+  statusCheckRollup: answer.statusCheckRollup ?? null,
 }));
 `;
   writeFileSync(path, script);
