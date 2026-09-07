@@ -97,8 +97,16 @@ principle (§8) and feeds the compounding loop
   directly and **never stored as requests just to be presentable** (§17). This layer's job is to
   present both as **one glanceable, deduplicated answer**, and to make acting on each — grant,
   decline, jump to the session — one step; which items are recorded and which derived is the
-  implementation's business, invisible at the surface. _Why:_ the human's attention is the scarcest
-  context in the system
+  implementation's business, invisible at the surface. Where a condition is derivable but its
+  **addressee** is not — a review pending on a reviewer the record does not name is the standing
+  case — the surface **presents it rather than dropping it, and presents it as either-way**: naming
+  both the act the human would take if the item is theirs and the waiting if it is not. _Why the
+  either-way form:_ the two failure modes are asymmetric in the same direction as §20's. Claiming an
+  attribution Ward cannot support tells a human to act on what is not theirs and trains them to
+  distrust the whole surface; omitting the item leaves the surface silent about the state most
+  delivered work sits in, which is exactly the "answer scoped to what happened to be recorded" this
+  constraint exists to forbid. Saying both costs a word and is true. _Why:_ the human's attention is
+  the scarcest context in the system
   ([`../01-concepts/01-scopes-and-personas.md`](../01-concepts/01-scopes-and-personas.md), the
   human); a workspace that can restore a dozen threads but cannot say which one is waiting on its
   human has managed everyone's context but theirs — and an answer scoped to what happened to be
@@ -238,9 +246,10 @@ principle (§8) and feeds the compounding loop
   affordance) and the **three constraints that govern every interactive moment** — deliberate entry
   (satisfied by demonstrable presence), a deterministic result for every non-interactive invocation,
   and unreachable by an agent caller — the **"what needs me?" attention surface** (one glanceable,
-  deduplicated answer over the recorded requests to the human), **workspace/scope-awareness from any
-  working directory**, **file inputs for long free-text arguments**, the **`doctor` self-diagnosis**
-  capability (its _surface_ — what it checks is
+  deduplicated answer over the recorded requests to the human, including the **either-way**
+  presentation of a condition whose addressee the record cannot decide), **workspace/scope-awareness
+  from any working directory**, **file inputs for long free-text arguments**, the **`doctor`
+  self-diagnosis** capability (its _surface_ — what it checks is
   [`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)'s),
   **surfacing version skew through the attention surface rather than as output chatter**,
   **opinionated global + workspace-local configuration** (workspace overrides global **per key**;
