@@ -28,10 +28,11 @@ import { z } from 'zod';
  * names a configuration Ward genuinely cannot honor, and refusing it is not
  * gatekeeping somebody else's namespace. One value today; the key exists so
  * the swappable seam (intent/02-subsystems/03-agent-harness.md — selectable
- * per scope) is visible in configuration from day one rather than appearing
- * as a surprise the day a second adapter lands.
+ * per scope) is visible in configuration. A second adapter has now landed
+ * (design/0044-pi-harness/), so the enum names both; the default stays the one
+ * Ward has always started (`AGENT_DEFAULTS.harness`).
  */
-export const agentHarnessSchema = z.literal('claude');
+export const agentHarnessSchema = z.enum(['claude', 'pi']);
 export type AgentHarness = z.infer<typeof agentHarnessSchema>;
 
 /**
