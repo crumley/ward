@@ -16,7 +16,6 @@ import type { AgentProvenance, Resolved } from '../agent/settings.ts';
 import type { PrForgeState } from '../forge/gh.ts';
 import type { RepoLocation } from '../global/locate.ts';
 import type { RegistryReport, WorkspaceListing } from '../global/registry.ts';
-import { CLAUDE_HARNESS } from '../harness/claude.ts';
 import type { AdoptionReport } from '../shell/adopt.ts';
 import {
   type ProjectRecord,
@@ -641,7 +640,7 @@ export function sessionLocateJson(location: SessionLocation): SessionLocateShape
     ...(location.record.task === undefined ? {} : { task: location.record.task }),
     state: location.record.state,
     handle: location.handle,
-    harness: CLAUDE_HARNESS,
+    harness: location.harness,
     nativeId: location.nativeId,
     workingDirectory: location.record.workingDirectory,
     ...(location.record.machine === undefined ? {} : { machine: location.record.machine }),
