@@ -170,11 +170,6 @@ the SF's disposition is appended in its entry, remove the line here.
   as the update path, and a creation that also converges an existing workspace can no longer be one.
 - **SF-002** — [0042](0042-upgrade-owns-convergence/spec-feedback.md): the update owns the record's
   shape as well as the installed artifacts, and the three-operations map does not say so.
-- **SF-001** — [0043](0043-task-next-surface/spec-feedback.md): the PR facts Ward tracks stop short
-  of the forge's check verdict, which is what most often stands between a PR and its merge.
-- **SF-002** — [0043](0043-task-next-surface/spec-feedback.md): "waiting on the human" is not always
-  derivable — a pending review names no reviewer the record knows — and the attention surface's rule
-  has no third answer.
 - **SF-001** — [0044](0044-pi-harness/spec-feedback.md): a passed-through thinking-depth (or model)
   value is bound to the harness it was written for — switching harness may invalidate it, and intent
   does not name that binding.

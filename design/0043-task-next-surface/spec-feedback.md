@@ -50,6 +50,9 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   live state plus the workspace's own record (worktrees, the PR set), never from a stored summary.
 
 - **Status:** pending.
+- **Status:** adjudicated — [#88](https://github.com/crumley/ward/pull/88) (owner's ruling: the
+  forge's check verdict is a tracked per-PR fact, read live like review state and never stored;
+  `closed unmerged` joins the status enumeration; the next step is derived, not summarized).
 
 ## SF-002 — "waiting on the human" is not always derivable, and the surface's rule has no third answer
 
@@ -91,3 +94,6 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   the same clause, so the rule is discoverable where the surface is defined.
 
 - **Status:** pending.
+- **Status:** adjudicated — [#88](https://github.com/crumley/ward/pull/88) (owner's ruling: where a
+  condition is derivable but its addressee is not, the attention surface presents it either-way,
+  naming both acts, rather than dropping it or asserting an addressee).
