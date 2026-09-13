@@ -126,14 +126,22 @@ Each scope keeps a **session log**: an append-only record of the sessions that h
 scope, with enough metadata per entry to support recovery, resumption, and reflection. At minimum an
 entry captures: the identity, the working directory, the **harness handle**, the **machine** the
 session ran on, the model, when it opened/closed, its current stored state (`open` or `closed`), and
-its **purpose** — a link to the brief or dispatch that opened it, or a one-line goal when neither
-exists. **Why the machine is part of the minimum:** the handle is machine-independent in form and
-machine-bound in fact — the harness keeps the run's history on the computer that produced it — so a
-record without it cannot say **where** a thread can be resumed, and recovery reading a workspace on
-a second machine cannot tell a thread it may re-attach from one it cannot. **Why purpose is part of
-the minimum:** "what was this thread trying to do" must be answerable from the record alone — the
-harness history says it at length, but the record must not depend on a transcript that may no longer
-resolve (`../02-subsystems/03-agent-harness.md`).
+its **purpose** — a link to the brief or dispatch that opened it, a one-line goal when neither
+exists, or — for a session opened to **receive** work rather than to perform a named piece of it —
+the **kind of session it is**. **Why the machine is part of the minimum:** the handle is
+machine-independent in form and machine-bound in fact — the harness keeps the run's history on the
+computer that produced it — so a record without it cannot say **where** a thread can be resumed, and
+recovery reading a workspace on a second machine cannot tell a thread it may re-attach from one it
+cannot. **Why purpose is part of the minimum:** "what was this thread trying to do" must be
+answerable from the record alone — the harness history says it at length, but the record must not
+depend on a transcript that may no longer resolve (`../02-subsystems/03-agent-harness.md`). **Why
+the kind of session can stand as its purpose:** the session a human opens to stand in a workspace
+and fire work off is opened to receive goals, not to pursue one — the tasks it opens and the agents
+it dispatches carry the purposes, and its own is only to be that workspace's standing interactive
+session. A goal invented for it fills the field without recording a fact. So the record names the
+kind of session and when it opened, and the purpose of its work is read from the threads it opened,
+not from its own entry. A session at task scope keeps requiring a purpose: several episodes can run
+against one task, and the purpose is what tells them apart on the log.
 
 Two further fields belong to the minimum but are **conditioned on a source existing**: the
 **persona** (name + role), once the workspace has a persona cast to name one from
@@ -260,10 +268,10 @@ remember it.
   deliberate (the shell may **ask** a present human; it never decides), the record (not the process)
   is authoritative, and the record is kept current.
 - **The per-scope session log** (append-only; "enough metadata" to recover, including each session's
-  **purpose** and the **machine** it ran on, and — conditioned on a source existing — its
-  **persona** once a cast exists and its **usage** where the harness exposes it; **lifecycle
-  events** — opened / resumed / resume-failed with cause / closed — so failure is a recorded fact,
-  never a silent retry).
+  **purpose** — the kind of session, for one opened to receive work — and the **machine** it ran on,
+  and — conditioned on a source existing — its **persona** once a cast exists and its **usage**
+  where the harness exposes it; **lifecycle events** — opened / resumed / resume-failed with cause /
+  closed — so failure is a recorded fact, never a silent retry).
 - **Recovery** — the cold-start orchestration that restores the in-flight threads (re-validating
   setup for **live** anchors only; addressing sessions by their workspace-unique bare id) — itself a
   **recorded episode** (wakes re-armed/fired, the rounds' conclusions) — and its **three per-thread
