@@ -126,6 +126,7 @@ The same file carries your defaults for every agent Ward starts — the `agent:`
 type: ward-config
 machine: mbp                            # what this computer is called in a session id
 agent:
+  harness: claude                       # which harness runs the agent: claude (default) or pi
   model: fable                          # passed through verbatim; unset means the harness's default
   effort: high
   args: [--dangerously-skip-permissions] # the tail of every launch and resume
@@ -140,10 +141,17 @@ workspace never mint the same id, and a resume on the wrong one is refused with 
 answer it named
 ([`design/0038-machine-bound-sessions/`](design/0038-machine-bound-sessions/README.md)).
 
+`agent.harness` picks which harness runs the agent — `claude` (Claude Code, the default) or `pi`
+(the pi coding agent). It selects the adapter that shapes the launch and reads a session's handle; a
+run keeps the harness it was born under (its handle is `claude:…` or `pi:…`), so resuming and
+locating route by that prefix whatever the configuration later says
+([`design/0044-pi-harness/`](design/0044-pi-harness/README.md)).
+
 `agent.command` is the program and any leading words — `[claude]` where the CLI is on PATH, which is
 also what an unset key means; `[npx, claude]` on a machine where it has to be reached through a
-launcher. A launch runs `<command…> --session-id ID [--model M] [--effort E] <args…>`, and
-`ward doctor` reports every key with the layer that set it and checks that the command can be found
+launcher. A launch runs `<command…> --session-id ID [--model M] [--effort E] <args…>` (pi spells the
+thinking flag `--thinking`), and `ward doctor` reports every key with the layer that set it and
+checks that the command can be found
 ([`design/0035-agent-command/`](design/0035-agent-command/README.md)).
 
 ## The shell layer

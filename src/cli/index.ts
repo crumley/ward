@@ -26,6 +26,7 @@ import {
   unregisterWorkspace,
   viewRegistry,
 } from '../global/registry.ts';
+import { adapterForHandle } from '../harness/index.ts';
 import {
   type AdoptionReport,
   adoptionDir,
@@ -2308,12 +2309,11 @@ async function cmdSessionLocate(id: string, json: boolean): Promise<void> {
     return;
   }
   console.log(`${pc.yellow('gone')} — ${pc.dim(`no transcript at ${location.path}`)} ${where}`);
-  console.log(
-    pc.dim(
-      'the harness owns retention (claude discards transcripts after cleanupPeriodDays, 30 by ' +
-        "default) — the session's own record is what survives",
-    ),
-  );
+  // The retention clause is the resolving adapter's own — claude discards old
+  // transcripts, pi keeps a session until a human deletes it — so the line
+  // tells the truth about the harness this run was born under.
+  const note = adapterForHandle(location.handle)?.retentionNote;
+  if (note !== undefined) console.log(pc.dim(note));
 }
 
 function renderSessionOpened(record: SessionRecord, json: boolean): void {

@@ -12,7 +12,7 @@ import { WardError } from '../errors.ts';
 import type { PrForgeState } from '../forge/gh.ts';
 import { type ForgeProbe, prBelongsToRemote, probeForge } from '../forge/gh.ts';
 import { readMachine } from '../global/machine.ts';
-import { claudeNativeId, locateClaudeRun } from '../harness/claude.ts';
+import { adapterForHandle } from '../harness/index.ts';
 import type {
   ProjectRecord,
   RepositoryRecord,
@@ -412,9 +412,11 @@ function openSessionStatuses(root: string, records: readonly SessionRecord[]): S
 }
 
 function sessionHistory(root: string, record: SessionRecord): SessionHistory {
-  const nativeId = record.handle === undefined ? null : claudeNativeId(record.handle);
+  const adapter = adapterForHandle(record.handle);
+  if (adapter === null) return 'unlocatable';
+  const nativeId = adapter.nativeId(record.handle ?? '');
   if (nativeId === null) return 'unlocatable';
-  return locateClaudeRun(nativeId, resolve(root, record.workingDirectory)).outcome;
+  return adapter.locate(nativeId, resolve(root, record.workingDirectory)).outcome;
 }
 
 async function taskStatuses(

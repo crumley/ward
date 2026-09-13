@@ -200,8 +200,15 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: 'dfc613e4b70a5f2b3c853827c01256615923ca3c245b44f49dcf54589e8c6963',
         era: 'design 0041 (ground floor)',
       },
-      // Current since design 0043: `ward task show ADDRESS` is the one-task
-      // surface, and it joins the read verbs that accept `--json`.
+      // design 0043 — `ward task show ADDRESS` is the one-task surface and
+      // joins the read verbs that accept `--json`; `agent.harness` still named
+      // only claude, and the `--handle` example knew one prefix.
+      {
+        sha256: 'c0edae70b25b0926f036491dad35154e5a8cea29766ed290f489795f6b3362b3',
+        era: 'design 0043 (task show)',
+      },
+      // Current since design 0044: `agent.harness` is `claude` or `pi`, and the
+      // `--handle` example shows both prefixes (pi is the second harness).
     ],
   },
 ];

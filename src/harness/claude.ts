@@ -1,74 +1,63 @@
-// The Claude Code adapter (design/0029-launched-sessions/): the thin seam
-// intent/02-subsystems/03-agent-harness.md names — START a run, expose its
-// HANDLE, RESUME it, and LOCATE its history — and nothing else. Everything
-// Ward-specific (which session record, which purpose, which environment
-// declares the agent) stays OUTSIDE this file and arrives as arguments, which
-// is what lets a second harness be added without touching the session model,
-// the store, or the CLI (the seam's own "everything Ward-specific staying in
-// Ward").
+// The Claude Code adapter (design/0029-launched-sessions/, design/0035-agent-command/):
+// one implementation of the harness seam (src/harness/adapter.ts) — START a
+// run, expose its HANDLE, RESUME it, and LOCATE its history — and nothing
+// else. Everything Ward-specific (which session record, which purpose, which
+// environment declares the agent) stays OUTSIDE this file and arrives as
+// arguments, which is what lets a second harness (src/harness/pi.ts) be added
+// without touching the session model, the store, or the CLI.
 //
-// How the CLI is INVOKED on this machine is configuration, not a constant
-// (design/0035-agent-command/): `agent.command` names the program and any
-// leading words — `['npx', 'claude']` where `claude` cannot be run directly —
-// and this adapter only supplies the default (`claude`) for a machine that
-// says nothing. Above both sits `WARD_CLAUDE_BIN`, the env override that
-// selects the program for one invocation: the hermeticity seam tests use —
-// the same pattern as `WARD_CONFIG_DIR` and `WARD_GH` — so no test ever
-// spawns the real CLI.
+// How the CLI is INVOKED on this machine is configuration, not a constant:
+// `agent.command` names the program and any leading words — `['npx', 'claude']`
+// where `claude` cannot be run directly — and the adapter only supplies the
+// default (`claude`) for a machine that says nothing. Above both sits
+// `WARD_CLAUDE_BIN`, the env override that selects the program for one
+// invocation: the hermeticity seam tests use — the same pattern as
+// `WARD_CONFIG_DIR` and `WARD_GH` — so no test ever spawns the real CLI.
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+import {
+  type CommandSource,
+  type Env,
+  flag,
+  type HarnessAdapter,
+  type HarnessCommand,
+  harnessCommand,
+  type LocateResult,
+  type StartRequest,
+} from './adapter.ts';
 
-type Env = Record<string, string | undefined>;
-
-/** The harness type recorded in every handle this adapter mints. */
+/** The harness name recorded in every handle this adapter mints, and its prefix. */
 export const CLAUDE_HARNESS = 'claude';
 
 /** What runs when nobody said otherwise: the CLI under its own name, on PATH. */
 export const DEFAULT_CLAUDE_COMMAND: readonly string[] = ['claude'];
 
-/** Where the command the adapter will run came from — reported by doctor. */
-export type ClaudeCommandSource = 'override' | 'configured' | 'default';
+/** The env override that names the program for one invocation (the test seam). */
+export const CLAUDE_BIN_ENV = 'WARD_CLAUDE_BIN';
 
-export interface ClaudeCommand {
-  /** The program and its leading words — everything BEFORE Ward's own flags. */
-  readonly command: readonly string[];
-  readonly source: ClaudeCommandSource;
-}
+/** Retained names for callers that predate the seam's shared types. */
+export type ClaudeCommandSource = CommandSource;
+export type ClaudeCommand = HarnessCommand;
+export type { LocateResult } from './adapter.ts';
 
 /**
- * The command that starts the CLI here: `WARD_CLAUDE_BIN` when set (one
- * program, the whole command — a test's stub, or an emergency), else the
- * configured `agent.command`, else the default. The env override sits ABOVE
- * the configuration because it is the narrowest layer there is — one
- * invocation — and narrower wins on every axis this configuration has; it is
- * also what keeps every existing hermetic test pointing at its stub whatever
- * a scratch config says.
+ * The command that starts the CLI here — the shared resolution
+ * (`harnessCommand`) applied to this adapter: `WARD_CLAUDE_BIN`, else the
+ * configured `agent.command`, else `['claude']`.
  */
 export function claudeCommand(
   configured: readonly string[] | undefined,
   env: Env = process.env,
 ): ClaudeCommand {
-  const override = env.WARD_CLAUDE_BIN;
-  if (override !== undefined && override !== '') return { command: [override], source: 'override' };
-  if (configured !== undefined && configured.length > 0) {
-    return { command: configured, source: 'configured' };
-  }
-  return { command: DEFAULT_CLAUDE_COMMAND, source: 'default' };
+  return harnessCommand(claudeAdapter, configured, env);
 }
 
-/**
- * Whether a command's program can be found: an absolute or relative path
- * checked as such (relative to `cwd`, where the launch would stand), a bare
- * name searched on PATH. Returns the resolved location, or null — the same
- * question doctor asks of `gh`, asked before a launch dies on it.
- */
-export function locateProgram(program: string, cwd: string, env: Env = process.env): string | null {
-  return Bun.which(program, { cwd, ...(env.PATH === undefined ? {} : { PATH: env.PATH }) });
-}
+/** Whether a command's program can be found — the shared, harness-agnostic lookup. */
+export { locateProgram } from './adapter.ts';
 
 /**
- * The harness handle: the harness type plus its native run id
+ * The harness handle: the harness name plus its native run id
  * (intent/01-concepts/02-sessions-and-lifecycle.md — a recorded ATTRIBUTE, not
  * a second identity). The prefix is what makes a handle self-describing: a
  * record carrying `claude:<uuid>` says which adapter can resolve it, so a
@@ -87,29 +76,12 @@ export function claudeNativeId(handle: string): string | null {
 }
 
 /**
- * What Ward hands the adapter to start a run. `model` and `effort` are
- * optional in the strict sense 0028 built: absent means the flag is omitted
- * ENTIRELY, never passed empty and never defaulted here — the harness's own
- * default then stands (design/0028-agent-configuration/, SF-002).
- */
-export interface StartRequest {
-  /** The session id Ward assigns BEFORE the process exists — the handle's native half. */
-  readonly nativeId: string;
-  readonly model?: string | undefined;
-  readonly effort?: string | undefined;
-  /** Extra arguments, appended verbatim and last (agent.args). */
-  readonly args: readonly string[];
-}
-
-/**
  * The argv of a fresh run, without the command that starts the CLI (that is
- * `claudeCommand`'s, prepended at spawn). `--session-id <uuid>` is the
- * whole trick this entry rests on: Claude Code accepts the id of the
- * conversation it is about to create, so WARD assigns the handle and the
- * process is born under it — no prompt, no hook, no token spent asking the
- * agent what its id turned out to be, and nothing of Ward's in the run's
- * context (the directive's zero-cost ask: tracking may not pollute the
- * session with context that serves only the tracking).
+ * the adapter's, prepended at spawn). `--session-id <uuid>` is the whole trick
+ * this rests on: Claude Code accepts the id of the conversation it is about to
+ * create, so Ward assigns the handle and the process is born under it — no
+ * prompt, no hook, no token spent asking the agent what its id turned out to
+ * be, and nothing of Ward's in the run's context.
  *
  * Order is deliberate: Ward's own flags first, then the human's `agent.args`
  * LAST, so a human can always override what Ward passed — the last word on a
@@ -128,8 +100,7 @@ export function startArgv(request: StartRequest): string[] {
 /**
  * The argv of a resumed run. `claude --resume <id>` continues the SAME
  * conversation under the SAME id — only `--fork-session` mints a new one — so
- * a handle recorded at open stays valid across every resume, which is what
- * makes the recorded handle a durable locator rather than a one-shot token.
+ * a handle recorded at open stays valid across every resume.
  *
  * No `--model` and no `--effort`: a resumed run restores the model it was
  * saved with, and passing today's configuration would silently re-model an old
@@ -141,57 +112,12 @@ export function resumeArgv(nativeId: string, args: readonly string[]): string[] 
   return ['--resume', nativeId, ...args];
 }
 
-export interface RunRequest {
-  /** The argv AFTER the command: Ward's flags, then the human's `agent.args`. */
-  readonly argv: readonly string[];
-  /** The configured `agent.command`, when a layer set one (see `claudeCommand`). */
-  readonly command?: readonly string[] | undefined;
-  /** Absolute working directory the run stands in. */
-  readonly cwd: string;
-  /** Extra environment for the child, merged over the caller's own. */
-  readonly env: Readonly<Record<string, string>>;
-}
-
-export type RunResult =
-  | { readonly outcome: 'exited'; readonly exitCode: number }
-  /** The process never started — a missing binary, a permission error. */
-  | { readonly outcome: 'failed'; readonly cause: string };
-
-/**
- * Run the harness in the FOREGROUND, inheriting stdio, and wait for it. The
- * terminal is the human's conversation with the agent; Ward's job is to hand
- * it over intact and take it back when the run exits. Nothing here interprets
- * the exit code — an agent exiting is not a session ending (open ≠ running,
- * intent/01-concepts/02-sessions-and-lifecycle.md), and deciding what an exit
- * MEANS is Ward's business, not the adapter's.
- */
-export async function runClaude(request: RunRequest, env: Env = process.env): Promise<RunResult> {
-  // The command's own words come first, Ward's flags after them, the human's
-  // args last: `npx claude --session-id … --dangerously-skip-permissions`.
-  const command = [...claudeCommand(request.command, env).command, ...request.argv];
-  try {
-    const child = Bun.spawn(command, {
-      cwd: request.cwd,
-      env: { ...env, ...request.env },
-      stdio: ['inherit', 'inherit', 'inherit'],
-    });
-    return { outcome: 'exited', exitCode: await child.exited };
-  } catch (error) {
-    // A binary that is not there is the ordinary failure — reported with its
-    // cause so the caller can record it (the seam's resume-failed event) and
-    // name the fix, never a stack trace at the human.
-    const reason = error instanceof Error ? error.message : String(error);
-    return { outcome: 'failed', cause: `${command[0]}: ${reason}` };
-  }
-}
-
 /**
  * Where Claude Code keeps a run's transcript:
  * `<config>/projects/<munged-cwd>/<session-id>.jsonl`, where the munged cwd is
  * the ABSOLUTE working directory with every non-alphanumeric character
  * replaced by `-`. The working directory is part of the address, which is why
- * Ward records the directory a session ran in and resolves from that — not
- * from wherever the caller happens to stand when they ask.
+ * Ward records the directory a session ran in and resolves from that.
  *
  * `CLAUDE_CONFIG_DIR` is honored: a human who moved their Claude home moved
  * their transcripts with it, and reading the default anyway would report every
@@ -205,12 +131,6 @@ export function transcriptPath(nativeId: string, cwd: string, env: Env = process
 /** The cwd as Claude Code spells it in a transcript directory name. */
 export function mungeCwd(cwd: string): string {
   return resolve(cwd).replace(/[^a-zA-Z0-9]/g, '-');
-}
-
-export interface LocateResult {
-  /** The path the transcript would have — reported whether or not it is there. */
-  readonly path: string;
-  readonly outcome: 'found' | 'gone';
 }
 
 /**
@@ -230,7 +150,17 @@ export function locateClaudeRun(
   return { path, outcome: existsSync(path) ? 'found' : 'gone' };
 }
 
-/** A flag and its value, or nothing at all — the "omitted means omitted" rule. */
-function flag(name: string, value: string | undefined): string[] {
-  return value === undefined ? [] : [name, value];
-}
+/** Claude Code as a harness adapter — the seam's surface, over the functions above. */
+export const claudeAdapter: HarnessAdapter = {
+  name: CLAUDE_HARNESS,
+  defaultCommand: DEFAULT_CLAUDE_COMMAND,
+  binEnvVar: CLAUDE_BIN_ENV,
+  retentionNote:
+    'the harness owns retention (claude discards transcripts after cleanupPeriodDays, 30 by ' +
+    "default) — the session's own record is what survives",
+  handle: claudeHandle,
+  nativeId: claudeNativeId,
+  startArgv,
+  resumeArgv,
+  locate: locateClaudeRun,
+};

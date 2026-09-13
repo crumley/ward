@@ -29,7 +29,8 @@ import {
   resolutionOrder,
 } from '../global/registry.ts';
 import type { GlobalRead } from '../global/store.ts';
-import { claudeCommand, locateProgram } from '../harness/claude.ts';
+import { harnessCommand, locateProgram } from '../harness/adapter.ts';
+import { adapterNamed } from '../harness/index.ts';
 import {
   adoptionDir,
   fishConfigured,
@@ -762,14 +763,20 @@ function renderArgs(args: readonly string[]): string {
  */
 function agentCommandFinding(root: string, agent: ResolvedAgentConfig): Finding {
   const check = 'agent command';
+  // The command speaks for the RESOLVED harness's adapter: its default program
+  // and its own override env var, so the day pi is the workspace's harness the
+  // finding names `pi` and `WARD_PI_BIN`, not claude's.
+  const adapter = adapterNamed(
+    agent.harness.provenance === 'absent' ? 'claude' : agent.harness.value,
+  );
   const configured = agent.command.provenance === 'absent' ? undefined : agent.command.value;
-  const { command, source } = claudeCommand(configured);
+  const { command, source } = harnessCommand(adapter, configured);
   const program = command[0] ?? '';
   const origin =
     source === 'override'
-      ? 'WARD_CLAUDE_BIN'
+      ? adapter.binEnvVar
       : source === 'default' || agent.command.provenance === 'absent'
-        ? "the claude adapter's default"
+        ? `the ${adapter.name} adapter's default`
         : sourceWord(agent.command.provenance);
   const found = locateProgram(program, root);
   if (found !== null) {
@@ -778,8 +785,8 @@ function agentCommandFinding(root: string, agent: ResolvedAgentConfig): Finding 
   const remedy =
     source === 'configured'
       ? `fix the program, or the agent.command that names it`
-      : `set agent.command in ${globalConfigPath()} — for example [npx, claude] where ` +
-        'claude is reached through a launcher — or override it per workspace in ' +
+      : `set agent.command in ${globalConfigPath()} — for example [npx, ${adapter.name}] where ` +
+        `${adapter.name} is reached through a launcher — or override it per workspace in ` +
         workspaceRecordType.relPath;
   return {
     check,

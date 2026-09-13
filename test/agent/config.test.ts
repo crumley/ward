@@ -247,6 +247,11 @@ const configRows: ReadonlyArray<{ name: string; frontMatter: string; agent: Agen
   },
   { name: 'no agent block at all reads as nothing configured', frontMatter: '', agent: {} },
   {
+    name: 'the second harness Ward now has an adapter for is accepted',
+    frontMatter: 'agent:\n  harness: pi\n',
+    agent: { harness: 'pi' },
+  },
+  {
     name: 'a harness Ward has no adapter for is invalid, and the file degrades to defaults',
     frontMatter: 'agent:\n  harness: some-other-harness\n',
     agent: {},
