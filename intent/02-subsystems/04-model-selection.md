@@ -31,11 +31,19 @@ bookkeeping, deep where the job is hard — and keep that choice **model-agnosti
   hands-on depth (a room, an attending). _Why:_ the persona already encodes how a scope attends to
   its work ([`../01-concepts/01-scopes-and-personas.md`](../01-concepts/01-scopes-and-personas.md)),
   so the right tier falls out of it and a new session usually needs no explicit choice.
-- **Model identifiers are configuration** that tracks the best available models over time, held in
-  the workspace — or, as a mere preference, on the human's own machine below it — and **never
-  written into the concepts**. What is durable is the **override hierarchy** and the **fast-vs-deep
-  intent**; _which_ model is fast or deep this month is a value, not a design commitment. _Why:_
-  models change faster than anything else; a concept that named one would be stale within months.
+- **Model identifiers — and thinking-depth values — are configuration** that tracks the best
+  available models over time, held in the workspace — or, as a mere preference, on the human's own
+  machine below it — and **never written into the concepts**. What is durable is the **override
+  hierarchy** and the **fast-vs-deep intent**; _which_ model is fast or deep this month is a value,
+  not a design commitment. _Why:_ models change faster than anything else; a concept that named one
+  would be stale within months. A passed-through value is **bound to the harness it was written
+  for**: each harness spells its model ids and its thinking levels in a vocabulary of its own, so
+  changing the harness ([`03-agent-harness.md`](03-agent-harness.md)) may make a previously valid
+  value invalid — surfaced by the harness at launch, exactly where an unknown model id surfaces —
+  and Ward **neither translates nor gates** it. _Why:_ the vocabulary belongs to the harness; a
+  table in Ward of what each harness accepts would be stale the day a harness added a level, and
+  gating on it would turn the harness's own error into Ward's opinion of it. What the human
+  re-checks on switching harness is the values; the ladder that resolves them is untouched.
 - **Tuning reads recorded evidence.** The persona → tier defaults are a starting point; revising
   them is a reflection outcome
   ([`../01-concepts/04-reflection-and-evolution.md`](../01-concepts/04-reflection-and-evolution.md))
@@ -58,15 +66,17 @@ bookkeeping, deep where the job is hard — and keep that choice **model-agnosti
 ## Canonical home for
 
 - The **model-selection contract**: an override ladder from the user's machine down to the
-  room/session, whose defaults follow the persona's job, with concrete model ids living in
-  configuration and the resolved choice recorded on the session — and the **evidence loop**: tuning
-  the defaults is grounded in recorded usage, not taste.
+  room/session, whose defaults follow the persona's job, with concrete model ids and thinking-depth
+  values living in configuration — **bound to the harness they were written for**, neither
+  translated nor gated by Ward — and the resolved choice recorded on the session — and the
+  **evidence loop**: tuning the defaults is grounded in recorded usage, not taste.
 
 ## Left to implementation
 
 - The exact configuration shape for defaults and overrides; the initial persona → tier mapping and
-  the concrete ids behind "fast" and "deep"; how thinking depth is expressed; how an override at one
-  scope is recorded and resolved against broader defaults. Planned in [`design/`](../../design/).
+  the concrete ids behind "fast" and "deep"; how thinking depth is expressed by each harness; how an
+  override at one scope is recorded and resolved against broader defaults. Planned in
+  [`design/`](../../design/).
 
 ## Open questions
 
