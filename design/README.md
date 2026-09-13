@@ -170,12 +170,6 @@ the SF's disposition is appended in its entry, remove the line here.
   as the update path, and a creation that also converges an existing workspace can no longer be one.
 - **SF-002** — [0042](0042-upgrade-owns-convergence/spec-feedback.md): the update owns the record's
   shape as well as the installed artifacts, and the three-operations map does not say so.
-- **SF-001** — [0044](0044-pi-harness/spec-feedback.md): a passed-through thinking-depth (or model)
-  value is bound to the harness it was written for — switching harness may invalidate it, and intent
-  does not name that binding.
-- **SF-002** — [0044](0044-pi-harness/spec-feedback.md): the harness is named "selectable per scope"
-  but resolves only at the workspace axis, like model and effort — the per-scope ladder below the
-  workspace is unbuilt.
 
 Entries 0001–0029 predate this queue and their SFs carry dispositions unevenly — some settled in
 their own text, some settled by later intent edits without a disposition line, some genuinely open.
