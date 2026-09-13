@@ -33,6 +33,10 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   harness at launch, and Ward neither translates nor gates it." No behaviour change is implied —
   only that the intent name the binding it already relies on.
 - **Status:** pending.
+- **Status:** adjudicated — [#91](https://github.com/crumley/ward/pull/91) (owner's ruling: a
+  passed-through model or thinking-depth value is bound to the harness it was written for; switching
+  harness may invalidate it, the harness's launch error surfaces it, and Ward neither translates nor
+  gates it).
 
 ## SF-002 — harness selection is named "per scope" but resolves only at the workspace axis
 
@@ -57,3 +61,7 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   below the workspace is not yet built would keep the promise honest. Raised for the record; likely
   resolved by a future entry that widens resolution rather than by an intent edit here.
 - **Status:** pending.
+- **Status:** adjudicated — [#91](https://github.com/crumley/ward/pull/91) (owner's ruling: the
+  harness slice stands as an aspiration; the human-shell slice now says the two axes are the rungs
+  built today and the ladder's narrower rungs are not yet — widening resolution is a future entry's
+  work).
