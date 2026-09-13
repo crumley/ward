@@ -49,6 +49,9 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   never silently relocates what is already placed.
 
 - **Status:** pending.
+- **Status:** adjudicated — [#81](https://github.com/crumley/ward/pull/81) (owner's ruling: a
+  project may claim repositories as a routing default, never a rule — explicit placement always
+  wins, and a moved claim leaves open tasks where they are).
 
 ## SF-002 — "floors low for recurring work, high for transient" has nowhere to live
 
@@ -82,3 +85,6 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   whether a floor number means something.
 
 - **Status:** pending.
+- **Status:** adjudicated — [#81](https://github.com/crumley/ward/pull/81) (owner's ruling: option
+  (a) — the ordering of floors carries no semantics Ward assigns; a workspace may adopt conventions
+  and Ward neither enforces nor infers them).
