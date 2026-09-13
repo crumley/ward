@@ -121,55 +121,12 @@ The SFs still `pending` across entries — the queue lives here, in the repo, no
 one session's memory. When an entry raises an SF, add a line (id, entry, one-line friction); when
 the SF's disposition is appended in its entry, remove the line here.
 
-- **SF-001** — [0030](0030-upgrade-self-service/README.md): is fast-forward-publishing the
-  workspace's own main line the gated push §18 means?
-- **SF-002** — [0030](0030-upgrade-self-service/README.md): the forge pull request as review surface
-  only — landing stays the local gated merge.
 - **SF-001** — [0033](0033-repo-remove/README.md): repository removal built as a local, autonomous
   act behind the fail-safe — the removal limb of the slice's open question, awaiting the intent
   edit.
 - **SF-001** — [0034](0034-workspace-session-shorthand/spec-feedback.md): the session log's purpose
   minimum assumes a goal — what an interactive workspace session, opened to receive work, records as
   its purpose.
-- **SF-001** — [0035](0035-agent-command/spec-feedback.md): the harness seam distinguishes
-  harnesses, not invocations — is how a harness is started on a machine configuration distinct from
-  which harness is selected?
-- **SF-002** — [0035](0035-agent-command/spec-feedback.md): a workspace-level `agent.command` is a
-  machine-shaped fact inside a record that travels — may the self-sufficient record carry a key
-  valid only on some machines?
-- **SF-001** — [0036](0036-floor-addressed-tasks/spec-feedback.md): the task identity rule reads as
-  "bare code only" and leaves reuse-on-close unbounded — should a task's address compose floor +
-  room, with the bare room as a shorthand?
-- **SF-002** — [0036](0036-floor-addressed-tasks/spec-feedback.md): the attention surface has no
-  rule for forgetting settled work, and none for which spelling Ward should speak when a noun has
-  both a full address and a shorthand.
-- **SF-001** — [0037](0037-repo-floor-affinity/spec-feedback.md): a project has no recorded
-  relationship to repositories, and the domain model does not say a container may hold one as a
-  routing default — nor what happens to placed work when such a judgment changes.
-- **SF-002** — [0037](0037-repo-floor-affinity/spec-feedback.md): the "low floors recur, high floors
-  are transient" convention has nowhere to live — it reads like intent but is unbuildable under the
-  monotonic-floors rule.
-- **SF-001** — [0038](0038-machine-bound-sessions/spec-feedback.md): uniqueness among open sessions
-  is too weak — a reused id overwrites a closed session's record, and two machines sharing a
-  workspace mint the same one.
-- **SF-002** — [0038](0038-machine-bound-sessions/spec-feedback.md): the session-log minimum does
-  not name the machine, and _running_ is per machine.
-- **SF-003** — [0038](0038-machine-bound-sessions/spec-feedback.md): may the shell ask a present
-  human whether a thread is done, and is a defaulted answer still theirs?
-- **SF-004** — [0038](0038-machine-bound-sessions/spec-feedback.md): locate is answered per machine
-  — `gone` here is not the same fact as gone everywhere.
-- **SF-005** — [0038](0038-machine-bound-sessions/spec-feedback.md): the interactive rules cover a
-  mode the human enters, not a moment they are demonstrably already in.
-- **SF-001** — [0041](0041-ground-floor/spec-feedback.md): the cheapest one-off is illustrated as a
-  bare task under the workspace, which is the one shape the build no longer produces.
-- **SF-002** — [0041](0041-ground-floor/spec-feedback.md): floor numbers are allocated monotonically
-  from 1, with no room for a reserved number the standing project could always occupy.
-- **SF-003** — [0041](0041-ground-floor/spec-feedback.md): the standing project's identity is
-  "allocated like any project's", which cannot be named by anything written outside one workspace.
-- **SF-001** — [0042](0042-upgrade-owns-convergence/spec-feedback.md): re-running creation is stated
-  as the update path, and a creation that also converges an existing workspace can no longer be one.
-- **SF-002** — [0042](0042-upgrade-owns-convergence/spec-feedback.md): the update owns the record's
-  shape as well as the installed artifacts, and the three-operations map does not say so.
 
 Entries 0001–0029 predate this queue and their SFs carry dispositions unevenly — some settled in
 their own text, some settled by later intent edits without a disposition line, some genuinely open.

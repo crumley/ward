@@ -38,6 +38,9 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   restatement with it. Task codes are deliberately **not** touched: a task record's path carries its
   slug and floor, and closing a task does not free its code for a new document.
 - **Status:** pending.
+- **Status:** adjudicated — [#79](https://github.com/crumley/ward/pull/79) (owner's ruling: a
+  session id is unique over the workspace's history across the machines that share it — slug, a
+  discriminator never reused, and the machine it ran on; task codes untouched).
 
 ## SF-002 — the session-log minimum does not name the machine, and _running_ is per machine
 
@@ -62,6 +65,9 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   thread can be resumed. In _Open vs. running_, state that running is per machine and that the
   record names the machine that can turn open into running.
 - **Status:** pending.
+- **Status:** adjudicated — [#79](https://github.com/crumley/ward/pull/79) (owner's ruling: the
+  session-log minimum names the machine, and running is per machine — the record says which machine
+  can turn open into running).
 
 ## SF-003 — may the shell ask a present human whether a thread is done?
 
@@ -88,6 +94,9 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   question is too close to Ward deciding, the honest alternative is to require an explicit `y` with
   no default — which the build can adopt in one line.
 - **Status:** pending.
+- **Status:** adjudicated — [#79](https://github.com/crumley/ward/pull/79) (owner's ruling: when a
+  run exits with its human present the shell may ask whether the thread is done; the answer, default
+  included, is the human's close and never Ward's).
 
 ## SF-004 — locate is answered per machine, and the slice does not say so
 
@@ -109,6 +118,9 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   handle found nowhere on this machine is gone here, even when another machine holds it — and note
   that the session record's machine is what makes the two causes distinguishable to the caller.
 - **Status:** pending.
+- **Status:** adjudicated — [#79](https://github.com/crumley/ward/pull/79) (owner's ruling: locate
+  is answered per machine — a handle found nowhere here is gone here even when another machine holds
+  it, and the recorded machine tells the two apart).
 
 ## SF-005 — the interactive rules cover a mode the human enters, not a moment they are already in
 
@@ -135,3 +147,6 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   non-TTY caller — stated so the rule reads as "deliberate entry _or_ demonstrable presence", with
   the determinism and agent-unreachability constraints unchanged.
 - **Status:** pending.
+- **Status:** adjudicated — [#79](https://github.com/crumley/ward/pull/79) (owner's ruling: the
+  interactive rules govern every interactive moment the layer takes, with deliberate entry satisfied
+  by demonstrable presence as well as by a typed argument).

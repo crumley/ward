@@ -368,7 +368,10 @@ in flight; and pruning an abandoned stewardship branch, whose absence this entry
   the main line stays the human's. _Proposed revision:_ say in §18, or in the workspace-lifecycle
   section that already carves out the journal, whether publishing the workspace's own main line to
   its remote is gated — and if it is, name what a forge-reviewed stewardship branch is supposed to
-  diff against instead.
+  diff against instead. _Disposition:_ **adjudicated** —
+  [#66](https://github.com/crumley/ward/pull/66) (owner's ruling: publishing the workspace's own
+  main line is backup, not the gated push — §18 now names a repository's main line, and the merge
+  onto any main line stays gated).
 - **SF-002** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md), _The
   review boundary is the branch, not a forge_. _Friction:_ the slice offers the pull request as a
   second **review** technique but says nothing about **landing**, and a pull request is not an inert
@@ -384,7 +387,10 @@ in flight; and pruning an abandoned stewardship branch, whose absence this entry
   one. _Proposed revision:_ state in the slice that where the forge technique is used, the forge is
   a review surface only and the landing act remains the local gated merge — or, if forge-landing
   should be supported, say what reconciles the root afterwards (a pull, and what happens when the
-  local main line was ahead).
+  local main line was ahead). _Disposition:_ **adjudicated** —
+  [#66](https://github.com/crumley/ward/pull/66) (owner's ruling: where the forge technique is used,
+  the forge reviews and never lands — the landing act remains the local gated merge, and the pull
+  request Ward opens says so on itself).
 
 One near-candidate adjudicated rather than filed: 0020's decision that the upgrade "requires the
 stewardship worktree to exist … rather than conjuring task, worktree, and branch itself" reads like
