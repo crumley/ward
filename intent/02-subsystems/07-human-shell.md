@@ -197,7 +197,11 @@ principle (§8) and feeds the compounding loop
   disagrees with it, and whole-block override would make setting one key silently discard every
   other. (Composition into an agent's context is the same tension without the same answer —
   [`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md), _Deletion,
-  not just shadowing_.)
+  not just shadowing_.) These two axes are the rungs configuration resolves on **today**: the
+  narrower rungs of the model-selection ladder ([`04-model-selection.md`](04-model-selection.md)) —
+  project, task, room/session — are **not yet built**, so a harness, model, or thinking-depth choice
+  presently holds for a whole workspace and cannot yet be made for one task. The ladder's promise
+  stands; this line keeps it honest until resolution is widened.
 - **A guided setup, runnable at any time.** Ward offers a **guided, interactive setup** that walks
   the human through inspecting and changing that configuration — the **global** axis always, the
   **workspace-local** axis additionally when invoked inside a workspace — and the workspace choices
