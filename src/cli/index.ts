@@ -26,7 +26,7 @@ import {
   unregisterWorkspace,
   viewRegistry,
 } from '../global/registry.ts';
-import { adapterForHandle } from '../harness/index.ts';
+import { adapterForHandle, ambientHandle } from '../harness/index.ts';
 import {
   type AdoptionReport,
   adoptionDir,
@@ -75,6 +75,7 @@ import { scopeFromCwd } from '../workspace/scope.ts';
 import {
   closeSession,
   describeScope,
+  findSession,
   openSession,
   openWorkspaceSession,
 } from '../workspace/sessions.ts';
@@ -709,6 +710,15 @@ const session = command(
       { brief: message`Re-attach to a session's agent run, in the directory it ran in.` },
     ),
     command(
+      'show',
+      object({
+        action: constant('session-show'),
+        id: argument(sessionId('any')),
+        json: jsonFlag(),
+      }),
+      { brief: message`One session's record, open or closed — its scope, state, and trail.` },
+    ),
+    command(
       'locate',
       object({
         action: constant('session-locate'),
@@ -727,7 +737,7 @@ const session = command(
       { brief: message`Close a session record; closed stays closed.` },
     ),
   ),
-  { brief: message`Open, resume, locate, and close agent sessions.` },
+  { brief: message`Open, resume, show, locate, and close agent sessions.` },
 );
 const status = command(
   'status',
@@ -1063,6 +1073,9 @@ try {
         break;
       case 'session-resume':
         await cmdSessionResume(result.id, result.onExit, result.json);
+        break;
+      case 'session-show':
+        await cmdSessionShow(result.id, result.json);
         break;
       case 'session-locate':
         await cmdSessionLocate(result.id, result.json);
@@ -2183,7 +2196,9 @@ async function cmdWorktreeList(json: boolean): Promise<void> {
  * `session open` (design/0029-launched-sessions/), three paths through one
  * verb:
  *
- * - **TASK given** — the record-only session 0004 built, unchanged.
+ * - **TASK given** — the record-only session 0004 built. With no `--handle`,
+ *   the handle is read from the harness run the caller stands in, when there
+ *   is one (design/0045-agent-record-reads/).
  * - **no TASK, `--handle` given** — a record-only session at workspace scope,
  *   for a run Ward did not start (the agent reading the manifest is the
  *   motivating case: it is already running and records itself).
@@ -2206,9 +2221,14 @@ async function cmdSessionOpen(
 ): Promise<void> {
   const root = await requireMutableWorkspace();
   if (task !== undefined) {
+    // An agent recording its own task session is standing in its harness's
+    // run: the handle is read from there rather than composed by the agent,
+    // which guesses when it does not know its run id — and a guessed handle
+    // locates nothing. `--handle` still wins; outside any run there is none.
+    const recorded = handle ?? ambientHandle() ?? undefined;
     renderSessionOpened(
       await openSession(root, task, purpose, {
-        ...(handle === undefined ? {} : { handle }),
+        ...(recorded === undefined ? {} : { handle: recorded }),
         ...(dir === undefined ? {} : { workingDirectory: dir }),
       }),
       json,
@@ -2281,6 +2301,38 @@ async function cmdSessionResume(id: string, onExit: OnExit, json: boolean): Prom
   }
   await afterRun(root, record.id, onExit, json);
   if (run.exitCode !== 0) process.exit(run.exitCode);
+}
+
+/**
+ * `session show` (design/0045-agent-record-reads/) — one session's record,
+ * open or closed, at any scope: the read that answers "did that session
+ * close, and when?" without opening the record file. Its document is the
+ * record exactly as the session mutations emit it, so what a caller learns
+ * from `session close --json` and from a later `session show --json` is one
+ * shape.
+ */
+async function cmdSessionShow(id: string, json: boolean): Promise<void> {
+  const { record } = await findSession(await requireWorkspace(), id);
+  if (json) {
+    printJson(sessionMutationJson(record));
+    return;
+  }
+  const state = record.state === 'open' ? pc.green('open') : pc.dim('closed');
+  console.log(`${pc.bold(record.id)} ${state} — ${record.purpose}`);
+  const row = (label: string, value: string) => console.log(`  ${label.padEnd(9)}${value}`);
+  row('scope', describeScope(record));
+  if (record.machine !== undefined) row('machine', record.machine);
+  row('dir', record.workingDirectory);
+  row('handle', record.handle ?? pc.dim('none recorded'));
+  row('opened', record.openedAt);
+  if (record.closedAt !== undefined) row('closed', record.closedAt);
+  if (record.events !== undefined && record.events.length > 0) {
+    console.log(`\n${pc.bold('events')}`);
+    for (const event of record.events) {
+      const cause = event.cause === undefined ? '' : pc.dim(` — ${event.cause}`);
+      console.log(`  ${event.at} ${event.event}${cause}`);
+    }
+  }
 }
 
 /**

@@ -36,7 +36,9 @@ operated with the \`ward\` CLI and tracked in git.
 ## Operating here
 
 - Run \`ward doctor\` to check machine preconditions and the record's integrity.
-- Records are markdown with typed front matter — read them directly; that is what they are for.
+- Records are markdown with typed front matter, so a human can read them and git can version
+  them. **\`ward\` is how they are read and changed**: some of what a record means is derived
+  rather than stored, and a write that skips \`ward\` skips its lock and its journal commit.
 - **A task is addressed \`f<floor>t<room>\`** — \`f3t1\` is room 1 on floor 3, \`f0t1\` room 1 on
   the ground floor. Every task lives on a floor; only legacy bare tasks, opened before the ground
   floor existed, carry a bare \`t<room>\`. Spelling is case-insensitive. A bare \`t1\` is also a
@@ -98,11 +100,15 @@ open is what starts the agent** — there is no id to copy by hand:
   block in \`workspace.md\`. A key set nowhere is passed as nothing at all — the harness's own
   default then applies. \`ward doctor\` prints the resolved answer with the layer each key came
   from, and checks that the command can be found.
-- **Sessions Ward did not launch record themselves.** \`ward session open --purpose TEXT --handle
-  HANDLE\` (and \`ward session open TASK --purpose TEXT\` for a task) records without launching —
-  the path for an agent that is already running, like the one reading this file. Put your
-  harness's own run id in \`--handle\`, prefixed by the harness (\`claude:<session-id>\` for Claude
-  Code, \`pi:<session-id>\` for pi), so the run can be located again.
+- **Sessions Ward did not launch record themselves.** \`ward session open TASK --purpose TEXT\`
+  (and \`ward session open --purpose TEXT --handle HANDLE\` at workspace scope) records without
+  launching — the path for an agent that is already running, like the one reading this file. For
+  a task session run inside Claude Code, Ward reads the run's handle from the environment; else
+  pass your harness's own run id in \`--handle\`, prefixed by the harness
+  (\`claude:<session-id>\`, \`pi:<session-id>\`), so the run can be located again. Never record
+  a handle you had to guess: one that names no run locates nothing.
+- \`ward session show ID\` reads one session's record, open or closed — its scope, state, and
+  trail of events (\`--json\` for the document).
 
 ## Driving \`ward\` as an agent
 
@@ -118,9 +124,13 @@ You may be reading this from the workspace root or from inside a task worktree u
   (\`.ward/store.lock\`) that names its holder; a write that cannot get it in time refuses
   legibly — rerun it. A lock left by a crashed process is taken over automatically, and
   \`ward doctor\` names a held or stale lock. Read verbs never wait on it.
-- **Read state as JSON.** \`ward status --json\` says where everything stands; every read verb
-  (\`status\`, \`project list\`, \`task list\`, \`task show ADDRESS\`, \`worktree list\`,
-  \`repo list\`, \`doctor\`) accepts \`--json\`.
+- **Read state through \`ward\`, never the record files.** Do not open, grep, list, or edit
+  anything under \`projects/\`, \`tasks/\`, \`sessions/\`, or \`repositories/\`, nor
+  \`workspace.md\` or \`catalog.md\`. \`ward status --json\` says where everything stands; every
+  read verb (\`status\`, \`project list\`, \`task list\`, \`task show ADDRESS\`,
+  \`session show ID\`, \`worktree list\`, \`repo list\`, \`doctor\`) accepts \`--json\`. When
+  \`ward\` cannot answer a question, say so — that is a gap in \`ward\` worth naming — rather
+  than reading the file for it.
 - **Ask one task where it stands.** \`ward task show ADDRESS\` puts a task on one screen: its
   pull requests with live review and check state, its worktrees and their freshness, its open
   sessions — and one **next** line, the single most useful thing to do now, derived from all of
@@ -135,7 +145,7 @@ You may be reading this from the workspace root or from inside a task worktree u
   binary, so they are always current for the \`ward\` you are running — no repo reading needed.
 - **Record your session.** If Ward launched you, it is already recorded and \`WARD_AGENT\` holds
   its id — nothing to do. If it did not, record yourself before you start work:
-  \`ward session open TASK --purpose TEXT --handle HANDLE\` (see **Sessions**, above).
+  \`ward session open TASK --purpose TEXT\` (see **Sessions**, above, for the handle).
 - **Name the task explicitly.** Deriving the task from the working directory is a human
   affordance; a declared agent is refused it and passes the **full address** (\`f3t22\`) on every
   task-addressed verb, read from \`address\` in \`--json\` (\`ward task list --json\` says what
@@ -150,8 +160,9 @@ You may be reading this from the workspace root or from inside a task worktree u
   a rewritten branch yourself with \`git push --force-with-lease\`.
 - **Link your pull request.** \`ward task pr ADDRESS URL\` records it on the task; review state is
   read live from the forge, never stored.
-- **Closing is gated.** \`ward task close\` requires the PR set resolved and tears down
-  worktrees — leave it to the human unless that authority was explicitly delegated to you.
+- **Closing is gated.** \`ward task close\` requires the PR set resolved, tears down
+  worktrees, and closes the task's open sessions (its \`sessions\` step names them) — leave it
+  to the human unless that authority was explicitly delegated to you.
 - **Never merge or push to a repository's main line.** Work reaches a main line only through a
   pull request, and resolving one is the human's act.
 

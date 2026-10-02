@@ -242,13 +242,27 @@ export async function findSession(root: string, id: string): Promise<OpenSession
   return match;
 }
 
-/** Resolve a bare id to its open session, at whatever scope holds it. */
+/**
+ * Resolve a bare id to its open session, at whatever scope holds it. A refusal
+ * says WHICH miss it is (design/0045-agent-record-reads/): an id that names a
+ * session already closed — most often swept up by its task's close — is told
+ * so, with when, rather than reading the same as an id that names nothing.
+ * The two misses call for different next moves, and a caller left unable to
+ * tell them apart goes looking in the record files for the answer.
+ */
 export async function requireOpenSession(root: string, id: string): Promise<OpenSessionListing> {
-  const open = (await readOpenSessions(root)).find((session) => session.record.id === id);
-  if (open === undefined) {
-    throw new WardError(`no open session has id '${id}' — closed stays closed, and ids are bare`);
+  const matches = (await readAllSessions(root)).filter((session) => session.record.id === id);
+  const open = matches.find((session) => session.record.state === 'open');
+  if (open !== undefined) return open;
+  const closed = matches.at(-1)?.record;
+  if (closed !== undefined) {
+    const when = closed.closedAt === undefined ? '' : ` at ${closed.closedAt}`;
+    throw new WardError(
+      `session '${id}' is already closed${when} — closed stays closed; ` +
+        `its record: ward session show ${id}`,
+    );
   }
-  return open;
+  throw new WardError(`no session has id '${id}' — ids are bare; see: ward status`);
 }
 
 /** How a session record reads in prose, for a human scanning `sessions/`. */

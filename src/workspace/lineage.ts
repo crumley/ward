@@ -207,8 +207,16 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: 'c0edae70b25b0926f036491dad35154e5a8cea29766ed290f489795f6b3362b3',
         era: 'design 0043 (task show)',
       },
-      // Current since design 0044: `agent.harness` is `claude` or `pi`, and the
-      // `--handle` example shows both prefixes (pi is the second harness).
+      // design 0044 — `agent.harness` is `claude` or `pi`, and the `--handle`
+      // example shows both prefixes; the manifest still told an agent to read
+      // the record files directly, and asked it to spell its own handle.
+      {
+        sha256: 'e0dea34e469d74915a9e574d69f83b309ef67aaf6142508511e2595511628d94',
+        era: 'design 0044 (pi harness)',
+      },
+      // Current since design 0045: records are read and changed through
+      // `ward`, never the files; `session show ID` joins the read verbs; a task
+      // session's handle is read from the harness run.
     ],
   },
 ];
