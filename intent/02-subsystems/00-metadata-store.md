@@ -45,9 +45,14 @@ that survives reboots ([`../00-foundation/01-principles.md`](../00-foundation/01
   and brief — identity allocation, not database workloads. _Why:_ the structural discipline above
   removes most contention first; what remains does not justify heavyweight machinery.
 - **Transparent and legible to both audiences** — the working realization is a **filesystem of
-  markdown files with typed front matter**, directory nesting expressing scope containment, so a
-  human or agent can read the state directly and git can version it (§15). _Why:_ a transparent
-  store doubles as documentation of the hierarchy and needs no opaque query layer.
+  markdown files with typed front matter**, directory nesting expressing scope containment, so the
+  state is never hidden: a human can read it directly and git can version it (§15). An agent
+  _acting_ on the state reads it through Ward's deterministic read verbs, not the files. _Why:_ a
+  transparent store doubles as documentation of the hierarchy and needs no opaque query layer — but
+  part of what a record means is derived rather than stored (aggregate status, above), and the
+  layout is not part of this contract (below), so a reader that learns the layout answers some
+  questions wrongly and breaks when the store is swapped. A question the read verbs cannot answer is
+  a missing verb, not a reason to read the file.
 - **Documents have explicit types, and types have runtime-validated schemas;** provenance is stored
   as first-class front matter, not reconstructed from logs. _Why:_ types make the store
   self-describing and validatable, and schemas are what migration reasons about
