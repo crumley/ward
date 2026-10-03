@@ -159,7 +159,9 @@ You may be reading this from the workspace root or from inside a task worktree u
   with the tree left as found — resolving it is your work, then rerun. It never pushes: publish
   a rewritten branch yourself with \`git push --force-with-lease\`.
 - **Link your pull request.** \`ward task pr ADDRESS URL\` records it on the task; review state is
-  read live from the forge, never stored.
+  read live from the forge, never stored. A PR withdrawn from the work — closed on purpose,
+  superseded — comes out of the set with \`ward task pr --unlink ADDRESS URL\`, so a task that
+  delivered through its other PRs can still close as delivered.
 - **Closing is gated.** \`ward task close\` requires the PR set resolved, tears down
   worktrees, and closes the task's open sessions (its \`sessions\` step names them) — leave it
   to the human unless that authority was explicitly delegated to you.

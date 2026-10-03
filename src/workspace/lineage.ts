@@ -214,9 +214,16 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: 'e0dea34e469d74915a9e574d69f83b309ef67aaf6142508511e2595511628d94',
         era: 'design 0044 (pi harness)',
       },
-      // Current since design 0045: records change only through `ward`, never
-      // by editing the files; `session show ID` joins the read verbs; a task
-      // session's handle is read from the harness run.
+      // design 0045 — records change only through `ward`, never by editing
+      // the files; `session show ID` joins the read verbs; a task session's
+      // handle is read from the harness run. A withdrawn PR could not yet
+      // leave a task's PR set.
+      {
+        sha256: '570f38d66fefd7c380a4538a3690ff061afd801d0529823fba33a5f566c9b6a9',
+        era: 'design 0045 (agent record reads)',
+      },
+      // Current since design 0046: `task pr --unlink` takes a withdrawn PR out
+      // of the set, named under "Link your pull request".
     ],
   },
 ];
