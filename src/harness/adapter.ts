@@ -88,6 +88,13 @@ export interface HarnessAdapter {
    * transcripts, pi keeps them until a human deletes one).
    */
   readonly retentionNote: string;
+  /**
+   * The variable this harness sets in the environment of everything its run
+   * starts, naming that run's native id — absent for a harness that sets none.
+   * It is how a session Ward did not launch can be recorded with its handle
+   * without the agent spelling one out (design/0045-agent-record-reads/).
+   */
+  readonly ambientEnvVar?: string;
   /** The handle recorded for a run: the name, then its native id. */
   handle(nativeId: string): string;
   /** The native id inside one of THIS adapter's handles — null for any other. */

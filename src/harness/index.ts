@@ -7,7 +7,7 @@
 // configuration now says: this is what lets a workspace mix harnesses without
 // a handle ever reaching an adapter that cannot read it.
 import { WardError } from '../errors.ts';
-import type { HarnessAdapter } from './adapter.ts';
+import type { Env, HarnessAdapter } from './adapter.ts';
 import { claudeAdapter } from './claude.ts';
 import { piAdapter } from './pi.ts';
 
@@ -40,4 +40,20 @@ export function adapterNamed(name: string): HarnessAdapter {
 export function adapterForHandle(handle: string | undefined): HarnessAdapter | null {
   if (handle === undefined) return null;
   return HARNESS_ADAPTERS.find((adapter) => adapter.nativeId(handle) !== null) ?? null;
+}
+
+/**
+ * The handle of the harness run the caller is standing in, read from the
+ * variable that harness sets for everything it starts — null outside any run
+ * Ward has an adapter for (design/0045-agent-record-reads/). This is what lets
+ * an agent record its own session without composing a handle: an agent asked
+ * to spell its run id guesses one when it does not know it, and a guessed
+ * handle locates nothing, ever. An empty value counts as unset.
+ */
+export function ambientHandle(env: Env = process.env): string | null {
+  for (const adapter of HARNESS_ADAPTERS) {
+    const value = adapter.ambientEnvVar === undefined ? undefined : env[adapter.ambientEnvVar];
+    if (value !== undefined && value !== '') return adapter.handle(value);
+  }
+  return null;
 }

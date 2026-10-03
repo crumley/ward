@@ -33,6 +33,12 @@ export const CLAUDE_HARNESS = 'claude';
 /** What runs when nobody said otherwise: the CLI under its own name, on PATH. */
 export const DEFAULT_CLAUDE_COMMAND: readonly string[] = ['claude'];
 
+/**
+ * What Claude Code sets in every process its run starts: that run's session id
+ * — the same id `--session-id` assigns and the transcript is named for.
+ */
+export const CLAUDE_AMBIENT_ENV = 'CLAUDE_CODE_SESSION_ID';
+
 /** The env override that names the program for one invocation (the test seam). */
 export const CLAUDE_BIN_ENV = 'WARD_CLAUDE_BIN';
 
@@ -158,6 +164,7 @@ export const claudeAdapter: HarnessAdapter = {
   retentionNote:
     'the harness owns retention (claude discards transcripts after cleanupPeriodDays, 30 by ' +
     "default) — the session's own record is what survives",
+  ambientEnvVar: CLAUDE_AMBIENT_ENV,
   handle: claudeHandle,
   nativeId: claudeNativeId,
   startArgv,

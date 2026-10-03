@@ -48,6 +48,10 @@ export const WARD_GLOBAL_ENV = ((): Readonly<Record<string, string>> => {
     // deliberately not a plausible hostname, so a real machine's name showing
     // up in an expectation is visible as the mistake it is.
     WARD_MACHINE: 'test',
+    // The run a caller stands in (design/0045-agent-record-reads/): blanked,
+    // so a suite run from inside Claude Code does not stamp the developer's
+    // own session handle onto every record-only session it opens.
+    CLAUDE_CODE_SESSION_ID: '',
   };
 })();
 
