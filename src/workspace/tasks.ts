@@ -171,6 +171,30 @@ export async function addTaskPr(root: string, code: string, url: string): Promis
   });
 }
 
+/**
+ * Take a pull request out of a task's PR set (design/0046-task-pr-unlink/).
+ * The set is what the close reads to decide delivered or abandoned, so a PR
+ * withdrawn from the work — closed on purpose, superseded by another — must be
+ * removable, or a task that delivered through its other PRs can only close as
+ * abandoned, a false outcome on a terminal record. The commit is the trail:
+ * the journal says the PR was linked and later unlinked, and when.
+ */
+export async function removeTaskPr(root: string, code: string, url: string): Promise<FoundTask> {
+  return withStoreLock(root, `task pr --unlink ${code}`, async () => {
+    const task = await resolveOpenTask(root, code);
+    if (!task.record.prs.includes(url)) {
+      const set = task.record.prs.length === 0 ? 'none linked' : task.record.prs.join(', ');
+      throw new WardError(
+        `${taskAddress(task)} has no linked PR ${url} — its PR set: ${set} (see: ward task show ${taskAddress(task)})`,
+      );
+    }
+    const record: TaskRecord = { ...task.record, prs: task.record.prs.filter((pr) => pr !== url) };
+    await writeTask(root, task.dir, record);
+    commitRecords(root, `Unlink PR from task ${taskAddress(task)}`, task.dir);
+    return { dir: task.dir, record };
+  });
+}
+
 // -- close ----------------------------------------------------------------
 
 export type Outcome = 'delivered' | 'abandoned';

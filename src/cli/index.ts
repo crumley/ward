@@ -97,7 +97,7 @@ import {
   taskDetail,
 } from '../workspace/status.ts';
 import { mergeWorkspaceBranch, refuseStewardshipCopy } from '../workspace/steward.ts';
-import { addTaskPr, closeTask, openTask, setTaskState } from '../workspace/tasks.ts';
+import { addTaskPr, closeTask, openTask, removeTaskPr, setTaskState } from '../workspace/tasks.ts';
 import { selfServiceUpgrade, type UpgradeReport, upgradeWorkspace } from '../workspace/upgrade.ts';
 import {
   createWorkspaceWorktree,
@@ -183,6 +183,16 @@ const pc = callerIsAgent() ? picocolors.createColors(false) : picocolors;
 function jsonFlag() {
   return option('--json', {
     description: message`Emit the result as JSON on stdout (a stable, documented shape).`,
+  });
+}
+
+/**
+ * `task pr --unlink` (design/0046-task-pr-unlink/): take a PR out of the set
+ * rather than add it — the record correction for a PR withdrawn from the work.
+ */
+function unlinkFlag() {
+  return option('--unlink', {
+    description: message`Remove URL from the task's PR set instead (a PR withdrawn from the work).`,
   });
 }
 
@@ -601,17 +611,19 @@ const task = command(
         object({
           action: constant('task-pr'),
           url: argument(string({ metavar: 'URL' })),
+          unlink: unlinkFlag(),
           json: jsonFlag(),
         }),
         object({
           action: constant('task-pr'),
           code: argument(taskIdentity('ADDRESS')),
           url: argument(string({ metavar: 'URL' })),
+          unlink: unlinkFlag(),
           json: jsonFlag(),
         }),
       ),
       {
-        brief: message`Link a pull request to a task. ADDRESS is inferred inside a task's worktree.`,
+        brief: message`Link a pull request to a task (--unlink removes one). ADDRESS is inferred inside a task's worktree.`,
       },
     ),
     command(
@@ -995,13 +1007,17 @@ try {
       case 'task-pr': {
         const code = 'code' in result ? result.code : undefined;
         const target = await resolveTaskTarget(code, 'ward task pr ADDRESS URL', result.json);
-        const linked = await addTaskPr(target.root, target.code, result.url);
+        const linked = result.unlink
+          ? await removeTaskPr(target.root, target.code, result.url)
+          : await addTaskPr(target.root, target.code, result.url);
         if (result.json) {
           printJson(taskMutationJson(linked.record, taskAddress(linked)));
           break;
         }
         console.log(
-          `${pc.green('linked')} ${result.url} to ${pc.bold(taskAddress(linked))} ` +
+          (result.unlink
+            ? `${pc.green('unlinked')} ${result.url} from ${pc.bold(taskAddress(linked))} `
+            : `${pc.green('linked')} ${result.url} to ${pc.bold(taskAddress(linked))} `) +
             pc.dim(`(${linked.record.prs.length} in the set)`),
         );
         break;
