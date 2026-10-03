@@ -37,6 +37,7 @@ import type { MergeReport } from '../workspace/steward.ts';
 import type { CloseReport } from '../workspace/tasks.ts';
 import type { UpgradeReport } from '../workspace/upgrade.ts';
 import type { RebaseReport, WorktreeListing, WorktreeStatus } from '../workspace/worktrees.ts';
+import { callerIsAgent } from './caller.ts';
 import { writeOut } from './output.ts';
 import type {
   DoctorShape,
@@ -72,8 +73,26 @@ import type {
   WorktreeRebaseShape,
 } from './schema.ts';
 
+/**
+ * How a `--json` document is spaced (design/0050-compact-json-for-pipes/):
+ * indented only for a human reading a terminal, compact for everyone else —
+ * a pipe, a file, or a declared agent at any stdout. Indentation is a
+ * human-audience cue (§8), like color: it carries no meaning, so a caller that
+ * parses the document pays for it in bytes and tokens (§12) and gets nothing.
+ * The mode is a pure function of the caller, so the same state still yields
+ * byte-identical output for the same mode (§6). Injected rather than read
+ * inside so the decision is testable without allocating a terminal.
+ */
+export function jsonSpacing(
+  isTTY: boolean = process.stdout.isTTY === true,
+  isAgent: boolean = callerIsAgent(),
+): 0 | 2 {
+  return isTTY && !isAgent ? 2 : 0;
+}
+
+/** Every `--json` document leaves through here: one document, newline-terminated. */
 export function printJson(value: unknown): void {
-  writeOut(`${JSON.stringify(value, null, 2)}\n`);
+  writeOut(`${JSON.stringify(value, null, jsonSpacing())}\n`);
 }
 
 /**
