@@ -131,6 +131,11 @@ You may be reading this from the workspace root or from inside a task worktree u
 - **Read state as JSON.** \`ward status --json\` says where everything stands, derived state
   included; every read verb (\`status\`, \`project list\`, \`task list\`, \`task show ADDRESS\`,
   \`session show ID\`, \`worktree list\`, \`repo list\`, \`doctor\`) accepts \`--json\`.
+- **Ask for the rows you need.** \`ward task list\` filters — \`--slug TEXT\` (a substring),
+  \`--state active|paused|closed\`, \`--floor N\`, \`--repo NAME\` — and the filters combine.
+  \`--state closed\` reaches all settled history on its own. Filter rather than pulling
+  \`--all --json\` and sifting it yourself: the whole history grows without bound, and what you
+  read is what you carry.
 - **Ask one task where it stands.** \`ward task show ADDRESS\` puts a task on one screen: its
   pull requests with live review and check state, its worktrees and their freshness, its open
   sessions — and one **next** line, the single most useful thing to do now, derived from all of

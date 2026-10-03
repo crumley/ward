@@ -222,8 +222,15 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '570f38d66fefd7c380a4538a3690ff061afd801d0529823fba33a5f566c9b6a9',
         era: 'design 0045 (agent record reads)',
       },
-      // Current since design 0046: `task pr --unlink` takes a withdrawn PR out
-      // of the set, named under "Link your pull request".
+      // design 0046 — `task pr --unlink` takes a withdrawn PR out of the set,
+      // named under "Link your pull request"; `task list` could not yet be
+      // filtered, so finding past work meant pulling the whole history.
+      {
+        sha256: '34842861a740dfc2ffe21e490967759c3cbdd05bf029ae0b6a3caaa26259e8db',
+        era: 'design 0046 (task pr unlink)',
+      },
+      // Current since design 0049: `task list` filters by slug, state, floor,
+      // and repo, and agents are told to filter rather than pull `--all`.
     ],
   },
 ];

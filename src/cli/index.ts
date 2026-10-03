@@ -81,10 +81,12 @@ import {
 } from '../workspace/sessions.ts';
 import {
   deriveStatus,
+  filterLiftsWindow,
   forgeStates,
   glanceOrder,
   type HiddenSummary,
   inReview,
+  matchesTaskFilter,
   type NeedsYouEntry,
   openPrUrls,
   SETTLED_AFTER_DAYS,
@@ -93,6 +95,7 @@ import {
   settledProject,
   settledTask,
   statusReport,
+  type TaskFilter,
   type TaskStatus,
   taskDetail,
 } from '../workspace/status.ts';
@@ -565,9 +568,40 @@ const task = command(
         brief: message`Open a task, bare or under a floor — --repo records what it touches and can place it.`,
       },
     ),
-    command('list', object({ action: constant('task-list'), all: allFlag(), json: jsonFlag() }), {
-      brief: message`List tasks, open and closed — settled ones hidden unless --all.`,
-    }),
+    // Filters (design/0049-task-list-filters/): fetch the rows wanted rather
+    // than the whole history. They AND together, compose with --all, and an
+    // unmatched filter is an empty listing, never an error.
+    command(
+      'list',
+      object({
+        action: constant('task-list'),
+        slug: optional(
+          option('--slug', string({ metavar: 'TEXT' }), {
+            description: message`Only tasks whose slug contains TEXT (case-insensitive).`,
+          }),
+        ),
+        state: optional(
+          option('--state', choice(['active', 'paused', 'closed'], { metavar: 'STATE' }), {
+            description: message`Only tasks in this state — closed reaches all settled history, no --all needed.`,
+          }),
+        ),
+        floor: optional(
+          option('--floor', floorNumber('any'), {
+            description: message`Only tasks on this floor.`,
+          }),
+        ),
+        repo: optional(
+          option('--repo', repoName(), {
+            description: message`Only tasks that record touching this repository.`,
+          }),
+        ),
+        all: allFlag(),
+        json: jsonFlag(),
+      }),
+      {
+        brief: message`List tasks, open and closed — settled ones hidden unless --all; filter by slug, state, floor, repo.`,
+      },
+    ),
     // The one-screen answer (design/0043-task-next-surface/): where one task
     // stands, and the single next step derived from it. A read verb — no
     // lock, no writes — so it resolves closed tasks too, behind the same
@@ -964,7 +998,16 @@ try {
         break;
       }
       case 'task-list':
-        await cmdTaskList(result.all, result.json);
+        await cmdTaskList(
+          {
+            ...(result.slug === undefined ? {} : { slug: result.slug }),
+            ...(result.state === undefined ? {} : { state: result.state }),
+            ...(result.floor === undefined ? {} : { floor: result.floor }),
+            ...(result.repo === undefined ? {} : { repo: result.repo }),
+          },
+          result.all,
+          result.json,
+        );
         break;
       case 'task-show': {
         const target = await resolveTaskTarget(
@@ -2029,15 +2072,20 @@ async function cmdProjectList(all: boolean, json: boolean): Promise<void> {
   renderHidden(hidden, 'ward project list --all');
 }
 
-async function cmdTaskList(all: boolean, json: boolean): Promise<void> {
+async function cmdTaskList(filter: TaskFilter, all: boolean, json: boolean): Promise<void> {
   const root = await requireWorkspace();
-  const tasks = await readTasks(root);
-  const probe = await probeForge(openPrUrls(tasks.map((task) => task.record)));
+  // Filter first, then window: `hidden` counts only tasks that matched the
+  // filter and were cut by the window — what the caller asked for and did
+  // not get. A task the filter excluded was excluded on request, not hidden
+  // (design/0049-task-list-filters/).
+  const tasks = (await readTasks(root)).filter((task) => matchesTaskFilter(task.record, filter));
   const now = Date.now();
+  const windowed = all || filterLiftsWindow(filter);
   const shown = glanceOrder(
-    all ? tasks : tasks.filter((task) => !settledTask(task.record, now)),
+    windowed ? tasks : tasks.filter((task) => !settledTask(task.record, now)),
     (task) => task.record.state,
   );
+  const probe = await probeForge(openPrUrls(shown.map((task) => task.record)));
   const hidden = {
     tasks: tasks.length - shown.length,
     projects: 0,
@@ -2056,8 +2104,15 @@ async function cmdTaskList(all: boolean, json: boolean): Promise<void> {
     printJson(taskListJson(entries, hidden));
     return;
   }
+  const filtered = filterWords(filter);
   if (entries.length === 0 && hidden.tasks === 0) {
-    console.log(pc.dim('no tasks — open one with: ward task open SLUG'));
+    console.log(
+      pc.dim(
+        filtered.length === 0
+          ? 'no tasks — open one with: ward task open SLUG'
+          : `no tasks match ${filtered.join(' ')}`,
+      ),
+    );
     return;
   }
   for (const entry of entries) {
@@ -2066,11 +2121,25 @@ async function cmdTaskList(all: boolean, json: boolean): Promise<void> {
     const prs = entry.forge === undefined ? '' : pc.dim(` — prs: ${forgeSummary(entry.forge)}`);
     console.log(`  ${renderTaskIdentity(record, entry.address, entry.inReview, floor)}${prs}`);
   }
-  renderHidden(hidden, 'ward task list --all');
+  // The footer's command keeps the filter, so the one flag it names shows
+  // the hidden rows of THIS listing rather than the whole history.
+  renderHidden(hidden, ['ward task list', ...filtered, '--all'].join(' '));
   renderForgeUnavailable(
     !probe.live,
-    tasks.map((task) => task.record),
+    shown.map((task) => task.record),
   );
+}
+
+/** A filter spelled back as the flags that express it, quoted where a shell would need it. */
+function filterWords(filter: TaskFilter): string[] {
+  const quote = (value: string) =>
+    /^[\w.@:/+-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
+  return [
+    ...(filter.slug === undefined ? [] : [`--slug ${quote(filter.slug)}`]),
+    ...(filter.state === undefined ? [] : [`--state ${filter.state}`]),
+    ...(filter.floor === undefined ? [] : [`--floor ${filter.floor}`]),
+    ...(filter.repo === undefined ? [] : [`--repo ${quote(filter.repo)}`]),
+  ];
 }
 
 /**
