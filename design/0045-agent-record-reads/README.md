@@ -1,27 +1,28 @@
-# 0045 — Records read through Ward: one session on one screen, and a handle no agent spells
+# 0045 — Records changed only through Ward: one session on one screen, and a handle no agent spells
 
 > An agent can now answer every question about a session through `ward` — `ward session show ID`,
 > and refusals that say which miss they are — and records its own task session's handle from the run
-> it stands in; the manifest says that `ward`, not the record files, is how records are read.
+> it stands in; the manifest says that records are read freely but changed only through `ward`.
 >
 > **Status:** built — awaiting review · **Started:** 2026-10-02
 
 The store is markdown so that it is transparent
 ([`intent/02-subsystems/00-metadata-store.md`](../../intent/02-subsystems/00-metadata-store.md)),
 and the installed manifest ([`0005`](../0005-agent-audience/README.md), carried by every upgrade
-since) told an agent to "read them directly; that is what they are for". In use, an agent does: it
-greps a task's `sessions/` directory to learn whether its session closed. The habit has a concrete
-cost. Part of what a record means is derived rather than stored (the aggregate-status constraint in
-the same slice), a write beside Ward skips the store lock and the journal commit
-([`0013`](../0013-telemetry-and-serialized-writes/README.md)), and a reader that learns the layout
-couples itself to what the slice explicitly calls swappable.
+since) invites an agent to read the records directly. It says nothing about writing them. The same
+slice makes records Ward-owned and changed only through its own path, and a write beside Ward skips
+the store lock, the schema validation, and the journal commit
+([`0013`](../0013-telemetry-and-serialized-writes/README.md)). An agent working from the manifest
+alone has no way to know that, and an agent that has already read a record's front matter is one
+edit away from changing it.
 
-The habit is also a symptom. The question the agent was asking, "did my session close?", had no
-verb. `task show` lists only open sessions, `status` lists only open workspace-scope ones, and
+The pull toward the files is also a symptom. An agent asking "did my session close?" had no verb to
+ask. `task show` lists only open sessions, `status` lists only open workspace-scope ones, and
 `session close` on a session its task's close had already swept up answered "no open session has id
 …" — the same words as for an id that was never allocated. A caller that cannot tell those two
-misses apart, and has no verb that reads a closed session, goes to the files. Fixing the guidance
-alone would leave the gap that caused it.
+misses apart, and has no verb that reads a closed session, goes to the files, and an agent that
+believes its session is stuck open is tempted to fix the record by hand. Fixing the guidance alone
+would leave the gap that caused it.
 
 A second gap sits beside it. A session Ward did not launch records itself with `--handle`, and the
 agent was asked to spell its own run id. An agent that does not know its id composes one, and a
@@ -32,19 +33,18 @@ it starts, so the handle can be read rather than spelled.
 
 ## Serves intent
 
-- [`metadata-store`](../../intent/02-subsystems/00-metadata-store.md) — _Deterministic reads_ in a
-  form agents parse: a closed session becomes readable through a verb, so no read an agent needs
-  requires the layout; see [`spec-feedback.md`](spec-feedback.md), SF-001, on the slice's "a human
-  or agent can read the state directly".
+- [`metadata-store`](../../intent/02-subsystems/00-metadata-store.md) — _Records are Ward-owned …
+  changed only through its update/migration path_: the manifest now says so to the agent reading it.
+  _Deterministic reads_: a closed session becomes readable through a verb, derived state included,
+  so the files are a convenience to an agent rather than its only answer.
 - [`human-shell`](../../intent/02-subsystems/07-human-shell.md) — _Organized around nouns and
   verbs_: `show` joins the session noun as it already sits on the task noun. _Degrade honestly_
   (principles §20): a refusal names which of two misses it is.
 - [`agent-harness`](../../intent/02-subsystems/03-agent-harness.md) — _Expose a harness handle_ and
   _make the run's history locatable from the recorded handle_: a self-recorded task session carries
   the handle of the run it was opened from, read from the harness rather than spelled by the agent.
-- [`principles`](../../intent/00-foundation/01-principles.md) — §8 (one record, two audiences: the
-  human reads the files, the agent reads the verb over them), §16 (recorded state is read through
-  the tool that derives it).
+- [`principles`](../../intent/00-foundation/01-principles.md) — §8 (one record, two audiences), §17
+  (no lost updates: every write takes the store lock, which only Ward's verbs do).
 
 ## Scope
 
@@ -64,11 +64,12 @@ it starts, so the handle can be read rather than spelled.
     `ambientHandle(env)` in the registry returns the first adapter's handle whose variable is set
     and non-empty. `session open TASK` without `--handle` records it. `--handle` still wins, and
     outside any run nothing is recorded.
-  - **The manifest.** The installed `AGENTS.md` says that `ward` is how records are read and
-    changed. It names the record paths an agent does not open, grep, list, or edit. It adds
-    `session show` to the read verbs and the Sessions section, drops the instruction to spell a
-    handle, and says that `task close` closes the task's open sessions and names them. The outgoing
-    default's hash joins the lineage, so an untouched manifest upgrades
+  - **The manifest.** The installed `AGENTS.md` keeps "read them directly" and adds that records
+    change only through `ward`, never by editing the files. The agent section names the record paths
+    an agent may read but not write, move, or delete, and tells it to say so when no verb makes the
+    change it needs. It adds `session show` to the read verbs and the Sessions section, drops the
+    instruction to spell a handle, and says that `task close` closes the task's open sessions and
+    names them. The outgoing default's hash joins the lineage, so an untouched manifest upgrades
     ([`0020`](../0020-deterministic-upgrade/README.md)).
 - **Deferred:**
   - **A session list verb** (`ward session list [--all]`). Safe to defer because `show` answers the

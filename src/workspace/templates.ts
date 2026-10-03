@@ -36,9 +36,9 @@ operated with the \`ward\` CLI and tracked in git.
 ## Operating here
 
 - Run \`ward doctor\` to check machine preconditions and the record's integrity.
-- Records are markdown with typed front matter, so a human can read them and git can version
-  them. **\`ward\` is how they are read and changed**: some of what a record means is derived
-  rather than stored, and a write that skips \`ward\` skips its lock and its journal commit.
+- Records are markdown with typed front matter — read them directly; that is what they are for.
+  **Change them only through \`ward\`**, never by editing the files: a write that skips \`ward\`
+  skips its lock, its validation, and its journal commit.
 - **A task is addressed \`f<floor>t<room>\`** — \`f3t1\` is room 1 on floor 3, \`f0t1\` room 1 on
   the ground floor. Every task lives on a floor; only legacy bare tasks, opened before the ground
   floor existed, carry a bare \`t<room>\`. Spelling is case-insensitive. A bare \`t1\` is also a
@@ -124,13 +124,13 @@ You may be reading this from the workspace root or from inside a task worktree u
   (\`.ward/store.lock\`) that names its holder; a write that cannot get it in time refuses
   legibly — rerun it. A lock left by a crashed process is taken over automatically, and
   \`ward doctor\` names a held or stale lock. Read verbs never wait on it.
-- **Read state through \`ward\`, never the record files.** Do not open, grep, list, or edit
-  anything under \`projects/\`, \`tasks/\`, \`sessions/\`, or \`repositories/\`, nor
-  \`workspace.md\` or \`catalog.md\`. \`ward status --json\` says where everything stands; every
-  read verb (\`status\`, \`project list\`, \`task list\`, \`task show ADDRESS\`,
-  \`session show ID\`, \`worktree list\`, \`repo list\`, \`doctor\`) accepts \`--json\`. When
-  \`ward\` cannot answer a question, say so — that is a gap in \`ward\` worth naming — rather
-  than reading the file for it.
+- **Never edit a record file.** Reading anything under \`projects/\`, \`tasks/\`,
+  \`sessions/\`, or \`repositories/\` is fine; writing, moving, or deleting one is not — every
+  change goes through a \`ward\` verb. If no verb makes the change you need, say so rather than
+  editing the file.
+- **Read state as JSON.** \`ward status --json\` says where everything stands, derived state
+  included; every read verb (\`status\`, \`project list\`, \`task list\`, \`task show ADDRESS\`,
+  \`session show ID\`, \`worktree list\`, \`repo list\`, \`doctor\`) accepts \`--json\`.
 - **Ask one task where it stands.** \`ward task show ADDRESS\` puts a task on one screen: its
   pull requests with live review and check state, its worktrees and their freshness, its open
   sessions — and one **next** line, the single most useful thing to do now, derived from all of

@@ -63,7 +63,7 @@ test('the AGENTS.md 0029 supersedes is in history — every workspace still on i
   expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
     'dfc613e4b70a5f2b3c853827c01256615923ca3c245b44f49dcf54589e8c6963', // design 0041
   ); // …and the 0044 manifest, superseded by design/0045-agent-record-reads/,
-  // which still told an agent to read the record files directly.
+  // which did not yet say that records change only through `ward`.
   expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
     'e0dea34e469d74915a9e574d69f83b309ef67aaf6142508511e2595511628d94', // design 0044
   );
@@ -76,7 +76,7 @@ test('the AGENTS.md 0029 supersedes is in history — every workspace still on i
 // exactly the bookkeeping that keeps every shipped default recognizable.
 test('the current defaults are pinned; changing one must move its old hash into history', () => {
   expect(sha256OfText(AGENTS_MD)).toBe(
-    '7c4e4f252e59a9e17c3c9fd693756681df136d66509dd58ff3844c12b56f0956', // since design 0045
+    '570f38d66fefd7c380a4538a3690ff061afd801d0529823fba33a5f566c9b6a9', // since design 0045
   );
   expect(sha256OfText(WARD_INTERNAL_README)).toBe(
     '6f10845611635508f006727f83bdc2222d840a9da972393781662c9f6ff04ac4', // since 65f1e8b (0013)
