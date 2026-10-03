@@ -37,6 +37,7 @@ import type { MergeReport } from '../workspace/steward.ts';
 import type { CloseReport } from '../workspace/tasks.ts';
 import type { UpgradeReport } from '../workspace/upgrade.ts';
 import type { RebaseReport, WorktreeListing, WorktreeStatus } from '../workspace/worktrees.ts';
+import { writeOut } from './output.ts';
 import type {
   DoctorShape,
   PrForgeShape,
@@ -72,7 +73,7 @@ import type {
 } from './schema.ts';
 
 export function printJson(value: unknown): void {
-  console.log(JSON.stringify(value, null, 2));
+  writeOut(`${JSON.stringify(value, null, 2)}\n`);
 }
 
 /**

@@ -138,6 +138,7 @@ import {
   worktreeListJson,
   worktreeRebaseJson,
 } from './json.ts';
+import { exitWhenFlushed, installPipeSafeConsole, pipeSafeStdout, writeOut } from './output.ts';
 import { refreshDisplay } from './progress.ts';
 import { allSchemasJson, verbSchemaJson } from './schema.ts';
 import { askToClose, type ExitHistory, exitDecision, type OnExit } from './session-exit.ts';
@@ -152,6 +153,11 @@ import {
   workspaceIdentity,
 } from './suggest.ts';
 import { isMachineryInvocation, recordInvocation } from './telemetry.ts';
+
+// Output first, before anything can print (design/0048-pipe-safe-output/):
+// every console write is routed through tracked stream writes, so a document
+// larger than a pipe's buffer arrives whole and every exit waits for it.
+installPipeSafeConsole();
 
 // Local usage telemetry, armed before anything can exit: one row per
 // invocation — read verbs included — appended at process exit so it carries
@@ -788,7 +794,7 @@ const version = object({
 // callback carry `completion <shell> …` (design/0022-shell-completion/).
 if (process.argv.length === 2) {
   printVersion(false);
-  process.exit(0);
+  await exitWhenFlushed(0);
 }
 
 const cli = or(
@@ -814,6 +820,12 @@ const result = await run(cli, {
   programName: 'ward',
   help: 'option',
   completion: 'command',
+  // Help, usage errors, and completion leave through the same flushed door as
+  // every verb (design/0048-pipe-safe-output/): a completion script or help
+  // page bigger than a pipe's buffer must arrive whole too.
+  stdout: (line) => writeOut(`${line}\n`),
+  stderr: (line) => console.error(line),
+  onExit: (code) => exitWhenFlushed(code) as never,
 });
 
 try {
@@ -864,7 +876,7 @@ try {
         // a file the shell will source (§18: Ward emits, the human installs).
         // The emitted bytes are `emitShellLayer`'s, because doctor compares an
         // installed file against them (design/0026-shell-staleness-doctor/).
-        process.stdout.write(emitShellLayer(result.shell));
+        writeOut(emitShellLayer(result.shell));
         break;
       case 'shell-candidates': {
         // Machinery, and shaped like it: one NAME<TAB>CUE line per candidate,
@@ -1121,7 +1133,7 @@ try {
 } catch (error) {
   if (error instanceof WardError) {
     console.error(`${pc.red('error:')} ${error.message}`);
-    process.exit(1);
+    await exitWhenFlushed(1);
   }
   throw error;
 }
@@ -1203,7 +1215,7 @@ async function cmdWorkspaceRestore(json: boolean): Promise<void> {
   const converged = restoreConverged(report);
   if (json) {
     printJson(workspaceRestoreJson(report));
-    if (!converged) process.exit(1);
+    if (!converged) await exitWhenFlushed(1);
     return;
   }
   console.log(`Restoring workspace at ${pc.bold(report.root)}\n`);
@@ -1244,7 +1256,7 @@ async function cmdWorkspaceRestore(json: boolean): Promise<void> {
       `${count('satisfied')} satisfied, ${count('lost')} lost, ${count('failed')} failed; ` +
       'the rows above carry the remedies.',
   );
-  process.exit(1);
+  await exitWhenFlushed(1);
 }
 
 function renderRestore(outcome: 'restored' | 'satisfied' | 'lost' | 'failed'): string {
@@ -1642,7 +1654,7 @@ async function cmdShellDiff(
   for (const name of wanted) {
     const shorthand = findShorthand(name);
     if (shorthand === undefined) continue;
-    process.stdout.write(diffShorthand(await inspectShorthand(shorthand, root)));
+    writeOut(diffShorthand(await inspectShorthand(shorthand, root)));
   }
 }
 
@@ -1801,7 +1813,7 @@ async function cmdRepoRefresh(
   // the same thing on every machine — the registry-fallback asymmetry (0024),
   // applied to a preference instead of a place.
   const stashing = stash || (!callerIsAgent() && (await readConfig()).repo.refresh.stash);
-  const display = json ? null : refreshDisplay(pc);
+  const display = json ? null : refreshDisplay(pc, pipeSafeStdout);
   const reports = await refreshRepositories(root, name, {
     stash: stashing,
     ...(display === null ? {} : { observe: display.observe }),
@@ -1812,7 +1824,7 @@ async function cmdRepoRefresh(
     // document and the verdict from $?, and the two never disagree (0005's
     // doctor posture).
     printJson(repoRefreshJson(reports));
-    if (reports.some((report) => report.outcome === 'failed')) process.exit(1);
+    if (reports.some((report) => report.outcome === 'failed')) await exitWhenFlushed(1);
     return;
   }
   display?.settle();
@@ -1820,7 +1832,7 @@ async function cmdRepoRefresh(
     console.log(pc.dim('no repositories registered — add one with: ward repo add SOURCE'));
     return;
   }
-  if (reports.some((report) => report.outcome === 'failed')) process.exit(1);
+  if (reports.some((report) => report.outcome === 'failed')) await exitWhenFlushed(1);
 }
 
 async function cmdRepoList(json: boolean): Promise<void> {
@@ -2159,7 +2171,7 @@ async function cmdWorktreeRebase(root: string, code: string, json: boolean): Pro
     // The per-worktree outcomes are the document, conflicts included — the
     // verb completed and reported; only the exit code carries the verdict.
     printJson(worktreeRebaseJson(task.record.code, address, reports));
-    if (broken) process.exit(1);
+    if (broken) await exitWhenFlushed(1);
     return;
   }
   if (reports.length === 0) {
@@ -2173,7 +2185,7 @@ async function cmdWorktreeRebase(root: string, code: string, json: boolean): Pro
   for (const report of reports) {
     console.log(`  ${renderRebase(report)}  ${report.record.path} ${pc.dim(`(${report.detail})`)}`);
   }
-  if (broken) process.exit(1);
+  if (broken) await exitWhenFlushed(1);
 }
 
 function renderRebase(report: RebaseReport): string {
@@ -2288,7 +2300,7 @@ async function cmdSessionOpen(
   // nonzero exit would tell a script the agent succeeded when it did not. The
   // question is asked first — the human answers about the session, then the
   // exit code answers for the run.
-  if (run.exitCode !== 0) process.exit(run.exitCode);
+  if (run.exitCode !== 0) await exitWhenFlushed(run.exitCode);
 }
 
 /**
@@ -2316,7 +2328,7 @@ async function cmdSessionResume(id: string, onExit: OnExit, json: boolean): Prom
     );
   }
   await afterRun(root, record.id, onExit, json);
-  if (run.exitCode !== 0) process.exit(run.exitCode);
+  if (run.exitCode !== 0) await exitWhenFlushed(run.exitCode);
 }
 
 /**
@@ -2691,7 +2703,7 @@ async function cmdDoctor(json: boolean): Promise<void> {
   const report = await runDoctor(process.cwd());
   if (json) {
     printJson(doctorJson(report));
-    if (!report.healthy) process.exit(1);
+    if (!report.healthy) await exitWhenFlushed(1);
     return;
   }
   console.log(pc.bold('Machine'));
@@ -2711,7 +2723,7 @@ async function cmdDoctor(json: boolean): Promise<void> {
       ? `\n${pc.green('healthy')} — nothing needs attention`
       : `\n${pc.red('unhealthy')} — problems above need attention`,
   );
-  if (!report.healthy) process.exit(1);
+  if (!report.healthy) await exitWhenFlushed(1);
 }
 
 /**
