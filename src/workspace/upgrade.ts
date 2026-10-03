@@ -535,7 +535,9 @@ export async function selfServiceUpgrade(
   const { record: worktree } = await createWorkspaceWorktree(
     root,
     taskAddress(task),
-    existing?.worktree?.branch ?? freshStewardshipBranch(root, taskAddress(task)),
+    // Unnamed for a fresh vehicle: the worktree verb derives a branch no
+    // earlier upgrade holds (design/0047-stewardship-fresh-branch/).
+    existing?.worktree?.branch,
   );
   echo({
     step: 'worktree',
@@ -613,23 +615,6 @@ async function deriveUpgradeTask(root: string): Promise<FoundTask> {
     purpose: `Bring the workspace's installed artifacts to the defaults ward ${pkg.version} ships`,
     stewardship: 'upgrade',
   });
-}
-
-/**
- * The branch a freshly derived upgrade rides. `steward/workspace-upgrade`
- * normally — but a branch of that name can already exist without belonging to
- * this task: an upgrade closed `--outcome abandoned` tears down its worktree
- * and leaves its branch behind (0019 defers pruning deliberately — a merged
- * branch is history, and an abandoned one is the human's to delete). Checking
- * that leftover out would silently adopt work the human explicitly discarded,
- * and would report "current" over an upgrade the workspace never took. So a
- * taken name gets the task's own address appended: deterministic, legible in
- * `git branch`, and never anyone else's history.
- */
-function freshStewardshipBranch(root: string, code: string): string {
-  const base = `steward/${DERIVED_SLUG}`;
-  const exists = git(root, 'rev-parse', '--verify', '--quiet', `refs/heads/${base}`);
-  return exists.exitCode === 0 ? `${base}-${code}` : base;
 }
 
 function abandonEmptyUpgradeTask(task: FoundTask): RemainingAct {

@@ -24,6 +24,7 @@ import {
 import { closeTask, openTask } from '../../src/workspace/tasks.ts';
 import {
   createWorkspaceWorktree,
+  readTaskWorktrees,
   rebaseTaskWorktrees,
   worktreeStatuses,
 } from '../../src/workspace/worktrees.ts';
@@ -68,6 +69,69 @@ test('creation converges: same record back, and a hand-deleted worktree is re-es
   const restored = await createWorkspaceWorktree(ws, 't1');
   expect(restored.record.path).toBe(first.record.path);
   expect(existsSync(join(ws, first.record.path, 'workspace.md'))).toBe(true);
+});
+
+// -- a stewardship worktree starts from the current main tip ----------------
+// (design/0047-stewardship-fresh-branch/) Teardown leaves merged stewardship
+// branches behind and slugs repeat, so the default name is routinely taken by
+// history the main line has long since moved past.
+
+test('a leftover default-named branch behind main is never adopted: the address disambiguates', async () => {
+  leaveStaleBranch('steward/steward-work');
+  const { record } = await createWorkspaceWorktree(ws, 'f0t1');
+  expect(record.branch).toBe('steward/steward-work-f0t1');
+  expect(record.path).toBe('worktrees/f0t1-steward-steward-work-f0t1');
+  // Cut from the current tip — zero commits behind, not the leftover's distance.
+  expect(gitOrThrow(ws, 'rev-list', '--count', `${record.branch}..${mainLine}`).stdout.trim()).toBe(
+    '0',
+  );
+  // The leftover is untouched: still where it stood, still behind.
+  expect(
+    gitOrThrow(ws, 'rev-list', '--count', `steward/steward-work..${mainLine}`).stdout,
+  ).not.toBe('0\n');
+  // Re-running converges on the branch the task already holds — no second worktree.
+  const again = await createWorkspaceWorktree(ws, 'f0t1');
+  expect(again.record).toEqual(record);
+  expect((await readTaskWorktrees(ws, (await readTasks(ws))[0]?.dir ?? '')).length).toBe(1);
+});
+
+test('a reused room whose addressed name is taken too gets a counter, still off the tip', async () => {
+  leaveStaleBranch('steward/steward-work');
+  gitOrThrow(ws, 'branch', 'steward/steward-work-f0t1', 'steward/steward-work');
+  const { record } = await createWorkspaceWorktree(ws, 'f0t1');
+  expect(record.branch).toBe('steward/steward-work-f0t1-2');
+  expect(gitOrThrow(ws, 'rev-list', '--count', `${record.branch}..${mainLine}`).stdout.trim()).toBe(
+    '0',
+  );
+});
+
+test('a NAMED branch behind main is refused legibly, before any record is written', async () => {
+  leaveStaleBranch('old-steward');
+  const head = gitOrThrow(ws, 'rev-parse', 'HEAD').stdout.trim();
+  const attempt = createWorkspaceWorktree(ws, 'f0t1', 'old-steward');
+  expect(attempt).rejects.toThrow(WardError);
+  expect(attempt).rejects.toThrow(/'old-steward' already exists .* 1 commit\(s\) behind/);
+  expect(attempt).rejects.toThrow(/git branch -d old-steward/);
+  expect(attempt).rejects.toThrow(/--branch NAME/);
+  await attempt.catch(() => undefined);
+  // Nothing recorded, nothing journaled, no worktree.
+  expect(gitOrThrow(ws, 'rev-parse', 'HEAD').stdout.trim()).toBe(head);
+  expect(await readTaskWorktrees(ws, (await readTasks(ws))[0]?.dir ?? '')).toEqual([]);
+  expect(existsSync(join(ws, 'worktrees/f0t1-old-steward'))).toBe(false);
+});
+
+test('a NAMED branch at or after the main tip is adopted; a fresh name is cut from it', async () => {
+  gitOrThrow(ws, 'branch', 'prepared', mainLine);
+  const adopted = await createWorkspaceWorktree(ws, 'f0t1', 'prepared');
+  expect(adopted.record.branch).toBe('prepared');
+  expect(existsSync(join(ws, adopted.record.path, 'workspace.md'))).toBe(true);
+
+  await openTask(ws, 'more-work', { floor: GROUND_FLOOR });
+  const named = await createWorkspaceWorktree(ws, 'f0t2', 'steward/chosen');
+  expect(named.record.branch).toBe('steward/chosen');
+  expect(gitOrThrow(ws, 'rev-list', '--count', `${named.record.branch}..${mainLine}`).stdout).toBe(
+    '0\n',
+  );
 });
 
 // -- the stewardship copy ---------------------------------------------------
@@ -252,6 +316,17 @@ let scratch: string;
 let ws: string;
 let mainLine: string;
 let caseId = 0;
+
+/**
+ * The f0t15 shape: a branch left at the current tip, then the main line moves
+ * on past it — a landed stewardship branch, as teardown leaves it behind.
+ */
+function leaveStaleBranch(branch: string): void {
+  gitOrThrow(ws, 'branch', branch, mainLine);
+  writeFileSync(join(ws, 'later.md'), 'the main line moved on\n');
+  gitOrThrow(ws, 'add', '-A', '--', 'later.md');
+  gitOrThrow(ws, 'commit', '-m', 'Advance main');
+}
 
 /** Commit one file on the stewardship branch, inside its worktree. */
 function commitInCopy(copy: string, file: string, content: string): void {

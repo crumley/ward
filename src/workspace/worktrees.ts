@@ -50,6 +50,18 @@ export async function createWorktree(
   await refreshRepositories(root, repoName);
 
   const canonical = join(root, 'repos', repoName);
+  // A task worktree is always cut fresh from the main line; an existing branch
+  // of the same name is never adopted (`-b` below would refuse it anyway). Say
+  // so before git does, with the ways forward
+  // (design/0047-stewardship-fresh-branch/).
+  if (branchExists(canonical, branch)) {
+    throw new WardError(
+      `branch '${branch}' already exists in repos/${repoName} — a task worktree is cut fresh ` +
+        `from origin/${repoRecord.mainLine} and never adopts an existing branch. If it is a ` +
+        `leftover whose work has landed, delete it (git -C repos/${repoName} branch -D ` +
+        `${branch}); otherwise name a fresh branch with --branch NAME.`,
+    );
+  }
   const result = git(
     canonical,
     'worktree',
@@ -104,13 +116,11 @@ export async function createWorkspaceWorktree(
   branchInput?: string,
 ): Promise<{ task: FoundTask; record: WorktreeRecord }> {
   const task = await resolveOpenTask(root, taskCode);
-  // A namespaced default: stewardship branches sit beside the journal in the
-  // workspace's own `git branch`, and the prefix is what announces them there.
-  const branch = branchInput ?? `steward/${task.record.slug}`;
+  const mainLine = resolveWorkspaceMainLine(root);
+  const branch = branchInput ?? (await defaultStewardshipBranch(root, task));
   const fileName = `workspace--${branch.replaceAll('/', '-')}`;
   const recordType = worktreeRecordType(task.dir, fileName);
   const path = `worktrees/${taskAddress(task)}-${branch.replaceAll('/', '-')}`;
-  const mainLine = resolveWorkspaceMainLine(root);
 
   let record: WorktreeRecord;
   if (existsSync(join(root, recordType.relPath))) {
@@ -119,6 +129,13 @@ export async function createWorkspaceWorktree(
       return { task, record }; // convergent: already there
     }
   } else {
+    // A new stewardship worktree starts from the current main-line tip
+    // (design/0047-stewardship-fresh-branch/). A derived name is never taken
+    // (above); a NAMED branch that already exists is adopted only when it
+    // already holds that tip — anything behind it is a leftover whose copy of
+    // the record is stale, and checking it out would classify and merge
+    // against history the main line has moved past.
+    if (branchInput !== undefined) refuseStaleStewardshipBranch(root, branch, mainLine);
     record = {
       type: 'worktree',
       source: 'workspace',
@@ -148,9 +165,7 @@ export async function createWorkspaceWorktree(
   // checked out where it stands — its commits are work, never recreated. A
   // stale registration left by a hand-deleted directory is pruned first.
   git(root, 'worktree', 'prune');
-  const branchExists =
-    git(root, 'rev-parse', '--verify', '--quiet', `refs/heads/${record.branch}`).exitCode === 0;
-  const args = branchExists
+  const args = branchExists(root, record.branch)
     ? ['worktree', 'add', join(root, record.path), record.branch]
     : ['worktree', 'add', '-b', record.branch, join(root, record.path), mainLine];
   const result = git(root, ...args);
@@ -158,6 +173,53 @@ export async function createWorkspaceWorktree(
     throw new WardError(`git worktree add failed: ${result.stderr.trim()}`);
   }
   return { task, record };
+}
+
+/**
+ * The branch a stewardship worktree rides when none is named
+ * (design/0047-stewardship-fresh-branch/). A task that already holds a
+ * workspace worktree converges on its branch — re-running the verb must find
+ * the same worktree, not mint a second. Otherwise `steward/<slug>`, unless a
+ * branch of that name already exists: teardown leaves merged and abandoned
+ * stewardship branches behind (0019 defers pruning), and slugs repeat — every
+ * upgrade task is `workspace-upgrade` — so the bare name is routinely someone
+ * else's history. A taken name gets the task's address appended, and a
+ * counter after that (rooms are reused once a task closes): deterministic,
+ * legible in `git branch`, and always cut fresh from the main-line tip.
+ */
+async function defaultStewardshipBranch(root: string, task: FoundTask): Promise<string> {
+  const held = (await readTaskWorktrees(root, task.dir)).find(
+    (record) => record.source === 'workspace',
+  );
+  if (held !== undefined) return held.branch;
+  const base = `steward/${task.record.slug}`;
+  if (!branchExists(root, base)) return base;
+  const addressed = `${base}-${taskAddress(task)}`;
+  let candidate = addressed;
+  for (let n = 2; branchExists(root, candidate); n++) candidate = `${addressed}-${n}`;
+  return candidate;
+}
+
+/**
+ * Refuses a named stewardship branch that exists but does not contain the
+ * main line's tip — naming how far behind it is and the ways forward.
+ */
+function refuseStaleStewardshipBranch(root: string, branch: string, mainLine: string): void {
+  if (!branchExists(root, branch)) return;
+  if (git(root, 'merge-base', '--is-ancestor', mainLine, branch).exitCode === 0) return;
+  const behind = git(root, 'rev-list', '--count', `${branch}..${mainLine}`).stdout.trim();
+  throw new WardError(
+    `branch '${branch}' already exists in the workspace's own repository and is ${behind} ` +
+      `commit(s) behind ${mainLine} — a stewardship worktree starts from the current tip of ` +
+      `${mainLine}, and adopting this branch would work against a stale copy of the record. ` +
+      `If its work has landed, delete it at the workspace root (git branch -d ${branch}); if ` +
+      `it holds work to keep, rebase it onto ${mainLine} first; or name a fresh branch with ` +
+      '--branch NAME, or omit --branch to let Ward choose one.',
+  );
+}
+
+function branchExists(dir: string, branch: string): boolean {
+  return git(dir, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`).exitCode === 0;
 }
 
 // -- rebase ---------------------------------------------------------------
