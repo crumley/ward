@@ -59,6 +59,41 @@ export function settledTask(record: TaskRecord, now: number = Date.now()): boole
 }
 
 /**
+ * The narrowing `ward task list` takes (design/0049-task-list-filters/).
+ * Every field present must hold — the filters combine with AND — and an
+ * absent field narrows nothing.
+ */
+export interface TaskFilter {
+  /** A case-insensitive substring of the slug: a slug family, not one slug. */
+  readonly slug?: string;
+  readonly state?: WorkState;
+  readonly floor?: number;
+  /** A repository the task records touching. */
+  readonly repo?: string;
+}
+
+/** Whether a task record passes every filter given. */
+export function matchesTaskFilter(record: TaskRecord, filter: TaskFilter): boolean {
+  if (filter.slug !== undefined && !record.slug.toLowerCase().includes(filter.slug.toLowerCase())) {
+    return false;
+  }
+  if (filter.state !== undefined && record.state !== filter.state) return false;
+  if (filter.floor !== undefined && record.floor !== filter.floor) return false;
+  if (filter.repo !== undefined && !(record.repositories ?? []).includes(filter.repo)) return false;
+  return true;
+}
+
+/**
+ * Whether a filter is itself the request for settled history. Asking for
+ * closed tasks is asking for the record of finished work, which the window
+ * would otherwise cut to its last week — so `--state closed` reaches the
+ * whole history without `--all`. No other filter lifts the window.
+ */
+export function filterLiftsWindow(filter: TaskFilter): boolean {
+  return filter.state === 'closed';
+}
+
+/**
  * A floor that has settled: it is closed, or every task it holds is — and the
  * newest of those closes (or its own) is older than the window. A floor with
  * no tasks at all never settles on its own: an empty container is `active`

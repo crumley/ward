@@ -124,8 +124,12 @@ export function taskIdentity(metavar: 'ADDRESS' | 'TASK'): ValueParser<'async', 
  * A number-valued argument that suggests: the suggester wraps `integer()`
  * rather than `string()`, so what the verb ACCEPTS is unchanged (a bad value
  * is optique's own parse error) and only the menu is added.
+ *
+ * `task list --floor` takes `'any'` (design/0049-task-list-filters/): a
+ * listing filter reads history, and a closed floor's tasks are exactly the
+ * history a reader may be after, so every floor is offered there.
  */
-export function floorNumber(): ValueParser<'async', number> {
+export function floorNumber(include: 'open' | 'any' = 'open'): ValueParser<'async', number> {
   const base = integer({ metavar: 'FLOOR' });
   return {
     ...base,
@@ -139,7 +143,7 @@ export function floorNumber(): ValueParser<'async', number> {
           root === null
             ? []
             : (await readProjects(root))
-                .filter((project) => project.record.state !== 'closed')
+                .filter((project) => include === 'any' || project.record.state !== 'closed')
                 .map((project) => ({
                   text: String(project.record.floor),
                   description: project.record.slug,

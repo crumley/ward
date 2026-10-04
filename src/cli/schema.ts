@@ -43,7 +43,10 @@ export type PrForgeShape = z.infer<typeof prForgeShape>;
  * What the settled-work window omitted from a listing
  * (design/0036-floor-addressed-tasks/) — always present on the verbs that
  * window, zeros included, so a filtered listing is never mistaken for the
- * whole record. `--all` lifts the filter and the counts go to zero.
+ * whole record. `--all` lifts the filter and the counts go to zero. Under
+ * `task list` filters (design/0049-task-list-filters/) the counts are of
+ * tasks that matched the filter and were cut by the window — rows excluded
+ * by the filter itself were excluded on request, not hidden.
  */
 export const hiddenShape = z.strictObject({
   tasks: z.number().int().nonnegative(),

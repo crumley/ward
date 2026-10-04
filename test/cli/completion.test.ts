@@ -101,6 +101,14 @@ test('repository arguments complete to registered names, the main line as the cu
   ]);
 });
 
+test('`task list` filters complete: every state, registered repos, every floor', () => {
+  expect(words(['task', 'list', '--state', ''])).toEqual(['active', 'paused', 'closed']);
+  expect(offers(['task', 'list', '--repo', ''])).toEqual([{ text: 'demo', description: 'main' }]);
+  expect(offers(['task', 'list', '--floor', ''])).toEqual([
+    { text: String(GROUND_FLOOR), description: 'workspace' },
+  ]);
+});
+
 test('`session close|resume ID` complete to OPEN session ids — closed stays closed', () => {
   for (const verb of ['close', 'resume']) {
     expect(offers(['session', verb, ''])).toEqual(
