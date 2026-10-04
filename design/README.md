@@ -59,9 +59,11 @@ triangle, all governed by `intent`.
 the slice it touches, the assumption made to keep moving, and a proposed revision. The file is
 created only when the build raises an SF: an entry without one is normal, and the absence is the
 record that building found no friction — a file saying "none" is tokens every later reader pays for
-nothing. An SF is `pending` until settled; once settled, its disposition is **appended** to it —
-`adjudicated` with a link to the intent change that settled it, or `declined` with a one-line why —
-never rewriting the original text, so what building surfaced stays on the record.
+nothing. Each SF carries a `**Status:**` line — the SF's one mutable line, written `pending` from
+the start and edited in place when it settles: `adjudicated` with a link to the intent change that
+settled it, or `declined` with a one-line why. Everything below Status is never rewritten, so what
+building surfaced stays on the record; only the SF's state moves. Writing `pending` down rather than
+implying it by silence is what lets the open queue be found mechanically.
 
 **`build-log.md`** (optional) — one block per iteration, newest at the bottom, holding only what the
 commits cannot: what building **forced or revealed** (a failing test that changed the design, a
@@ -117,20 +119,35 @@ and frictions intact, in the order it happened — means the next build starts f
 learned, and the diff in `intent/` between entries is the visible result: Ward's intent, hardened by
 the act of building Ward.
 
-## Open spec-feedback
+## Finding open spec-feedback
 
-The SFs still `pending` across entries — the queue lives here, in the repo, not in someone's head or
-one session's memory. When an entry raises an SF, add a line (id, entry, one-line friction); when
-the SF's disposition is appended in its entry, remove the line here.
+The entries are the queue. Each SF carries a `**Status:**` line, so what is still open is a question
+the entries answer directly:
 
-- **SF-001** — [0033](0033-repo-remove/README.md): repository removal built as a local, autonomous
-  act behind the fail-safe — the removal limb of the slice's open question, awaiting the intent
-  edit.
-- **SF-001** — [0034](0034-workspace-session-shorthand/spec-feedback.md): the session log's purpose
-  minimum assumes a goal — what an interactive workspace session, opened to receive work, records as
-  its purpose.
+```sh
+grep -rn '\*\*Status:\*\* *pending' design/*/
+```
 
-Entries 0001–0029 predate this queue and their SFs carry dispositions unevenly — some settled in
-their own text, some settled by later intent edits without a disposition line, some genuinely open.
-A one-time reconciliation sweep (append the missing dispositions, then list what is truly pending
-here) is owed and has not been done.
+**Why there is no index here.** This README used to carry a hand-maintained list of the pending SFs,
+because `pending` used to be the _absence_ of a disposition line and absence cannot be found any
+other way. A list nothing derives and nothing checks is a cache, and this one drifted: it carried
+`0035`'s SF-001 and SF-002 as open long after both were adjudicated in
+[#75](https://github.com/crumley/ward/pull/75) and [#76](https://github.com/crumley/ward/pull/76).
+Every other line it held pointed at an SF whose entry already stated the same thing, so removing it
+loses nothing — the entries were always the authoritative copy.
+
+## The reconciliation still owed
+
+**34 SFs in entries 0001–0033 carry no Status line at all.** They predate the convention, and they
+were never in the index either — so they have been invisible the whole time, which is the debt this
+README has recorded since it was written: some were settled in their own text, some were settled by
+later intent edits that left no mark, some are genuinely open. Nothing here guesses which.
+
+```sh
+# the unconverted ones, to be read and given a Status
+grep -rn 'SF-[0-9]' design/00*/ design/001*/ design/002*/ design/003[0-3]*/
+```
+
+The pass is judgment, not conversion: read the SF, find whether the intent change landed, write the
+Status. Worth doing one entry at a time, whenever one is next touched, rather than as a sweep that
+would be guessing at the oldest ones.
