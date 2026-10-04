@@ -48,12 +48,13 @@ relevant slice (and reflected in tests and code).
 - [`01-concepts/05-context-loading.md`](../01-concepts/05-context-loading.md) — none open (_the
   append-vs-rewrite line now settled as the two-zone model — below_).
 - [`01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md) — repository
-  removal/rename/remote-moves; more than one workspace on a machine (and whether a machine-level
-  registry may exist); **what runs the cadence** (also cross-cutting, above); precedence between
-  composed layers; deletion rather than shadowing (_the configuration half now settled as replace,
-  not merge_); semantic drift across an upgrade; migration safety; how improvements bound for Ward
-  itself cross the local↔remote boundary. (_Where versioning belongs, the shape of a reconciliation,
-  declining a default, and the Ward-owned tier's membership test are now settled — see below._)
+  rename/remote-moves (_removal now settled: refused under live tasks, autonomous otherwise_); more
+  than one workspace on a machine (and whether a machine-level registry may exist); **what runs the
+  cadence** (also cross-cutting, above); precedence between composed layers; deletion rather than
+  shadowing (_the configuration half now settled as replace, not merge_); semantic drift across an
+  upgrade; migration safety; how improvements bound for Ward itself cross the local↔remote boundary.
+  (_Where versioning belongs, the shape of a reconciliation, declining a default, and the Ward-owned
+  tier's membership test are now settled — see below._)
 - [`02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md) — none open (_the
   artifact taxonomy now settled as two tiers — below; the concurrency primitive is a bounded
   technique choice under §19, constrained by the store contract, chosen in `design/`_).

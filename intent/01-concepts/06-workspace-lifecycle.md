@@ -135,6 +135,16 @@ Repositories). Populating that set is part of the workspace's arc, not a detail 
   its own source would have smuggled in a dependency no principle argues for.
 - **Registration is local and reversible, so it is autonomous** (§18). Fetching a repository reads
   from the remote; nothing crosses the boundary outward, so no authority is required.
+- **A repository leaves by a deliberate act, symmetrically local and autonomous** (§18) — and the
+  act is **refused** while any open task's worktree stands on its checkout or the checkout carries
+  evidence of unrecorded work: a dirty tree, a stash, a branch holding commits the remote's main
+  line lacks. _Why refusal, not a question:_ the canonical checkout is the object store every
+  worktree of the repository borrows, so removing it under live tasks is not an ambiguous case to
+  adjudicate but the destruction of their anchor; the remedy is closing those tasks, and the
+  fail-safe of [`03-work-lifecycle.md`](03-work-lifecycle.md) applied to departure is what guards
+  everything else. _Why autonomous:_ with those gates satisfied the checkout is re-creatable from
+  its remote to the commit and the record's deletion is one journal commit from revert — local and
+  reversible, the same reason registration needs no authority.
 
 ## Preconditions: self-sufficiency is about the record, not the machine
 
@@ -676,7 +686,9 @@ read as an omission rather than a decision.
   **contained canonical checkout** (inside the workspace, one per repository, independent of every
   worktree, ignored by the workspace's own git); the main line read from the repository rather than
   assumed; adopt-or-clone **converging on the contained checkout**; that **no repository is required
-  or special** — Ward's own source included; registration as a local, autonomous act.
+  or special** — Ward's own source included; registration and **removal** as local, autonomous acts,
+  removal refused while an open task's worktree stands on the checkout or it carries unrecorded
+  work.
 - **Preconditions** — that §3's self-sufficiency is about the **record, not the machine**; the
   required/optional split that gives `doctor` its subject; and the **global-state boundary**
   (preferences only; nothing resumption depends on).
@@ -745,9 +757,9 @@ read as an omission rather than a decision.
 
 ## Open questions
 
-- **Repository removal, rename, and remote-moves.** What it means to remove a repository that live
-  tasks reference, and how a moved remote or renamed main line is reconciled. Deferred: the
-  bootstrap path only adds.
+- **Repository rename and remote-moves.** How a renamed repository, a moved remote, or a renamed
+  main line is reconciled. Deferred: the set only adds and removes. (Removal, the third limb this
+  question once carried, is settled above — refused under live tasks, autonomous otherwise.)
 - **More than one workspace on a machine.** Whether that is expected, and whether Ward may keep a
   machine-level registry of workspaces — which would be state outside the workspace and must be
   reconciled with the global-state boundary above.
