@@ -31,6 +31,6 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   session's work is read from the threads it opened, not from its own entry. That lets an
   interactive standing session be complete against the minimum without an invented goal, and keeps
   the field load-bearing where a goal genuinely exists.
-- **Status:** pending. The owner's review (2026-09-03) affirmed both halves of the assumption — the
-  workspace-scope default states the kind of session, and task scope keeps requiring a purpose — and
-  set the default's wording; the intent edit that would settle the slice is not yet made.
+- **Status:** adjudicated — [#96](https://github.com/crumley/ward/pull/96) (owner's ruling: a
+  session opened to receive work records the kind of session it is as its purpose, read for its work
+  from the threads it opened; task scope keeps requiring a purpose).

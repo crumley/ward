@@ -54,7 +54,6 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   SF-001 and is deliberately not re-proposed here: that one settles the spelling, this one settles
   the container.
 
-- **Status:** pending.
 - **Status:** adjudicated — [#84](https://github.com/crumley/ward/pull/84) (owner's ruling: the
   cheapest one-off is one task on the ground floor with one elided session — stated through the
   rule's own test, not through the bare task the build no longer produces).
@@ -96,7 +95,6 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   [`06-workspace-lifecycle.md`](../../intent/01-concepts/06-workspace-lifecycle.md) would have to
   say how a Ward-authored default is meant to name a per-workspace number.
 
-- **Status:** pending.
 - **Status:** adjudicated — [#84](https://github.com/crumley/ward/pull/84) (owner's ruling: floor 0
   is reserved for the standing workspace project, the one address every workspace shares; ordinary
   floors stay monotonic from 1 and never reused).
@@ -134,7 +132,6 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   concrete number left to [`design/`](../../design/) as before. Keep the link to _Identity_, which
   (with SF-002 settled) is where the reserved number and its _why_ live.
 
-- **Status:** pending.
 - **Status:** adjudicated — [#84](https://github.com/crumley/ward/pull/84) (owner's ruling: the
   standing project's identity is fixed and the same in every workspace, rather than allocated like
   any project's).

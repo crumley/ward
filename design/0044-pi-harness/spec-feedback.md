@@ -32,7 +32,6 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   written for**; changing the harness may make a previously valid value invalid, surfaced by the
   harness at launch, and Ward neither translates nor gates it." No behaviour change is implied —
   only that the intent name the binding it already relies on.
-- **Status:** pending.
 - **Status:** adjudicated — [#91](https://github.com/crumley/ward/pull/91) (owner's ruling: a
   passed-through model or thinking-depth value is bound to the harness it was written for; switching
   harness may invalidate it, the harness's launch error surfaces it, and Ward neither translates nor
@@ -60,7 +59,6 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   ([`07-human-shell.md`](../../intent/02-subsystems/07-human-shell.md)) that the per-scope ladder
   below the workspace is not yet built would keep the promise honest. Raised for the record; likely
   resolved by a future entry that widens resolution rather than by an intent edit here.
-- **Status:** pending.
 - **Status:** adjudicated — [#91](https://github.com/crumley/ward/pull/91) (owner's ruling: the
   harness slice stands as an aspiration; the human-shell slice now says the two axes are the rungs
   built today and the ladder's narrower rungs are not yet — widening resolution is a future entry's

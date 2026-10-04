@@ -26,3 +26,7 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   stands on its checkout or the checkout carries evidence of unrecorded work — the fail-safe of
   [`03-work-lifecycle.md`](../../intent/01-concepts/03-work-lifecycle.md) applied to departure. Trim
   the open question to its two remaining limbs (rename; a moved remote or renamed main line).
+- **Status:** adjudicated — [#95](https://github.com/crumley/ward/pull/95) (owner's ruling: a
+  repository leaves the set by a deliberate act, symmetrically local and autonomous, refused while
+  any open task's worktree stands on its checkout or it carries unrecorded work; rename and
+  remote-moves stay open).

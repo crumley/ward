@@ -59,7 +59,6 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   correction into the open-questions "Identity edges closed" bullet, the glossary's identity row,
   and the delivering-work walkthrough's two "workspace-unique" phrases.
 
-- **Status:** pending.
 - **Status:** adjudicated — [#81](https://github.com/crumley/ward/pull/81) (owner's ruling: a task
   composes its address from floor + room, rooms run in opening order round a floor, and the bare
   room is a shorthand accepted while unique among open tasks and refused with the candidates named
@@ -104,7 +103,6 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   when it speaks to a human, and **accepts a shorthand while it is unique**, refusing with the
   candidates named when it is not.
 
-- **Status:** pending.
 - **Status:** adjudicated — [#81](https://github.com/crumley/ward/pull/81) (owner's ruling: settled
   work leaves the glanceable surface after a stated window and stays retrievable on request; Ward
   prefers the full address when it speaks and accepts a shorthand while it is unique).

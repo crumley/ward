@@ -49,7 +49,6 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   promise concrete in the same breath: what is left to complete the task is **derived** from that
   live state plus the workspace's own record (worktrees, the PR set), never from a stored summary.
 
-- **Status:** pending.
 - **Status:** adjudicated — [#88](https://github.com/crumley/ward/pull/88) (owner's ruling: the
   forge's check verdict is a tracked per-PR fact, read live like review state and never stored;
   `closed unmerged` joins the status enumeration; the next step is derived, not summarized).
@@ -93,7 +92,6 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   both costs a word and is true. Extend the _Canonical home for_ line for the attention surface with
   the same clause, so the rule is discoverable where the surface is defined.
 
-- **Status:** pending.
 - **Status:** adjudicated — [#88](https://github.com/crumley/ward/pull/88) (owner's ruling: where a
   condition is derivable but its addressee is not, the attention surface presents it either-way,
   naming both acts, rather than dropping it or asserting an addressee).
