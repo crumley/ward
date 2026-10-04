@@ -12,6 +12,7 @@
 // a `--json` invocation, or any non-TTY caller is never asked, and the
 // session stays open exactly as it did before this entry existed.
 import { createInterface } from 'node:readline';
+import { writeOut } from './output.ts';
 
 /** `--on-exit`: the answer given in advance, for a human who already knows it. */
 export type OnExit = 'ask' | 'keep' | 'close';
@@ -69,9 +70,9 @@ export function exitDecision(situation: ExitSituation): ExitDecision {
  * would).
  */
 export async function askToClose(prompt: string, defaultYes: boolean): Promise<boolean> {
-  process.stdout.write(`${prompt} ${defaultYes ? '[Y/n]' : '[y/N]'} `);
+  writeOut(`${prompt} ${defaultYes ? '[Y/n]' : '[y/N]'} `);
   const answer = await readLine();
-  process.stdout.write('\n');
+  writeOut('\n');
   if (answer === null) return false;
   const trimmed = answer.trim().toLowerCase();
   if (trimmed === '') return defaultYes;
