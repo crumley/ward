@@ -35,6 +35,18 @@ test('rebases onto a moved main line, refreshing the canonical checkout first', 
   expect(git(ws, 'status', '--porcelain').stdout).toBe('');
 });
 
+test('worktree create never adopts an existing branch in the canonical checkout (0047)', async () => {
+  await openTask(ws, 'second', { floor: GROUND_FLOOR });
+  gitOrThrow(checkoutPath(ws, 'demo'), 'branch', 'leftover', 'main');
+  const attempt = createWorktree(ws, 'f0t2', 'demo', 'leftover');
+  expect(attempt).rejects.toThrow(/branch 'leftover' already exists in repos\/demo/);
+  expect(attempt).rejects.toThrow(/git -C repos\/demo branch -D leftover/);
+  await attempt.catch(() => undefined);
+  // A fresh name still works.
+  const { record } = await createWorktree(ws, 'f0t2', 'demo', 'second-fresh');
+  expect(record.branch).toBe('second-fresh');
+});
+
 test('already up to date says so and repeats cleanly — idempotent', async () => {
   const first = await rebaseTaskWorktrees(ws, 't1');
   expect(first.reports.map((r) => r.outcome)).toEqual(['current']);
