@@ -7,14 +7,15 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cliPath, GIT_ENV, makeTempDir, NO_GH, removeDir, WARD_GLOBAL_ENV } from '../helpers.ts';
+import { GIT_ENV, makeTempDir, NO_GH, removeDir, WARD_GLOBAL_ENV } from '../helpers.ts';
 
 const PIPE_BUFFER = 64 * 1024;
 
 const rows: { name: string; argv: () => string[]; exitCode: number }[] = [
-  // A real verb, ending naturally: the schema document is the largest one
-  // ward emits without a workspace, and it touches no record.
-  { name: 'ward schema (natural exit)', argv: () => ['bun', cliPath, 'schema'], exitCode: 0 },
+  // The path every `--json` verb takes, ending naturally: printJson with a
+  // document past the buffer even compact (design/0050-compact-json-for-pipes/
+  // shrank `ward schema` under 64 KiB, so no real verb is a dependable size).
+  { name: 'printJson, natural exit', argv: () => ['bun', printer], exitCode: 0 },
   // The flushed exit: a console write followed at once by a nonzero exit,
   // the shape of `doctor --json` on an unhealthy workspace.
   { name: 'console.log then exitWhenFlushed(3)', argv: () => ['bun', fixture], exitCode: 3 },
@@ -33,6 +34,7 @@ for (const row of rows) {
 
 let dir: string;
 let fixture: string;
+let printer: string;
 
 beforeAll(() => {
   dir = makeTempDir();
@@ -47,6 +49,17 @@ installPipeSafeConsole();
 void process.stdout.isTTY;
 console.log(JSON.stringify({ rows: Array.from({ length: 4000 }, (_, i) => 'row ' + i + ' '.repeat(40)) }));
 await exitWhenFlushed(3);
+`,
+  );
+  printer = join(dir, 'printer.ts');
+  const json = new URL('../../src/cli/json.ts', import.meta.url).pathname;
+  writeFileSync(
+    printer,
+    `import { installPipeSafeConsole } from ${JSON.stringify(output)};
+import { printJson } from ${JSON.stringify(json)};
+installPipeSafeConsole();
+void process.stdout.isTTY;
+printJson({ rows: Array.from({ length: 4000 }, (_, i) => 'row ' + i + ' '.repeat(40)) });
 `,
   );
 });
