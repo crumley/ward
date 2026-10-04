@@ -48,7 +48,6 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   constraint there once: a judgment recorded at a container may change what happens **next**, and
   never silently relocates what is already placed.
 
-- **Status:** pending.
 - **Status:** adjudicated — [#81](https://github.com/crumley/ward/pull/81) (owner's ruling: a
   project may claim repositories as a routing default, never a rule — explicit placement always
   wins, and a moved claim leaves open tasks where they are).
@@ -84,7 +83,6 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   either way is better than the current silence, in which each build has to decide for itself
   whether a floor number means something.
 
-- **Status:** pending.
 - **Status:** adjudicated — [#81](https://github.com/crumley/ward/pull/81) (owner's ruling: option
   (a) — the ordering of floors carries no semantics Ward assigns; a workspace may adopt conventions
   and Ward neither enforces nor infers them).

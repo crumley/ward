@@ -71,7 +71,6 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   setup/teardown actions, and it does not use creation's re-run as its example. Named here so a
   reader settling this SF does not go looking for a §6 edit that is not owed.
 
-- **Status:** pending.
 - **Status:** adjudicated — [#86](https://github.com/crumley/ward/pull/86) (owner's ruling: creation
   is a one-time, located act that refuses a path already carrying a workspace and names the update
   path; convergence, with every property it had, belongs to update).
@@ -121,7 +120,6 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   two halves so the section's artifact focus reads as one of two rather than as the whole. Update
   the _Canonical home for_ bullet for the recovery/doctor/update map in the same words.
 
-- **Status:** pending.
 - **Status:** adjudicated — [#86](https://github.com/crumley/ward/pull/86) (owner's ruling: the
   update owns the record's shape as well as the installed artifacts — the standing project and
   floor, ignore policy, reserved directories, guidance bridge, main-line name, baseline record).
