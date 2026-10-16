@@ -237,13 +237,13 @@ export function worktreeRecordType(
 /**
  * The level a session is responsible for (design/0029-launched-sessions/;
  * intent/01-concepts/00-domain-model.md — a session's scope is workspace /
- * project / task / room). Two values today: every session recorded before this
- * entry is a task session, and workspace scope is the one this entry launches.
- * `project` and `room` arrive as new values with the verbs that open them —
- * data, not a migration, because no existing record changes when the enum
- * grows.
+ * project / task / room). Every session recorded before 0029 is a task
+ * session, and workspace scope is the one 0029 launches. `project` — a floor's
+ * own session (design/0051-floor-scope-sessions/) — arrived the way 0029 said
+ * it would, as a new value with the verb that opens one; `room` will do the
+ * same. Data, not a migration: no existing record changes when the enum grows.
  */
-export const sessionScopeSchema = z.enum(['workspace', 'task']);
+export const sessionScopeSchema = z.enum(['workspace', 'project', 'task']);
 export type SessionScope = z.infer<typeof sessionScopeSchema>;
 
 /**
@@ -275,6 +275,13 @@ export const sessionSchema = z
     scope: sessionScopeSchema.optional(),
     /** The task addressed — present exactly when the scope is a task. */
     task: z.string().min(1).optional(),
+    /**
+     * The floor addressed — present exactly when the scope is a project
+     * (design/0051-floor-scope-sessions/). The floor number, not the slug:
+     * it is the project's identity, monotonic and never reused, and the one
+     * every other record already addresses a floor by.
+     */
+    floor: z.number().int().nonnegative().optional(),
     purpose: z.string().min(1),
     workingDirectory: z.string().min(1),
     /** Free-form harness handle (which harness, which native run), when known. */
@@ -314,6 +321,9 @@ export const sessionSchema = z
   // is identified by location and has no code to carry.
   .refine((record) => ((record.scope ?? 'task') === 'task') === (record.task !== undefined), {
     message: "a task session names its task; a workspace session names none — 'task' must match",
+  })
+  .refine((record) => (record.scope === 'project') === (record.floor !== undefined), {
+    message: "a project session names its floor, and only it does — 'floor' must match",
   });
 export type SessionRecord = z.infer<typeof sessionSchema>;
 
@@ -324,7 +334,9 @@ export function sessionScopeOf(record: SessionRecord): SessionScope {
 
 /**
  * Session records live under the scope they belong to: a task's beside its
- * task record, and a workspace-scope session's in `sessions/` at the root —
+ * task record, a floor's beside its project record
+ * (design/0051-floor-scope-sessions/), and a workspace-scope session's in
+ * `sessions/` at the root —
  * the workspace's own level, exactly as `tasks/` holds the bare tasks that
  * elide the project level (levels are elided, not faked). `scopeDir` is the
  * empty string for the workspace itself.

@@ -32,7 +32,13 @@ import type { CreateReport } from '../workspace/create.ts';
 import type { DoctorReport } from '../workspace/doctor.ts';
 import type { AddReport, RefreshReport, RemoveReport } from '../workspace/repos.ts';
 import type { RestoreReport } from '../workspace/restore.ts';
-import type { HiddenSummary, StatusReport, TaskDetail, TaskStatus } from '../workspace/status.ts';
+import type {
+  HiddenSummary,
+  SessionStatus,
+  StatusReport,
+  TaskDetail,
+  TaskStatus,
+} from '../workspace/status.ts';
 import type { MergeReport } from '../workspace/steward.ts';
 import type { CloseReport } from '../workspace/tasks.ts';
 import type { UpgradeReport } from '../workspace/upgrade.ts';
@@ -53,6 +59,7 @@ import type {
   SessionLocateShape,
   SessionMutationShape,
   ShellAdoptShape,
+  StatusSessionShape,
   StatusShape,
   StatusTaskShape,
   StatusWorktreeShape,
@@ -163,6 +170,17 @@ function statusTaskJson(status: TaskStatus): StatusTaskShape {
   };
 }
 
+/** One open session as `status` and `task show` report it — the same row at every scope. */
+function statusSessionJson(session: SessionStatus): StatusSessionShape {
+  return {
+    id: session.id,
+    purpose: session.purpose,
+    ...(session.machine === undefined ? {} : { machine: session.machine }),
+    openedAt: session.openedAt,
+    history: session.history,
+  };
+}
+
 export function statusJson(report: StatusReport): StatusShape {
   return {
     workspace: report.workspace,
@@ -174,6 +192,7 @@ export function statusJson(report: StatusReport): StatusShape {
       ...(project.project.repositories === undefined
         ? {}
         : { repositories: project.project.repositories }),
+      sessions: project.sessions.map(statusSessionJson),
       tasks: project.tasks.map(statusTaskJson),
     })),
     bareTasks: report.bareTasks.map(statusTaskJson),
@@ -183,13 +202,7 @@ export function statusJson(report: StatusReport): StatusShape {
       settledAfterDays: report.hidden.settledAfterDays,
     },
     machine: report.machine,
-    sessions: report.sessions.map((session) => ({
-      id: session.id,
-      purpose: session.purpose,
-      ...(session.machine === undefined ? {} : { machine: session.machine }),
-      openedAt: session.openedAt,
-      history: session.history,
-    })),
+    sessions: report.sessions.map(statusSessionJson),
     ...(report.needsYou === undefined
       ? {}
       : {
@@ -280,13 +293,7 @@ export function taskShowJson(detail: TaskDetail): TaskShowShape {
       ? {}
       : { worktrees: status.worktrees.map(statusWorktreeJson) }),
     machine: detail.machine,
-    sessions: detail.sessions.map((session) => ({
-      id: session.id,
-      purpose: session.purpose,
-      ...(session.machine === undefined ? {} : { machine: session.machine }),
-      openedAt: session.openedAt,
-      history: session.history,
-    })),
+    sessions: detail.sessions.map(statusSessionJson),
     next: {
       reason: detail.next.reason,
       text: detail.next.text,
@@ -607,6 +614,7 @@ export function sessionMutationJson(record: SessionRecord): SessionMutationShape
     // never has to infer the level from which fields happen to be here.
     scope: sessionScopeOf(record),
     ...(record.task === undefined ? {} : { task: record.task }),
+    ...(record.floor === undefined ? {} : { floor: record.floor }),
     purpose: record.purpose,
     workingDirectory: record.workingDirectory,
     ...(record.handle === undefined ? {} : { handle: record.handle }),
@@ -658,6 +666,7 @@ export function sessionLocateJson(location: SessionLocation): SessionLocateShape
     id: location.record.id,
     scope: sessionScopeOf(location.record),
     ...(location.record.task === undefined ? {} : { task: location.record.task }),
+    ...(location.record.floor === undefined ? {} : { floor: location.record.floor }),
     state: location.record.state,
     handle: location.handle,
     harness: location.harness,

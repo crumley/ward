@@ -30,6 +30,7 @@ import type { SessionRecord } from '../store/types.ts';
 import {
   appendSessionEvent,
   findSession,
+  openFloorSession,
   openWorkspaceSession,
   requireOpenSession,
 } from '../workspace/sessions.ts';
@@ -50,7 +51,17 @@ export interface LaunchedSession {
 type Recorded = (record: SessionRecord) => void;
 
 /**
- * Open a workspace-scope session and run the agent in it, in the foreground.
+ * The scope a launched session opens at: the workspace itself, or one floor
+ * (design/0051-floor-scope-sessions/). A task session is never launched — it
+ * stays the record-only verb 0004 built.
+ */
+export type LaunchScope = { readonly floor?: undefined } | { readonly floor: number };
+
+/**
+ * Open a workspace- or floor-scope session and run the agent in it, in the
+ * foreground. The two differ only in the record — its scope, where it lives,
+ * the default purpose — and never in how the agent is started: a floor
+ * session stands where a workspace session stands, at the root.
  *
  * The adapter is chosen from the resolved `agent.harness` (default `claude`) —
  * a launch has no handle yet, so the configured harness is what selects it.
@@ -68,8 +79,9 @@ type Recorded = (record: SessionRecord) => void;
  * still says what it said, and the resume affordance the caller prints is what
  * turns it back into a run.
  */
-export async function launchWorkspaceSession(
+export async function launchSession(
   root: string,
+  at: LaunchScope,
   purpose: string | undefined,
   workingDirectory: string | undefined,
   onRecorded: Recorded = () => {},
@@ -83,12 +95,16 @@ export async function launchWorkspaceSession(
   const adapter = adapterNamed(resolvedHarness(agent.harness));
   const model = chosenFlag('model', agent.model);
   const effort = chosenFlag('effort', agent.effort);
-  const record = await openWorkspaceSession(root, purpose, {
+  const options = {
     handle: adapter.handle(nativeId),
     ...model,
     ...effort,
     ...(workingDirectory === undefined ? {} : { workingDirectory }),
-  });
+  };
+  const record =
+    at.floor === undefined
+      ? await openWorkspaceSession(root, purpose, options)
+      : await openFloorSession(root, at.floor, purpose, options);
   onRecorded(record);
   const run = await runHarness(adapter, {
     argv: adapter.startArgv({ nativeId, ...model, ...effort, args: argsOf(agent.args) }),
@@ -198,15 +214,25 @@ async function refuseUnresumable(root: string, record: SessionRecord, path: stri
   if (there !== undefined && there !== here) {
     throw new WardError(
       `session ${record.id} ran on ${there}; its history is not on ${here} (looked at ${path}). ` +
-        `Resume it on ${there}, or start a fresh session here: ward session open --purpose TEXT`,
+        `Resume it on ${there}, or start a fresh session here: ${freshOpen(record)}`,
     );
   }
   await appendSessionEvent(root, record.id, 'resume-failed', `history not found at ${path}`);
   throw new WardError(
     `session ${record.id} has no harness history on ${here} (looked at ${path}) — the harness ` +
       'owns retention, and the attempt is recorded as resume-failed. The session stays open; ' +
-      'start a fresh session here: ward session open --purpose TEXT',
+      `start a fresh session here: ${freshOpen(record)}`,
   );
+}
+
+/**
+ * The open that starts a fresh run at the same scope — a floor session's
+ * successor is another floor session, not a workspace one.
+ */
+function freshOpen(record: SessionRecord): string {
+  return record.floor === undefined
+    ? 'ward session open --purpose TEXT'
+    : `ward session open --floor ${record.floor} --purpose TEXT`;
 }
 
 /**

@@ -23,7 +23,8 @@ operated with the \`ward\` CLI and tracked in git.
   project that never closes, and it is floor 0 in every workspace. Ordinary floors run from 1.
 - \`tasks/\` — legacy bare tasks from before the ground floor: read, never written.
 - \`sessions/\` — sessions opened at **workspace scope**: the ones responsible for the workspace
-  itself rather than for any one task. A task's sessions live beside its task record instead.
+  itself rather than for any one floor or task. A floor's own sessions live beside its project
+  record, and a task's beside its task record.
 - \`repositories/\` — the records of registered repositories (one document each).
 - \`repos/\` — canonical checkouts of registered repositories, kept fresh and never worked in
   directly.
@@ -73,6 +74,13 @@ open is what starts the agent** — there is no id to copy by hand:
   \`Coordinating work · opened <time>\`. Ward assigns the harness handle before the process starts and sets
   \`WARD_AGENT\` in its environment, so the new session is declared from its first command and
   nothing about Ward has to be explained to it.
+- \`ward session open --floor N [--purpose TEXT]\` opens a session at **floor scope** instead:
+  responsible for floor N's outcome rather than any one task on it. It launches the same way, in
+  the workspace root; left without a purpose, the record says
+  \`Coordinating floor N · opened <time>\`, and its id names the floor (\`f7-1@mbp\`). A session
+  has one floor: work that keeps spanning two floors is a sign they are one project, and a
+  session that only routes between floors is a workspace-scope one. \`--floor 0\` is the ground floor's own session — the
+  workspace's own work — while workspace scope holds the status of every floor.
 - **A session id names the machine it ran on**, and a number is never reused:
   \`workspace-7@mbp\` is workspace session seven, on \`mbp\`. A session is bound to the computer
   holding its harness history while this record travels, so two machines sharing one workspace
@@ -85,8 +93,8 @@ open is what starts the agent** — there is no id to copy by hand:
   Ward asks once whether to close it when the run exits, defaulting to yes only when the run left
   no history at all; \`--on-exit keep|close\` answers in advance, and nothing is ever asked of an
   agent, a \`--json\` invocation, or a caller without a terminal.
-- \`ward status\` lists the open workspace-scope sessions, each saying whether its harness history
-  is on this machine — so a session with nothing to resume is visible, with the command that ends
+- \`ward status\` lists the open workspace-scope sessions, and each floor's under its floor, each
+  saying whether its harness history is on this machine — so a session with nothing to resume is visible, with the command that ends
   it. \`ward session resume\` refuses a session whose history is on another machine, naming the
   machine that can resume it, rather than starting a run that can only fail.
 - \`ward session locate ID\` resolves a session's handle to the harness's own history, reporting
@@ -101,10 +109,11 @@ open is what starts the agent** — there is no id to copy by hand:
   default then applies. \`ward doctor\` prints the resolved answer with the layer each key came
   from, and checks that the command can be found.
 - **Sessions Ward did not launch record themselves.** \`ward session open TASK --purpose TEXT\`
-  (and \`ward session open --purpose TEXT --handle HANDLE\` at workspace scope) records without
-  launching — the path for an agent that is already running, like the one reading this file. For
-  a task session run inside Claude Code, Ward reads the run's handle from the environment; else
-  pass your harness's own run id in \`--handle\`, prefixed by the harness
+  records without launching — the path for an agent that is already running, like the one
+  reading this file. At workspace or floor scope, the same open run from inside Claude Code
+  records that run instead of starting a second agent inside it. Inside Claude Code, Ward reads
+  the run's handle from the environment; else pass your harness's own run id in \`--handle\`
+  (which always records rather than launches), prefixed by the harness
   (\`claude:<session-id>\`, \`pi:<session-id>\`), so the run can be located again. Never record
   a handle you had to guess: one that names no run locates nothing.
 - \`ward session show ID\` reads one session's record, open or closed — its scope, state, and
