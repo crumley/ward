@@ -302,6 +302,16 @@ export const sessionSchema = z
      */
     model: z.string().min(1).optional(),
     effort: z.string().min(1).optional(),
+    /**
+     * The session that started this one (design/0052-session-parent-link/):
+     * the id of the session whose run opened it, captured at open from the
+     * caller's declared identity and present exactly when that names a
+     * session in this workspace. Recorded because it cannot be derived later —
+     * where two sessions happen to be hosted says nothing about who started
+     * whom. Optional so every earlier record parses unchanged, and absent for
+     * a session a human opened.
+     */
+    parent: z.string().min(1).optional(),
     state: z.enum(['open', 'closed']),
     /** The append-only lifecycle trail; absent on records written before 0029. */
     events: z.array(sessionEventSchema).optional(),

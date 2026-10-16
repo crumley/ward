@@ -766,6 +766,8 @@ export const sessionMutationShape = z.strictObject({
   /** What the agent was started with — present only where Ward did the starting. */
   model: z.string().optional(),
   effort: z.string().optional(),
+  /** The session that started this one (0052); absent when none did, or before it. */
+  parent: z.string().optional(),
   state: z.enum(['open', 'closed']),
   events: z
     .array(

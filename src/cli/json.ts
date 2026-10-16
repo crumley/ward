@@ -613,6 +613,7 @@ export function sessionMutationJson(record: SessionRecord): SessionMutationShape
     ...(record.machine === undefined ? {} : { machine: record.machine }),
     ...(record.model === undefined ? {} : { model: record.model }),
     ...(record.effort === undefined ? {} : { effort: record.effort }),
+    ...(record.parent === undefined ? {} : { parent: record.parent }),
     state: record.state,
     ...(record.events === undefined
       ? {}

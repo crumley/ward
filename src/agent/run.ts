@@ -72,6 +72,7 @@ export async function launchWorkspaceSession(
   root: string,
   purpose: string | undefined,
   workingDirectory: string | undefined,
+  startedBy: string | undefined,
   onRecorded: Recorded = () => {},
 ): Promise<LaunchedSession> {
   const nativeId = randomUUID();
@@ -88,6 +89,7 @@ export async function launchWorkspaceSession(
     ...model,
     ...effort,
     ...(workingDirectory === undefined ? {} : { workingDirectory }),
+    ...(startedBy === undefined ? {} : { startedBy }),
   });
   onRecorded(record);
   const run = await runHarness(adapter, {
