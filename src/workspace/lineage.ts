@@ -229,8 +229,16 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '34842861a740dfc2ffe21e490967759c3cbdd05bf029ae0b6a3caaa26259e8db',
         era: 'design 0046 (task pr unlink)',
       },
-      // Current since design 0049: `task list` filters by slug, state, floor,
-      // and repo, and agents are told to filter rather than pull `--all`.
+      // design 0049 — `task list` filters by slug, state, floor, and repo, and
+      // agents are told to filter rather than pull `--all`. A session opened
+      // from inside another did not yet record its parent.
+      {
+        sha256: '4b3479735c3f694ab658e32a18185863e6d119e4b7a1c1aa3d6dcb4554c30abf',
+        era: 'design 0049 (task list filters)',
+      },
+      // Current since design 0052: a session opened while WARD_AGENT holds a
+      // session's id records it as parent, and agents are told to pass it to
+      // the agents they start.
     ],
   },
 ];

@@ -26,6 +26,12 @@ export interface OpenSessionOptions {
   /** What the agent was started with — recorded only where Ward did the starting. */
   readonly model?: string;
   readonly effort?: string;
+  /**
+   * The session the caller declares itself to be — WARD_AGENT, unverified.
+   * It becomes the record's `parent` only if it names a session here
+   * (`parentOf`, design/0052-session-parent-link/).
+   */
+  readonly startedBy?: string;
 }
 
 /**
@@ -87,6 +93,7 @@ export async function openSession(
       purpose,
       workingDirectory: options.workingDirectory ?? worktrees[0]?.path ?? '.',
       ...(options.handle === undefined ? {} : { handle: options.handle }),
+      ...(options.startedBy === undefined ? {} : { startedBy: options.startedBy }),
       subject: `Open session ${id} on task ${taskCode}`,
     });
   });
@@ -116,6 +123,7 @@ export async function openWorkspaceSession(
       ...(options.handle === undefined ? {} : { handle: options.handle }),
       ...(options.model === undefined ? {} : { model: options.model }),
       ...(options.effort === undefined ? {} : { effort: options.effort }),
+      ...(options.startedBy === undefined ? {} : { startedBy: options.startedBy }),
       subject: `Open session ${id} at workspace scope`,
     });
   });
@@ -344,15 +352,49 @@ interface OpenedFields {
   readonly machine: string;
   readonly model?: string;
   readonly effort?: string;
+  /** The caller's declared session, not yet checked against the store. */
+  readonly startedBy?: string;
   readonly subject: string;
 }
 
-/** One writer for both scopes: the record, its `opened` event, and the commit. */
+/**
+ * The session that started a new one (design/0052-session-parent-link/), or
+ * undefined — resolved under the store lock, at open, because the moment of
+ * opening is the only time the relation is observable at all.
+ *
+ * The caller's declaration becomes the link only when it names a session in
+ * THIS workspace, open or closed. Anything else records nothing, and nothing
+ * is refused: `WARD_AGENT=1` is the documented way to declare an agent with no
+ * session, and an id from another workspace is a real session somewhere
+ * else, so a refusal would fail an open that is entirely legitimate in order
+ * to protect a field that is optional by intent. A closed session still
+ * links: the link says who opened this one, and a run keeps running after its
+ * record is closed (a task close sweeps its sessions without stopping a
+ * process). The one declared session that is NOT a parent is the same run
+ * recording itself again — matching handles mean nothing was started.
+ */
+export function parentOf(
+  sessions: readonly OpenSessionListing[],
+  startedBy: string | undefined,
+  handle: string | undefined,
+): string | undefined {
+  if (startedBy === undefined) return undefined;
+  const opener = sessions.find((session) => session.record.id === startedBy)?.record;
+  if (opener === undefined) return undefined;
+  if (handle !== undefined && opener.handle === handle) return undefined;
+  return opener.id;
+}
+
+/** One writer for every scope: the record, its `opened` event, and the commit. */
 async function writeOpened(
   root: string,
   scopeDir: string,
   fields: OpenedFields,
 ): Promise<SessionRecord> {
+  const parent =
+    fields.startedBy === undefined
+      ? undefined
+      : parentOf(await readAllSessions(root), fields.startedBy, fields.handle);
   const openedAt = new Date().toISOString();
   const record: SessionRecord = {
     type: 'session',
@@ -365,6 +407,7 @@ async function writeOpened(
     machine: fields.machine,
     ...(fields.model === undefined ? {} : { model: fields.model }),
     ...(fields.effort === undefined ? {} : { effort: fields.effort }),
+    ...(parent === undefined ? {} : { parent }),
     state: 'open',
     events: [{ event: 'opened', at: openedAt }],
     openedAt,

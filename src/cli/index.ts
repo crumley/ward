@@ -110,7 +110,7 @@ import {
   rebaseTaskWorktrees,
   type WorktreeStatus,
 } from '../workspace/worktrees.ts';
-import { callerIsAgent } from './caller.ts';
+import { callerIsAgent, declaredSession } from './caller.ts';
 import {
   doctorJson,
   printJson,
@@ -2317,6 +2317,12 @@ async function cmdSessionOpen(
   json: boolean,
 ): Promise<void> {
   const root = await requireMutableWorkspace();
+  // The session this one is opened from, when the caller declares one
+  // (design/0052-session-parent-link/) — read on every path, because who
+  // started a session is a fact about the open, not about its scope or
+  // whether Ward launches it. The store decides whether it names a session.
+  const startedBy = declaredSession();
+  const started = startedBy === undefined ? {} : { startedBy };
   if (task !== undefined) {
     // An agent recording its own task session is standing in its harness's
     // run: the handle is read from there rather than composed by the agent,
@@ -2327,6 +2333,7 @@ async function cmdSessionOpen(
       await openSession(root, task, purpose, {
         ...(recorded === undefined ? {} : { handle: recorded }),
         ...(dir === undefined ? {} : { workingDirectory: dir }),
+        ...started,
       }),
       json,
     );
@@ -2337,6 +2344,7 @@ async function cmdSessionOpen(
       await openWorkspaceSession(root, purpose, {
         handle,
         ...(dir === undefined ? {} : { workingDirectory: dir }),
+        ...started,
       }),
       json,
     );
@@ -2346,7 +2354,7 @@ async function cmdSessionOpen(
   // the callback, so what the caller reads is the record as it stood BEFORE
   // any process existed — the ordering the whole design rests on, made
   // visible rather than merely promised.
-  const { record, run } = await launchWorkspaceSession(root, purpose, dir, (opened) => {
+  const { record, run } = await launchWorkspaceSession(root, purpose, dir, startedBy, (opened) => {
     if (json) printJson(sessionMutationJson(opened));
     else {
       console.log(
@@ -2421,6 +2429,7 @@ async function cmdSessionShow(id: string, json: boolean): Promise<void> {
   if (record.machine !== undefined) row('machine', record.machine);
   row('dir', record.workingDirectory);
   row('handle', record.handle ?? pc.dim('none recorded'));
+  if (record.parent !== undefined) row('parent', record.parent);
   row('opened', record.openedAt);
   if (record.closedAt !== undefined) row('closed', record.closedAt);
   if (record.events !== undefined && record.events.length > 0) {

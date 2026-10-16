@@ -119,7 +119,9 @@ You may be reading this from the workspace root or from inside a task worktree u
 - **Declare yourself.** Set \`WARD_AGENT=1\` in the environment before calling \`ward\` — or,
   better, set it to your session id once you have one. (A session Ward launched is born with it
   already set.) A declared agent gets plain, deterministic output and is never given an
-  interactive prompt.
+  interactive prompt. A session opened while it holds your id records yours as its **parent** —
+  so where you start another agent, pass it along: a new terminal or multiplexer window starts
+  from its own environment, and a session opened without it records no parent.
 - **Run \`ward\` commands concurrently when it helps.** Store writes serialize on a lock
   (\`.ward/store.lock\`) that names its holder; a write that cannot get it in time refuses
   legibly — rerun it. A lock left by a crashed process is taken over automatically, and
