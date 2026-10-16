@@ -44,3 +44,32 @@ with the exact command that proves it:** the rewritten documents pass the repo's
 `mise run check` → exit 0 on this branch. **Decisions.** All recorded under the entry's Design,
 cited to the prior-art file that justified each. **Next.** Human review of the rewritten entry and
 amended ADR; on acceptance, the build starts with the premise validation.
+
+## 2026-10-16 — Regrouped: one floor host per floor
+
+**Goal.** Re-decide the grouping the entry had deferred, now that the work it hosts is coordinated
+per floor: long-lived floor-scope sessions (0051 floor-scope-sessions) that start further sessions
+for their floor's tasks, with the parent recorded on each (0052 session-parent-link). **What was
+done.** The one-host-per-session decision was superseded in place, with what it bought kept on the
+record: one **floor host** per floor, one window per session, floor 0's windows linked into every
+floor host, placement derived from the record (own floor, or a non-zero parent's). What the
+regrouping forced, each now a decision under Design: window identity by **window-option tag**
+(`@ward_session`, `@ward_epoch`, `@ward_pane`) instead of a derived name, since window ids are not
+derivable and titles are rewritten — the dmux rebinder is the cost avoided; ownership moved off the
+tmux session environment, which a floor host shares and which every later window would inherit, so
+`WARD_AGENT` is now pane-only via `new-window -e` and verification reads window and host options;
+the host is found by **stamps** (`@ward_workspace`, `@ward_floor`) and its name minted only when the
+floor has none, which let the record **drop** `hostName` — `host` alone remains; attach goes through
+a **grouped view** so it never moves another client's current window; observe is a **single-window
+read-only view** built with `link-window -k`, after `attach -r` of the floor host (wrong grain),
+`capture-pane` (a poll, not a view), and `pipe-pane` (size-garbled, one pipe per pane) were weighed;
+close kills the window and the host only when nothing of its own remains, relying on tmux unlinking
+rather than killing floor-0 windows at `kill-session`; and since windows have no unique names to
+arbitrate a race, the probe-and-create moved **inside the store write** — safe because Ward's store
+lock is a link(2) lockfile holding no descriptor, which also retires the first version's
+spawn-after-release rule (that hazard was a flock's). One new friction went to
+[`spec-feedback.md`](spec-feedback.md) (SF-007, grouping by lineage), the six existing SFs were
+re-read against floor hosts and moved to one `**Status:**` line each, all still pending, and ADR
+0006 was amended in place, still proposed. **What works now — with the exact command that proves
+it:** `env -u WARD_AGENT mise run check` → exit 0 on this branch. **Next.** Human review of the
+regrouped entry; on acceptance, the build starts with the premise validation.

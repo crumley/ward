@@ -22,7 +22,10 @@ inside one entry. The design that consumes it is
 first drafted it was tested against a systematic survey of eleven comparable systems
 ([`prior-art/`](../0031-detached-session-hosting/prior-art/), committed beside that entry); the
 survey did not change the choice, and it did add caveats — recorded under Consequences below and
-amended in place, this ADR still being proposed.
+amended in place, this ADR still being proposed. The entry was later regrouped from one tmux session
+per Ward session to one **floor host** (a tmux session) per floor with a window per Ward session and
+floor 0's windows linked into each; that too left the choice standing and moved the caveats, amended
+in place below.
 
 What the intent fixes and what it leaves free: the **contract** above is fixed; the tool is free,
 explicitly plural (§19), and must remain swappable behind the adapter — the seam's own "not a
@@ -33,15 +36,17 @@ commitment to one specific multiplexer."
 - **tmux** — the ubiquitous terminal multiplexer. Detach/attach are its core verbs
   (`new-session -d`, `attach-session`, `detach-client`); **read-only attach is first-class and
   server-enforced** (`attach-session -r`); every query has a machine-readable form
-  (`list-sessions -F '#{…}'`, `has-session`, exit codes meant for scripts); sessions are **named**,
-  and the name is stable across the session's life — a record→live mapping needs nothing beyond a
-  name minted from Ward identity and recorded; per-session status/border styling (`set-option -t`)
-  is exactly the surface the theming seam will want. Packaged everywhere, decades stable, and —
-  crucially for §16 — it holds **no durable state of its own**: when the server dies, everything in
-  it is gone, which is the correct shape for a cache. Tradeoffs: a real dependency (though only for
-  those who want detachment); one more layer of key bindings between the human and the harness TUI;
-  no Windows — and two field-reported sharp edges the survey surfaced: interactive TUI agents can
-  crash when initialized in a **detached** session
+  (`list-sessions -F '#{…}'`, `list-windows -a -F`, `has-session`, exit codes meant for scripts);
+  sessions and windows carry **user options** (`@name`) that renames and title escapes never touch —
+  a record→live mapping can bind to a tag the launch set rather than to any name; windows can be
+  **linked** into several tmux sessions at once (`link-window`), so one live process can appear in
+  several groupings; per-session and per-window status/border styling (`set-option -t`) is exactly
+  the surface the theming seam will want. Packaged everywhere, decades stable, and — crucially for
+  §16 — it holds **no durable state of its own**: when the server dies, everything in it is gone,
+  which is the correct shape for a cache. Tradeoffs: a real dependency (though only for those who
+  want detachment); one more layer of key bindings between the human and the harness TUI; no Windows
+  — and two field-reported sharp edges the survey surfaced: interactive TUI agents can crash when
+  initialized in a **detached** session
   ([muxel](../0031-detached-session-hosting/prior-art/muxel.md), which deliberately omits `-d`), and
   `-t` targets **prefix-match** by default, so every scripted target needs the `=` exact-match
   prefix ([amux](../0031-detached-session-hosting/prior-art/amux-survey.md), after prefix matching
@@ -76,11 +81,14 @@ the added technique beside the foreground baseline. The two techniques serve the
 
 ## Consequences
 
-- **Every seam constraint maps to a first-class tmux verb** — keep-alive (`new-session -d`),
-  re-attach (`attach-session` / `switch-client`), observe read-only (`attach-session -r`,
-  server-enforced), map (the session **name**, minted from Ward identity and recorded — below),
-  re-create (`new-session` again from the record), group/label (name prefixes, `choose-tree`,
-  per-session options). Nothing has to be faked.
+- **Every seam constraint maps to a first-class tmux verb** — keep-alive (`new-window -d` in a floor
+  host made by `new-session -d`), re-attach (`attach-session` / `switch-client` on a grouped view,
+  `new-session -t`, so one client's current window never moves another's), observe read-only
+  (`attach-session -f read-only,ignore-size` on a single-window view built with `link-window`,
+  server-enforced), map (a **window tag** set at create — below), re-create (`new-window` again from
+  the record), group/label (a tmux session per floor, a window per Ward session, floor 0 linked into
+  each). Nothing has to be faked — though observe at session grain, free under one tmux session per
+  Ward session, now costs a transient view.
 - **The host stays a cache honestly.** tmux persists nothing across a server death, so a reboot
   leaves exactly what §16 prescribes: the record, and nothing live — recovery rebuilds from the
   record with no stale resurrection to reconcile.
@@ -88,17 +96,28 @@ the added technique beside the foreground baseline. The two techniques serve the
   is what an explicit choice or a missing tmux falls back to (with the consequence named). Windows
   is not served by this technique; it was not served by the baseline's audience assumptions either,
   and the adapter boundary is where a different host for a different platform would slot in.
-- **The name is minted, then recorded — never re-derived as a binding key.** The session name is
-  load-bearing for attach, doctor's drift checks, and theming — and the survey was unanimous that a
-  name derived from a **mutable** input (Ward's workspace name is editable) must not be the binding:
-  a rename would orphan every live session at once
-  ([cmux](../0031-detached-session-hosting/prior-art/cmux.md) bans workspace-derived keys;
-  [muxel](../0031-detached-session-hosting/prior-art/muxel.md)'s recorded-name-wins resolver
-  documents the duplicate-and-misreap failure;
-  [amux](../0031-detached-session-hosting/prior-art/amux-survey.md) keys to an immutable id). 0031
-  therefore mints the name once, records it on the session, treats it as an opaque whole thereafter,
-  and confirms a found session is Ward's own by a token the launch placed inside it — never by the
-  name alone.
+- **No name is a binding key — tags are.** The survey was unanimous that a name derived from a
+  **mutable** input (Ward's workspace name is editable) must not be the binding: a rename would
+  orphan every live session at once ([cmux](../0031-detached-session-hosting/prior-art/cmux.md) bans
+  workspace-derived keys; [muxel](../0031-detached-session-hosting/prior-art/muxel.md)'s
+  recorded-name-wins resolver documents the duplicate-and-misreap failure;
+  [amux](../0031-detached-session-hosting/prior-art/amux-survey.md) keys to an immutable id). The
+  first version of 0031 answered by recording the minted name; under floor hosts the answer is
+  tmux's user options: a floor host is found by `@ward_workspace`/`@ward_floor` stamps (its name
+  minted only when none exists, and recorded nowhere), a window by `@ward_session`, and a found
+  window is confirmed as the record's own by a generation stamp (`@ward_epoch`) the launch set —
+  never by a name, an index, or a title. Window ids are not derivable, and titles are rewritten by
+  the harness and by humans; [dmux](../0031-detached-session-hosting/prior-art/dmux.md)'s
+  title-encoding rebinder is what binding to a title costs.
+- **A floor host shares what a per-session host did not.** The tmux session environment is shared by
+  every window and inherited by every later one, so nothing session-specific may live there —
+  `WARD_AGENT` goes on the pane (`new-window -e`) and ownership evidence on window options. A window
+  linked into several floor hosts has one size, set by the most recently active client
+  (`window-size latest`): two differently sized terminals viewing floor 0 from two floor hosts take
+  turns resizing it. `kill-session` destroys only windows linked nowhere else, and `kill-window`
+  removes a window from every tmux session it is linked into — the semantics 0031's floor-0 linking
+  leans on, and its acceptance proves. The per-window user options, `new-window -e`, and the client
+  flags set a version floor that doctor's capability finding names.
 - **The detached start is the premise to validate first.** The field reports interactive TUI agents
   (Claude named explicitly) crashing when initialized with no client attached
   ([muxel](../0031-detached-session-hosting/prior-art/muxel.md)), and headless defaults being raised
@@ -106,11 +125,12 @@ the added technique beside the foreground baseline. The two techniques serve the
   The hosted session is therefore created at an explicit size, and 0031's build begins with a smoke
   check against a real tmux; if the premise fails, the mechanism pivots to attach-then-launch
   **within tmux** — the pivot changes 0031's create flow, not this ADR's choice of host.
-- **Exit legibility is free if asked for at create.** `remain-on-exit on` makes the host retain a
-  finished run's exit status and signal (`#{pane_dead_status}`, `#{pane_dead_signal}`), turning "the
-  session is gone" into "exited 0" or "killed by SIGKILL" with no shim in the run's process tree
+- **Exit legibility is free if asked for at create.** `remain-on-exit on` (set per window, so a
+  human's own windows in a floor host are untouched) makes the host retain a finished run's exit
+  status and signal (`#{pane_dead_status}`, `#{pane_dead_signal}`), turning "the session is gone"
+  into "exited 0" or "killed by SIGKILL" with no shim in the run's process tree
   ([amux](../0031-detached-session-hosting/prior-art/amux-survey.md)). The cost is owned: dead panes
-  linger, so liveness has layers (session present ≠ process alive) and close must kill dead sessions
+  linger, so liveness has layers (window present ≠ process alive) and close must kill dead windows
   too.
 - **Sharing the default server obliges Ward to start it hygienically.** The tmux server inherits the
   argv of the client that first forks it; a create run naked would leave the workspace path in the
