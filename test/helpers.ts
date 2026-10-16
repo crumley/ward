@@ -172,7 +172,7 @@ function findRoot(from) {
 function recordSeen(id) {
   const root = findRoot(process.cwd());
   if (root === null || !id) return false;
-  const containers = ['', 'tasks/*', 'projects/*/tasks/*'];
+  const containers = ['', 'tasks/*', 'projects/*', 'projects/*/tasks/*'];
   return containers.some((container) =>
     [...new Bun.Glob(join(container, 'sessions', id + '.md')).scanSync({ cwd: root })].length > 0,
   );

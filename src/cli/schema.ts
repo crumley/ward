@@ -127,8 +127,9 @@ export const needsYouShape = z.strictObject({
 export type NeedsYouShape = z.infer<typeof needsYouShape>;
 
 /**
- * One open workspace-scope session in `status`
- * (design/0038-machine-bound-sessions/): the record's identity and purpose,
+ * One open workspace- or floor-scope session in `status`
+ * (design/0038-machine-bound-sessions/, design/0051-floor-scope-sessions/):
+ * the record's identity and purpose,
  * the machine it ran on where one is recorded, and `history` — whether its
  * harness transcript is on THIS machine, read from the local filesystem at
  * read time and never stored.
@@ -155,6 +156,8 @@ export const statusShape = z.strictObject({
       derived: workStateSchema,
       /** The repositories this floor claims — a routing default (0037). */
       repositories: z.array(z.string()).optional(),
+      /** The floor's OWN open sessions (0051) — project scope, not its tasks'. */
+      sessions: z.array(statusSessionShape),
       tasks: z.array(statusTaskShape),
     }),
   ),
@@ -749,15 +752,18 @@ export type WorkspaceRegistryShape = z.infer<typeof workspaceRegistryShape>;
  * and `session close`, and read back by `session show`
  * (design/0045-agent-record-reads/). `scope` names the level the session works at
  * (design/0029-launched-sessions/) and `task` is present exactly when that
- * scope is a task: a workspace-scope session addresses the workspace, which is
- * identified by location and has no code to carry. `events` is the append-only
+ * scope is a task, `floor` exactly when it is a project
+ * (design/0051-floor-scope-sessions/): a workspace-scope session addresses the
+ * workspace, which is identified by location and has no code to carry. `events` is the append-only
  * lifecycle trail, absent on a record written before 0029 and never
  * fabricated.
  */
 export const sessionMutationShape = z.strictObject({
   id: z.string(),
-  scope: z.enum(['workspace', 'task']),
+  scope: z.enum(['workspace', 'project', 'task']),
   task: z.string().optional(),
+  /** The floor a project-scope session is responsible for (0051); present exactly then. */
+  floor: z.number().int().nonnegative().optional(),
   purpose: z.string(),
   workingDirectory: z.string(),
   handle: z.string().optional(),
@@ -824,8 +830,10 @@ export type ShellAdoptShape = z.infer<typeof shellAdoptShape>;
  */
 export const sessionLocateShape = z.strictObject({
   id: z.string(),
-  scope: z.enum(['workspace', 'task']),
+  scope: z.enum(['workspace', 'project', 'task']),
   task: z.string().optional(),
+  /** The floor a project-scope session is responsible for (0051); present exactly then. */
+  floor: z.number().int().nonnegative().optional(),
   state: z.enum(['open', 'closed']),
   handle: z.string(),
   harness: z.string(),
