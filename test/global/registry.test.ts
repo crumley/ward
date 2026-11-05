@@ -127,12 +127,14 @@ test('MRU: a touched workspace leads the list; the default still leads resolutio
   // The recorded stamp is millisecond-resolution, and two touches inside one
   // millisecond are genuinely indistinguishable — the path tie-break then
   // decides, deterministically. A test about ORDER must therefore separate
-  // its touches; a fast machine (CI) puts them in the same millisecond.
+  // its touches — from each other AND from the registration before them, so
+  // the pause comes before each touch; a fast machine (CI) otherwise puts
+  // them in the same millisecond.
+  await Bun.sleep(2);
   await touchWorkspace(alpha, state);
-  await Bun.sleep(2);
   expect((await listWorkspaces(state)).map((entry) => entry.name)).toEqual(['alpha', 'beta']);
-  await touchWorkspace(beta, state);
   await Bun.sleep(2);
+  await touchWorkspace(beta, state);
   expect((await listWorkspaces(state)).map((entry) => entry.name)).toEqual(['beta', 'alpha']);
   // Resolution is not MRU order: the default is what a verb falls back to.
   expect(resolutionOrder(await listWorkspaces(state))[0]?.name).toBe('alpha');
