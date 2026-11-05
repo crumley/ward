@@ -1,9 +1,9 @@
 // Floor-scope sessions, end to end through the spawned CLI
 // (design/0051-floor-scope-sessions/): `ward session open --floor N` records a
 // PROJECT-scope session beside the floor's project record and launches the
-// agent at the workspace root, exactly as a workspace-scope open does; the
-// record-only paths (`--handle`, or the run the caller stands in) record
-// without launching; and every session verb — status, show, locate, resume,
+// agent at the workspace root, exactly as a workspace-scope open does — even
+// from inside a harness run, since only `--handle` records without launching
+// at this scope; and every session verb — status, show, locate, resume,
 // close, `--json`, `ward schema` — reads the new scope.
 //
 // No test here spawns the real Claude Code: WARD_CLAUDE_BIN points at the
@@ -95,19 +95,43 @@ test('--handle at floor scope records without launching', async () => {
   expect((await readSessions(ws, FLOOR_DIR))[0]?.handle).toBe('claude:existing');
 });
 
-test('inside a harness run, a floor or workspace open records that run — no agent nested in it', async () => {
+test('inside a harness run, a floor or workspace open with no --handle still launches', async () => {
+  // How an agent responsible for the workspace or a floor starts a child
+  // session: the run it stands in is not read at these scopes, so the open
+  // launches rather than recording the caller itself.
+  const ambient = { CLAUDE_CODE_SESSION_ID: RUN_ID };
+  const floor = ward(['session', 'open', '--floor', '1', '--json'], { env: ambient });
+  expect(floor.exitCode).toBe(0);
+  const workspace = ward(['session', 'open', '--json'], { env: ambient });
+  expect(workspace.exitCode).toBe(0);
+
+  const launched = runs();
+  expect(launched.map((run) => run.wardAgent)).toEqual(['f1-1@test', 'workspace-1@test']);
+  expect(launched.every((run) => run.recordSeen)).toBe(true);
+  const [floorRecord] = await readSessions(ws, FLOOR_DIR);
+  const [workspaceRecord] = await readSessions(ws, '');
+  // Ward assigned each handle; neither is the ambient run's.
+  expect(floorRecord?.handle).toBe(`claude:${launched[0]?.argv[1]}`);
+  expect(workspaceRecord?.handle).toBe(`claude:${launched[1]?.argv[1]}`);
+  expect(floorRecord?.handle).not.toBe(`claude:${RUN_ID}`);
+  expect(workspaceRecord?.handle).not.toBe(`claude:${RUN_ID}`);
+});
+
+test('inside a harness run, --handle records only, at floor and workspace scope', async () => {
   const ambient = { CLAUDE_CODE_SESSION_ID: RUN_ID };
   for (const args of [['--floor', '1'], []]) {
-    const result = ward(['session', 'open', ...args, '--json'], { env: ambient });
+    const result = ward(['session', 'open', ...args, '--handle', `claude:${RUN_ID}`, '--json'], {
+      env: ambient,
+    });
     expect(result.exitCode).toBe(0);
     expect(sessionMutationShape.parse(JSON.parse(result.stdout)).handle).toBe(`claude:${RUN_ID}`);
   }
-  expect(runs()).toEqual([]);
-  // --handle still wins over the run.
+  // --handle names the run, whichever it is — not the ambient one by default.
   const named = ward(['session', 'open', '--floor', '1', '--handle', 'pi:abc', '--json'], {
     env: ambient,
   });
   expect(sessionMutationShape.parse(JSON.parse(named.stdout)).handle).toBe('pi:abc');
+  expect(runs()).toEqual([]);
 });
 
 // -- every session verb reads the scope ----------------------------------------

@@ -729,9 +729,9 @@ const worktree = command(
 // (design/0051-floor-scope-sessions/) — and LAUNCHES the agent in it: Ward
 // assigns the handle before the process starts, so nothing is ever hand-copied
 // and nothing of Ward's lands in the agent's context. With a TASK it stays the
-// record-only verb 0004 built; `--handle`, or a harness run the caller already
-// stands in, is the record-only path at every scope, for a session Ward did
-// not start.
+// record-only verb 0004 built (reading the handle from the harness run the
+// caller stands in); `--handle` is the record-only path at workspace and floor
+// scope, for a session Ward did not start.
 const session = command(
   'session',
   or(
@@ -2305,13 +2305,14 @@ async function cmdWorktreeList(json: boolean): Promise<void> {
  * - **TASK given** — the record-only session 0004 built. With no `--handle`,
  *   the handle is read from the harness run the caller stands in, when there
  *   is one (design/0045-agent-record-reads/).
- * - **no TASK, a run to record** — a record-only session at workspace scope,
+ * - **no TASK, `--handle` given** — a record-only session at workspace scope,
  *   or at `--floor N`'s (design/0051-floor-scope-sessions/), for a run Ward did
- *   not start: the one `--handle` names, else the one the caller stands in.
- *   An agent already running records itself; it is never handed a second,
- *   nested agent inside its own tool call.
- * - **no TASK, no run** — the launched path: Ward assigns the handle, writes
- *   the record, and runs the agent in the foreground.
+ *   not start: an agent already running records itself by naming its run.
+ * - **no TASK, no `--handle`** — the launched path, always: Ward assigns the
+ *   handle, writes the record, and runs the agent in the foreground. The run
+ *   the caller stands in is NOT read here — an agent at workspace or floor
+ *   scope opening a session is starting a child agent, and must be able to;
+ *   recording itself stays explicit, through `--handle`.
  *
  * Omitting TASK means workspace (or floor) scope EXPLICITLY, which is why this
  * verb no longer infers a task from the working directory as 0006 gave it: the
@@ -2330,15 +2331,7 @@ async function cmdSessionOpen(
   json: boolean,
 ): Promise<void> {
   const root = await requireMutableWorkspace();
-  // An agent recording its own session is standing in its harness's run: the
-  // handle is read from there rather than composed by the agent, which
-  // guesses when it does not know its run id — and a guessed handle locates
-  // nothing. `--handle` still wins; outside any run there is none.
-  const recorded = handle ?? ambientHandle() ?? undefined;
-  const options = {
-    ...(recorded === undefined ? {} : { handle: recorded }),
-    ...(dir === undefined ? {} : { workingDirectory: dir }),
-  };
+  const at = dir === undefined ? {} : { workingDirectory: dir };
   if (task !== undefined) {
     if (floor !== undefined) {
       throw new WardError(
@@ -2346,10 +2339,27 @@ async function cmdSessionOpen(
           `(ward session open --floor ${floor}), not both`,
       );
     }
-    renderSessionOpened(await openSession(root, task, purpose, options), json);
+    // An agent recording its own task session is standing in its harness's
+    // run: the handle is read from there rather than composed by the agent,
+    // which guesses when it does not know its run id — and a guessed handle
+    // locates nothing. `--handle` still wins; outside any run there is none.
+    const recorded = handle ?? ambientHandle() ?? undefined;
+    renderSessionOpened(
+      await openSession(root, task, purpose, {
+        ...(recorded === undefined ? {} : { handle: recorded }),
+        ...at,
+      }),
+      json,
+    );
     return;
   }
-  if (recorded !== undefined) {
+  // At workspace and floor scope only an explicit `--handle` records: with
+  // none, the open launches even from inside a harness run, because that is
+  // how an agent responsible for the workspace or a floor starts a child
+  // session. Reading the ambient run here would turn every such launch into a
+  // record of the caller itself.
+  if (handle !== undefined) {
+    const options = { handle, ...at };
     renderSessionOpened(
       floor === undefined
         ? await openWorkspaceSession(root, purpose, options)
@@ -2362,8 +2372,8 @@ async function cmdSessionOpen(
   // the callback, so what the caller reads is the record as it stood BEFORE
   // any process existed — the ordering the whole design rests on, made
   // visible rather than merely promised.
-  const at = floor === undefined ? {} : { floor };
-  const { record, run } = await launchSession(root, at, purpose, dir, (opened) => {
+  const scope = floor === undefined ? {} : { floor };
+  const { record, run } = await launchSession(root, scope, purpose, dir, (opened) => {
     if (json) printJson(sessionMutationJson(opened));
     else {
       console.log(
