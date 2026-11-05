@@ -11,7 +11,7 @@ import { choice, integer, string } from '@optique/core/valueparser';
 import { run } from '@optique/run';
 import picocolors from 'picocolors';
 import pkg from '../../package.json' with { type: 'json' };
-import { launchWorkspaceSession, locateSession, resumeSession } from '../agent/run.ts';
+import { launchSession, locateSession, resumeSession } from '../agent/run.ts';
 import { WardError } from '../errors.ts';
 import { type PrForgeState, probeForge } from '../forge/gh.ts';
 import { readConfig } from '../global/config.ts';
@@ -76,6 +76,7 @@ import {
   closeSession,
   describeScope,
   findSession,
+  openFloorSession,
   openSession,
   openWorkspaceSession,
 } from '../workspace/sessions.ts';
@@ -724,11 +725,13 @@ const worktree = command(
 );
 
 // Sessions (design/0029-launched-sessions/): with no TASK, `session open`
-// opens a session at WORKSPACE scope and LAUNCHES the agent in it — Ward
+// opens a session at WORKSPACE scope — or, with `--floor N`, at that floor's
+// (design/0051-floor-scope-sessions/) — and LAUNCHES the agent in it: Ward
 // assigns the handle before the process starts, so nothing is ever hand-copied
 // and nothing of Ward's lands in the agent's context. With a TASK it stays the
-// record-only verb 0004 built; `--handle` is the record-only path at either
-// scope, for a session Ward did not start.
+// record-only verb 0004 built; `--handle`, or a harness run the caller already
+// stands in, is the record-only path at every scope, for a session Ward did
+// not start.
 const session = command(
   'session',
   or(
@@ -739,7 +742,12 @@ const session = command(
         task: optional(argument(taskIdentity('TASK'))),
         purpose: optional(
           option('--purpose', string({ metavar: 'TEXT' }), {
-            description: message`What the session is for. Optional at workspace scope (recorded as "Coordinating work · opened <time>"); a task session states one.`,
+            description: message`What the session is for. Optional at workspace and floor scope (recorded as "Coordinating work · opened <time>", or "Coordinating floor N · …"); a task session states one.`,
+          }),
+        ),
+        floor: optional(
+          option('--floor', floorNumber(), {
+            description: message`Open the session at this floor's scope — responsible for the floor's outcome, standing at the workspace root.`,
           }),
         ),
         handle: optional(option('--handle', string({ metavar: 'TEXT' }))),
@@ -748,7 +756,7 @@ const session = command(
         json: jsonFlag(),
       }),
       {
-        brief: message`Open a session: with no TASK, at workspace scope, launching the agent.`,
+        brief: message`Open a session: with no TASK, at workspace or --floor scope, launching the agent.`,
       },
     ),
     command(
@@ -1135,6 +1143,7 @@ try {
       case 'session-open':
         await cmdSessionOpen(
           result.task,
+          result.floor,
           result.purpose,
           result.handle,
           result.dir,
@@ -2296,20 +2305,24 @@ async function cmdWorktreeList(json: boolean): Promise<void> {
  * - **TASK given** — the record-only session 0004 built. With no `--handle`,
  *   the handle is read from the harness run the caller stands in, when there
  *   is one (design/0045-agent-record-reads/).
- * - **no TASK, `--handle` given** — a record-only session at workspace scope,
- *   for a run Ward did not start (the agent reading the manifest is the
- *   motivating case: it is already running and records itself).
- * - **no TASK, no `--handle`** — the launched path: Ward assigns the handle,
- *   writes the record, and runs the agent in the foreground.
+ * - **no TASK, a run to record** — a record-only session at workspace scope,
+ *   or at `--floor N`'s (design/0051-floor-scope-sessions/), for a run Ward did
+ *   not start: the one `--handle` names, else the one the caller stands in.
+ *   An agent already running records itself; it is never handed a second,
+ *   nested agent inside its own tool call.
+ * - **no TASK, no run** — the launched path: Ward assigns the handle, writes
+ *   the record, and runs the agent in the foreground.
  *
- * Omitting TASK means workspace scope EXPLICITLY, which is why this verb no
- * longer infers a task from the working directory as 0006 gave it: the same
- * bare invocation cannot mean both "the task I am standing in" and "the
+ * Omitting TASK means workspace (or floor) scope EXPLICITLY, which is why this
+ * verb no longer infers a task from the working directory as 0006 gave it: the
+ * same bare invocation cannot mean both "the task I am standing in" and "the
  * workspace". A task session names its task, which is also what a declared
- * agent was always required to do.
+ * agent was always required to do. A session has one scope, so TASK and
+ * `--floor` together are refused rather than resolved.
  */
 async function cmdSessionOpen(
   task: string | undefined,
+  floor: number | undefined,
   purpose: string | undefined,
   handle: string | undefined,
   dir: string | undefined,
@@ -2317,27 +2330,30 @@ async function cmdSessionOpen(
   json: boolean,
 ): Promise<void> {
   const root = await requireMutableWorkspace();
+  // An agent recording its own session is standing in its harness's run: the
+  // handle is read from there rather than composed by the agent, which
+  // guesses when it does not know its run id — and a guessed handle locates
+  // nothing. `--handle` still wins; outside any run there is none.
+  const recorded = handle ?? ambientHandle() ?? undefined;
+  const options = {
+    ...(recorded === undefined ? {} : { handle: recorded }),
+    ...(dir === undefined ? {} : { workingDirectory: dir }),
+  };
   if (task !== undefined) {
-    // An agent recording its own task session is standing in its harness's
-    // run: the handle is read from there rather than composed by the agent,
-    // which guesses when it does not know its run id — and a guessed handle
-    // locates nothing. `--handle` still wins; outside any run there is none.
-    const recorded = handle ?? ambientHandle() ?? undefined;
-    renderSessionOpened(
-      await openSession(root, task, purpose, {
-        ...(recorded === undefined ? {} : { handle: recorded }),
-        ...(dir === undefined ? {} : { workingDirectory: dir }),
-      }),
-      json,
-    );
+    if (floor !== undefined) {
+      throw new WardError(
+        `a session has one scope — name the task (ward session open ${task}) or the floor ` +
+          `(ward session open --floor ${floor}), not both`,
+      );
+    }
+    renderSessionOpened(await openSession(root, task, purpose, options), json);
     return;
   }
-  if (handle !== undefined) {
+  if (recorded !== undefined) {
     renderSessionOpened(
-      await openWorkspaceSession(root, purpose, {
-        handle,
-        ...(dir === undefined ? {} : { workingDirectory: dir }),
-      }),
+      floor === undefined
+        ? await openWorkspaceSession(root, purpose, options)
+        : await openFloorSession(root, floor, purpose, options),
       json,
     );
     return;
@@ -2346,12 +2362,13 @@ async function cmdSessionOpen(
   // the callback, so what the caller reads is the record as it stood BEFORE
   // any process existed — the ordering the whole design rests on, made
   // visible rather than merely promised.
-  const { record, run } = await launchWorkspaceSession(root, purpose, dir, (opened) => {
+  const at = floor === undefined ? {} : { floor };
+  const { record, run } = await launchSession(root, at, purpose, dir, (opened) => {
     if (json) printJson(sessionMutationJson(opened));
     else {
       console.log(
         `${pc.green('opened')} session ${pc.bold(opened.id)} ` +
-          pc.dim(`(workspace scope, handle ${opened.handle ?? '?'})`),
+          pc.dim(`(${describeScope(opened)}, handle ${opened.handle ?? '?'})`),
       );
       console.log(pc.dim(`launching the agent in ${opened.workingDirectory} — WARD_AGENT is set`));
     }
@@ -2579,6 +2596,11 @@ async function cmdStatus(all: boolean, json: boolean): Promise<void> {
       `${pc.bold(`floor ${project.project.floor}`)} — ${project.project.slug}` +
         `${groundFloorNote(project.project)} [${renderState(project.derived)}]`,
     );
+    // The floor's own sessions lead its row (design/0051-floor-scope-sessions/):
+    // whoever is responsible for the floor reads before the work on it.
+    for (const session of project.sessions) {
+      console.log(`  ${pc.dim('session')} ${renderSessionRow(report.machine, session)}`);
+    }
     for (const task of project.tasks) {
       console.log(renderTaskStatus(task));
     }
@@ -2617,10 +2639,13 @@ function renderSessions(report: StatusReport): void {
   if (report.sessions.length === 0) return;
   console.log(`\n${pc.bold('sessions')}`);
   for (const session of report.sessions) {
-    console.log(
-      `  ${pc.bold(session.id)} — ${session.purpose} ${pc.dim(`(${sessionNote(report.machine, session)})`)}`,
-    );
+    console.log(`  ${renderSessionRow(report.machine, session)}`);
   }
+}
+
+/** One open session's line — the same at workspace scope and on a floor's row. */
+function renderSessionRow(here: string, session: SessionStatus): string {
+  return `${pc.bold(session.id)} — ${session.purpose} ${pc.dim(`(${sessionNote(here, session)})`)}`;
 }
 
 function sessionNote(here: string, session: SessionStatus): string {

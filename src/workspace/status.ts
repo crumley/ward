@@ -276,6 +276,12 @@ export interface ProjectStatus {
   readonly project: FoundProject['record'];
   /** Derived from the project's tasks — the stored state only pauses/closes it explicitly. */
   readonly derived: WorkState;
+  /**
+   * The floor's OWN open sessions (design/0051-floor-scope-sessions/) —
+   * project scope, responsible for the floor rather than a task on it. They
+   * ride the floor's row the way a task's sessions ride the task's.
+   */
+  readonly sessions: readonly SessionStatus[];
   readonly tasks: readonly TaskStatus[];
 }
 
@@ -302,10 +308,11 @@ export interface HiddenSummary {
 export type SessionHistory = 'found' | 'gone' | 'unlocatable';
 
 /**
- * One open workspace-scope session, as `status` reports it
- * (design/0038-machine-bound-sessions/). Task sessions stay on their task
- * lines, where their work is; these have no task row to sit on, which is the
- * gap 0029 deferred until there was more than one case in hand.
+ * One open session, as `status` reports it
+ * (design/0038-machine-bound-sessions/): a workspace-scope session in the
+ * workspace's own block, a floor's on the floor's row
+ * (design/0051-floor-scope-sessions/), a task's in `task show`. Task sessions
+ * stay on their task lines in `status`, where their work is.
  */
 export interface SessionStatus {
   readonly id: string;
@@ -361,12 +368,17 @@ export async function statusReport(
   let hiddenProjects = 0;
   for (const project of projects) {
     const own = tasks.filter((task) => task.dir.startsWith(`${project.dir}/`));
+    const sessions = openSessionStatuses(root, await readSessions(root, project.dir));
     const derived =
       project.record.state === 'active'
         ? deriveStatus(own.map((task) => task.record.state))
         : project.record.state;
+    // A floor whose session is still open is in flight whatever its tasks
+    // say: the window hides settled work, and a floor someone is still
+    // responsible for is not settled.
     if (
       options.all !== true &&
+      sessions.length === 0 &&
       settledProject(
         project.record,
         own.map((task) => task.record),
@@ -382,6 +394,7 @@ export async function statusReport(
     projectStatuses.push({
       project: project.record,
       derived,
+      sessions,
       tasks: glanceOrder(await taskStatuses(root, shown, probe), (status) => status.task.state),
     });
   }
@@ -431,8 +444,9 @@ function workspaceSessions(root: string, records: readonly SessionRecord[]): Ses
 
 /**
  * The OPEN sessions of a scope, each with the one derived fact that says what
- * can be done about it. Shared by the workspace block and by `task show`
- * (design/0043-task-next-surface/), so a session reads the same either way.
+ * can be done about it. Shared by the workspace block, each floor's row
+ * (design/0051-floor-scope-sessions/), and `task show`
+ * (design/0043-task-next-surface/), so a session reads the same everywhere.
  */
 function openSessionStatuses(root: string, records: readonly SessionRecord[]): SessionStatus[] {
   return records

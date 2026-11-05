@@ -17,7 +17,8 @@ import {
   sessionRecordType,
   sessionScopeOf,
 } from '../store/types.ts';
-import { commitRecords, readTasks, resolveOpenTask } from './scan.ts';
+import { resolveProject } from './projects.ts';
+import { commitRecords, projectDirs, readTasks, resolveOpenTask } from './scan.ts';
 import { readTaskWorktrees } from './worktrees.ts';
 
 export interface OpenSessionOptions {
@@ -54,6 +55,27 @@ export function defaultWorkspaceSessionPurpose(openedAt: string): string {
   return `Coordinating work · opened ${openedAt.replace(/\.\d{3}Z$/, 'Z')}`;
 }
 
+/**
+ * The id slug of a floor's own session (design/0051-floor-scope-sessions/):
+ * `f7` for floor 7, so ids read `f7-1@mbp` — the floor half of the task
+ * address `f7t14`, which a human already reads as "floor 7". The scope and
+ * its referent in two characters, like `workspace` for the workspace.
+ */
+export function floorSessionSlug(floor: number): string {
+  return `f${floor}`;
+}
+
+/**
+ * What a floor session is for when the opener says nothing
+ * (design/0051-floor-scope-sessions/): the floor's counterpart of
+ * `defaultWorkspaceSessionPurpose`. A floor session is opened to receive the
+ * floor's work and route it — the tasks it opens carry the purposes — so the
+ * kind of session stands as its purpose, naming the floor it coordinates.
+ */
+export function defaultFloorSessionPurpose(floor: number, openedAt: string): string {
+  return `Coordinating floor ${floor} · opened ${openedAt.replace(/\.\d{3}Z$/, 'Z')}`;
+}
+
 export async function openSession(
   root: string,
   taskCode: string,
@@ -63,13 +85,14 @@ export async function openSession(
   // A task session states its purpose (design/0034-workspace-session-shorthand/):
   // when you open a task you have one in mind, and several episodes can run
   // against one task, so the purpose is what tells them apart on the log.
-  // Only a workspace-scope session may leave it out — there Ward states one
-  // on the human's behalf (`defaultWorkspaceSessionPurpose`). Refused before
+  // Only a workspace or floor session may leave it out — there Ward states
+  // one on the human's behalf (`defaultWorkspaceSessionPurpose`,
+  // `defaultFloorSessionPurpose`). Refused before
   // the lock, so nothing is read or written for a call that cannot proceed.
   if (purpose === undefined) {
     throw new WardError(
       `a task session states its purpose — ward session open ${taskCode} --purpose TEXT ` +
-        '(only a workspace-scope session, opened with no TASK, may leave it out)',
+        '(only a workspace or floor session, opened with no TASK, may leave it out)',
     );
   }
   // The id-allocation scan through the commit is the serialized critical
@@ -117,6 +140,47 @@ export async function openWorkspaceSession(
       ...(options.model === undefined ? {} : { model: options.model }),
       ...(options.effort === undefined ? {} : { effort: options.effort }),
       subject: `Open session ${id} at workspace scope`,
+    });
+  });
+}
+
+/**
+ * Open a session at PROJECT scope — a floor's own session
+ * (design/0051-floor-scope-sessions/), responsible for the floor's outcome
+ * rather than for any one task on it. The record lands beside the project
+ * record (`projects/<floor>-<slug>/sessions/`), the floor's own level, as a
+ * task's sessions land beside the task's; its working directory defaults to
+ * the workspace root, where the agent stands to read every floor and route
+ * work, exactly as a workspace-scope session does. The ground floor is a floor
+ * like any other here: its session owns the workspace's own work, where a
+ * workspace-scope session holds the status of every floor.
+ */
+export async function openFloorSession(
+  root: string,
+  floor: number,
+  purpose: string | undefined,
+  options: OpenSessionOptions,
+): Promise<SessionRecord> {
+  return withStoreLock(root, `session open --floor ${floor}`, async () => {
+    const project = await resolveProject(root, floor);
+    // A closed floor's outcome is settled; a session responsible for it would
+    // own nothing. Paused is not closed — a paused floor still has an owner.
+    if (project.record.state === 'closed') {
+      throw new WardError(`project on floor ${floor} is closed — a session cannot open on it`);
+    }
+    const machine = (await readMachine()).name;
+    const id = await allocateId(root, floorSessionSlug(floor), machine);
+    return writeOpened(root, project.dir, {
+      id,
+      scope: 'project',
+      floor,
+      machine,
+      purpose,
+      workingDirectory: options.workingDirectory ?? '.',
+      ...(options.handle === undefined ? {} : { handle: options.handle }),
+      ...(options.model === undefined ? {} : { model: options.model }),
+      ...(options.effort === undefined ? {} : { effort: options.effort }),
+      subject: `Open session ${id} on floor ${floor}`,
     });
   });
 }
@@ -204,7 +268,7 @@ export interface OpenSessionListing {
  * very listing `closeSession` resolves against — one reader, so what the
  * shell offers and what the verb accepts cannot disagree. Since
  * design/0029-launched-sessions/ it also carries the workspace's own sessions,
- * at every scope.
+ * and since design/0051-floor-scope-sessions/ every floor's.
  */
 export async function readOpenSessions(root: string): Promise<OpenSessionListing[]> {
   return (await readAllSessions(root)).filter((listing) => listing.record.state === 'open');
@@ -215,6 +279,7 @@ export async function readAllSessions(root: string): Promise<OpenSessionListing[
   const listings: OpenSessionListing[] = [];
   for (const scopeDir of [
     WORKSPACE_SCOPE_DIR,
+    ...projectDirs(root),
     ...(await readTasks(root)).map((task) => task.dir),
   ]) {
     for (const record of await readSessions(root, scopeDir)) {
@@ -267,7 +332,14 @@ export async function requireOpenSession(root: string, id: string): Promise<Open
 
 /** How a session record reads in prose, for a human scanning `sessions/`. */
 export function describeScope(record: SessionRecord): string {
-  return sessionScopeOf(record) === 'workspace' ? 'workspace scope' : `task ${record.task ?? '?'}`;
+  switch (sessionScopeOf(record)) {
+    case 'workspace':
+      return 'workspace scope';
+    case 'project':
+      return `floor ${record.floor ?? '?'}`;
+    case 'task':
+      return `task ${record.task ?? '?'}`;
+  }
 }
 
 function sessionsDir(scopeDir: string): string {
@@ -336,7 +408,8 @@ interface OpenedFields {
   readonly id: string;
   readonly scope: SessionRecord['scope'];
   readonly task?: string;
-  /** Absent only at workspace scope, where the record states one itself. */
+  readonly floor?: number;
+  /** Absent only at workspace and floor scope, where the record states one itself. */
   readonly purpose?: string | undefined;
   readonly workingDirectory: string;
   readonly handle?: string;
@@ -347,7 +420,7 @@ interface OpenedFields {
   readonly subject: string;
 }
 
-/** One writer for both scopes: the record, its `opened` event, and the commit. */
+/** One writer for every scope: the record, its `opened` event, and the commit. */
 async function writeOpened(
   root: string,
   scopeDir: string,
@@ -359,7 +432,12 @@ async function writeOpened(
     id: fields.id,
     scope: fields.scope,
     ...(fields.task === undefined ? {} : { task: fields.task }),
-    purpose: fields.purpose ?? defaultWorkspaceSessionPurpose(openedAt),
+    ...(fields.floor === undefined ? {} : { floor: fields.floor }),
+    purpose:
+      fields.purpose ??
+      (fields.floor === undefined
+        ? defaultWorkspaceSessionPurpose(openedAt)
+        : defaultFloorSessionPurpose(fields.floor, openedAt)),
     workingDirectory: fields.workingDirectory,
     ...(fields.handle === undefined ? {} : { handle: fields.handle }),
     machine: fields.machine,
@@ -377,9 +455,17 @@ async function writeOpened(
 async function writeSession(root: string, scopeDir: string, record: SessionRecord): Promise<void> {
   await writeDocument(root, sessionRecordType(scopeDir, record.id), {
     data: record,
-    body:
-      sessionScopeOf(record) === 'workspace'
-        ? `Session \`${record.id}\` at workspace scope.`
-        : `Session \`${record.id}\` of task \`${record.task ?? '?'}\`.`,
+    body: sessionBody(record),
   });
+}
+
+function sessionBody(record: SessionRecord): string {
+  switch (sessionScopeOf(record)) {
+    case 'workspace':
+      return `Session \`${record.id}\` at workspace scope.`;
+    case 'project':
+      return `Session \`${record.id}\` of floor ${record.floor ?? '?'}.`;
+    case 'task':
+      return `Session \`${record.id}\` of task \`${record.task ?? '?'}\`.`;
+  }
 }
