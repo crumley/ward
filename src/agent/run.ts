@@ -84,6 +84,7 @@ export async function launchSession(
   at: LaunchScope,
   purpose: string | undefined,
   workingDirectory: string | undefined,
+  startedBy: string | undefined,
   onRecorded: Recorded = () => {},
 ): Promise<LaunchedSession> {
   const nativeId = randomUUID();
@@ -100,6 +101,7 @@ export async function launchSession(
     ...model,
     ...effort,
     ...(workingDirectory === undefined ? {} : { workingDirectory }),
+    ...(startedBy === undefined ? {} : { startedBy }),
   };
   const record =
     at.floor === undefined

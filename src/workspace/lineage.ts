@@ -242,9 +242,17 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '119a4e28debb359f34ee7873d33c388eee0b82079198ec861cc56a0131ab309c',
         era: 'design 0051 (floor-scope sessions)',
       },
-      // Current since the 0051 revert (2026-11-04): at workspace or floor scope
-      // only `--handle` records; without it the open always launches, even
-      // from inside a harness run.
+      // the 0051 revert (2026-11-04) — at workspace or floor scope only
+      // `--handle` records; without it the open always launches, even from
+      // inside a harness run. A session opened from inside another did not yet
+      // record its parent.
+      {
+        sha256: '7fe60b83fd9707011ed538f239ae4def9c5d3877bffe20d41ece06436c2dd616',
+        era: 'design 0051 revert (session open always launches)',
+      },
+      // Current since design 0052: a session opened while WARD_AGENT holds a
+      // session's id records it as parent, and agents are told to pass it to
+      // the agents they start.
     ],
   },
 ];

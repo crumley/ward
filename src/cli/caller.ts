@@ -16,3 +16,17 @@ export function callerIsAgent(env: Record<string, string | undefined> = process.
   const value = env.WARD_AGENT;
   return value !== undefined && value !== '';
 }
+
+/**
+ * The session the caller declares itself to be (design/0052-session-parent-link/):
+ * WARD_AGENT's value, which a Ward-launched run is born holding as its own
+ * session id. Unverified here, deliberately — `1` and an id from another
+ * workspace are both legitimate declarations, and only the store can say
+ * whether the value names a session (src/workspace/sessions.ts, the parent
+ * link). Undefined when nothing is declared.
+ */
+export function declaredSession(
+  env: Record<string, string | undefined> = process.env,
+): string | undefined {
+  return callerIsAgent(env) ? env.WARD_AGENT : undefined;
+}
