@@ -157,8 +157,29 @@ whose source does not exist yet reads as a contract the build silently fails ins
 thing to reach. Naming the condition keeps both errors out — the field is never quietly dropped from
 the target, and never invented out of nothing to satisfy it.
 
+A third conditioned field is **the session that started it** — its **parent** session — recorded
+when the session was opened from inside another one: a floor's coordinating session starting an
+agent for one of its tasks, an agent recording an episode it dispatched. The source is the opener's
+own declared identity at the moment of opening; a session a human opens from a shell has no parent,
+and a declaration that names no session in the workspace records none rather than a guess. **Why it
+is recorded, not derived:** the relation is a fact about the moment of opening, and nothing
+afterwards still holds it. The parent's process exits, its terminal closes, a reboot scatters every
+window — and two sessions side by side in one live host say only where they happen to be hosted,
+never who started whom (`../02-subsystems/01-session-multiplexer.md`: the live host is a cache over
+the record, never the source of truth). Captured at open it is provenance (§11 of
+`../00-foundation/01-principles.md`); reconstructed later it would be a guess. Recorded, it is what
+lets a dispatcher find what it started (_Dispatch and waiting_, below), lets recovery rounds hand a
+re-attached thread back to the session that owns it, and lets reflection read a delegation as a tree
+rather than a flat list. **Why the link lives on the child:** the child's entry is written once, at
+its own open; a parent that listed its children would be rewritten by every child's open — the
+stored roll-up `00-domain-model.md` rejects for status, for the same lost-update reason (§17). A
+session's children are read from the entries that name it.
+
 Sub-scopes nest within their parents, so reading a scope's record also reveals the threads beneath
-it. (Store is a _how_ — `../02-subsystems/00-metadata-store.md`.)
+it. A parent session is a different relation from a parent scope: the session that started a thread
+may work at the same scope, a broader one, or — for a fork — anywhere (`01-scopes-and-personas.md`),
+so the link records **who opened it**, never where it belongs. (Store is a _how_ —
+`../02-subsystems/00-metadata-store.md`.)
 
 The log records **lifecycle events, not just sessions**: per session, append-only entries for
 opened, resumed, **resume-failed (with its cause)**, and closed. Events are not states — the stored
@@ -269,9 +290,11 @@ remember it.
   is authoritative, and the record is kept current.
 - **The per-scope session log** (append-only; "enough metadata" to recover, including each session's
   **purpose** — the kind of session, for one opened to receive work — and the **machine** it ran on,
-  and — conditioned on a source existing — its **persona** once a cast exists and its **usage**
-  where the harness exposes it; **lifecycle events** — opened / resumed / resume-failed with cause /
-  closed — so failure is a recorded fact, never a silent retry).
+  and — conditioned on a source existing — its **persona** once a cast exists, its **usage** where
+  the harness exposes it, and its **parent session** where another session opened it (recorded at
+  open on the child, never derived from where the two are hosted); **lifecycle events** — opened /
+  resumed / resume-failed with cause / closed — so failure is a recorded fact, never a silent
+  retry).
 - **Recovery** — the cold-start orchestration that restores the in-flight threads (re-validating
   setup for **live** anchors only; addressing sessions by their workspace-unique bare id) — itself a
   **recorded episode** (wakes re-armed/fired, the rounds' conclusions) — and its **three per-thread
