@@ -50,18 +50,23 @@ adds that value and the verb that opens it.
     beside the existing `task` one. Records written before this entry carry no `floor` and parse
     unchanged.
   - **`ward session open --floor N [--purpose TEXT] [--dir PATH] [--handle H]`.** It refuses an
-    unknown floor or a closed project, and refuses TASK together with `--floor`. With no run to
-    record, it launches the agent exactly as the workspace-scope open does: same adapter, same
-    assigned handle, same `WARD_AGENT`, the same exit question. The record is
+    unknown floor or a closed project, and refuses TASK together with `--floor`. Without `--handle`,
+    it launches the agent exactly as the workspace-scope open does: same adapter, same assigned
+    handle, same `WARD_AGENT`, the same exit question. The record is
     `projects/<floor>-<slug>/sessions/<id>.md`, the id is `f<N>-<n>@<machine>`, the working
     directory defaults to `.`, and the purpose, when omitted, is
     `Coordinating floor N · opened <instant>`.
   - **The record-only path at workspace and floor scope.** `--handle H` records without launching,
-    as before. Without `--handle`, an open run from inside a harness run that names itself in the
-    environment (Claude Code's `CLAUDE_CODE_SESSION_ID`,
-    [0045](../0045-agent-record-reads/README.md)) records that run instead of launching a second
-    agent inside it. Task sessions already read the ambient handle; this extends it to the two
-    scopes that launch.
+    as before, and is the only thing that does. The contract of `ward session open`:
+    - **TASK given:** record-only. The handle is `--handle`, else the harness run the caller stands
+      in ([0045](../0045-agent-record-reads/README.md)).
+    - **No TASK, `--handle` given:** record-only, at workspace scope or at `--floor N`'s.
+    - **No TASK, no `--handle`:** always the launched path. Ward assigns the handle and launches the
+      agent, even when the caller stands inside a harness run. This is how a floor manager agent
+      starts a child session.
+
+    An agent recording its own session at workspace or floor scope passes `--handle` with its run's
+    id. The ambient run is not read at these scopes (see Design, _A no-TASK open launches_).
   - **Every session verb reads the scope.** `session show` prints `scope floor N`. `show`, `open`,
     `resume`, `close`, and `locate --json` carry `scope: project` and `floor`. `resume`'s
     fresh-start affordance names `--floor N` for a floor session. Completion describes the session
@@ -74,8 +79,8 @@ adds that value and the verb that opens it.
   - **`ward schema`.** The session shapes take the new scope value and `floor`, and the status shape
     takes the per-floor `sessions` array.
   - **The installed manifest.** It gets the `--floor` bullet, the layout note, the status line, and
-    the record-only bullet at every scope. The outgoing 0049 default joins the lineage, so an
-    untouched manifest upgrades.
+    the record-only bullet naming `--handle` at workspace and floor scope. The outgoing 0049 default
+    joins the lineage, so an untouched manifest upgrades.
 - **Deferred:**
   - **Personas, model tiers, dispatch, and wakes.** A floor session is recorded with the same
     configuration as any launched session. _Safe to defer because_ the record has no field any of
@@ -102,11 +107,12 @@ adds that value and the verb that opens it.
      writes `projects/1-alpha/sessions/f1-1@test.md` before the stub runs, in the root, with
      `WARD_AGENT` set and the default purpose. `--floor 0` and workspace scope stay distinct. An
      unknown floor and TASK with `--floor` are refused with nothing written or launched. `--handle`
-     and the ambient run record without launching, at floor and workspace scope. `status --json`
-     puts the session on its floor's row and not in the workspace block. `show`, `locate`, `resume`
-     (gone, then found), and `close` all read `scope: project, floor: 1`. Ids climb per floor and
-     never repeat. The schema refuses `project` without `floor` and `floor` on any other scope,
-     while a pre-0029 record still parses. `ward schema session open` names both.
+     records without launching at floor and workspace scope, and an open with no `--handle` from
+     inside a harness run still launches at both. `status --json` puts the session on its floor's
+     row and not in the workspace block. `show`, `locate`, `resume` (gone, then found), and `close`
+     all read `scope: project, floor: 1`. Ids climb per floor and never repeat. The schema refuses
+     `project` without `floor` and `floor` on any other scope, while a pre-0029 record still parses.
+     `ward schema session open` names both.
   2. `bun test test/agent/launch.test.ts test/cli/session-show.test.ts` stays green. Workspace and
      task sessions are unchanged, and the pre-0029 record still parses, closes, and locates.
   3. `bun test test/workspace/lineage.test.ts test/cli/upgrade.test.ts` passes with the 0049
@@ -161,16 +167,18 @@ adds that value and the verb that opens it.
     where a coordinating agent reads every floor and every repository record from, and it is where a
     workspace-scope session already stands, so one launch path serves both. _Cost:_ none. `--dir`
     still chooses, and the scope still says what the session answers for.
-  - **An open inside a harness run records that run (workspace and floor scope).** 0045 deferred
-    this at workspace scope because it "would change what the verb does based on the environment it
-    happens to run in". _Alternative:_ keep that deferral and have the agent pass `--handle`.
-    _Attractive_ because a verb's effect would never depend on the environment. _Lost_ because the
-    environment already decides the outcome. A launch from inside an agent's tool call starts an
-    interactive harness with no terminal, nested in a run that is itself the session being recorded,
-    and that is never what the caller meant. Reading the handle also removes the guessed-handle
-    failure 0045 named. Task sessions read the ambient handle already, so this makes the rule the
-    same at every scope. This supersedes that one deferral of 0045 and nothing else in it. _Cost:_ a
-    human who wants a nested launch from inside an agent must run it outside the agent.
+  - **A no-TASK open launches, even inside a harness run (workspace and floor scope).** 0045
+    deferred reading the ambient handle at workspace scope because it "would change what the verb
+    does based on the environment it happens to run in". _Alternative:_ the first build of this
+    entry lifted that deferral, so a no-TASK open inside a harness run recorded that run instead of
+    launching. It was _attractive_ because a launch nested in an agent's tool call looked like
+    something no caller meant, and reading the handle removes the guessed-handle failure. It _lost_
+    (reverted 2026-11-04, see the build log) because a nested launch is exactly what an agent at
+    workspace or floor scope means when it opens a session: it is starting a child agent. A floor
+    manager starting a worker, and the floor hosts and parent links that build on it, depend on
+    that. With the ambient read, an agent could not launch at these scopes at all. 0045's deferral
+    stands. _Cost:_ an agent recording itself at workspace or floor scope passes `--handle` with its
+    own run id, as it did before this entry.
   - **A floor with an open session is never hidden.** The settled-work window hides a floor whose
     tasks all closed over a week ago ([0036](../0036-floor-addressed-tasks/README.md)). An open
     floor session is a thread someone is still responsible for, and hiding it would make the one

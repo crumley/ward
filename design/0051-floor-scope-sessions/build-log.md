@@ -33,3 +33,31 @@ with `WARD_MACHINE=smoke`:
 - `ward doctor` on the same workspace raised no finding about the new directory.
 - `bun test test/agent/floor-sessions.test.ts` → `11 pass, 0 fail`.
 - `env -u WARD_AGENT mise run check` → exit 0, 810 pass, 0 fail across 69 files.
+
+## 2026-11-04 — A no-TASK open launches again; only `--handle` records
+
+**What changed.** The first iteration let the ambient harness run decide record versus launch at
+workspace and floor scope. That was outside the brief, and it is reverted. The contract of
+`ward session open` is back to the one before this entry, with `--floor` added:
+
+- **TASK given:** record-only. The handle is `--handle`, else the run the caller stands in (0045).
+- **No TASK, `--handle` given:** record-only, at workspace or floor scope.
+- **No TASK, no `--handle`:** always the launched path, even from inside a harness run.
+
+**Why.** An agent at workspace or floor scope that opens a session is starting a child agent. A
+floor manager starting a worker is the motivating case, and the floor hosts and the parent link
+being built next depend on it. With the ambient read, that agent could only ever record itself, so
+no agent could launch at these scopes. Recording yourself stays possible, and explicit: pass
+`--handle` with your run's id. The README's decision now records the revert, and 0045's deferral
+stands.
+
+**What else moved.** The installed manifest's record-only bullet says `--handle` is what records at
+workspace and floor scope, and that an open without it launches even from inside a running agent.
+The outgoing 0051 default (`119a4e28…`) joins the lineage, so an untouched manifest upgrades.
+
+**What works now — with the commands that prove it** (Bun 1.4.0, macOS):
+
+- `test/agent/floor-sessions.test.ts`: with `CLAUDE_CODE_SESSION_ID` set and no `--handle`, opens at
+  `--floor 1` and at workspace scope both launch the stub, each with the record already written and
+  a Ward-assigned handle that is not the ambient run's. With `--handle`, both scopes record only,
+  and nothing launches.

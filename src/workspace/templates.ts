@@ -109,13 +109,14 @@ open is what starts the agent** — there is no id to copy by hand:
   default then applies. \`ward doctor\` prints the resolved answer with the layer each key came
   from, and checks that the command can be found.
 - **Sessions Ward did not launch record themselves.** \`ward session open TASK --purpose TEXT\`
-  records without launching — the path for an agent that is already running, like the one
-  reading this file. At workspace or floor scope, the same open run from inside Claude Code
-  records that run instead of starting a second agent inside it. Inside Claude Code, Ward reads
-  the run's handle from the environment; else pass your harness's own run id in \`--handle\`
-  (which always records rather than launches), prefixed by the harness
-  (\`claude:<session-id>\`, \`pi:<session-id>\`), so the run can be located again. Never record
-  a handle you had to guess: one that names no run locates nothing.
+  (and, at workspace or floor scope, \`ward session open [--floor N] --purpose TEXT --handle
+  HANDLE\`) records without launching — the path for an agent that is already running, like the
+  one reading this file. For a task session run inside Claude Code, Ward reads the run's handle
+  from the environment; else pass your harness's own run id in \`--handle\`, prefixed by the
+  harness (\`claude:<session-id>\`, \`pi:<session-id>\`), so the run can be located again. At
+  workspace or floor scope only \`--handle\` records: without it the open launches a new agent,
+  even from inside a running one — how an agent responsible for the workspace or a floor starts
+  a child session. Never record a handle you had to guess: one that names no run locates nothing.
 - \`ward session show ID\` reads one session's record, open or closed — its scope, state, and
   trail of events (\`--json\` for the document).
 

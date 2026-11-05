@@ -236,8 +236,15 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '4b3479735c3f694ab658e32a18185863e6d119e4b7a1c1aa3d6dcb4554c30abf',
         era: 'design 0049 (task list filters)',
       },
-      // Current since design 0051: `session open --floor N` opens a floor's own
-      // session, and an open inside a harness run records that run.
+      // design 0051 — `session open --floor N` opens a floor's own session, and
+      // a no-TASK open inside a harness run recorded that run.
+      {
+        sha256: '119a4e28debb359f34ee7873d33c388eee0b82079198ec861cc56a0131ab309c',
+        era: 'design 0051 (floor-scope sessions)',
+      },
+      // Current since the 0051 revert (2026-11-04): at workspace or floor scope
+      // only `--handle` records; without it the open always launches, even
+      // from inside a harness run.
     ],
   },
 ];
