@@ -26,9 +26,10 @@ as a side effect of running a command somewhere that lacks one.
 
 **Why:** Ward discovers the workspace by looking outward from the working directory
 ([`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md), workspace-awareness),
-so an accidentally-created workspace silently captures every command run beneath it — and the
-workspace is identified by its location ([`00-domain-model.md`](00-domain-model.md), Identity),
-which makes a misplaced root expensive to correct later. Creation is cheap; guessing at it is not.
+so an accidentally-created workspace silently captures every command run beneath it — and creation
+mints the workspace's **identity** ([`00-domain-model.md`](00-domain-model.md), Identity), which the
+record and anything outside it that recognizes the workspace key on from then on, so an accidental
+one is expensive to undo. Creation is cheap; guessing at it is not.
 
 ### What creation establishes
 
@@ -40,6 +41,13 @@ human or agent — needs for the workspace to be **self-sufficient** from its fi
   ([`../02-subsystems/00-metadata-store.md`](../02-subsystems/00-metadata-store.md)), including the
   registered artifact-type catalog Ward seeds. _Why:_ every later operation writes here; nothing is
   discoverable until the record has a home.
+- **Its immutable id** — the workspace's identity ([`00-domain-model.md`](00-domain-model.md),
+  Identity), minted here once and never changed by a move, a rename, or a clone. A workspace made
+  before the id existed is given one when it is first brought forward (**update**, _Putting a
+  workspace right_, below) — the one time an id is minted outside creation, and still only once.
+  _Why:_ anything outside the record that must recognize this workspace — the state a multiplexer
+  keeps for its live sessions, above all — needs a key that does not change when the workspace
+  moves; minting it at creation means no such state is ever keyed by something less durable first.
 - **The version stamp** — which version of Ward created it (_How a workspace evolves_, below).
   _Why:_ a workspace created without a stamp is one no future CLI can safely reason about (_Version
   skew_, below).
@@ -677,10 +685,11 @@ read as an omission rather than a decision.
 ## Canonical home for
 
 - **Workspace creation** — that it is a deliberate, located act; **what creation establishes** (the
-  metadata root, the version stamp, the **guidance an agent needs to work here** — the root
-  `AGENTS.md` and Ward's workspace skill — Ward's defaults as workspace-owned artifacts, version
-  control over itself, the repository set); that it is **one-time** — a path that is already a
-  workspace is **refused**, never clobbered, and the refusal names the update path; and that
+  metadata root, the **immutable workspace id** — minted at creation, or once at update for a
+  workspace that predates it — the version stamp, the **guidance an agent needs to work here** — the
+  root `AGENTS.md` and Ward's workspace skill — Ward's defaults as workspace-owned artifacts,
+  version control over itself, the repository set); that it is **one-time** — a path that is already
+  a workspace is **refused**, never clobbered, and the refusal names the update path; and that
   **credentials are never workspace state**.
 - **The repository set's lifecycle** — deliberate registration recording remote and main line; the
   **contained canonical checkout** (inside the workspace, one per repository, independent of every
@@ -750,10 +759,11 @@ read as an omission rather than a decision.
   configuration; how a structural write is recognized in order to be blocked under skew; **how the
   installed baseline is recorded and compared** to detect divergence (a fingerprint, a retained
   pristine copy, or a merge base); the contents of the workspace skill and the root `AGENTS.md`; the
-  reconciliation skill's own procedure; and the **stewardship surface** — the preview and merge
-  verbs, stewardship branch naming, how a stewardship copy is recognized, where the workspace
-  records its own main-line name, the form of the off-main-line surfacing at write time, and the
-  standing workspace project's concrete address. Planned in [`design/`](../../design/).
+  reconciliation skill's own procedure; the **form of the workspace id** and where the record keeps
+  it; and the **stewardship surface** — the preview and merge verbs, stewardship branch naming, how
+  a stewardship copy is recognized, where the workspace records its own main-line name, the form of
+  the off-main-line surfacing at write time, and the standing workspace project's concrete address.
+  Planned in [`design/`](../../design/).
 
 ## Open questions
 
@@ -762,7 +772,11 @@ read as an omission rather than a decision.
   question once carried, is settled above — refused under live tasks, autonomous otherwise.)
 - **More than one workspace on a machine.** Whether that is expected, and whether Ward may keep a
   machine-level registry of workspaces — which would be state outside the workspace and must be
-  reconciled with the global-state boundary above.
+  reconciled with the global-state boundary above. A narrower case the workspace id makes visible:
+  **two checkouts of one workspace on one machine** share its id (a clone shares it — _What creation
+  establishes_, above), so anything outside the record that recognizes the workspace by that id
+  cannot tell them apart. Whether that arrangement is supported, or named as one workspace standing
+  in two places, is unsettled.
 - **What runs the cadence.** Refresh, rebase, and cadence reflection are specified as recurring
   ([`03-work-lifecycle.md`](03-work-lifecycle.md),
   [`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)) but nothing states what fires
