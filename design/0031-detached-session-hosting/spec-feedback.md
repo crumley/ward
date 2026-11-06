@@ -123,10 +123,10 @@ design was regrouped from one host per session to floor hosts.
   shared by design; observe is the protected grain" or "a design must keep attach single-writer,
   with takeover an explicit act" — whichever the intent means. The answer holds for any host
   technique and changes what every design builds.
-- **Status:** accepted by Ryan 2026-11-06 (review of #109): concurrent attach is shared by design,
-  and observe is the protected grain — two humans on one floor share the keyboard when both are on
-  the same window. The seam sentence is still to land in intent; this line then reads adjudicated
-  with its link.
+- **Status:** pending — ruled by Ryan 2026-11-06 (review of #109), awaiting the intent edit:
+  concurrent attach is shared by design, and observe is the protected grain — two humans on one
+  floor share the keyboard when both are on the same window. The seam sentence is still to land in
+  intent; this line then reads adjudicated with its link.
 
 ## SF-006 — mapping a record to a live session says nothing about verifying it belongs
 
@@ -174,10 +174,10 @@ design was regrouped from one host per session to floor hosts.
   derived from the record, never from co-location)", or, if scope is meant strictly, say so — in
   which case a design must place a dispatched session in its own scope's group and reach its parent
   some other way.
-- **Status:** accepted by Ryan 2026-11-06 (review of #109): lineage is the intended reading. A child
-  goes in a non-zero parent's floor host, including a workspace-scope child of a floor-N session. A
-  floor-0 parent never pulls a child onto floor 0, so the coordinator's floor-5 session lands in
-  floor 5's host. Placement never reads the caller's tmux session. Only the coordinator (a
-  workspace-scope session with no recorded parent) is linked into every host; its workspace-scope
-  children stay in the floor-0 host. The parenthesis's rewording is still to land in intent; this
-  line then reads adjudicated with its link.
+- **Status:** pending — ruled by Ryan 2026-11-06 (review of #109), awaiting the intent edit: lineage
+  is the intended reading. A child goes in a non-zero parent's floor host, including a
+  workspace-scope child of a floor-N session. A floor-0 parent never pulls a child onto floor 0, so
+  the coordinator's floor-5 session lands in floor 5's host. Placement never reads the caller's tmux
+  session. Only the coordinator (a workspace-scope session with no recorded parent) is linked into
+  every host; its workspace-scope children stay in the floor-0 host. The parenthesis's rewording is
+  still to land in intent; this line then reads adjudicated with its link.

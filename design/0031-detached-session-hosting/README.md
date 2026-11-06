@@ -530,8 +530,8 @@ say what changed.
     behind, and loses to the yank. The cost: while a human is attached, a view appears in `tmux ls`
     beside its host (named `<host>-v<n>`), and doctor must tell views from strays (it does, by
     `@ward_view`). Two attaches to one session still share one window — and one keyboard — which is
-    SF-005's question, unchanged by the regrouping and accepted in review (2026-11-06): shared-write
-    attach is by design, and observe is the protected grain.
+    SF-005's question, unchanged by the regrouping and ruled in review (2026-11-06; pending the
+    intent edit): shared-write attach is by design, and observe is the protected grain.
   - **Observe is a read-only, single-window view — the grain the first version got for free, rebuilt
     with a link.** Under one host per session, `attach -r` showed exactly one session. Against a
     floor host it would show the whole floor: neighbors visible, and the observer able to wander

@@ -87,8 +87,8 @@ regrouped entry; on acceptance, the build starts with the premise validation.
   workspace-scope child of the coordinator is placed on floor 0 and stays in the floor-0 host. So
   does a ground-floor task or floor session. Floating every floor-0 window would have put each
   helper the coordinator starts at the left edge of every floor host.
-- **Shared-write attach is settled** (SF-005 accepted): two humans on one window share its keyboard,
-  and observe is the protected grain.
+- **Shared-write attach is ruled** (SF-005, pending its intent edit): two humans on one window share
+  its keyboard, and observe is the protected grain.
 - **Close no longer kills hosts.** Close kills the session's window and nothing else. Ward never
   runs `kill-session`. A linked window is a full window of every tmux session it is linked into, and
   tmux keeps a session while it has any window. So a finished floor's host that still shows the
