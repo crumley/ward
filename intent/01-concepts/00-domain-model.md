@@ -419,6 +419,27 @@ so an id that does not name its machine is minted twice and the two records coll
 workspace syncs. A **room** may reuse its code precisely because it is a slot that empties and
 refills, not a record; a session is a record, so its id is permanent.
 
+The **workspace** is the one thing whose identity is not a name a human types. It carries an
+**immutable id**, minted once — when the workspace is created, or, for a workspace made before the
+id existed, when it is first brought forward
+([`06-workspace-lifecycle.md`](06-workspace-lifecycle.md), _What creation establishes_) — and never
+changed afterwards: not when the workspace is **moved** on disk, not when its root is **renamed**,
+not when it is **cloned** onto another machine. A clone **shares** the id, because the record
+travels in git and a clone is the same workspace standing somewhere else — the same reading that
+makes session ids name their machine (above). Its **location** is where it stands on one machine, an
+attribute discovered by looking outward from the working directory
+([`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md)), not what it is. **Why
+an id rather than its location:** inside the workspace nothing needs one — every command already
+stands in it — but things **outside the record** must recognize which workspace they belong to:
+state a multiplexer keeps for a workspace's live sessions, anything else on the machine that
+survives between commands. Recognized by its path, that state is stranded the moment the workspace
+moves, and confused with another workspace that later takes the path; recognized by its name, it
+collides with any other workspace given the same name. An id minted once and carried in the record
+is the only key that is right in every place the workspace will ever stand. **Why not a name to
+remember:** no human addresses a workspace by it — they stand in one — so it is free of the
+memorability rules above, and it is the one identity here that must be unique with no help from
+context — on any machine, against any other workspace.
+
 A **task composes its address the way a room does**: a task on a floor is addressed by its **floor
 number plus its room** (`f3t1` is room 1 on floor 3), and a task opened directly under the workspace
 — no floor to compose with — is addressed by its room alone. Composition is what keeps the address
@@ -473,7 +494,7 @@ the number it vacated, like any other closed floor.
 | Session   | slug + code + **the machine it ran on**, unique over the workspace's history across the machines sharing it — the code is **never reused** (a bare id addresses it)            |
 | Worktree  | natural key (repository + branch); its **disposition** is an attribute, not identity                                                                                           |
 | Workdir   | natural key (task + name); scope-relative is enough                                                                                                                            |
-| Workspace | the root itself; identified by location                                                                                                                                        |
+| Workspace | an **immutable id**, minted once and never changed — survives a move, a rename, and a clone (a clone shares it); its location is an attribute, not its identity                |
 | Artifact  | addressed by scope + type + name                                                                                                                                               |
 
 A session also stores a **harness handle** — the locator for its underlying harness run — but that
@@ -543,8 +564,9 @@ detours is the prime directive in miniature. (Mechanics and modes in `01-scopes-
   within the open, workspace-evolvable type set, and cross-scope discoverability/ownership.
 - **Identity** — slug + short code, the floor/room convention (floor numbers monotonic, never
   reused), **composed task addresses** (`f3t1`) with the bare room as a shorthand while unique,
-  rooms running in opening order round a floor, bare workspace-unique ids for open sessions,
-  identity-need-not-mirror-containment.
+  rooms running in opening order round a floor, bare workspace-unique ids for open sessions, the
+  **workspace's immutable id** (minted once, surviving move, rename, and clone) as what anything
+  outside the record recognizes it by, identity-need-not-mirror-containment.
 - **The dispatch / report / wake flows** and **forking** as concepts (mechanisms in
   [`../02-subsystems/02-messaging-coordination.md`](../02-subsystems/02-messaging-coordination.md)
   and [`01-scopes-and-personas.md`](01-scopes-and-personas.md)).
