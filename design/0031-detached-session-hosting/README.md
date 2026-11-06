@@ -1,13 +1,14 @@
 # 0031 — Detached session hosting
 
 > The multiplexer seam's added technique, designed ahead of its build: `ward session open --detach`
-> hosts the agent as one window in its floor's **floor host** — one tmux session per floor, with
-> floor 0's windows linked into every one — that outlives the terminal, while the durable record
-> stays the only source of truth and the live half is a disposable, verified cache that `attach`
-> re-joins or re-creates, `observe` watches read-only, `close` tears down, and `locate`/`doctor`
-> report honestly.
+> hosts the agent as one window in its floor's **floor host** — one tmux session per floor, with the
+> workspace's coordinator linked into every one — that outlives the terminal, while the durable
+> record stays the only source of truth and the live half is a disposable, verified cache that
+> `attach` re-joins or re-creates, `observe` watches read-only, `close` tears down, and
+> `locate`/`doctor` report honestly.
 >
-> **Status:** proposed · **Started:** 2026-08-24 · **Regrouped:** 2026-10-16 (floor hosts)
+> **Status:** proposed · **Started:** 2026-08-24 · **Regrouped:** 2026-10-16 (floor hosts) ·
+> **Reviewed:** 2026-11-06
 
 [0029](../0029-launched-sessions/README.md) made Ward launch agents — foreground, in the caller's
 terminal, dying with it — and its SF-002, since adjudicated into the
@@ -25,10 +26,10 @@ session — whose **parent** is recorded at open (0052 session-parent-link, like
 floor is the unit a human attends to, and the seam already asks that sessions be **grouped by the
 work they belong to**; a host per Ward session made every floor a scatter of N unrelated rows. This
 revision groups by floor: one **floor host** per floor, one **window** per Ward session, and the
-ground floor's windows **linked into every floor host** so the workspace coordinator is in view
-wherever a human stands. The record learns nothing about hosts or windows in the process — the
-regrouping changed only what the adapter does with a record, which is the seam's cache-over-record
-promise holding under its first real change.
+workspace's **coordinator** — a workspace-scope session no other session started — **linked into
+every floor host** so it is in view wherever a human stands. The record learns nothing about hosts
+or windows in the process — the regrouping changed only what the adapter does with a record, which
+is the seam's cache-over-record promise holding under its first real change.
 
 This entry is **design-only**, resting on [ADR 0006](../decisions/0006-tmux-detached-host.md)'s
 choice of tmux. It was tested against a survey of eleven comparable systems, kept under
@@ -63,6 +64,10 @@ where this entry describes tmux's own mechanics — never in a Ward surface, mes
   floor host and its per-session windows are the stable hooks the theming arc will decorate (a
   host's status line, a window's label and accent), so nothing here moves when that seam is
   realized.
+- [`domain-model`](../../intent/01-concepts/00-domain-model.md) — consumed, not changed: the
+  workspace's **immutable id** (_Identity_; declared in
+  [#114](https://github.com/crumley/ward/pull/114)) is what a floor host is stamped with and found
+  by, so a workspace moved, renamed, or cloned finds its own hosts and no other's.
 - [`human-shell`](../../intent/02-subsystems/07-human-shell.md) — verbs read true — `attach`
   attaches, `observe` observes, `resume` resumes — and every refusal names its remedy with the exact
   command.
@@ -74,6 +79,10 @@ where this entry describes tmux's own mechanics — never in a Ward surface, mes
 ## Scope
 
 - **In** (what the build realizing this design will deliver):
+  - **A prerequisite this entry does not build: the workspace id.** Host stamps carry the
+    workspace's immutable id ([#114](https://github.com/crumley/ward/pull/114)); minting it — at
+    `init`, and once at update for an existing workspace — is a separate, earlier build task, and
+    this entry's build starts after it lands.
   - **The premise validation, first** — a smoke check against a real tmux proving Claude Code
     initializes healthy in a detached window, with the pivot named in advance (the premise decision,
     under Design, carries the evidence and the pivot).
@@ -83,15 +92,19 @@ where this entry describes tmux's own mechanics — never in a Ward surface, mes
     exact-match targeting, namespace-scoped destruction, view sessions, and the server-hygiene
     preamble — each specified under Design.
   - **Placement** — a pure function from records to the floor whose host a session's window belongs
-    in: its own floor, or its recorded parent's (the placement decision, under Design).
+    in: its own floor, or its recorded parent's when that is not 0; and whether the window
+    **floats** — only a workspace-scope session with no recorded parent does (the placement and
+    floating decisions, under Design).
   - **The hosted open** — `ward session open … --detach`: record first, then the session's window
-    created in its floor host (the host created, and floor 0 linked in, when the floor has none
-    yet), and the attach affordance printed. `--foreground` forces the baseline; bare `open` follows
-    the resolved `agent.host`. Scope-blind: it hosts whatever scope the open was for — workspace
-    scope today, project scope when 0051 lands, task scope when that launch arrives.
-  - **Floor-0 linking** — every live floor-0 window linked into every floor host: when a floor host
-    is created, and when a floor-0 window is created; repaired on attach; never killed by anything
-    but its own session's close.
+    created in its floor host (the host created, and the floating coordinator linked in, when the
+    floor has none yet), and the attach affordance printed. `--foreground` forces the baseline; bare
+    `open` follows the resolved `agent.host`. Scope-blind: it hosts whatever scope the open was for
+    — workspace scope today, project scope when 0051 lands, task scope when that launch arrives.
+  - **Floating** — every live floating window (a workspace-scope session with no recorded parent)
+    linked into every floor host: when a floor host is created, and when a floating window is
+    created; repaired on attach; never killed by anything but its own session's close. Every other
+    floor-0 window — a workspace-scope child, a ground-floor task or floor session — lives in the
+    floor-0 host only.
   - **Attach** — `ward session attach ID`: re-join the session's live window through a per-client
     view of its floor host, or re-create the window from the record when the host has lost it —
     always verifying the window is Ward's own and current first, and refusing (with the diagnosis)
@@ -100,13 +113,13 @@ where this entry describes tmux's own mechanics — never in a Ward surface, mes
   - **Resume, host-aware** — `ward session resume ID` refuses while the session's window is live,
     pointing at attach; otherwise behaves as today, with `--detach` hosting the resumed run.
   - **Close tears down the cache** — `ward session close ID` (and the task-close cascade) kills the
-    session's window — running or dead-pane alike — idempotently, and the floor host with it when
-    nothing of the floor's own remains in it.
+    session's window — running or dead-pane alike — idempotently, and nothing else: Ward never kills
+    a floor host; tmux ends one when its last window goes.
   - **Locate's live half** — `ward session locate ID` reports, beside the transcript answer, the
     host and window found and a classified live state.
   - **Doctor** — host capability, stray windows and hosts (surfaced, never swept), gone-as-
-    information, misplaced windows and missing floor-0 links as information, could-not-determine,
-    and version skew (the finding set is under Mechanisms).
+    information, misplaced windows, missing floating links, and idle hosts as information,
+    could-not-determine, and version skew (the finding set is under Mechanisms).
   - **Configuration** — `agent.host: foreground | tmux` on 0028's two-layer, per-key ladder
     ([0028](../0028-agent-configuration/README.md)); unset resolves to `foreground`.
   - **CLI plumbing** — `--json` shapes for the new and changed verbs, `ward schema` coverage,
@@ -189,10 +202,14 @@ where this entry describes tmux's own mechanics — never in a Ward surface, mes
      and any window not carrying `@ward_session`.
   4. Placement: workspace scope → floor 0, a task → its task's floor, a project-scope session → its
      floor; a recorded parent on floor N ≠ 0 overrides the child's own floor; a floor-0 parent does
-     not; a missing parent record falls back to the child's own floor.
-  5. Host lookup by stamp: after the workspace is renamed, a new session on floor N lands in the
-     floor host minted under the old name; a host wearing the minted name but another workspace's
-     stamp is refused as foreign, never joined.
+     not (the coordinator's floor-5 child lands in floor 5's host); a missing parent record falls
+     back to the child's own floor. Floating: a workspace-scope session with no parent floats; a
+     workspace-scope child of the coordinator is placed on floor 0 and does not float; a
+     workspace-scope child of a floor-N session lands in floor N's host and does not float; a
+     ground-floor task or floor session does not float.
+  5. Host lookup by stamp: after the workspace is renamed **or moved on disk**, a new session on
+     floor N lands in the floor host minted before; a host wearing the minted name but another
+     workspace's id is refused as foreign, never joined.
   6. Ordering and serialization: the launch event on disk before the stub tmux sees `new-window`;
      two concurrent opens on an empty floor produce one floor host; two concurrent resumes of one
      session produce one window, the loser refused toward attach.
@@ -202,12 +219,14 @@ where this entry describes tmux's own mechanics — never in a Ward surface, mes
   8. Ownership: attach, close, and doctor verify the window's `@ward_session`, its `@ward_epoch`
      against the record's latest launch event, and the host's `@ward_workspace` before acting; the
      foreign-holder refusal names the remedy.
-  9. Floor 0: a floor-0 window is linked into every floor host at its creation and at each floor
-     host's creation; closing a floor-0 session removes its window from every host; killing a floor
-     host leaves every floor-0 window alive in the others.
+  9. Floating: a floating window is linked into every floor host at its creation and at each floor
+     host's creation; a non-floating floor-0 window appears in the floor-0 host only; closing the
+     coordinator removes its window from every host; killing a floor host by hand leaves every
+     floating window alive in the others.
   10. Close and host lifetime: `remain-on-exit` set on the window at create; the retained exit
-      status read; close killing live and dead windows alike, a no-op when none exists, killing the
-      floor host only when no window of its own (Ward's or a human's) remains in it.
+      status read; close killing live and dead windows alike, a no-op when none exists, and never
+      issuing `kill-session` — a floor host left holding only floating links stays, and one left
+      with no window at all is gone because tmux destroyed it.
   11. Attach branching by classified probe: view-and-select vs `switch-client` vs
       clear-dead-then-re-create vs re-create vs refuse — with could-not-determine refusing, never
       re-creating; a second attached client on the same floor host keeps its own current window.
@@ -218,9 +237,10 @@ where this entry describes tmux's own mechanics — never in a Ward surface, mes
   14. `--detach` with no usable tmux refused; `agent.host: tmux` degraded to foreground — each
       naming its consequence.
   15. Locate's `--json` `host` block carrying the four-way state, covered by `ward schema`.
-  16. Doctor: a fabricated stray window and an emptied floor host each named with remedy and
-      attribution; a misplaced window and a missing floor-0 link reported as information; an
-      erroring tmux reported as could-not-determine, never as a clean bill.
+  16. Doctor: a fabricated stray window and a duplicate floor host each named with remedy and
+      attribution; a misplaced window, a missing floating link, and a host holding only floating
+      links reported as information; an erroring tmux reported as could-not-determine, never as a
+      clean bill.
   17. Every pre-0031 session record parsing, locating, and closing unchanged.
 
 ## Design
@@ -293,76 +313,100 @@ say what changed.
     re-attaching, and nothing shows the floor as a unit — the seam's own group-by-the-work
     constraint met only by a name prefix. A floor host makes the floor the thing you attach to: the
     coordinator's window and every session it or a human started for the floor sit side by side,
-    navigable with tmux's own window keys, and the ground floor's coordinator is linked into each so
-    it is never more than a keystroke away. The costs are the ones the first version avoided, and
-    each is paid by a decision below rather than waved off: window ids are not derivable, so
-    identity becomes a **tag** set at create (dmux's rebinder is the price of getting this wrong);
+    navigable with tmux's own window keys, and the workspace's coordinator is linked into each so it
+    is never more than a keystroke away. The costs are the ones the first version avoided, and each
+    is paid by a decision below rather than waved off: window ids are not derivable, so identity
+    becomes a **tag** set at create (dmux's rebinder is the price of getting this wrong);
     per-session attach and read-only observe are no longer exact by construction and need **views**;
     ownership evidence can no longer live in the tmux session's environment, which is now shared;
-    close must decide **when the host dies**; and floor 0's windows are **shared objects** across
-    hosts, with the sizing caveat that brings. A middle path — tmux session groups, one Ward session
-    per tmux session but grouped per floor — was considered and declined: grouped tmux sessions
-    share one window list, so it is floor hosts with N names for the same windows rather than an
-    alternative to them. The regrouping honored the first version's promise: the record schema did
-    not grow for it — it shrank (the decision on `host` below).
+    **when a host dies** has to be stated (tmux's own rule, under the close decision); and the
+    floating coordinator is a **shared object** across hosts, with the sizing caveat that brings. A
+    middle path — tmux session groups, one Ward session per tmux session but grouped per floor — was
+    considered and declined: grouped tmux sessions share one window list, so it is floor hosts with
+    N names for the same windows rather than an alternative to them. The regrouping honored the
+    first version's promise: the record schema did not grow for it — it shrank (the decision on
+    `host` below).
   - **Placement is derived from the record: a session's own floor, or its recorded parent's.** A
     session's window belongs in the host of its **placement floor**: workspace scope → 0, project
     scope → its floor (0051), task scope → its task's floor, legacy bare tasks → 0 — unless the
     session has a recorded **parent** (0052) whose placement floor is not 0, in which case it is the
     parent's. So a session a floor-3 coordinator starts for floor-5 work lands beside its parent in
-    floor 3's host, where the coordinator that started it is watching; a session the ground-floor
-    coordinator starts for floor 5 lands in floor 5's host, because a floor-0 parent is linked into
-    every host and "its parent's host" names no one host — the child's own floor breaks the tie. The
-    alternative — placement by co-location (the window lands wherever the caller's `$TMUX` pane
-    happens to be) — is attractive because it needs no record at all and does the right thing for
-    the common case, and loses because it is a fact about a process, not about the work: a re-create
-    after a reboot has no caller pane to read, and a session started from a foreground terminal, a
-    script, or another machine would land somewhere arbitrary. The parent link is recorded, so
-    placement is a pure function of records and survives a reboot exactly. The cost: placement is
-    recursive over parents (bounded by the chain's length, and computed from records already read),
-    and a child grouped by lineage sits in a host that is not its scope's — the grouping constraint
-    reads "by scope", and SF-007 in [`spec-feedback.md`](spec-feedback.md) asks whether lineage is
-    an admissible reading of "the work they belong to".
-  - **Floor 0 floats: its windows are linked into every floor host, never copied and never killed by
-    another floor.** A floor-0 window lives in the floor-0 host and is `link-window`ed into every
-    floor host — the same window, the same pane, the same process, visible as the first window of
-    each. The alternative — floor 0 in its own host only — is attractive for its simplicity and its
-    lack of shared objects, and loses because the ground floor's coordinator is the session a human
-    on any floor most often needs to reach, and a separate host means detaching from the floor to
-    talk to it. Links are made when a floor host is created (every live floor-0 window) and when a
-    floor-0 window is created (into every live floor host); attach's ensure path repairs a missing
-    link (additive, never destructive), and doctor reports one as information. Tear-down follows
-    tmux's own semantics: `kill-window` removes a window from every session it is linked into (so
-    closing a floor-0 session clears it everywhere), and `kill-session` destroys only the windows
-    linked nowhere else (so killing a floor host merely unlinks floor 0 from it) — the acceptance
-    test proves both rather than trusting the manual. The cost is the sizing caveat, owned: a linked
-    window has one size, and tmux sizes it to the most recently active client (`window-size latest`)
-    — two humans viewing the coordinator from two differently sized terminals in two floor hosts
-    take turns resizing it, and the other sees it padded or clipped until they act. The harness
-    reflows on resize, so the cost is visual, not a corruption; it is named in the manifest rather
-    than engineered around.
+    floor 3's host, where the coordinator that started it is watching; a session the workspace's
+    coordinator starts for floor 5 is a floor-5 session and lands in floor 5's host — a floor-0
+    parent never pulls a child onto floor 0, because floor 0 is where the workspace itself is
+    tended, and work started for a floor belongs where that floor is tended (and the coordinator is
+    linked in there anyway). The ruling (2026-11-06) runs the other way too: a workspace-scope
+    session a floor-N session starts is lineage-placed in floor N's host like any other child, and
+    does not float. The alternative — placement by co-location (the window lands wherever the
+    caller's `$TMUX` pane happens to be) — is attractive because it needs no record at all and does
+    the right thing for the common case, and loses because it is a fact about a process, not about
+    the work: a re-create after a reboot has no caller pane to read, and a session started from a
+    foreground terminal, a script, or another machine would land somewhere arbitrary. The parent
+    link is recorded, so placement is a pure function of records and survives a reboot exactly. The
+    cost: placement is recursive over parents (bounded by the chain's length, and computed from
+    records already read), and a child grouped by lineage sits in a host that is not its scope's —
+    the grouping constraint reads "by scope", and SF-007 in [`spec-feedback.md`](spec-feedback.md)
+    records lineage accepted as a reading of "the work they belong to" (2026-11-06), with the intent
+    wording still to follow.
+  - **The coordinator floats: a workspace-scope session with no recorded parent is linked into every
+    floor host, never copied and never killed by another floor.** That is the whole rule: a window
+    **floats** exactly when its session is at **workspace scope** and records **no parent** — the
+    coordinator a human opened, of which a workspace may have more than one. Nothing else floats,
+    floor 0 included: a workspace-scope child of the coordinator is placed on floor 0 and sits in
+    the floor-0 host only, a ground-floor task session or floor session (0051's `--floor 0`, not
+    workspace scope) likewise, and a workspace-scope session a floor-N session starts is in floor
+    N's host by lineage. A floating window lives in the floor-0 host and is `link-window`ed into
+    every floor host — the same window, the same pane, the same process, visible as the first window
+    of each. The alternatives lose on either side. Floor 0 in its own host only is attractive for
+    its simplicity and its lack of shared objects, and loses because the coordinator is the session
+    a human on any floor most often needs to reach, and a separate host means detaching from the
+    floor to talk to it. Floating every floor-0 window (this entry's previous rule) is attractive
+    for having no condition at all, and loses because a coordinator that starts a few
+    workspace-scope helpers would then put each of them at the left edge of every floor host — the
+    float is for the one thing every floor needs, and a helper is the coordinator's business. Both
+    facts the rule reads, scope and parent, are recorded at open and never change, so whether a
+    window floats is derived like placement and never stored. Links are made when a floor host is
+    created (every live floating window) and when a floating window is created (into every live
+    floor host); attach's ensure path repairs a missing link (additive, never destructive), and
+    doctor reports one as information. Tear-down follows tmux's own semantics: `kill-window` removes
+    a window from every session it is linked into (so closing the coordinator clears it everywhere),
+    and `kill-session` destroys only the windows linked nowhere else (so a human killing a floor
+    host merely unlinks the coordinator from it) — the acceptance test proves both rather than
+    trusting the manual. The cost is the sizing caveat, owned: a linked window has one size, and
+    tmux sizes it to the most recently active client (`window-size latest`) — two humans viewing the
+    coordinator from two differently sized terminals in two floor hosts take turns resizing it, and
+    the other sees it padded or clipped until they act. The harness reflows on resize, so the cost
+    is visual, not a corruption; it is named in the manifest rather than engineered around.
   - **The host is found by its stamps; its name is minted only when the floor has none, and recorded
-    nowhere.** A floor host carries `@ward_workspace` (the workspace root) and `@ward_floor` as tmux
-    session options, and every lookup is one `list-sessions -F` filtered on those stamps — never a
-    lookup by name. The name exists for humans and for tmux's uniqueness rule: minted as
-    `ward-<workspace-name>-f<N>`, munged to tmux's safe alphabet (every character outside
-    `[A-Za-z0-9_-]` replaced by `-`), only when the lookup finds no host for the floor. This answers
-    the problem the first version solved by recording the name — the workspace name is a **mutable
-    input**, and a binding derived from it orphans every live host on a rename
-    ([cmux](prior-art/cmux.md), [amux](prior-art/amux-survey.md), [muxel](prior-art/muxel.md)) —
-    without recording anything: after a rename the stamp still finds the host minted under the old
-    name, and new windows join it. Recording the name was considered and declined: with a host per
-    floor, the name is a fact about the floor, and writing it onto each session record would copy
-    one fact into N records that could disagree (a host re-created under a new name after a reboot
-    and a rename, older records still naming the old one) — while the binding key would still not be
-    the name but the window tag. The residual cases are refusals, not guesses: a host wearing the
-    minted name but another workspace's stamp (two workspaces sharing a name, or a workspace moved
-    on disk while its hosts lived) is refused at create with the foreign holder named and its remedy
+    nowhere.** A floor host carries `@ward_workspace` (the workspace's **immutable id** —
+    [#114](https://github.com/crumley/ward/pull/114)) and `@ward_floor` as tmux session options, and
+    every lookup is one `list-sessions -F` filtered on those stamps — never a lookup by name. The
+    name exists for humans and for tmux's uniqueness rule: minted as `ward-<workspace-name>-f<N>`,
+    munged to tmux's safe alphabet (every character outside `[A-Za-z0-9_-]` replaced by `-`), only
+    when the lookup finds no host for the floor. This answers the problem the first version solved
+    by recording the name — the workspace name is a **mutable input**, and a binding derived from it
+    orphans every live host on a rename ([cmux](prior-art/cmux.md),
+    [amux](prior-art/amux-survey.md), [muxel](prior-art/muxel.md)) — without recording anything:
+    after a rename — or a move on disk, since the stamp is the id and not the root — the stamp still
+    finds the host minted under the old name, and new windows join it. Recording the name was
+    considered and declined: with a host per floor, the name is a fact about the floor, and writing
+    it onto each session record would copy one fact into N records that could disagree (a host
+    re-created under a new name after a reboot and a rename, older records still naming the old one)
+    — while the binding key would still not be the name but the window tag. The residual cases are
+    refusals, not guesses: a host wearing the minted name but another workspace's stamp (two
+    workspaces sharing a name) is refused at create with the foreign holder named and its remedy
     ([dmux](prior-art/dmux.md)'s path-hash suffix was weighed for this and declined, as before: a
     rare refusal beats a suffix every human reads forever); two hosts stamped for one floor are
-    reported by doctor, and placement uses the older until a human resolves it. The cost: the
-    workspace root is the stamp's identity, because a workspace record carries no immutable id —
-    moving a workspace on disk strands its live hosts as foreign, which doctor attributes.
+    reported by doctor, and placement uses the older until a human resolves it. The stamp was first
+    drafted as the workspace **root path**, for want of anything better in the record — and a path
+    is a mutable input exactly as the name is: moving the workspace on disk stranded every live host
+    as foreign, and a different workspace later created at the old path would have adopted them. The
+    review (2026-11-06) answered with an immutable workspace id, declared in intent rather than
+    invented here, because it is the workspace's identity and not a hosting detail. The costs: this
+    entry's build depends on that id being minted first (Scope); and two checkouts of **one**
+    workspace on one machine share the id, so they would share floor hosts — the case the intent PR
+    leaves open, and one doctor can name (a host whose windows verify against no record here) but
+    not resolve.
   - **A window is identified by a tag set at create, never by its name, index, or title.** Window
     ids (`@12`) are minted by tmux, not derivable from anything Ward holds, and window names and
     titles are rewritten by the harness's terminal escapes, by `automatic-rename`, and by humans —
@@ -370,7 +414,7 @@ say what changed.
     creates is tagged with tmux **window options**: `@ward_session` (the session id), `@ward_epoch`
     (the generation, below), and `@ward_pane` (the pane id of the agent's pane, so a human splitting
     the window never confuses which pane's liveness is the session's). Lookup is one
-    `list-windows -a -F` filtered on `@ward_session`, deduplicated by window id (a floor-0 window
+    `list-windows -a -F` filtered on `@ward_session`, deduplicated by window id (a floating window
     answers once per host it is linked into). The alternative — dmux's shape, a stored pane id
     repaired by an encoded title and a rebinder ([dmux](prior-art/dmux.md)) — is attractive as
     proven at scale, and loses because it stores volatile state in the record and then needs rules
@@ -460,8 +504,9 @@ say what changed.
     human's own windows in the host behave as they always have — the host retains the exit fact: the
     pane stays, dead, with `#{pane_dead}`, `#{pane_dead_status}`, and `#{pane_dead_signal}` readable
     ([amux](prior-art/amux-survey.md)). The cost is structural and owned: a dead window lingers in
-    its floor host (and, for floor 0, in every floor host) until a re-create or a close clears it,
-    so liveness is layered (next decision) and close kills dead windows as readily as live ones.
+    its floor host (and, for the coordinator, in every floor host) until a re-create or a close
+    clears it, so liveness is layered (next decision) and close kills dead windows as readily as
+    live ones.
   - **Liveness is layered, and a probe that fails answers "could not determine" — never "not
     running."** Three facts, each derived fresh at read time and never stored: the tagged window
     exists and verifies, its agent pane is alive (`#{pane_dead}` of `@ward_pane`), and the
@@ -480,12 +525,13 @@ say what changed.
     holding its own current window, stamped `@ward_view` and set `destroy-unattached on` so it
     vanishes when its client leaves; the session's window is selected in the view and the caller
     attaches it (or, inside tmux, `switch-client`s to it). The human lands on the session's window
-    with the whole floor — and floor 0 — a keystroke away. The alternative — attach the floor host
-    directly and `select-window` — is attractive for leaving no extra tmux session behind, and loses
-    to the yank. The cost: while a human is attached, a view appears in `tmux ls` beside its host
-    (named `<host>-v<n>`), and doctor must tell views from strays (it does, by `@ward_view`). Two
-    attaches to one session still share one window — and one keyboard — which is SF-005's question,
-    unchanged by the regrouping.
+    with the whole floor — and the coordinator — a keystroke away. The alternative — attach the
+    floor host directly and `select-window` — is attractive for leaving no extra tmux session
+    behind, and loses to the yank. The cost: while a human is attached, a view appears in `tmux ls`
+    beside its host (named `<host>-v<n>`), and doctor must tell views from strays (it does, by
+    `@ward_view`). Two attaches to one session still share one window — and one keyboard — which is
+    SF-005's question, unchanged by the regrouping and accepted in review (2026-11-06): shared-write
+    attach is by design, and observe is the protected grain.
   - **Observe is a read-only, single-window view — the grain the first version got for free, rebuilt
     with a link.** Under one host per session, `attach -r` showed exactly one session. Against a
     floor host it would show the whole floor: neighbors visible, and the observer able to wander
@@ -502,27 +548,36 @@ say what changed.
     observer's terminal never resizes the agent's window. No neighbor is in the view, and destroying
     the view only unlinks the window. The cost: the client-flags version floor, and one more
     transient entry in `tmux ls` while someone watches.
-  - **Close kills the session's window — and the floor host only when nothing of its own remains.
-    Nothing else ever kills.** The alternative — automatic healing, doctor reaping strays and
-    recovery restarting the gone — loses on §18: a sweep spends teardown authority on a heuristic
-    (SF-004 proposes the seam say this outright), and the one tool in the survey that auto-heals in
-    both directions needed a lifecycle lock, a stale-operation sweep, a paused watcher, and
+  - **Close kills the session's window, and only that. A host's lifetime is tmux's own rule. Nothing
+    else ever kills.** The alternative — automatic healing, doctor reaping strays and recovery
+    restarting the gone — loses on §18: a sweep spends teardown authority on a heuristic (SF-004
+    proposes the seam say this outright), and the one tool in the survey that auto-heals in both
+    directions needed a lifecycle lock, a stale-operation sweep, a paused watcher, and
     kill-verification retries just to stop its own healer ([dmux](prior-art/dmux.md)). Teardown
-    rides on the deliberate close: verify the window, `kill-window` it (live or dead-pane alike; for
-    floor 0 that removes it from every host), and then, if the floor host it lived in holds no
-    window other than floor-0 links — no Ward window of the floor and no window a human made there —
-    `kill-session` the host, which unlinks floor 0 rather than killing it. Floor 0's own host needs
-    no rule: it ends when its last window does. Floor hosts set `detach-on-destroy off`, so a human
-    attached to a host that empties is moved to another tmux session rather than dropped to the
-    shell. The alternatives for the host — keep empty hosts forever, or kill a host the moment its
-    coordinating session closes — lose respectively to clutter that doctor would have to explain and
-    to killing sessions that coordinator started and that are still working. The kill is idempotent
-    when the window is already gone, touches only windows it verified as Ward's own, and the
-    adapter's destructive verbs refuse any host outside the `ward-` namespace. Ward's record-first,
-    kill-second order is safe precisely _because_ nothing here auto-recreates — dmux must kill
-    before mutating its record or its healer resurrects the pane mid-close. The cost: strays
-    accumulate until a human runs the printed remedy, and a human's own window keeps a floor host
-    alive after its floor's sessions are gone, by design.
+    rides on the deliberate close: verify the window and `kill-window` it (live or dead-pane alike;
+    for the coordinator that removes it from every host). Ward never runs `kill-session` on a floor
+    host. tmux keeps a session alive while it holds any window and destroys it when its last window
+    goes, and a linked window is a full window of every session it is linked into — so a floor host
+    whose own sessions have all closed but which still shows the coordinator is a host with a
+    window, and it stays, exactly as it would for a human using tmux by hand; when the coordinator
+    closes too, every host left with no window ends by itself. Floor hosts set
+    `detach-on-destroy off`, so a human attached to a host tmux destroys is moved to another tmux
+    session rather than dropped to the shell. This entry first killed a floor host once nothing of
+    its floor's own remained — only floating links — and the review (2026-11-06) reversed it: that
+    rule is attractive because it keeps `tmux ls` free of hosts for finished floors, and loses
+    because it is Ward second-guessing tmux's own lifetime rule with one of its own — a host a human
+    is standing in, still showing a live window, vanishing under them — and because it bought a
+    stray state of its own (a close interrupted between its two kills) for doctor to explain. Two
+    other host rules lose as before: keeping a host past its last window would need a placeholder
+    Ward owns, and killing a host when its coordinating session closes kills sessions that
+    coordinator started and that are still working. The kill is idempotent when the window is
+    already gone, touches only windows it verified as Ward's own, and the adapter's destructive
+    verbs refuse any host outside the `ward-` namespace. Ward's record-first, kill-second order is
+    safe precisely _because_ nothing here auto-recreates — dmux must kill before mutating its record
+    or its healer resurrects the pane mid-close. The cost: a finished floor's host lingers while the
+    coordinator floats in it (doctor reports it as information, with `kill-session` as the human's
+    remedy — which only unlinks the coordinator), strays accumulate until a human runs the printed
+    remedy, and a human's own window keeps a floor host alive, by design.
   - **The default tmux server, not a private socket — started hygienically.** The alternative — a
     private `-L ward` server — is attractive for isolation from name collisions and from a stray
     `kill-server`, and loses because it hides every floor host from the surface humans actually
@@ -555,10 +610,10 @@ say what changed.
   - **Attach re-creates when the live window is gone — through the same path that opened it — and
     inherits locate's honesty when the transcript is gone too.** Re-create is a hosted resume: same
     handle, same recorded directory, the window placed in the host its placement floor names
-    (created, with floor 0 linked in, if the floor has none). Internally the hosted open, attach's
-    re-create, and `resume --detach` are **one ensure function** differing only in argv (start vs
-    resume) and in whether the record already existed — [isolade](prior-art/isolade.md)'s "no
-    separate first-attach path". Two shortcuts were declined, as before: `new-session -A`
+    (created, with the coordinator linked in, if the floor has none). Internally the hosted open,
+    attach's re-create, and `resume --detach` are **one ensure function** differing only in argv
+    (start vs resume) and in whether the record already existed — [isolade](prior-art/isolade.md)'s
+    "no separate first-attach path". Two shortcuts were declined, as before: `new-session -A`
     ([muxel](prior-art/muxel.md)) cannot choose between start and resume argv and has no window
     grain, and a `--continue` rung under the resume ladder ([dmux](prior-art/dmux.md) and most of
     the field) can steal a sibling session's conversation in a shared directory
@@ -570,7 +625,7 @@ say what changed.
   host and window stamps, view construction, probe classification, the hygiene preamble — and
   nothing about Ward's records (a second host would be a second file here), while
   `src/agent/host.ts` is the Ward-shaped half: placement, the ensure function, the
-  attach/observe/re-create flows, ownership verification, floor-0 linking, and close teardown,
+  attach/observe/re-create flows, ownership verification, floating links, and close teardown,
   consuming `src/agent/run.ts`'s argv building rather than duplicating it. Placement lives on the
   Ward side because it reads records (scope, task floor, parent); the adapter receives a floor
   number and never learns why. The record grows one provenance field and two events; the session
@@ -582,11 +637,12 @@ say what changed.
   - _Placement._ `placementFloor(session)` = `placementFloor(parent)` when the session records a
     parent whose record exists and whose placement floor is not 0; otherwise the session's own floor
     (workspace scope and legacy bare tasks → 0, project scope → its floor, task scope → its task's
-    floor). Pure over records, recomputed on every launch and every read that needs it; never
-    stored.
-  - _Finding and minting hosts._ `findHost(root, floor)` = one `list-sessions -F` over
+    floor). `floats(session)` = the session is at workspace scope and records no parent (its
+    placement floor is then 0). Both pure over records, recomputed on every launch and every read
+    that needs them; never stored.
+  - _Finding and minting hosts._ `findHost(workspaceId, floor)` = one `list-sessions -F` over
     `#{session_name} #{@ward_workspace} #{@ward_floor} #{@ward_view} #{session_created}`, keeping
-    non-view entries whose stamps equal `(root, floor)` — the oldest when several. When none:
+    non-view entries whose stamps equal `(workspaceId, floor)` — the oldest when several. When none:
     `mintHostName(workspaceName, floor)` = `ward-<workspace>-f<floor>` munged to `[A-Za-z0-9_-]`; a
     live tmux session already wearing that name (it was not found by stamp, so it is not ours) is
     the foreign-holder refusal. The `ward-` prefix is the namespace: doctor's scan key, and the
@@ -594,12 +650,13 @@ say what changed.
   - _Creating a floor host._ One chained invocation: `new-session -d -s <name> -x 120 -y 40` (a
     placeholder window, no `-e`, so the host's environment carries nothing session-specific)
     `';' set-option -t '=<name>' @ward_workspace
-    <root>`, `@ward_floor <N>`,
+    <workspace-id>`, `@ward_floor <N>`,
     `@ward_version <v>`, `detach-on-destroy off`. The placeholder is then replaced: for a floor
-    other than 0, by a link to the first live floor-0 window
-    (`link-window -k -s <f0-window> -t '=<name>':<placeholder>`), the rest linked after it; for
-    floor 0, or when no floor-0 window exists, it is killed once the session's own window exists.
-    Floor 0 therefore sits at the left edge of every floor host, and nothing reads indexes.
+    other than 0, by a link to the first live floating window
+    (`link-window -k -s <floating-window> -t '=<name>':<placeholder>`), the rest linked after it;
+    for floor 0, or when no floating window exists, it is killed once the session's own window
+    exists. The coordinator therefore sits at the left edge of every floor host, and nothing reads
+    indexes.
   - _Hosted open._ Resolve configuration (host, model, effort, args) → mint the session id → hygiene
     preamble (`start-server ';' set -s exit-empty off`) → **under the store lock**: write and commit
     the record (state `open`, handle, `host: tmux`, directory, purpose, model/effort, parent) with
@@ -609,7 +666,7 @@ say what changed.
     -e WARD_AGENT=<id> <claude argv>`
     followed by `set-option -w -t <window_id>` for `@ward_session <id>`, `@ward_epoch <opened.at>`,
     `@ward_pane <pane_id>`, `remain-on-exit on`, `automatic-rename off`, `allow-rename off`; then,
-    for a floor-0 window, `link-window` into every live floor host → **release the lock** → report
+    for a floating window, `link-window` into every live floor host → **release the lock** → report
     (`--json` emits here) → verify: the window verifies, and its pane is not dead a beat later (an
     instant death is reported now with the retained exit status — [muxel](prior-art/muxel.md) reads
     an immediate exit as a bad launch) → print the affordances: `ward session attach <id>` and the
@@ -620,7 +677,7 @@ say what changed.
     hosted runs ([herdr](prior-art/herdr.md)'s issue trail). Ward sets what it owns explicitly via
     `-e`; doctor's capability finding is where a confused human is pointed.
   - _Attach._ Resolve the session (open only) → classified probe: **live and ours** → ensure the
-    floor-0 links of the window's host → create a view
+    floating links of the window's host → create a view
     (`new-session -d -t '=<host>' -s
     <host>-v<n>`, stamped `@ward_view`,
     `destroy-unattached on`), `select-window` the session's window in it, and
@@ -647,10 +704,10 @@ say what changed.
     ensure path (new window in the placement host, `resumed` appended, affordances printed, no
     wait).
   - _Close._ After the record mutation: find and verify the window, `kill-window -t <window_id>` if
-    present — live or dead-pane alike; then, for a floor host left holding only floor-0 links,
-    `kill-session -t '=<host>'`. Each teardown is reported in the mutation's steps. A kill that
-    finds nothing is a no-op, not an error; a window that answers but is not ours is left standing
-    and reported, never killed.
+    present — live or dead-pane alike. No `kill-session`, ever: a host that lost its last window to
+    the kill is destroyed by tmux, and one still holding any window (floating links included) stays.
+    The teardown is reported in the mutation's steps. A kill that finds nothing is a no-op, not an
+    error; a window that answers but is not ours is left standing and reported, never killed.
   - _Locate._ The existing transcript answer, plus a `host` block when the record says the session
     was hosted: `{kind, host, window, floor, state, exit?}` — `host` the floor host found (by stamp)
     holding the window, `window` its id, `floor` the derived placement floor, `state` one of
@@ -664,28 +721,29 @@ say what changed.
     `@ward_session`, in a host stamped with this workspace, that verifies against no open record
     (closed, missing, or an older epoch): named with `tmux kill-window -t <window_id>` as the
     remedy, attributed by its session id, flagged when a client is viewing it — never swept. **Stray
-    hosts** — a floor host of this workspace holding only floor-0 links (a close interrupted between
-    its two kills), or a duplicate host for one floor; and leftover views with no client. **Foreign
-    hosts** — `ward-` hosts stamped with another workspace root, attributed and left alone
-    (information: another workspace's, or this one before a move). **Gone** — open hosted records
-    whose window is absent or dead — information ("not running — attach re-creates it", with the
-    retained exit status where the pane lingered), because after any reboot this is the _normal_
-    state of every detached session (§20). **Misplaced** — a verified window living in a host other
-    than its placement floor's: information; attach follows it. **Missing floor-0 links** —
-    information; attach repairs. **Could not determine** — an unreachable or erroring tmux reported
-    as exactly that, never as "no strays found" ([amux](prior-art/amux-survey.md)'s guarded
-    reconcile), and never memoized between runs. **Version skew** — floor hosts whose
-    `@ward_version` predates the running ward: information ([herdr](prior-art/herdr.md)).
+    hosts** — a duplicate host for one floor, and leftover views with no client. **Idle hosts** — a
+    floor host holding nothing of its own floor, only floating links: information, not a stray (tmux
+    keeps it while it shows a window), with `tmux kill-session -t '=<host>'` named as the human's
+    option — it only unlinks the coordinator. **Foreign hosts** — `ward-` hosts stamped with another
+    workspace's id, attributed and left alone (information). **Gone** — open hosted records whose
+    window is absent or dead — information ("not running — attach re-creates it", with the retained
+    exit status where the pane lingered), because after any reboot this is the _normal_ state of
+    every detached session (§20). **Misplaced** — a verified window living in a host other than its
+    placement floor's: information; attach follows it. **Missing floating links** — information;
+    attach repairs. **Could not determine** — an unreachable or erroring tmux reported as exactly
+    that, never as "no strays found" ([amux](prior-art/amux-survey.md)'s guarded reconcile), and
+    never memoized between runs. **Version skew** — floor hosts whose `@ward_version` predates the
+    running ward: information ([herdr](prior-art/herdr.md)).
   - _Reboot, end to end (the scenario the seam exists for)._ The tmux server dies with the machine;
     every floor host and window is gone; every record survives. Nothing needs sweeping: the records
     still say `open`, doctor reports the gone windows as information, and each thread comes back
     through `attach` exactly when someone wants it — re-created into the host its placement floor
-    names, the host created on that first attach and floor 0 linked in as its floor-0 sessions come
-    back. Because placement is derived from records, the floors reassemble exactly as they were,
-    without anything having remembered a window. No mass restart burns tokens on threads nobody is
-    ready to look at ([amux-survey](prior-art/amux-survey.md)'s own code declines to auto-restart
-    too; [dmux](prior-art/dmux.md)'s restart-everything-on-load is the alternative, built, and
-    priced). The future recovery arc orchestrates mass re-attachment per the lifecycle slice — most
-    naturally floor by floor, coordinator first; this entry supplies the per-session mechanics it
-    will call, and hands it one rule from the survey: anything that ever auto-recreates needs an
-    anti-flap guard ([bb](prior-art/bb.md)).
+    names, the host created on that first attach and the coordinator linked in as it comes back.
+    Because placement is derived from records, the floors reassemble exactly as they were, without
+    anything having remembered a window. No mass restart burns tokens on threads nobody is ready to
+    look at ([amux-survey](prior-art/amux-survey.md)'s own code declines to auto-restart too;
+    [dmux](prior-art/dmux.md)'s restart-everything-on-load is the alternative, built, and priced).
+    The future recovery arc orchestrates mass re-attachment per the lifecycle slice — most naturally
+    floor by floor, coordinator first; this entry supplies the per-session mechanics it will call,
+    and hands it one rule from the survey: anything that ever auto-recreates needs an anti-flap
+    guard ([bb](prior-art/bb.md)).

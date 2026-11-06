@@ -73,3 +73,40 @@ re-read against floor hosts and moved to one `**Status:**` line each, all still 
 0006 was amended in place, still proposed. **What works now — with the exact command that proves
 it:** `env -u WARD_AGENT mise run check` → exit 0 on this branch. **Next.** Human review of the
 regrouped entry; on acceptance, the build starts with the premise validation.
+
+## 2026-11-06 — Review answers: who floats, who kills a host, what stamps it
+
+**Goal.** Apply Ryan's answers to the five review questions on #109. **What was done.**
+
+- **Placement is confirmed as designed.** A session the coordinator starts for floor 5 is a floor-5
+  session and goes in floor 5's host. A workspace-scope session that a floor-N session starts goes
+  in floor N's host by lineage. Placement never reads the caller's tmux session. SF-007 is now
+  accepted.
+- **Floating is narrowed** to the one case the review named. A window floats exactly when its
+  session is at workspace scope and records no parent: the coordinator a human opened. A
+  workspace-scope child of the coordinator is placed on floor 0 and stays in the floor-0 host. So
+  does a ground-floor task or floor session. Floating every floor-0 window would have put each
+  helper the coordinator starts at the left edge of every floor host.
+- **Shared-write attach is settled** (SF-005 accepted): two humans on one window share its keyboard,
+  and observe is the protected grain.
+- **Close no longer kills hosts.** Close kills the session's window and nothing else. Ward never
+  runs `kill-session`. A linked window is a full window of every tmux session it is linked into, and
+  tmux keeps a session while it has any window. So a finished floor's host that still shows the
+  coordinator stays, and a host left with no window ends by tmux's own rule. This removed the
+  interrupted-close stray-host finding. Doctor now reports a host holding only floating links as an
+  idle host (information). The emptied-host acceptance case became a duplicate-host case.
+- **The host stamp is now a workspace id.** `@ward_workspace` carries the workspace's immutable id,
+  declared in intent by [#114](https://github.com/crumley/ward/pull/114) in its own PR (rule 3). It
+  no longer carries the root path, so a move on disk, like a rename, finds the same hosts. This
+  entry's build now depends on a separate, earlier build task that mints the id. One new consequence
+  is recorded: two checkouts of one workspace on one machine would share floor hosts. #114 records
+  that as an open question.
+
+ADR 0006's binding consequence now names the id. **What works now — with the exact command that
+proves it:** `bun install --frozen-lockfile && env -u WARD_AGENT mise run check` → exit 0 on this
+branch. **Next.**
+
+1. Merge #114.
+2. Build the workspace-id mint.
+3. Adjudicate SF-005 and SF-007 in intent.
+4. Start this entry's build with the premise validation.

@@ -9,13 +9,13 @@ Context for adjudicating without the entry open: [0031](README.md) designs the
 [session-multiplexer](../../intent/02-subsystems/01-session-multiplexer.md) seam's **added
 technique** — Ward-launched agent sessions hosted detached in tmux, beside the foreground baseline
 [0029](../0029-launched-sessions/README.md) built. Each floor gets one **floor host** (a tmux
-session) holding one window per Ward session, with floor 0's windows linked into every floor host; a
-window's placement is derived from the record (its floor, or its recorded parent's). The record
-stays the only source of truth; the live half is a cache; `attach`, `observe`, `resume`, and `close`
-are the verbs over it. The design is proposed and unbuilt: SF-001..004 surfaced while drawing its
-boundaries, SF-005..006 while testing it against a prior-art survey of eleven comparable systems
-([`prior-art/`](prior-art/) holds the evidence the later SFs cite), and SF-007 when the design was
-regrouped from one host per session to floor hosts.
+session) holding one window per Ward session, with the workspace's coordinator linked into every
+floor host; a window's placement is derived from the record (its floor, or its recorded parent's).
+The record stays the only source of truth; the live half is a cache; `attach`, `observe`, `resume`,
+and `close` are the verbs over it. The design is proposed and unbuilt: SF-001..004 surfaced while
+drawing its boundaries, SF-005..006 while testing it against a prior-art survey of eleven comparable
+systems ([`prior-art/`](prior-art/) holds the evidence the later SFs cite), and SF-007 when the
+design was regrouped from one host per session to floor hosts.
 
 ## SF-001 — "map … for resume" conflates attaching a live run with re-creating a stopped one
 
@@ -123,7 +123,10 @@ regrouped from one host per session to floor hosts.
   shared by design; observe is the protected grain" or "a design must keep attach single-writer,
   with takeover an explicit act" — whichever the intent means. The answer holds for any host
   technique and changes what every design builds.
-- **Status:** pending.
+- **Status:** accepted by Ryan 2026-11-06 (review of #109): concurrent attach is shared by design,
+  and observe is the protected grain — two humans on one floor share the keyboard when both are on
+  the same window. The seam sentence is still to land in intent; this line then reads adjudicated
+  with its link.
 
 ## SF-006 — mapping a record to a live session says nothing about verifying it belongs
 
@@ -171,4 +174,10 @@ regrouped from one host per session to floor hosts.
   derived from the record, never from co-location)", or, if scope is meant strictly, say so — in
   which case a design must place a dispatched session in its own scope's group and reach its parent
   some other way.
-- **Status:** pending.
+- **Status:** accepted by Ryan 2026-11-06 (review of #109): lineage is the intended reading. A child
+  goes in a non-zero parent's floor host, including a workspace-scope child of a floor-N session. A
+  floor-0 parent never pulls a child onto floor 0, so the coordinator's floor-5 session lands in
+  floor 5's host. Placement never reads the caller's tmux session. Only the coordinator (a
+  workspace-scope session with no recorded parent) is linked into every host; its workspace-scope
+  children stay in the floor-0 host. The parenthesis's rewording is still to land in intent; this
+  line then reads adjudicated with its link.

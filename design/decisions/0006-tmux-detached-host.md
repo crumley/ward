@@ -24,8 +24,8 @@ first drafted it was tested against a systematic survey of eleven comparable sys
 survey did not change the choice, and it did add caveats — recorded under Consequences below and
 amended in place, this ADR still being proposed. The entry was later regrouped from one tmux session
 per Ward session to one **floor host** (a tmux session) per floor with a window per Ward session and
-floor 0's windows linked into each; that too left the choice standing and moved the caveats, amended
-in place below.
+the workspace's coordinator linked into each; that too left the choice standing and moved the
+caveats, amended in place below.
 
 What the intent fixes and what it leaves free: the **contract** above is fixed; the tool is free,
 explicitly plural (§19), and must remain swappable behind the adapter — the seam's own "not a
@@ -86,9 +86,9 @@ the added technique beside the foreground baseline. The two techniques serve the
   `new-session -t`, so one client's current window never moves another's), observe read-only
   (`attach-session -f read-only,ignore-size` on a single-window view built with `link-window`,
   server-enforced), map (a **window tag** set at create — below), re-create (`new-window` again from
-  the record), group/label (a tmux session per floor, a window per Ward session, floor 0 linked into
-  each). Nothing has to be faked — though observe at session grain, free under one tmux session per
-  Ward session, now costs a transient view.
+  the record), group/label (a tmux session per floor, a window per Ward session, the coordinator
+  linked into each). Nothing has to be faked — though observe at session grain, free under one tmux
+  session per Ward session, now costs a transient view.
 - **The host stays a cache honestly.** tmux persists nothing across a server death, so a reboot
   leaves exactly what §16 prescribes: the record, and nothing live — recovery rebuilds from the
   record with no stale resurrection to reconcile.
@@ -103,21 +103,23 @@ the added technique beside the foreground baseline. The two techniques serve the
   recorded-name-wins resolver documents the duplicate-and-misreap failure;
   [amux](../0031-detached-session-hosting/prior-art/amux-survey.md) keys to an immutable id). The
   first version of 0031 answered by recording the minted name; under floor hosts the answer is
-  tmux's user options: a floor host is found by `@ward_workspace`/`@ward_floor` stamps (its name
-  minted only when none exists, and recorded nowhere), a window by `@ward_session`, and a found
-  window is confirmed as the record's own by a generation stamp (`@ward_epoch`) the launch set —
-  never by a name, an index, or a title. Window ids are not derivable, and titles are rewritten by
-  the harness and by humans; [dmux](../0031-detached-session-hosting/prior-art/dmux.md)'s
-  title-encoding rebinder is what binding to a title costs.
+  tmux's user options: a floor host is found by its `@ward_workspace` stamp — the workspace's
+  immutable id ([#114](https://github.com/crumley/ward/pull/114)), never its root path, which a move
+  changes as surely as a rename changes the name — and its `@ward_floor` (its name minted only when
+  none exists, and recorded nowhere), a window by `@ward_session`, and a found window is confirmed
+  as the record's own by a generation stamp (`@ward_epoch`) the launch set — never by a name, an
+  index, or a title. Window ids are not derivable, and titles are rewritten by the harness and by
+  humans; [dmux](../0031-detached-session-hosting/prior-art/dmux.md)'s title-encoding rebinder is
+  what binding to a title costs.
 - **A floor host shares what a per-session host did not.** The tmux session environment is shared by
   every window and inherited by every later one, so nothing session-specific may live there —
   `WARD_AGENT` goes on the pane (`new-window -e`) and ownership evidence on window options. A window
   linked into several floor hosts has one size, set by the most recently active client
-  (`window-size latest`): two differently sized terminals viewing floor 0 from two floor hosts take
-  turns resizing it. `kill-session` destroys only windows linked nowhere else, and `kill-window`
-  removes a window from every tmux session it is linked into — the semantics 0031's floor-0 linking
-  leans on, and its acceptance proves. The per-window user options, `new-window -e`, and the client
-  flags set a version floor that doctor's capability finding names.
+  (`window-size latest`): two differently sized terminals viewing the coordinator from two floor
+  hosts take turns resizing it. `kill-session` destroys only windows linked nowhere else, and
+  `kill-window` removes a window from every tmux session it is linked into — the semantics 0031's
+  floating coordinator leans on, and its acceptance proves. The per-window user options,
+  `new-window -e`, and the client flags set a version floor that doctor's capability finding names.
 - **The detached start is the premise to validate first.** The field reports interactive TUI agents
   (Claude named explicitly) crashing when initialized with no client attached
   ([muxel](../0031-detached-session-hosting/prior-art/muxel.md)), and headless defaults being raised
