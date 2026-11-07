@@ -194,7 +194,7 @@ _that_ as its upstream and the hint would otherwise fire on every rebase of a ne
 workspace-wide sweep, `--json` on mutation reports (joins the 0008 registry), and the occupancy
 yield when occupancy is recorded.
 
-## Spec-feedback
+## Intent feedback
 
 None this entry. Two near-candidates were adjudicated as deferrals rather than frictions:
 [`work-lifecycle`](../../intent/01-concepts/03-work-lifecycle.md)'s occupancy yield presumes an

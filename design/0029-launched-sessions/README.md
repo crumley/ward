@@ -99,7 +99,7 @@ these two are 0028 and 0029.
   - **Lifecycle events** on the record, append-only, including the `closed` event from
     `session close` and from the task-close cascade.
   - **What the run was started with**, recorded on a launched session (`model`, `effort`) — the
-    intent's session-log minimum, and the half of 0028's SF-001 that entry called thin.
+    intent's session-log minimum, and the half of 0028's IF-001 that entry called thin.
   - **The manifest refresh** — `AGENTS.md` gains a **Sessions** section (Ward opens sessions and the
     open starts the agent; exit ≠ close; resume; locate; where the agent configuration lives; the
     manual `--handle` path) plus a `sessions/` layout bullet, reaching existing workspaces through
@@ -123,7 +123,7 @@ these two are 0028 and 0029.
     nothing may depend on its presence; reading it needs a transcript parser whose shape is the
     harness's, not Ward's, and this entry's job was the run, not the accounting.
   - **Fork (`--fork-session`), any multiplexer, detach, or background hosting.** _Why safe:_ Arc 2,
-    and the multiplexer is its own seam — see SF-002, which records that the foreground start does
+    and the multiplexer is its own seam — see IF-002, which records that the foreground start does
     not satisfy that seam's keep-alive-when-detached constraint and why that is acceptable now.
   - **A workspace-level sessions line in `ward status`.** _Why safe:_ `status` reports the state of
     the work — projects and tasks — and a workspace-scope session belongs to no task row; where to
@@ -321,7 +321,7 @@ schema), and the mechanical rename of `pathVerbShapes` → `argumentReadVerbShap
 
 **One addition beyond the commissioned scope, named because it is one.** A launched session records
 the `model` and `effort` it was started with. 0028 deferred exactly this to "the launch that knows
-what it actually ran" (its SF-001, the half that entry called thin), and the intent's session-log
+what it actually ran" (its IF-001, the half that entry called thin), and the intent's session-log
 minimum names the model; it is four optional fields and it is what keeps a per-user configuration
 layer from making a workspace unreproducible. Everything else here is the commission as written.
 
@@ -360,11 +360,11 @@ files and `mise run fmt` + `mise run check` → exit 0.
 
 **Next.** Task- and project-scope launches (the records are ready); usage at close; and the first
 real question this entry raises rather than answers — what a workspace does with sessions that are
-open, unresumable, and never coming back (SF-003).
+open, unresumable, and never coming back (IF-003).
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`sessions-and-lifecycle`](../../intent/01-concepts/02-sessions-and-lifecycle.md),
+- **IF-001** — [`sessions-and-lifecycle`](../../intent/01-concepts/02-sessions-and-lifecycle.md),
   _Recording per scope_ / [`agent-harness`](../../intent/02-subsystems/03-agent-harness.md), _Expose
   a harness handle_. _Friction:_ the seam says Ward **exposes** the handle the harness produced, and
   the lifecycle slice says the handle is "recorded" — both read as though the run mints its id and
@@ -383,7 +383,7 @@ open, unresumable, and never coming back (SF-003).
   however the launch is built, and it is the difference between a record that can always be trusted
   and one with a hole at the moment of starting. _Disposition:_ **adjudicated** — the revision
   landed as [`bb96572`](https://github.com/crumley/ward/commit/bb96572) (PR #56, merged 2026-08-22).
-- **SF-002** — [`session-multiplexer`](../../intent/02-subsystems/01-session-multiplexer.md),
+- **IF-002** — [`session-multiplexer`](../../intent/02-subsystems/01-session-multiplexer.md),
   _Constraints_ (**Start** … and **keep it alive when detached**). _Friction:_ that seam owns
   "hosting live sessions", and its first constraint pairs starting with surviving detachment. This
   entry **starts** a session — in the caller's own terminal, in the foreground, dying with it — and
@@ -403,7 +403,7 @@ open, unresumable, and never coming back (SF-003).
   when the terminal does; the record and resume are what survive). _Disposition:_ **adjudicated** —
   the revision landed as [`bf12fab`](https://github.com/crumley/ward/commit/bf12fab) (PR #56, merged
   2026-08-22).
-- **SF-003** — [`sessions-and-lifecycle`](../../intent/01-concepts/02-sessions-and-lifecycle.md),
+- **IF-003** — [`sessions-and-lifecycle`](../../intent/01-concepts/02-sessions-and-lifecycle.md),
   _Open vs. running_ and _Recovery_. _Friction:_ "an exit is not a close" is exactly right and this
   entry implements it — and it creates a population the intent has no answer for: sessions that are
   **open, not running, and never coming back**. The agent exited; nobody resumed it; the transcript
@@ -422,7 +422,7 @@ open, unresumable, and never coming back (SF-003).
   run under a new handle_, which is a different act and deserves a different word. _Disposition:_
   **adjudicated** — the revision (optional note included) landed as
   [`661c913`](https://github.com/crumley/ward/commit/661c913) (PR #56, merged 2026-08-22).
-- **SF-004** — [`sessions-and-lifecycle`](../../intent/01-concepts/02-sessions-and-lifecycle.md),
+- **IF-004** — [`sessions-and-lifecycle`](../../intent/01-concepts/02-sessions-and-lifecycle.md),
   _Recording per scope_ (the minimum entry). _Friction:_ the minimum names **the persona (name +
   role)** among the fields every session entry captures, and Ward has no persona machinery at all —
   no cast, no name list, no way to say which persona a launch is for. A launched session therefore

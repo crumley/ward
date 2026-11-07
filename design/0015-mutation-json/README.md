@@ -216,7 +216,7 @@ registry rows beside these (whichever merges second rebases); a structured trust
 steps if agent orchestration proves it needs one (Deferred here); file inputs for long free-text
 arguments (`--purpose` from a file), the other half of the human-shell agent ergonomics.
 
-## Spec-feedback
+## Intent feedback
 
 None this entry. Two near-candidates adjudicated rather than filed:
 
@@ -229,5 +229,5 @@ None this entry. Two near-candidates adjudicated rather than filed:
 - [`principles`](../../intent/00-foundation/01-principles.md) §8's "where one form cannot serve
   both, the tool offers both" needed no revision to license this completion — the friction was never
   in the intent, only in the build's coverage of it. Recorded here so the trail shows the deferral
-  closing against an unchanged principle. 0008's still-open SF-001 (the self-describing contract as
+  closing against an unchanged principle. 0008's still-open IF-001 (the self-describing contract as
   a human-shell constraint) now covers thirteen more verbs and is reinforced, not re-filed.

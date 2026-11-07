@@ -70,7 +70,7 @@ export interface PublishRequest {
  * because these commits are the JOURNAL, which intent already blesses as
  * landing directly on the workspace's own main line; the push publishes a
  * record that already exists rather than delivering work. The tension is real
- * and is filed as this entry's SF-001 rather than papered over — and the
+ * and is filed as this entry's IF-001 rather than papered over — and the
  * mechanical guard is that the push is never forced, so it can only ever
  * fast-forward what the forge already holds.
  */

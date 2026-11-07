@@ -39,7 +39,7 @@ derived items of the human-shell's "what needs me?" query.
 - [`human-shell`](../../intent/02-subsystems/07-human-shell.md) — "**What needs me?** is a
   first-class query": this entry builds its seed — the two attention items derivable today (a fully
   merged PR set awaiting the gated close; changes requested on an open PR) — as a derived-only
-  surface inside `status` (friction with the constraint's messaging-seam wording: SF-001). Also the
+  surface inside `status` (friction with the constraint's messaging-seam wording: IF-001). Also the
   doctor posture — `gh` stays an **optional external tool Ward takes advantage of when installed**,
   so its absence degrades and never breaks.
 - [`remote-provider`](../../intent/02-subsystems/06-remote-provider.md) — "report PR status — review
@@ -88,7 +88,7 @@ derived items of the human-shell's "what needs me?" query.
     a derivation: claiming a closed PR "needs you" guesses the human's intent), version skew (the
     human-shell says it reaches this surface; it needs the skew condition plumbed, its own entry),
     wakes and recorded requests (the messaging seam does not exist). _Why safe:_ the surface is a
-    derived list with a stable entry shape; each new source appends entries and, per SF-001, the
+    derived list with a stable entry shape; each new source appends entries and, per IF-001, the
     deduplicated-answer contract is what must hold when sources multiply.
   - **A dedicated "what needs me?" verb.** _Why safe:_ the items live in `status` — the glanceable
     place — and `needsYou` in its JSON is already the entry shape a future `ward needs` (or the
@@ -235,13 +235,13 @@ derivation table exposed as false certainty: an unreadable PR now falls back to 
 approximation instead of silently un-marking a task that may well be in review.
 
 **Next.** Natural follow-ons, in dogfood-priority order: checks (CI) status joining `prForgeShape`
-when something reads it; version skew and further attention sources joining `needs you` (SF-001's
+when something reads it; version skew and further attention sources joining `needs you` (IF-001's
 resolution decides the constraint wording they join under); `--json` on the mutation reports
 (deferred since 0005).
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), "Constraints any
+- **IF-001** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), "Constraints any
   design must honor" → the "what needs me?" bullet. _Friction:_ the constraint scopes the surface to
   requests "**recorded by the messaging seam**," but the first real attention items turn out to be
   **derivable, not recorded**: a fully merged PR set awaiting the gated close and an open PR with

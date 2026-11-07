@@ -168,9 +168,9 @@ would have clobbered exactly what it promised to leave alone.
 **Next.** Natural follow-ons: the update/reconciliation arc picks this up as its first migration;
 other harness filenames if one ever operates these workspaces.
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`context-loading`](../../intent/01-concepts/05-context-loading.md), "Why
+- **IF-001** — [`context-loading`](../../intent/01-concepts/05-context-loading.md), "Why
   harness-neutral (`AGENTS.md`, not a harness-specific file)". **Friction:** the slice argues for
   standardizing on `AGENTS.md` so the workspace stays portable across harnesses, but is silent on
   the case this entry hit: a harness that only reads its own filename. Taken literally, shipping any

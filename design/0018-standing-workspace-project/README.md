@@ -149,7 +149,7 @@ it** — so every mechanism here is the ordinary project mechanism, plus exactly
     the standing project has never held a task — a fresh workspace, and one whose stewardship has
     not yet begun, no longer read `closed` when all other work closes. That is the empty-container
     rule applied honestly, but the asymmetry (whether a workspace reads `closed` between arcs now
-    depends on whether stewardship ever happened) is worth intent's attention — SF-001.
+    depends on whether stewardship ever happened) is worth intent's attention — IF-001.
   - **The doctor finding mirrors 0017's bridge exactly.** Absent is the pre-0018 workspace: `info`,
     never `warn` — nothing is broken, ordinary work is unaffected — carrying the one-line converge
     remedy doctor itself never runs. Present is `ok` naming the floor, so the finding doubles as the
@@ -214,7 +214,7 @@ empty set).
 the workspace-rollup consequence was found by the spine test, not foreseen: the bootstrap arc's
 final assertion (`workspace: closed` after the only project delivers) became `active`, because the
 standing project is empty until its first stewardship task. The honest reading was updated in the
-test with the why, and the asymmetry filed as SF-001 rather than papered over with a derivation
+test with the why, and the asymmetry filed as IF-001 rather than papered over with a derivation
 special case.
 
 **Next.** Sibling entry 0019 hangs the stewardship surface (worktrees, merge, close gate) off this
@@ -222,9 +222,9 @@ project; the upgrade-orchestration entry opens its reconciliation task under it;
 project-close verb must refuse the marked record (its test is ready to write the day the verb
 exists).
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md), "The
+- **IF-001** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md), "The
   standing workspace project" / [`domain-model`](../../intent/01-concepts/00-domain-model.md), "The
   derivation rule". **Friction:** the two slices compose into an asymmetry neither names. The
   derivation rule says an empty container is `active`, and the standing-project section blesses that

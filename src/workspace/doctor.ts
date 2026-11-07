@@ -1092,7 +1092,7 @@ async function claimFindings(root: string): Promise<Finding[]> {
  * name is recorded in the workspace record — from the repository, never
  * assumed, the same rule every registered repository lives by — so a root
  * checkout standing elsewhere is ordinary record↔disk drift with a name,
- * instead of quietly redefining what the main line is (0019's SF-001). An
+ * instead of quietly redefining what the main line is (0019's IF-001). An
  * unrecorded name is the pre-0020 workspace: info, never warn — nothing is
  * broken, every rail falls back to the live root read — carrying the update
  * remedy doctor itself never runs. Drift is warn, not error:

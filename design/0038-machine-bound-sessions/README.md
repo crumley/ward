@@ -38,20 +38,20 @@ and one question there costs less than a session list that fills with threads no
 - [`domain-model`](../../intent/01-concepts/00-domain-model.md) — _Identity_: a bare id stays a
   sufficient address for every session operation, which is what this entry protects by making the id
   unique over the workspace's history rather than only among its open sessions; the uniqueness rule
-  itself is where the friction lands ([`spec-feedback.md`](spec-feedback.md), SF-001).
+  itself is where the friction lands ([`intent-feedback.md`](intent-feedback.md), IF-001).
 - [`sessions-and-lifecycle`](../../intent/01-concepts/02-sessions-and-lifecycle.md) — the
   **session-log minimum** gains a field the record can now answer with (the machine); the **three
   per-thread outcomes** get their third, _unresumable_, recorded with its cause and never
   auto-closed; **closed stays closed** is what never reusing a number defends, and **closing stays
-  deliberate** is why the exit question is a question (SF-002, SF-003).
+  deliberate** is why the exit question is a question (IF-002, IF-003).
 - [`agent-harness`](../../intent/02-subsystems/03-agent-harness.md) — _locate distinguishes found
   from gone_: the distinction is drawn per machine, and a handle found nowhere here is gone here
-  whatever another machine holds (SF-004).
+  whatever another machine holds (IF-004).
 - [`human-shell`](../../intent/02-subsystems/07-human-shell.md) — _what needs me?_: an open session
   with no history to resume becomes a visible, derived item with the command that ends it; the
   interactive-resolution rules (**deliberate entry**, a **deterministic result for every
   non-interactive invocation**, **unreachable by an agent caller**) are what the exit question is
-  built to satisfy (SF-005); _opinionated configuration, global and workspace-local_: the machine
+  built to satisfy (IF-005); _opinionated configuration, global and workspace-local_: the machine
   name takes the global axis only.
 - [`principles`](../../intent/00-foundation/01-principles.md) — **§16**: which machine a session ran
   on is recorded, never inferred from whoever is reading. **§8**: the question is a human-audience
@@ -186,7 +186,7 @@ and one question there costs less than a session list that fills with threads no
     machine's own sequence, which is honest history, not a defect.
   - **The machine name is global-only, with an environment override above it.** _Alternative:_ the
     same two-axis treatment every `agent.*` key gets — attractive for uniformity. _Why it lost:_ the
-    ruling recorded in [0035](../0035-agent-command/spec-feedback.md) (SF-002) is that a
+    ruling recorded in [0035](../0035-agent-command/intent-feedback.md) (IF-002) is that a
     machine-shaped fact belongs in the machine's own configuration and out of the record that
     travels; a workspace-level `machine` would be false on every other machine that clones it, and
     it would falsify the very ids it named. The `WARD_MACHINE` override is the ladder

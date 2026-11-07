@@ -9,7 +9,7 @@
 // fires on every TAB and on every picker entry, exactly like a completion
 // callback, and inherits that path's contracts — it never throws, it never
 // writes telemetry, and it never churns the registry's recency
-// (intent/02-subsystems/07-human-shell.md, and 0022's SF-002).
+// (intent/02-subsystems/07-human-shell.md, and 0022's IF-002).
 import { searchOrder } from '../global/locate.ts';
 import { listWorkspaces } from '../global/registry.ts';
 import { listRepositoryNames } from '../workspace/repos.ts';

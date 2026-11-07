@@ -84,7 +84,7 @@ relevant slice (and reflected in tests and code).
   workspace's own repository: creation records the main-line name, making "the root never leaves its
   main line" checkable — a root standing elsewhere is drift doctor names, and a journal write
   landing off the recorded line proceeds loudly, never silently (refusing would wedge the record's
-  own bookkeeping; the stewardship copy remains the refused case). Raised as spec-feedback by the
+  own bookkeeping; the stewardship copy remains the refused case). Raised as intent feedback by the
   stewardship-rails design entry
   ([`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)).
 - **The workspace's own main line has two writers: journal and stewardship.** Ward's **journal** —

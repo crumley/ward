@@ -57,7 +57,7 @@ const VERB_TREE: Record<string, readonly string[]> = {
 /**
  * An invocation the interaction layer made of ITSELF, rather than one the
  * caller asked for — the exclusion intent's telemetry constraint needs to
- * mean what it says ("commands the caller invoked"; 0022's SF-002). Two
+ * mean what it says ("commands the caller invoked"; 0022's IF-002). Two
  * today, one class: a completion callback fires per TAB, and
  * `ward shell candidates KIND` fires whenever the emitted shell layer needs a
  * list to complete or to pick from. From the caller's seat neither ever ran

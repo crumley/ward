@@ -63,7 +63,7 @@ loop and nothing else.
   - **Surfacing auth breakage on the "needs you" surface.** _Why safe:_ `needs you` routes attention
     to work; doctor is the diagnosis surface, and the status note already points at gh. If
     dogfooding shows humans miss it, a later entry adds a derived condition under whatever wording
-    SF-001's resolution settles.
+    IF-001's resolution settles.
 - **Acceptance:** from a cold checkout, `mise run check` is green, and `bun test` proves:
   1. against a fake gh whose `auth status` exits 0, doctor reports `gh` ok **and** `gh auth` ok;
   2. exit nonzero → `gh` ok plus a `gh auth` **warn** containing `gh auth login`, with doctor still
@@ -149,7 +149,7 @@ doctor's presence finding tell the truth through the same pin the tests use.
 **Next.** Natural follow-ons: deeper auth findings (host, scopes) if dogfooding wants them; the
 deferred question of whether auth breakage ever joins `needs you`.
 
-## Spec-feedback
+## Intent feedback
 
 None this entry. The doctor constraint in
 [`human-shell`](../../intent/02-subsystems/07-human-shell.md) leaves the check set to implementation

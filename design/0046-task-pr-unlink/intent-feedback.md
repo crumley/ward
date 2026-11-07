@@ -1,4 +1,4 @@
-# 0046 — Spec-feedback
+# 0046 — Intent feedback
 
 > Intent frictions found while letting a withdrawn pull request leave a task's PR set.
 

@@ -24,7 +24,7 @@ export type { Env };
  * What Ward hands an adapter to start a run. `model` and `effort` are optional
  * in the strict sense 0028 built: absent means the flag is omitted ENTIRELY,
  * never passed empty and never defaulted — the harness's own default then
- * stands (design/0028-agent-configuration/, SF-002). Each adapter spells
+ * stands (design/0028-agent-configuration/, IF-002). Each adapter spells
  * `effort` in its own CLI's word (`--effort` for claude, `--thinking` for pi):
  * the vocabulary belongs to the harness, and Ward passes the value through.
  */

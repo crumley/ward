@@ -10,7 +10,7 @@
 > **Status:** accepted · **Started:** 2026-08-21
 
 [0025](../0025-fish-shell-layer/README.md) emitted a shell layer the human installs by redirect, and
-recorded its own hole in the same breath (SF-002): a redirect-installed layer is a **snapshot**, the
+recorded its own hole in the same breath (IF-002): a redirect-installed layer is a **snapshot**, the
 intent slice says the shorthand set is expected to **churn**, and nothing anywhere told the human
 their copy had fallen behind. The adjudication of that friction — the intent edit landing beside
 this entry, [crumley/ward#50](https://github.com/crumley/ward/pull/50) — adds the obligation that
@@ -185,7 +185,7 @@ This entry builds the visibility half, for the layer and for the completions
 ### 2026-08-21 — The whole entry in one iteration
 
 **Goal.** Everything in Scope. **What was done.** Read 0024 (the machine-findings pattern and its
-never-`error` posture), 0025 whole (the emission layout and the SF this answers), the human-shell
+never-`error` posture), 0025 whole (the emission layout and the IF this answers), the human-shell
 slice, and `src/workspace/doctor.ts` before writing anything. Then: the completion re-render and its
 proof that it matches the CLI; `emitShellLayer` and the print site that now uses it; the marker
 constant; `xdgConfigHome`; `installed.ts`; the two findings; the `XDG_CONFIG_HOME` pin in
@@ -240,9 +240,9 @@ for the layer (it stays for the completions, which are still a file). Until then
 sites when a bash or zsh layer exists, and `ward setup` as the place a human would install both
 without a redirect they had to remember.
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _A self-diagnosis
+- **IF-001** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _A self-diagnosis
   command_ → _What it checks_. _Friction:_ the slice hands doctor's subject to
   [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md), which draws it as two
   things: **machine preconditions** (the tools and settings the environment must have) and the

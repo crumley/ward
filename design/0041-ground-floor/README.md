@@ -48,7 +48,7 @@ record already in it.
   one project that never closes. This entry gives that project the one thing the slice leaves to
   design — a concrete identity — and chooses a reserved one so the project is nameable from outside
   the workspace that holds it. The slice still says its identity is "allocated like any project's";
-  [`spec-feedback.md`](spec-feedback.md) says so rather than assuming.
+  [`intent-feedback.md`](intent-feedback.md) says so rather than assuming.
 - [`00-domain-model.md`](../../intent/01-concepts/00-domain-model.md) — _Levels are elided, not
   faked_: the cheapest one-off is still one task and one elided session, and it is now a task on a
   floor that already exists. Nothing empty is created for ceremony — the ground floor is established

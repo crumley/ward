@@ -1,5 +1,5 @@
 // The workspace's own main-line name, recorded — not assumed
-// (design/0020-deterministic-upgrade/, resolving 0019's SF-001): creation
+// (design/0020-deterministic-upgrade/, resolving 0019's IF-001): creation
 // reads it from the repository and records it in the workspace record; doctor
 // names a root standing elsewhere as record↔disk drift and an unrecorded name
 // as the pre-0020 workspace; the stewardship rails aim at the recorded name,

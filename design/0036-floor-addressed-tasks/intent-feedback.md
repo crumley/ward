@@ -1,12 +1,12 @@
-# 0036 — Spec-feedback
+# 0036 — Intent feedback
 
 > Intent frictions found while building the floor-addressed task, the room sequence, and the
 > settled-work window.
 
 This file is the entry's adjudication surface and is read on its own — an adjudication session loads
-it without the entry's README, so each SF carries enough context to be ruled on directly.
+it without the entry's README, so each IF carries enough context to be ruled on directly.
 
-## SF-001 — the task's identity rule reads as "bare code only", and reuse-on-close is what broke
+## IF-001 — the task's identity rule reads as "bare code only", and reuse-on-close is what broke
 
 - **Slice:** [`intent/01-concepts/00-domain-model.md`](../../intent/01-concepts/00-domain-model.md),
   _Identity_ — the paragraph beginning "A **task follows the same rule, for the same reason**", the
@@ -64,7 +64,7 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   room is a shorthand accepted while unique among open tasks and refused with the candidates named
   when not).
 
-## SF-002 — the attention surface has no rule for forgetting, and none for which spelling to speak
+## IF-002 — the attention surface has no rule for forgetting, and none for which spelling to speak
 
 - **Slice:**
   [`intent/02-subsystems/07-human-shell.md`](../../intent/02-subsystems/07-human-shell.md) — the

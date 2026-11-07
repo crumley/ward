@@ -1,11 +1,11 @@
-# 0034 — Spec-feedback
+# 0034 — Intent feedback
 
 > Intent frictions found while building the workspace session shorthand.
 
 This file is the entry's adjudication surface and is read on its own — an adjudication session loads
-it without the entry's README, so each SF carries enough context to be ruled on directly.
+it without the entry's README, so each IF carries enough context to be ruled on directly.
 
-## SF-001 — the purpose minimum assumes every session is opened _for_ a goal
+## IF-001 — the purpose minimum assumes every session is opened _for_ a goal
 
 - **Slice:**
   [`intent/01-concepts/02-sessions-and-lifecycle.md`](../../intent/01-concepts/02-sessions-and-lifecycle.md),

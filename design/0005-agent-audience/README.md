@@ -225,7 +225,7 @@ grown create/workspace suites.
 in-review overlay is still only "has linked PRs"), `--json` on the mutation reports, and local usage
 telemetry now that callers are distinguishable.
 
-## Spec-feedback
+## Intent feedback
 
 None this entry. One observation recorded rather than raised as friction: the human-shell contract
 phrases the ambient signal as one "Ward sets when it starts an agent," and under the arc's governing

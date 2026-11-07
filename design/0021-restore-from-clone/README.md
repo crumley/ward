@@ -102,7 +102,7 @@ something new — is adjudicated under Design → Decisions: something new, and 
   - **Auto-closing or migrating stale sessions from another machine.** Intent's operation map
     assigns re-establishing live work to **recovery** (`attach`), which does not exist yet; restore
     closing them would be Ward guessing (§17). _Why safe:_ the records stay honest and named, and
-    `ward session close` is the human's per-session remedy today (SF-002).
+    `ward session close` is the human's per-session remedy today (IF-002).
   - **Restoring uncommitted or unpushed work no record can reach — impossible by construction, and
     said so.** Uncommitted tree state was never in any git object store; an unpushed branch's only
     copy died with the old machine's clone. No record, no surviving ref — nothing honest can
@@ -157,7 +157,7 @@ something new — is adjudicated under Design → Decisions: something new, and 
     would blur the exact line that keeps restore safe. So: one new verb, sweeping the whole
     workspace, per-item convergent — doctor recommends it finding by finding, mirroring intent's
     "doctor diagnoses and recommends the other two". The workspace noun reads true: the thing
-    restored is the workspace's materialized state. (The map's missing row is SF-001.)
+    restored is the workspace's materialized state. (The map's missing row is IF-001.)
   - **One sweep, not per-thing remedies.** The fresh-clone moment is the motivating case, and it
     wants one act, not N invocations of `repo add`/`worktree create` with arguments the human must
     copy out of records Ward can read itself — the toil intent says Ward absorbs. Per-thing
@@ -204,7 +204,7 @@ something new — is adjudicated under Design → Decisions: something new, and 
   - **Sessions are named, never restored, never touched.** A session record's run lived in a harness
     on the machine that recorded it; nothing here can resume it, and closing it en masse would be
     Ward guessing at the human's threads (§17). The report carries the count and the honest sentence
-    — silent ignoring is the one thing intent forbids (SF-002 for where the adjudication should
+    — silent ignoring is the one thing intent forbids (IF-002 for where the adjudication should
     eventually live).
   - **Doctor's worktree findings are `warn`, per-worktree, in the repository idiom.** One finding
     per missing materialization, each naming the task, branch, source, and remedy — a fresh clone
@@ -285,9 +285,9 @@ untouched, and the +1 schema test derives from the registry row without editing 
 `needs you` derivation for lost rows; workdirs joining the sweep when 0004's deferred anchor kind
 exists; recovery (`attach`) taking over the session adjudication restore currently only names.
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md), _Putting
+- **IF-001** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md), _Putting
   a workspace right: three operations, one map_. _Friction:_ the map has no row that owns
   **re-materializing the world from the record**. A fresh clone's condition — record complete,
   machine state empty — falls between the rows: doctor is read-only ("changes little"), recovery
@@ -303,7 +303,7 @@ exists; recovery (`attach`) taking over the session adjudication restore current
   re-materializing canonical checkouts and anchors from recorded state, naming what cannot be (lost
   work is adjudicated, never fabricated) — and note the composition: doctor recommends restore;
   recovery assumes restore has run.
-- **SF-002** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md),
+- **IF-002** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md),
   _Workspace integrity_ (record↔harness), with
   [`sessions-and-lifecycle`](../../intent/01-concepts/02-sessions-and-lifecycle.md). _Friction:_ the
   drift class names "a session whose harness handle no longer resolves", but a **relocated**

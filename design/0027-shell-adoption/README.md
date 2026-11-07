@@ -32,7 +32,7 @@ nothing at all.
 
 - [`human-shell`](../../intent/02-subsystems/07-human-shell.md) — _The interactive layer adds
   mnemonic shorthands … **evolvable** as telemetry reveals real usage_, and its clause amended by
-  0025's SF-002: **churn must be deliverable** — "whatever installed form the shorthands take in the
+  0025's IF-002: **churn must be deliverable** — "whatever installed form the shorthands take in the
   human's shell configuration, that form is **cheaply re-obtainable** from the tool, and its
   **staleness is visible**". Adoption is a second installed form, and it honors both halves at a
   finer grain than the layer can: re-obtaining is `ward shell adopt fish wrr`, and staleness is
@@ -270,7 +270,7 @@ nothing at all.
 ### 2026-08-21 — The whole entry in one iteration
 
 **Goal.** Everything in Scope. **What was done.** Read `CONTRIBUTING.md`, 0025 and 0026 whole, the
-`human-shell` slice (including the clause SF-002's adjudication had just added), all of
+`human-shell` slice (including the clause IF-002's adjudication had just added), all of
 `src/shell/`, doctor's machine pass, `test/cli/shell*.test.ts`, and `test/helpers.ts`'s XDG pins
 before writing anything. Then, in order: the units (`shorthands.ts`) and `fish.ts` rebuilt as an
 assembly of them — **verified byte-identical to the previous emission before going further**; the
@@ -366,9 +366,9 @@ style rather than the default one); a bash layout when someone asks; and `ward s
 place a human would pick between the two styles rather than reading a README section that compares
 them.
 
-## Spec-feedback
+## Intent feedback
 
-- None this entry. The `human-shell` slice's shorthand clause was amended by 0025's SF-002
+- None this entry. The `human-shell` slice's shorthand clause was amended by 0025's IF-002
   adjudication ([crumley/ward#50](https://github.com/crumley/ward/pull/50)) to require that
   "whatever installed form the shorthands take in the human's shell configuration, that form is
   cheaply re-obtainable from the tool, and its staleness is visible" — deliberately phrased over

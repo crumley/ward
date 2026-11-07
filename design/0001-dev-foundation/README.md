@@ -131,7 +131,7 @@ it).
 **Decisions.** Task named `ward`, not `run`, so the invocation reads as the tool
 (`mise run ward -- …`) rather than the awkward `mise run run`. **Next.** unchanged.
 
-## Spec-feedback
+## Intent feedback
 
 **None this entry.** Expected: the foundation deliberately touches no Ward domain concept, so there
 was no intent surface to rub against. (The one mandate exercised — CONTRIBUTING's "wire the

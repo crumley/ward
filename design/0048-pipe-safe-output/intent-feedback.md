@@ -1,4 +1,4 @@
-# 0048 — Spec-feedback
+# 0048 — Intent feedback
 
 > Intent frictions found while making output larger than a pipe's buffer arrive whole.
 

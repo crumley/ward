@@ -177,7 +177,7 @@ Ward workspace. Natural follow-ons, in dogfood-priority order: `--json` output (
 own example task), live PR state in `status` via `gh`, and the workspace skill installed at
 creation.
 
-## Spec-feedback
+## Intent feedback
 
 None this entry. One observation recorded for later rather than raised as friction: intent's
 session-id rule (slug + discriminator, unique among open sessions) is realized here as

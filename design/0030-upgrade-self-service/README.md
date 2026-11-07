@@ -191,7 +191,7 @@ the repository (#59, gate hardening) touches no design entry. No collision to re
        <mainLine>` makes the branch's commits reachable from the base
        branch, and the forge marks the pull request merged — which is why that act is in the
        completion message rather than hidden. The tension with §18's "pushing to a main line" is
-       real and is **SF-001**, not papered over. The pull request's **body carries the
+       real and is **IF-001**, not papered over. The pull request's **body carries the
        arrangement**, in the body itself: it says the merge button would create a commit the
        workspace root does not have, and prints the three commands that land it properly. A reviewer
        who never reads this entry still cannot land it wrongly by accident.
@@ -349,9 +349,9 @@ the main-line publish against a genuinely divergent `origin`. Then: whether refl
 same one-at-a-time rule (left open by the owner, above); a `needs you` item for an upgrade task left
 in flight; and pruning an abandoned stewardship branch, whose absence this entry now works around.
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`principles`](../../intent/00-foundation/01-principles.md) §18, with
+- **IF-001** — [`principles`](../../intent/00-foundation/01-principles.md) §18, with
   [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md), _The workspace's own
   main line_. _Friction:_ §18 names "**pushing to a main line**" in the gated set that requires the
   human — but the workspace's own main line is the one main line intent gives a **lawful direct
@@ -372,7 +372,7 @@ in flight; and pruning an abandoned stewardship branch, whose absence this entry
   [#66](https://github.com/crumley/ward/pull/66) (owner's ruling: publishing the workspace's own
   main line is backup, not the gated push — §18 now names a repository's main line, and the merge
   onto any main line stays gated).
-- **SF-002** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md), _The
+- **IF-002** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md), _The
   review boundary is the branch, not a forge_. _Friction:_ the slice offers the pull request as a
   second **review** technique but says nothing about **landing**, and a pull request is not an inert
   review surface — it ships a merge button. Pressing it lands a merge commit on the forge's copy of

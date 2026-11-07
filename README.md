@@ -12,12 +12,12 @@ building Ward; it is not itself a Ward workspace._
 
 The repo stands on four parallel trees. **`intent` governs the other three.**
 
-| Leg                  | What it is                                                                                                                                                   | Rate of change                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
-| [`intent/`](intent/) | The durable **what & why** — purpose, concepts, and the seam contracts.                                                                                      | Changes **only** when our understanding of Ward changes. Rare. |
-| [`design/`](design/) | The **how**, a **chronological record** — numbered design entries (scope, design, build log, spec-feedback) and the stack ADRs; superseded, not overwritten. | Appends as a build proceeds; old entries are kept.             |
-| [`src/`](src/)       | The code that implements the design.                                                                                                                         | Moves with `design`.                                           |
-| [`test/`](test/)     | Tests holding the code to the design **and** the intent.                                                                                                     | Moves with `design`.                                           |
+| Leg                  | What it is                                                                                                                                                     | Rate of change                                                 |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| [`intent/`](intent/) | The durable **what & why** — purpose, concepts, and the seam contracts.                                                                                        | Changes **only** when our understanding of Ward changes. Rare. |
+| [`design/`](design/) | The **how**, a **chronological record** — numbered design entries (scope, design, build log, intent feedback) and the stack ADRs; superseded, not overwritten. | Appends as a build proceeds; old entries are kept.             |
+| [`src/`](src/)       | The code that implements the design.                                                                                                                           | Moves with `design`.                                           |
+| [`test/`](test/)     | Tests holding the code to the design **and** the intent.                                                                                                       | Moves with `design`.                                           |
 
 `design` + `src` + `test` are a triangle that moves together; `intent` sits above them. A change
 that has to touch `intent` means we **learned something about Ward itself**, not that a tool moved.

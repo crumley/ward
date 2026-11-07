@@ -28,7 +28,7 @@ re-landing after.
   exactly such a condition — it exists in the PR's live base plus the repository record's main line
   alone — and it joins the same one glanceable, deduplicated answer 0009 built, with acting on it
   kept one step (the remedy is a single named command). The condition list this extends is read as
-  examples, not a closed set (SF-001).
+  examples, not a closed set (IF-001).
 - [`work-lifecycle`](../../intent/01-concepts/03-work-lifecycle.md) — _Ward absorbs the recurring
   toil_: "watch PR and CI status … and **surface only what needs a human**" — a PR whose merge
   cannot deliver its work is the surfacing at its highest value, because the cardinal rule ("work …
@@ -242,12 +242,12 @@ instead of incidental.
 
 **Next.** Natural follow-ons, in dogfood-priority order: checks (CI) status joining `prForgeShape`
 when something reads it (deferred since 0009); the messaging-seam successors to `needs you` (0009
-SF-001); the "knowingly stacked" acknowledgment if dogfooding shows standing stale-base lines are
+IF-001); the "knowingly stacked" acknowledgment if dogfooding shows standing stale-base lines are
 noise rather than signal.
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), "Constraints any
+- **IF-001** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), "Constraints any
   design must honor" → the "what needs me?" bullet. _Friction:_ the derivable-conditions clause
   enumerates its conditions in a parenthetical — "(a task's PR set fully merged and awaiting the
   gated close, changes requested awaiting action, version skew)" — that reads as a closed list. The

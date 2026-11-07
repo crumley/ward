@@ -25,7 +25,7 @@ directive built. The gap it closes was measured on the live bootstrap workspace:
 `.ward/baselines.md` is **empty** (`artifacts: []`) — converge fingerprints only what it itself
 establishes — so untouched-vs-customized was undecidable exactly where an upgrade needs the answer,
 its `AGENTS.md` and `.ward/README.md` are stale-but-untouched originals from designs 0004 and 0002,
-and its record has no main-line name (0019's SF-001). All four are fixed here, deterministically.
+and its record has no main-line name (0019's IF-001). All four are fixed here, deterministically.
 
 ## Serves intent
 
@@ -105,7 +105,7 @@ and its record has no main-line name (0019's SF-001). All four are fixed here, d
     exactly this report.
   - **Recorded declines** (intent's "chosen, not drifted" mark). _Why safe:_ nothing regresses —
     doctor already reads customized artifacts as `info`, never worse; the decline record belongs to
-    the reconciliation entry that creates decisions to record (SF-001 below).
+    the reconciliation entry that creates decisions to record (IF-001 below).
   - **Steward-branch pruning after merge** — deferred by 0019, stays deferred; it did not fall out
     naturally here. _Why safe:_ a merged branch holds nothing unmerged; pruning is cosmetic and
     reversible.
@@ -147,7 +147,7 @@ and its record has no main-line name (0019's SF-001). All four are fixed here, d
 ## Design
 
 - **Decisions:** no new ADRs — the existing stack carries this entry. Entry-local:
-  - **The main-line name lives in the workspace record (`workspace.md`), optional.** 0019's SF-001
+  - **The main-line name lives in the workspace record (`workspace.md`), optional.** 0019's IF-001
     named the workspace document the natural home, and it is: the record already carries the
     workspace's identity and stamp, and the field is exactly the repository-set rule
     (recorded-from-the-repository) applied to the workspace's own repository. `optional` keeps every
@@ -223,7 +223,7 @@ and its record has no main-line name (0019's SF-001). All four are fixed here, d
   - **The stamp advances with the upgrade commit, residue or not.** The human's gated merge is the
     adjudication act (intent: "a gated, Ward-managed merge is that adjudication made mechanical"),
     and the diff it lands names the residue it does not touch. The tension with "the stamp records
-    changes considered and decided" when residue is left unreconciled is real and filed as SF-001
+    changes considered and decided" when residue is left unreconciled is real and filed as IF-001
     rather than resolved by this entry.
   - **Doctor severities mirror the existing bridges.** Unrecorded name = `info` (the pre-0020
     workspace: nothing broken, the 0017/0018 migration-target pattern, remedy named). Drift,
@@ -326,11 +326,11 @@ around by asserting severity and message separately in `mainline.test.ts`.
 **Next.** In dogfood-priority order: run the real upgrade against the live bootstrap workspace
 through these rails (the acceptance fixture is its exact state, so the flow is proven); the
 agent-orchestrated reconciliation entry that consumes the residue report; recorded declines
-(SF-001); 0019's remaining deferred doctor findings when evidence of silent degradation appears.
+(IF-001); 0019's remaining deferred doctor findings when evidence of silent degradation appears.
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md),
+- **IF-001** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md),
   _Reconciliation is one task, and its close asserts adjudication_ / _What the stamp therefore
   means_. _Friction:_ the slice narrates upgrades through a reconciliation **task** whose delivered
   close asserts per-artifact adjudication, and defines the stamp as "changes considered and decided"
@@ -347,7 +347,7 @@ agent-orchestrated reconciliation entry that consumes the residue report; record
   no adjudication needed), and state what the stamp asserts when residue exists — either bless
   "mechanically upgraded, residue named" as sufficient, or direct that the stamp advance only when a
   reconciliation task has adjudicated the residue.
-- **SF-002** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md),
+- **IF-002** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md),
   _Reconciliation_ (the trigger rule: "Ward's default changed **between the stamped version and the
   CLI in hand**"). _Friction:_ the trigger is keyed on version numbers, but Ward's actual practice
   gives them no resolution — every workspace ever created is stamped `0.1.0` while the installed

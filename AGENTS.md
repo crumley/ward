@@ -18,7 +18,7 @@ The repo stands on four parallel trees; **`intent` governs the other three** (se
   [`02-subsystems/`](intent/02-subsystems/). Start at [`intent/README.md`](intent/README.md).
 - [`design/`](design/) — the **how**, and the **chronological record of building it**: numbered,
   self-contained **design entries** (each: context, scope, design, and — only when building raises
-  one — the **spec-feedback** loop that records where building reveals an intent problem without
+  one — the **intent-feedback** loop that records where building reveals an intent problem without
   silently rewriting `intent/`, with a build log only when the build earns one), plus the stack
   **ADRs** in [`design/decisions/`](design/decisions/). Entries are **superseded, not overwritten**,
   written in a standalone single-author voice. Organized for building, **not** a mirror of intent.
@@ -57,8 +57,8 @@ The repo stands on four parallel trees; **`intent` governs the other three** (se
   intent it serves, set its scope, record the _how_, journal the build in its log, and record stack
   choices as ADRs in [`design/decisions/`](design/decisions/). A later entry supersedes (never
   overwrites) the one it replaces. The build authors `design/`, `src/`, `test/`; it does **not**
-  silently rewrite `intent/` — friction goes to the entry's `spec-feedback.md` for human review
-  (created only when there is friction — no SF, no file).
+  silently rewrite `intent/` — friction goes to the entry's `intent-feedback.md` for human review
+  (created only when there is friction — no **IF** (intent-feedback item), no file).
 
 ## Conventions
 

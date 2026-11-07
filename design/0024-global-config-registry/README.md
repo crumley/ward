@@ -32,7 +32,7 @@ boundary in the intent — and most of the decisions below are that boundary, ap
   boundary**, verbatim: "global state may hold preferences and conveniences only — never anything
   the understanding or resumption of work depends on." Every design decision here is checked against
   it, and the entry answers the slice's own open question — _More than one workspace on a machine …
-  whether Ward may keep a machine-level registry_ — with a build (SF-001). Also _Identity_
+  whether Ward may keep a machine-level registry_ — with a build (IF-001). Also _Identity_
   ([`domain-model`](../../intent/01-concepts/00-domain-model.md)): a workspace is identified by its
   **location**, which is why entries are keyed by path and names are only labels.
 - [`principles`](../../intent/00-foundation/01-principles.md) — §3 (self-sufficiency: nothing here
@@ -69,7 +69,7 @@ boundary in the intent — and most of the decisions below are that boundary, ap
   - **MRU maintenance**: every invocation from inside a registered workspace notes recency — with
     two rules that keep it off the hot path and off the critical path: a workspace already at the
     head of the order is not rewritten, and no failure here ever reaches the command. A completion
-    callback is machinery, not usage ([0022](../0022-shell-completion/README.md) SF-002), so it
+    callback is machinery, not usage ([0022](../0022-shell-completion/README.md) IF-002), so it
     never churns the order.
   - **Resolution from anywhere** (`src/cli/index.ts`, `src/global/locate.ts`): standing inside a
     workspace always wins; standing nowhere, a **human** gets the default (else most recently used),
@@ -375,9 +375,9 @@ built on the two path verbs); the workspace-local configuration axis and the pre
 the two; and the guided `ward setup` that edits both. (Wiring `repo.refresh.stash` into
 `ward repo refresh` was on this list and has since landed — see the configuration bullet in Scope.)
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md), _Open
+- **IF-001** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md), _Open
   questions_ → "**More than one workspace on a machine.** Whether that is expected, and whether Ward
   may keep a machine-level registry of workspaces — which would be state outside the workspace and
   must be reconciled with the global-state boundary above." _Friction:_ the question is open, and
@@ -393,7 +393,7 @@ the two; and the guided `ward setup` that edits both. (Wiring `repo.refresh.stas
   machine-level registry is permitted **under a stated test** — it may hold only what is derivable
   from the workspaces themselves, and no verb may depend on it for correctness — with a pointer to
   this entry as the worked instance.
-- **SF-002** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Workspace- and
+- **IF-002** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Workspace- and
   scope-aware from any working directory_. _Friction:_ the clause is written entirely about being
   **inside** a workspace ("invoked anywhere inside an initialized workspace … Ward discovers the
   workspace itself, with no flag and no 'which workspace?' prompt"), and says nothing about being
@@ -410,7 +410,7 @@ the two; and the guided `ward setup` that edits both. (Wiring `repo.refresh.stas
   **echo what it resolved**, must not prompt, and must refuse the resolution to a declared agent —
   plus the carve-out that verbs whose _purpose_ is to answer about the registry serve both audiences
   from anywhere.
-- **SF-003** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Opinionated
+- **IF-003** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Opinionated
   configuration, global and workspace-local_. _Friction:_ the slice names the two axes and the
   quality bar, but leaves unstated the thing a builder most needs: **what may live on the global
   axis**. The answer turned out to live in a different slice

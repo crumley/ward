@@ -229,7 +229,7 @@ the first upgrade's reconciliation and the first migration both travel this path
     Intent: the root checkout IS the main-line checkout. `workspaceMainLine` reads
     `symbolic-ref --short HEAD` and refuses a detached root. Nothing pins the _name_ (no record
     field, no `main` assumption — the hermetic tests run on `master` to prove it); the residue —
-    Ward cannot detect a root moved to some other branch by hand — is SF-001.
+    Ward cannot detect a root moved to some other branch by hand — is IF-001.
 - **Layout:** `src/workspace/steward.ts` (new, self-contained: `workspaceMainLine`,
   `stewardshipEnclosure`, `refuseStewardshipCopy`, `mergeWorkspaceBranch`) — the stewardship seam in
   one module, imported by worktrees/tasks/CLI; `src/workspace/worktrees.ts`
@@ -303,9 +303,9 @@ rails (the first real client); the deferred doctor findings and `AGENTS.md` less
 landed and the shared files are quiet; the upgrade entry's fuller preview; a local `awaiting-close`
 derivation for landed-but-unclosed stewardship tasks.
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md), _The
+- **IF-001** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md), _The
   workspace's own main line_, with [`domain-model`](../../intent/01-concepts/00-domain-model.md),
   _Repositories and the main line_. _Friction:_ the workspace's own main line has no recorded name
   anywhere — for registered repositories intent insists "the main line is recorded from the

@@ -43,7 +43,8 @@ keeps a `claude:` run resolvable in a workspace since reconfigured for pi.
 - [`model-selection`](../../intent/02-subsystems/04-model-selection.md) — _Model identifiers are
   configuration … passed through_ and thinking depth expressed per harness: pi's `provider/id`
   models and `off … max` thinking levels pass through unread, the same posture 0028 took for claude
-  (see [`spec-feedback.md`](spec-feedback.md), SF-001, on the value's portability across harnesses).
+  (see [`intent-feedback.md`](intent-feedback.md), IF-001, on the value's portability across
+  harnesses).
 - [`human-shell`](../../intent/02-subsystems/07-human-shell.md) — _Opinionated configuration_ and _A
   self-diagnosis command_: `agent.harness` gains a second value on the same two axes, and doctor's
   command finding names the resolved adapter's own default program and override variable.
@@ -136,8 +137,8 @@ keeps a `claude:` run resolvable in a workspace since reconfigured for pi.
     (0028's word); pi's flag is `--thinking`. The adapter translates the flag NAME and leaves the
     VALUE alone, the same pass-through 0028 chose for model ids and effort levels — a Ward-side
     mapping of level names would be the stale table 0028's reasoning rejected. That the value is not
-    portable across harnesses is a real friction, raised in [`spec-feedback.md`](spec-feedback.md)
-    (SF-001) rather than papered over here.
+    portable across harnesses is a real friction, raised in
+    [`intent-feedback.md`](intent-feedback.md) (IF-001) rather than papered over here.
   - **The shared machinery moves to `adapter.ts`, not stays in `claude.ts`.** `harnessCommand`,
     `locateProgram`, and `runHarness` were in the claude adapter but never used anything
     claude-specific; leaving them there would make the pi adapter import from claude, implying a

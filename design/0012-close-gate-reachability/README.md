@@ -25,7 +25,7 @@ copy is torn down. This entry teaches the gate the difference.
   complete only when its PR set is resolved: every PR **merged** — the **delivered** close" — read
   together with the cardinal rule ("work … reaches the main line **only through a pull request**"),
   _delivered_ can only mean the main line actually received the work; a merge into a dead base
-  satisfies the forge's word but not the rule's meaning (the residue of that gap is SF-001).
+  satisfies the forge's word but not the rule's meaning (the residue of that gap is IF-001).
   _Refresh and clean up_: teardown follows the close — which is exactly why the gate must answer
   before it.
 - [`principles`](../../intent/00-foundation/01-principles.md) §20 — the close is the textbook
@@ -236,11 +236,11 @@ mirrors its forges.
 **Next.** Natural follow-ons, in dogfood-priority order: the earlier warning (a doctor finding or
 PR-watch item when a PR's base is not the main line — `baseRefName` rides the same probe call);
 checks (CI) status joining `prForgeShape` when something reads it (deferred since 0009); the
-messaging-seam successors to `needs you` (SF-001 of 0009).
+messaging-seam successors to `needs you` (IF-001 of 0009).
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`work-lifecycle`](../../intent/01-concepts/03-work-lifecycle.md), _Completion_
+- **IF-001** — [`work-lifecycle`](../../intent/01-concepts/03-work-lifecycle.md), _Completion_
   (item 4) and _Task states_. _Friction:_ completion is defined as "every PR **merged** — the
   **delivered** close," but on a forge "merged" is a statement about the PR's base branch, not about
   the main line — a PR merged into a retired base satisfies the sentence as written while violating

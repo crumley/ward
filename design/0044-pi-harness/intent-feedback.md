@@ -1,11 +1,11 @@
-# 0044 — Spec-feedback
+# 0044 — Intent feedback
 
 > Intent frictions found while adding the pi coding agent as a second harness.
 
 This file is the entry's adjudication surface and is read on its own — an adjudication session loads
-it without the entry's README, so each SF carries enough context to be ruled on directly.
+it without the entry's README, so each IF carries enough context to be ruled on directly.
 
-## SF-001 — a thinking-depth value is not portable across harnesses
+## IF-001 — a thinking-depth value is not portable across harnesses
 
 - **Slice:**
   [`intent/02-subsystems/04-model-selection.md`](../../intent/02-subsystems/04-model-selection.md),
@@ -37,7 +37,7 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   harness may invalidate it, the harness's launch error surfaces it, and Ward neither translates nor
   gates it).
 
-## SF-002 — harness selection is named "per scope" but resolves only at the workspace axis
+## IF-002 — harness selection is named "per scope" but resolves only at the workspace axis
 
 - **Slice:**
   [`intent/02-subsystems/03-agent-harness.md`](../../intent/02-subsystems/03-agent-harness.md),

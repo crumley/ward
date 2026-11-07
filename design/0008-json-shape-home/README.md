@@ -180,9 +180,9 @@ stability-policy assertions on the emitted task schema; plus the grown lesson ro
 coverage (the test table follows automatically). When the write verbs gain `--json` (deferred since
 0005), their reports join the same registry.
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), "Constraints any
+- **IF-001** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), "Constraints any
   design must honor". _Friction:_ "the machine-readable output contract is discoverable from the
   tool itself" reads like durable intent — it would hold however the shapes are realized
   (documentation shipped in the binary cannot drift from the build, which is a constraint-level

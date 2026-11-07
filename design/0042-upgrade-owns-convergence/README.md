@@ -41,7 +41,7 @@ and makes it fit this release of Ward.** One list of establishment steps, one mo
 - [`06-workspace-lifecycle.md`](../../intent/01-concepts/06-workspace-lifecycle.md) — _Creation is a
   deliberate act, never implicit_: creation is about a **location**, and this entry makes the verb
   operate only on one that is not yet a workspace. The slice still says re-running creation
-  converges; [`spec-feedback.md`](spec-feedback.md) says so rather than assuming.
+  converges; [`intent-feedback.md`](intent-feedback.md) says so rather than assuming.
 - [`06-workspace-lifecycle.md`](../../intent/01-concepts/06-workspace-lifecycle.md) —
   _Reconciliation is one task_, and the trigger rule: what triggers adjudication is **a default that
   moved**, not a file that differs. Phase 2 is untouched, so a same-version run still opens no task,

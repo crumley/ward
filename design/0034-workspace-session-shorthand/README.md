@@ -32,7 +32,7 @@ whole reason the shorthand would otherwise need a prompt.
 - [`sessions-and-lifecycle`](../../intent/01-concepts/02-sessions-and-lifecycle.md) — the session
   log's minimum keeps its **purpose**: the record always carries one, and the JSON shape is
   unchanged. What changes is who supplies it for one kind of session (Design, below), and
-  [`spec-feedback.md`](spec-feedback.md) names the friction that kind exposes in the slice.
+  [`intent-feedback.md`](intent-feedback.md) names the friction that kind exposes in the slice.
 - [`scopes-and-personas`](../../intent/01-concepts/01-scopes-and-personas.md) — the two axes, chosen
   explicitly by a shorthand: scope is the workspace (no TASK is passed), and the working directory
   is its root, where the calling shell is moved to and left.
