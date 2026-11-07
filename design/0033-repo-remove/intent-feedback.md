@@ -1,11 +1,12 @@
-# 0033 — Spec-feedback
+# 0033 — Intent feedback
 
 > Intent frictions found while building repository removal.
 
 This file is the entry's adjudication surface and is read on its own — an adjudication session loads
-it without the entry's README, so each SF carries enough context to be ruled on directly.
+it without the entry's README, so each intent-feedback item carries enough context to be ruled on
+directly.
 
-## SF-001 — the repository set's lifecycle stops at registration
+## IF-001 — the repository set's lifecycle stops at registration
 
 - **Slice:**
   [`intent/01-concepts/06-workspace-lifecycle.md`](../../intent/01-concepts/06-workspace-lifecycle.md),

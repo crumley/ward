@@ -78,14 +78,14 @@ with the human's visual cues) stays deferred, and this entry says why the two ar
     in the shell, with no TTY negotiation and no agent hazard, while a picker is an in-process
     interactive affordance that must branch on `callerIsAgent()` and own a TTY. Completion also
     removes most of the picker's demand: the argument is rarely missing if it was easy to type.
-    (Filed as SF-001, because intent states them as one clause.)
+    (Filed as IF-001, because intent states them as one clause.)
   - **Visual cues in the menu** —
     [`05-visual-theming`](../../intent/02-subsystems/05-visual-theming.md)'s accent color and type
     glyph beside each candidate. The shell completion protocols carry a **plain text description
     column and nothing else** (optique's encoder even strips tabs and newlines, and fish/zsh style
     the column themselves). _Why safe:_ the description already carries the recognizable cue that
     matters today — the slug behind `t1`, the main line behind a repo name — and glyph/accent land
-    naturally in the picker, which owns its own rendering. (SF-001.)
+    naturally in the picker, which owns its own rendering. (IF-001.)
   - **Project slugs, floors, PR urls, outcomes.** `--outcome` is already a `choice()`, which optique
     suggests for free; the rest are either new names being coined (`task open SLUG`,
     `project open SLUG`, `workspace create PATH`) — where a suggestion would be nonsense — or values
@@ -172,7 +172,7 @@ with the human's visual cues) stays deferred, and this entry says why the two ar
     be analyzed for "which flows are clumsy" (§4); a row per TAB would bury that signal under
     keystroke noise and put a file append on the shell's latency path. Script generation is the
     opposite — a deliberate act, once per install, worth knowing about — so it is recorded as verb
-    `completion`. (Intent says "per invocation" without qualification: SF-002.)
+    `completion`. (Intent says "per invocation" without qualification: IF-002.)
   - **The bare-`ward` guard is untouched.** `process.argv.length === 2` fires only with no
     arguments; both completion paths carry `completion <shell>` at minimum. Verified by test and by
     the live fish session.
@@ -261,9 +261,9 @@ carry); project floors and slugs once a verb takes one where recall is hard; a `
 ordering of task candidates if telemetry says the recall problem is "which of my six", not "what was
 the code".
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Resolve missing or
+- **IF-001** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Resolve missing or
   ambiguous arguments interactively — and make it delightful_. _Friction:_ the slice binds
   **autocomplete** and the **interactive picker** into one constraint, and attaches the visual-cue
   requirement (identity handle plus accent color and type glyph, so "the blue 🗂️ one" is selectable)
@@ -282,7 +282,7 @@ the code".
   and **interactive resolution** (in-process, TTY-owning, `callerIsAgent()`-branching, where the
   accent/glyph requirement lives), stating that the first reduces demand for the second and that
   both serve the same "do not make them recall a handle" purpose.
-- **SF-002** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Record command usage
+- **IF-002** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Record command usage
   as local telemetry_. _Friction:_ the constraint says "**per invocation**", and a completion
   callback is, mechanically, an invocation of the binary — several per typed command, one per TAB.
   Recording them would satisfy the letter of the constraint and destroy its purpose, which the same

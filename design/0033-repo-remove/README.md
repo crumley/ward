@@ -28,7 +28,7 @@ the verb legibly.
 
 - [`intent/01-concepts/06-workspace-lifecycle.md`](../../intent/01-concepts/06-workspace-lifecycle.md)
   — gives the repository set the leaving half of its lifecycle, answering the removal portion of the
-  slice's own open question (see [`spec-feedback.md`](spec-feedback.md)).
+  slice's own open question (see [`intent-feedback.md`](intent-feedback.md)).
 - [`intent/01-concepts/03-work-lifecycle.md`](../../intent/01-concepts/03-work-lifecycle.md) — the
   fail-safe: evidence of unrecorded work stops the toil, whatever the record says; here it is what
   makes an autonomous delete safe at all.

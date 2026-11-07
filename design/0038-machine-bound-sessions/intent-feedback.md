@@ -1,11 +1,12 @@
-# 0038 — Spec-feedback
+# 0038 — Intent feedback
 
 > Intent frictions found while binding sessions to the machine that holds their history.
 
 This file is the entry's adjudication surface and is read on its own — an adjudication session loads
-it without the entry's README, so each SF carries enough context to be ruled on directly.
+it without the entry's README, so each intent-feedback item carries enough context to be ruled on
+directly.
 
-## SF-001 — uniqueness among open sessions is too weak to keep the record
+## IF-001 — uniqueness among open sessions is too weak to keep the record
 
 - **Slice:** [`intent/01-concepts/00-domain-model.md`](../../intent/01-concepts/00-domain-model.md),
   _Identity_ — the session paragraph ("unique among the open sessions in the workspace … over
@@ -41,7 +42,7 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   session id is unique over the workspace's history across the machines that share it — slug, a
   discriminator never reused, and the machine it ran on; task codes untouched).
 
-## SF-002 — the session-log minimum does not name the machine, and _running_ is per machine
+## IF-002 — the session-log minimum does not name the machine, and _running_ is per machine
 
 - **Slice:**
   [`intent/01-concepts/02-sessions-and-lifecycle.md`](../../intent/01-concepts/02-sessions-and-lifecycle.md),
@@ -67,7 +68,7 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   session-log minimum names the machine, and running is per machine — the record says which machine
   can turn open into running).
 
-## SF-003 — may the shell ask a present human whether a thread is done?
+## IF-003 — may the shell ask a present human whether a thread is done?
 
 - **Slice:**
   [`intent/01-concepts/02-sessions-and-lifecycle.md`](../../intent/01-concepts/02-sessions-and-lifecycle.md),
@@ -95,7 +96,7 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   run exits with its human present the shell may ask whether the thread is done; the answer, default
   included, is the human's close and never Ward's).
 
-## SF-004 — locate is answered per machine, and the slice does not say so
+## IF-004 — locate is answered per machine, and the slice does not say so
 
 - **Slice:**
   [`intent/02-subsystems/03-agent-harness.md`](../../intent/02-subsystems/03-agent-harness.md),
@@ -118,7 +119,7 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   is answered per machine — a handle found nowhere here is gone here even when another machine holds
   it, and the recorded machine tells the two apart).
 
-## SF-005 — the interactive rules cover a mode the human enters, not a moment they are already in
+## IF-005 — the interactive rules cover a mode the human enters, not a moment they are already in
 
 - **Slice:**
   [`intent/02-subsystems/07-human-shell.md`](../../intent/02-subsystems/07-human-shell.md), the

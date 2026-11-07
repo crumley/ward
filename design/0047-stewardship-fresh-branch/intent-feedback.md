@@ -1,4 +1,4 @@
-# 0047 — Spec-feedback
+# 0047 — Intent feedback
 
 > Intent frictions found while making a stewardship worktree start from the current main tip.
 

@@ -36,7 +36,7 @@ writes_); this entry climbs its last rung and adds the first genuinely concurren
 - [`human-shell`](../../intent/02-subsystems/07-human-shell.md) — "record command usage as local
   telemetry, per invocation," realized as what exists today of the named fields (scope is recorded
   anchor-shaped, as far as the concept exists; persona does not exist in the implementation yet —
-  SF-001); the Not-list's "not telemetry that ever leaves the workspace" enforced structurally
+  IF-001); the Not-list's "not telemetry that ever leaves the workspace" enforced structurally
   (untracked twice over, below); the `doctor` surface grows the two findings this entry's conditions
   need (§20).
 - [`principles`](../../intent/00-foundation/01-principles.md) §17 — no lost updates, the entry's
@@ -185,7 +185,7 @@ writes_); this entry climbs its last rung and adds the first genuinely concurren
     miniature).
   - **The row records the resolved scope, not just the raw cwd** (amended 2026-08-12, at the
     workspace owner's direction). The first build recorded only `cwd`, judging "scope" to have no
-    runtime referent (the original SF-001) — but the 0006 resolver is exactly that referent: the
+    runtime referent (the original IF-001) — but the 0006 resolver is exactly that referent: the
     working directory already resolves to the anchors the records claim. The deciding argument is
     that the derivation is **moment-bound**: worktrees are torn down at close and task codes are
     **reused**, so a `cwd` recorded in January resolves to nothing — or to the wrong task — in
@@ -284,12 +284,12 @@ serialization if real contention ever shows there.
 
 ### 2026-08-12 — The row learns its scope (review amendment)
 
-**Goal.** Record the invocation's scope, per the workspace owner's review of the original SF-001:
+**Goal.** Record the invocation's scope, per the workspace owner's review of the original IF-001:
 the 0006 resolver is scope's runtime referent as far as it exists, and the derivation from `cwd` is
 moment-bound (torn-down worktrees, reused codes), so the row must capture it at the only moment it
 can. **What was done.** `src/cli/telemetry.ts` resolves scope eagerly at invocation (0006's
 `scopeFromCwd`, then a registered-checkout prefix match, then `workspace`) and the exit row carries
-it; the decision, SF-001, and the mechanisms line above updated to match.
+it; the decision, IF-001, and the mechanisms line above updated to match.
 
 **What works now — with the commands that prove it:** `bun test` →
 `195 pass, 0 fail, 668 expect() calls` across 23 files (the baseline moved twice: this entry's first
@@ -299,9 +299,9 @@ the spawned CLI from the workspace root, a claimed worktree (and a subdirectory 
 canonical checkout, asserting `workspace`, `task:t1`, `task:t1`, `repo:demo` in turn.
 `mise run check` → exit 0.
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Record command usage
+- **IF-001** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Record command usage
   as local telemetry_. _Friction:_ the constraint enumerates the per-invocation fields as "persona,
   scope, working directory, and human-or-agent," but persona does not exist in the implementation
   (personas are unbuilt), and the first build judged scope absent too — the workspace owner's review
@@ -314,7 +314,7 @@ canonical checkout, asserting `workspace`, `task:t1`, `task:t1`, `repo:demo` in 
   and duration; persona is omitted entirely (absence over `null`/`"default"`) until it exists.
   _Proposed revision:_ "per invocation: the caller's context as it exists — working directory, scope
   as far as it resolves, and human-or-agent today; persona as it comes to exist."
-- **SF-002** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), the same bullet read
+- **IF-002** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), the same bullet read
   with the Not-list ("not telemetry that ever leaves the workspace"). _Friction:_ "record usage
   **per invocation**" is unqualified, but some invocations run outside any workspace (`ward doctor`
   on a bare machine, `ward workspace create` from a neutral directory) — telemetry that never leaves

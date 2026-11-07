@@ -1,11 +1,12 @@
-# 0041 — Spec-feedback
+# 0041 — Intent feedback
 
 > Intent frictions found while building the ground floor.
 
 This file is the entry's adjudication surface and is read on its own — an adjudication session loads
-it without the entry's README, so each SF carries enough context to be ruled on directly.
+it without the entry's README, so each intent-feedback item carries enough context to be ruled on
+directly.
 
-## SF-001 — the cheapest one-off is a bare task, and this build no longer has one
+## IF-001 — the cheapest one-off is a bare task, and this build no longer has one
 
 - **Slice:** [`intent/01-concepts/00-domain-model.md`](../../intent/01-concepts/00-domain-model.md)
   — _Levels are elided, not faked_, the **task** bullet: "the cheapest one-off is a bare task
@@ -50,15 +51,15 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   [`04-walkthrough-delivering-work.md`](../../intent/04-walkthrough-delivering-work.md) — where the
   task is opened — should say that a task always sits on a floor, and which floor it lands on when
   none is named. The other half of those sentences, that a task's address **composes** its floor
-  with its room, is already on the queue as [0036](../0036-floor-addressed-tasks/spec-feedback.md)'s
-  SF-001 and is deliberately not re-proposed here: that one settles the spelling, this one settles
-  the container.
+  with its room, is already on the queue as
+  [0036](../0036-floor-addressed-tasks/intent-feedback.md)'s IF-001 and is deliberately not
+  re-proposed here: that one settles the spelling, this one settles the container.
 
 - **Status:** adjudicated — [#84](https://github.com/crumley/ward/pull/84) (owner's ruling: the
   cheapest one-off is one task on the ground floor with one elided session — stated through the
   rule's own test, not through the bare task the build no longer produces).
 
-## SF-002 — floor numbers are monotonic from 1, with no room for a reserved one
+## IF-002 — floor numbers are monotonic from 1, with no room for a reserved one
 
 - **Slice:** [`intent/01-concepts/00-domain-model.md`](../../intent/01-concepts/00-domain-model.md)
   — _Identity_: "a **project is a floor**, addressed by a **floor number** (`1`, `2`, `3…`, starting
@@ -75,7 +76,7 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   written once and read in several workspaces. An allocated number cannot satisfy that: it is 1 in a
   fresh workspace and 6 in a converged one, so no text can name it and be right twice.
 
-  The reserved number is also the thing that lets the elision question in SF-001 be settled at all:
+  The reserved number is also the thing that lets the elision question in IF-001 be settled at all:
   "every task lives on a floor" is only cheap if there is a floor guaranteed to be there, with a
   name that is the same everywhere.
 
@@ -99,7 +100,7 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   is reserved for the standing workspace project, the one address every workspace shares; ordinary
   floors stay monotonic from 1 and never reused).
 
-## SF-003 — the standing project's identity is "allocated like any project's"
+## IF-003 — the standing project's identity is "allocated like any project's"
 
 - **Slice:**
   [`intent/01-concepts/06-workspace-lifecycle.md`](../../intent/01-concepts/06-workspace-lifecycle.md)
@@ -130,7 +131,7 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   constraint: its identity is **fixed and the same in every workspace** — the one address every
   workspace shares, which is what lets Ward-authored defaults and briefs refer to it — with the
   concrete number left to [`design/`](../../design/) as before. Keep the link to _Identity_, which
-  (with SF-002 settled) is where the reserved number and its _why_ live.
+  (with IF-002 settled) is where the reserved number and its _why_ live.
 
 - **Status:** adjudicated — [#84](https://github.com/crumley/ward/pull/84) (owner's ruling: the
   standing project's identity is fixed and the same in every workspace, rather than allocated like

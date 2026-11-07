@@ -1,11 +1,12 @@
-# 0043 — Spec-feedback
+# 0043 — Intent feedback
 
 > Intent frictions found while making the pull request visible and deriving a task's next step.
 
 This file is the entry's adjudication surface and is read on its own — an adjudication session loads
-it without the entry's README, so each SF carries enough context to be ruled on directly.
+it without the entry's README, so each intent-feedback item carries enough context to be ruled on
+directly.
 
-## SF-001 — the PR facts Ward tracks stop short of the one that most often decides what to do next
+## IF-001 — the PR facts Ward tracks stop short of the one that most often decides what to do next
 
 - **Slice:**
   [`intent/01-concepts/03-work-lifecycle.md`](../../intent/01-concepts/03-work-lifecycle.md) —
@@ -53,7 +54,7 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   forge's check verdict is a tracked per-PR fact, read live like review state and never stored;
   `closed unmerged` joins the status enumeration; the next step is derived, not summarized).
 
-## SF-002 — "waiting on the human" is not always derivable, and the surface's rule has no third answer
+## IF-002 — "waiting on the human" is not always derivable, and the surface's rule has no third answer
 
 - **Slice:**
   [`intent/02-subsystems/07-human-shell.md`](../../intent/02-subsystems/07-human-shell.md) — _"What

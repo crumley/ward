@@ -36,7 +36,7 @@ readable at all.
   that **cannot** be derived from children — a priority, a 'waiting on an external decision' note,
   an attention flag — are recorded at the higher scope." A claim is that kind of judgment, and this
   entry records it at the project and nowhere else. The slice does not yet name claims among a
-  project's attributes; [`spec-feedback.md`](spec-feedback.md) says so rather than assuming.
+  project's attributes; [`intent-feedback.md`](intent-feedback.md) says so rather than assuming.
 - [`00-domain-model.md`](../../intent/01-concepts/00-domain-model.md) — _Repositories and the main
   line_ and _Task_: a task "can span multiple worktrees across multiple repositories", and recording
   which repositories a task touches is what lets `worktree create` stop asking when there is only

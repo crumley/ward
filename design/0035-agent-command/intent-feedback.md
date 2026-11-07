@@ -1,12 +1,13 @@
-# 0035 — Spec-feedback
+# 0035 — Intent feedback
 
 > Intent frictions found while building the agent command — how the harness is invoked on this
 > machine.
 
 This file is the entry's adjudication surface and is read on its own — an adjudication session loads
-it without the entry's README, so each SF carries enough context to be ruled on directly.
+it without the entry's README, so each intent-feedback item carries enough context to be ruled on
+directly.
 
-## SF-001 — the seam distinguishes harnesses, not invocations
+## IF-001 — the seam distinguishes harnesses, not invocations
 
 - **Slice:**
   [`intent/02-subsystems/03-agent-harness.md`](../../intent/02-subsystems/03-agent-harness.md),
@@ -35,7 +36,7 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   invocation is distinct from harness identity; the harness is `claude` whatever command reaches
   it).
 
-## SF-002 — a workspace-level command is a machine fact in a record that travels
+## IF-002 — a workspace-level command is a machine fact in a record that travels
 
 - **Slice:**
   [`intent/01-concepts/06-workspace-lifecycle.md`](../../intent/01-concepts/06-workspace-lifecycle.md),

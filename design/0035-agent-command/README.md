@@ -37,11 +37,11 @@ twice — the number is a timestamp, not a promise, and every reference here say
   adapter_ with everything Ward-specific outside it: the adapter keeps owning its default program
   and now takes the configured command as an argument, so nothing about launchers enters the session
   model, the store, or the CLI; _how start/resume are invoked per harness_ (left to implementation)
-  is where the machine-specific invocation lives (see [`spec-feedback.md`](spec-feedback.md),
-  SF-001).
+  is where the machine-specific invocation lives (see [`intent-feedback.md`](intent-feedback.md),
+  IF-001).
 - [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md) — the global-state
   boundary: the global `agent.command` is a preference, and deleting it costs a default. The
-  workspace-level override brushes the boundary from the other side, which is SF-002.
+  workspace-level override brushes the boundary from the other side, which is IF-002.
 - [`principles`](../../intent/00-foundation/01-principles.md) — §5 (Ward does not care how the CLI
   is reached, only that it is), §6 (the same two files give the same command on every run), §8 (one
   resolution, a doctor line for the human and keyed data under `--json`), §20 (a program that is not

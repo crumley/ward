@@ -25,7 +25,7 @@ neither `dirty` nor `failed`, which both the report and the rendering then have 
   the default ("a dirty tree is never rebased or refreshed, whatever the record says") is untouched,
   and the **human's explicit, opt-in exception** — set aside, update, put back, report `conflicted`
   where restoring needs judgement — is built exactly as the slice now sanctions it. That sanction
-  was not there when this entry started; it is the intent amendment recorded under SF-001 below.
+  was not there when this entry started; it is the intent amendment recorded under IF-001 below.
 - [`principles`](../../intent/00-foundation/01-principles.md) — **§6**: the report is registration
   order regardless of completion order, so the same set of repositories produces the same document
   and the same rendered lines on every run. **§8**: the in-place block is a human-audience cue, in
@@ -75,7 +75,7 @@ neither `dirty` nor `failed`, which both the report and the rendering then have 
     `repoRefreshShape`, so `--json` and `ward schema` carry it. `worktree rebase` refuses a rebase
     onto a conflicted canonical checkout for the same reason it refuses a dirty one.
   - **The intent amendment** to [`work-lifecycle`](../../intent/01-concepts/03-work-lifecycle.md)
-    sanctioning the exception — see SF-001.
+    sanctioning the exception — see IF-001.
 - **Deferred:**
   - **Reading a configured default for `--stash`** (`repo.refresh.stash`). A parallel task is
     building global configuration; nothing here reads any. The flag is plumbed as a plain boolean
@@ -251,9 +251,9 @@ once the configuration entry lands (one expression); consider the same snapshot 
 `worktree rebase`, whose rows have the same shape but whose work is local and must stay serial; and
 revisit the fixed cap of 8 only if telemetry on real workspaces says the client is the limit.
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`work-lifecycle`](../../intent/01-concepts/03-work-lifecycle.md), _Ward absorbs the
+- **IF-001** — [`work-lifecycle`](../../intent/01-concepts/03-work-lifecycle.md), _Ward absorbs the
   recurring toil_ → "the toil yields to evidence of unrecorded work". _Friction:_ the slice stated
   the fail-safe as absolute — "a dirty tree is never rebased or refreshed, whatever the record says"
   — with a _why_ (a lost update is silent corruption, §17) that argues for protecting work **whose

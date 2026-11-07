@@ -1,11 +1,12 @@
-# 0051 — Spec-feedback
+# 0051 — Intent feedback
 
 > Intent frictions found while building floor-scope sessions.
 
 This file is the entry's adjudication surface and is read on its own — an adjudication session loads
-it without the entry's README, so each SF carries enough context to be ruled on directly.
+it without the entry's README, so each intent-feedback item carries enough context to be ruled on
+directly.
 
-## SF-001 — whether a project-scope session may do a task's work itself is unstated
+## IF-001 — whether a project-scope session may do a task's work itself is unstated
 
 - **Slice:**
   [`intent/01-concepts/01-scopes-and-personas.md`](../../intent/01-concepts/01-scopes-and-personas.md)

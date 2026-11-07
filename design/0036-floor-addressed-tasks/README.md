@@ -47,7 +47,7 @@ held is about to belong to someone else — stops printing that room for closed 
   **composed** where global uniqueness is genuinely needed, exactly as the slice already prescribes
   for rooms, and stays **derived, never stored** (Status: only what cannot be derived is recorded
   above the leaves). The slice still says a task code is workspace-unique among open tasks; where
-  this build reads that differently, [`spec-feedback.md`](spec-feedback.md) says so rather than
+  this build reads that differently, [`intent-feedback.md`](intent-feedback.md) says so rather than
   rewriting it.
 - [`00-domain-model.md`](../../intent/01-concepts/00-domain-model.md) — _size codes to real
   cardinality_ and _time is another ambiguity-breaker_: 99 rooms per floor is sized to the observed

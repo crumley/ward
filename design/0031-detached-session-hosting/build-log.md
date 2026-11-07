@@ -14,7 +14,7 @@ the session record schema, the session verbs). Surveyed the host candidates and 
 as [ADR 0006](../decisions/0006-tmux-detached-host.md) (proposed); wrote the entry — verb surface,
 naming, failure semantics, scope boundaries, and the acceptance the build will be measured against.
 No `src/`, `test/`, or `intent/` files were touched: this is a design-only unit, and the frictions
-it surfaced went to [`spec-feedback.md`](spec-feedback.md). **What works now — with the exact
+it surfaced went to [`intent-feedback.md`](intent-feedback.md). **What works now — with the exact
 command that proves it:** the documents pass the repo's full gate — `mise run check` (Biome +
 dprint + `tsc --noEmit` + `bun test` + lychee + actionlint) → exit 0 on this branch. **Decisions.**
 All recorded under the entry's Design. **Next.** Human review of the entry and ADR 0006; on
@@ -38,12 +38,12 @@ explicitly sized; probe failures became **"could not determine"**, never "not ru
 spawn moved **strictly after the store-lock release**; and the `--continue` fallback and
 `new-session -A` were recorded as considered and declined. Newly deferred, each with its why and
 named consequence: the handle-freshness refresh channel, `release`, and fleet roll-up. Two new
-frictions went to [`spec-feedback.md`](spec-feedback.md) (SF-005, SF-006), and ADR 0006 was amended
-in place — still proposed — with the caveats the survey added to the tmux choice. **What works now —
-with the exact command that proves it:** the rewritten documents pass the repo's full gate —
-`mise run check` → exit 0 on this branch. **Decisions.** All recorded under the entry's Design,
-cited to the prior-art file that justified each. **Next.** Human review of the rewritten entry and
-amended ADR; on acceptance, the build starts with the premise validation.
+frictions went to [`intent-feedback.md`](intent-feedback.md) (SF-005, SF-006), and ADR 0006 was
+amended in place — still proposed — with the caveats the survey added to the tmux choice. **What
+works now — with the exact command that proves it:** the rewritten documents pass the repo's full
+gate — `mise run check` → exit 0 on this branch. **Decisions.** All recorded under the entry's
+Design, cited to the prior-art file that justified each. **Next.** Human review of the rewritten
+entry and amended ADR; on acceptance, the build starts with the premise validation.
 
 ## 2026-10-16 — Regrouped: one floor host per floor
 
@@ -68,7 +68,7 @@ rather than killing floor-0 windows at `kill-session`; and since windows have no
 arbitrate a race, the probe-and-create moved **inside the store write** — safe because Ward's store
 lock is a link(2) lockfile holding no descriptor, which also retires the first version's
 spawn-after-release rule (that hazard was a flock's). One new friction went to
-[`spec-feedback.md`](spec-feedback.md) (SF-007, grouping by lineage), the six existing SFs were
+[`intent-feedback.md`](intent-feedback.md) (SF-007, grouping by lineage), the six existing SFs were
 re-read against floor hosts and moved to one `**Status:**` line each, all still pending, and ADR
 0006 was amended in place, still proposed. **What works now — with the exact command that proves
 it:** `env -u WARD_AGENT mise run check` → exit 0 on this branch. **Next.** Human review of the

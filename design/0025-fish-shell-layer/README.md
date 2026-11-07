@@ -285,9 +285,9 @@ question of one prefix versus three is still open); a bash layer once someone as
 in the global config when someone wants fzy. The in-process picker stays deferred, now with a
 concrete reason it can stay that way.
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Supply nouns by
+- **IF-001** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Supply nouns by
   recognition, never by recall_, the **interactive resolution (the picker)** bullet. _Friction:_ the
   slice locates the picker **"in the process"** — "It runs **in the process**, owns its rendering,
   and **branches on caller identity**" — as part of distinguishing it from shell completion. But the
@@ -310,7 +310,7 @@ concrete reason it can stay that way.
   accent and glyph. That would let this entry and a future in-process picker both read as builds of
   the same constraint rather than one superseding the other. _Disposition:_ adjudicated —
   [crumley/ward#50](https://github.com/crumley/ward/pull/50).
-- **SF-002** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _The interactive layer
+- **IF-002** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _The interactive layer
   adds mnemonic shorthands for common operations_. _Friction:_ the slice says the alias set is
   expected to churn ("Not a fixed alias set — aliases are expected to churn as telemetry reveals
   real usage") but says nothing about what a human's shell configuration is supposed to do when it

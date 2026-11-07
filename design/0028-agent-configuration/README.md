@@ -40,19 +40,19 @@ therefore **0029**; every reference in code, tests, and prose here says so.
 
 - [`human-shell`](../../intent/02-subsystems/07-human-shell.md) — _Opinionated configuration, global
   and workspace-local_: the **workspace-local axis**, built, and with it the precedence rule between
-  the two that the clause names but never states (SF-003). _A self-diagnosis command_ is where the
+  the two that the clause names but never states (IF-003). _A self-diagnosis command_ is where the
   resolution becomes visible: doctor reports the resolved configuration with per-key provenance, for
   both audiences.
 - [`agent-harness`](../../intent/02-subsystems/03-agent-harness.md) — _Accept an externally-chosen
   model and thinking depth … this seam does not decide which model runs, only honors the decision._
   This entry builds the **externally-chosen** part: where the choice is written, how it resolves,
-  and — the part the seam is silent about — what "unchosen" means (SF-002). Also _Be selectable per
+  and — the part the seam is silent about — what "unchosen" means (IF-002). Also _Be selectable per
   scope_: `agent.harness` exists with one legal value today so the seam is visible in configuration
   before there is a second adapter to make it urgent.
 - [`model-selection`](../../intent/02-subsystems/04-model-selection.md) — _Model identifiers are
   configuration … never written into the concepts_: they are two optional strings in two documents,
   validated for nothing but non-emptiness. The slice's override hierarchy starts at the workspace
-  and this entry adds a layer **above** it, which is the friction SF-001 records.
+  and this entry adds a layer **above** it, which is the friction IF-001 records.
 - [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md) — the **global-state
   boundary**: everything this entry puts in `~/.config/ward/config.md` is a preference, and deleting
   the file costs a default, never a recovery. The workspace half lives in the workspace record,
@@ -106,7 +106,7 @@ therefore **0029**; every reference in code, tests, and prose here says so.
     so a third layer is a row, not a redesign — and inventing scope-level configuration homes before
     a session verb exists to read them would guess at their shape.
   - **Recording the resolved model and effort on the session record.** _Why safe:_ nothing runs yet,
-    so there is nothing to record; but it is the missing half of SF-001's answer and belongs with
+    so there is nothing to record; but it is the missing half of IF-001's answer and belongs with
     the launch that knows what it actually ran.
   - **A `ward config` read/write verb, and the guided `ward setup`.** _Why safe:_ 0024's posture,
     unchanged — the files are optional, hand-editable, and every key resolves without them; a second
@@ -180,7 +180,7 @@ therefore **0029**; every reference in code, tests, and prose here says so.
     makes the escape hatch obvious — `args: []` in a workspace record means "none of them here" —
     and keeps the resolved value something a human can read off a single file instead of assembling
     in their head. It also answers, for configuration, the lifecycle slice's open question
-    _Deletion, not just shadowing_ (SF-003).
+    _Deletion, not just shadowing_ (IF-003).
   - **`{}` overrides nothing.** A workspace that carries an `agent:` block with no keys in it
     resolves exactly like a workspace with no block: presence is not an override, only a value is.
     The test is `!== undefined` everywhere and never truthiness, which is also what lets an explicit
@@ -305,11 +305,11 @@ is what holds.
 
 **Next.** Entry 0029: start an agent from this configuration — the harness adapter, the launch
 command assembled with absent keys omitted, and the resolved model and effort recorded on the
-session (SF-001's missing half). After that, the narrower scope levels if real use asks for them.
+session (IF-001's missing half). After that, the narrower scope levels if real use asks for them.
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`model-selection`](../../intent/02-subsystems/04-model-selection.md), _Resolution
+- **IF-001** — [`model-selection`](../../intent/02-subsystems/04-model-selection.md), _Resolution
   through the scope hierarchy_ and _Model identifiers are configuration_. _Friction:_ the slice's
   hierarchy **begins at the workspace** ("a default at the workspace level, overridable at project,
   task, and room/session levels") and locates the identifiers themselves "in the workspace, never
@@ -327,7 +327,7 @@ session (SF-001's missing half). After that, the narrower scope levels if real u
   preferences and that the resolved choice is recorded on the session, so reproduction reads the
   record rather than the machine. _Disposition:_ **adjudicated** — the revision landed as
   [`a957cec`](https://github.com/crumley/ward/commit/a957cec) (PR #56, merged 2026-08-22).
-- **SF-002** — [`agent-harness`](../../intent/02-subsystems/03-agent-harness.md), _Accept an
+- **IF-002** — [`agent-harness`](../../intent/02-subsystems/03-agent-harness.md), _Accept an
   externally-chosen model and thinking depth … and pass them through_. _Friction:_ the seam says it
   honors a choice, and says nothing about what happens when **no choice was made** — which is the
   ordinary case and the directive's omitted-means-omitted ask. Two readings are available and they
@@ -344,7 +344,7 @@ session (SF-001's missing half). After that, the narrower scope levels if real u
   harness-agnostic tool and one with opinions about somebody else's defaults (§5). _Disposition:_
   **adjudicated** — the revision landed as
   [`e63946b`](https://github.com/crumley/ward/commit/e63946b) (PR #56, merged 2026-08-22).
-- **SF-003** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Opinionated
+- **IF-003** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Opinionated
   configuration, global and workspace-local_. _Friction:_ the clause names both axes and never says
   **which wins**, nor at what granularity. Two questions had to be settled to build anything: does a
   workspace value override the whole global block or only the key it sets, and does a

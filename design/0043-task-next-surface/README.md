@@ -36,7 +36,7 @@ recommend different things.
   PRs** and **Guide to merge**: the PR set becomes the visible object it is described as, per-PR
   state and all, and "what is left to complete this task" becomes a line Ward prints rather than a
   promise. What the slice does not name among the tracked facts is the forge's check verdict;
-  [`spec-feedback.md`](spec-feedback.md) says so rather than assuming.
+  [`intent-feedback.md`](intent-feedback.md) says so rather than assuming.
 - [`03-work-lifecycle.md`](../../intent/01-concepts/03-work-lifecycle.md) — _Task states_, the
   derived `in-review` rule: the ladder reads the same PR set the overlay is computed from, so
   "in-review" and "what next" are two readings of one source and cannot disagree.
@@ -44,7 +44,7 @@ recommend different things.
   first-class query_: the same derivable conditions the workspace-wide surface presents, narrowed to
   one task and extended to the conditions it never covered. The one case the surface's rule does not
   reach — a PR awaiting review by someone the record cannot name — is raised in
-  [`spec-feedback.md`](spec-feedback.md).
+  [`intent-feedback.md`](intent-feedback.md).
 - [`07-human-shell.md`](../../intent/02-subsystems/07-human-shell.md) — _Settled work leaves the
   glanceable surface, and stays retrievable_: a closed task is addressable by `task show` under the
   same window every listing obeys, and a settled one is refused with `--all` named, never silently
@@ -198,7 +198,7 @@ recommend different things.
     answers route to the same page). Naming both acts in one line lets the reader take the half that
     is theirs, and costs a word. The cost is a line that is imperative about two things where every
     other rung is imperative about one, which is the honest shape of a fact the record does not
-    hold; [`spec-feedback.md`](spec-feedback.md) raises it as the gap in the attention surface's
+    hold; [`intent-feedback.md`](intent-feedback.md) raises it as the gap in the attention surface's
     rule that it is.
   - **An unreadable forge prints the link and says so.** Suppressing the PR lines when the probe is
     dead — the way `needs you` disappears — would have kept the "no forge state means no forge

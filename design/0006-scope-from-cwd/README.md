@@ -72,7 +72,7 @@ contract's asymmetry clause seriously enough to make the agent-caller call expli
     task → project, and record directories (`tasks/<code>-<slug>/`) also lexically imply a task.
     _Why safe:_ worktrees are the only location kind one occupies to _work_ today (rooms and
     workdirs don't exist yet); widening the claimed set later is additive to the same resolver — and
-    the record-tree question is raised as SF-001 rather than answered unilaterally.
+    the record-tree question is raised as IF-001 rather than answered unilaterally.
   - **Inference on `task close`.** _Why safe:_ excluded by decision, not by accident (below); the
     explicit form works everywhere, and evidence from use can reopen the call in a later entry.
   - **Scoping the read verbs by location** (`ward status` narrowed to the enclosing task). _Why
@@ -191,9 +191,9 @@ resolver branch (with theming's cues when they exist), location-scoped read verb
 narrowed to the enclosing task), and revisiting the claimed-location set (rooms, workdirs) as those
 anchor kinds arrive.
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), "Workspace- and
+- **IF-001** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), "Workspace- and
   scope-aware from any working directory". The clause's chain ("a worktree → room → task → project")
   does not say whether the **record tree** counts as a location that implies scope: a caller
   standing in `tasks/t1-feature/` (the task's _records_) is inside a structure that lexically
@@ -224,4 +224,4 @@ anchor kinds arrive.
   worktree **record** nests under its task and carries the directory as its `path` field — which is
   exactly what this entry's resolver follows, keeping the physical placement swappable without
   touching the mechanism. Nesting would have collapsed worktree-cwd and record-cwd into one rule —
-  deciding SF-001 by fiat in the direction the resolution above rejects.
+  deciding IF-001 by fiat in the direction the resolution above rejects.

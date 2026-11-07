@@ -142,7 +142,7 @@ the status surface, per worktree, with the 0011 verb named as the remedy.
     to skim past the items that genuinely need them — the cry-wolf failure the deduplicated-answer
     contract exists to prevent. The sub-line with its named remedy is the whole surface; if
     dogfooding proves a long-ignored behind worktree is a real risk, an entry can add a threshold
-    condition additively. (The friction with work-lifecycle's own wording is SF-001.)
+    condition additively. (The friction with work-lifecycle's own wording is IF-001.)
   - **One sub-line per worktree, always — not a task-line summary, not aberrant-only.** Three
     candidates were weighed. A task-line count (`— worktrees: 1 behind · 1 current`, the `prs:`
     precedent) keeps lines compact but buries **which** worktree is behind — the actionable datum —
@@ -256,9 +256,9 @@ the render switch was rewritten as an if-chain because the undefined-freshness g
 (when something can watch, it reads `worktreeStatuses` and calls the 0011 verb); the occupancy yield
 when occupancy is recorded; checks state when the forge probe grows it.
 
-## Spec-feedback
+## Intent feedback
 
-- **SF-001** — [`work-lifecycle`](../../intent/01-concepts/03-work-lifecycle.md), "Ward absorbs the
+- **IF-001** — [`work-lifecycle`](../../intent/01-concepts/03-work-lifecycle.md), "Ward absorbs the
   recurring toil" → the surfacing sentence. _Friction:_ the slice says Ward "surfaces **only what
   needs a human** — what is behind, what is conflicted, what is blocked, what is ready", reading
   "behind" as an instance of "needs a human" — while the same paragraph's own _why_ frames the goal

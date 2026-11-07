@@ -211,7 +211,7 @@ environment plus any runtime changes), and the tests' pinning now takes effect. 
 **Decisions.** Subprocess environments are always passed explicitly at the spawn site; nothing may
 rely on `Bun.spawnSync` picking up `process.env` mutations. **Next.** unchanged.
 
-## Spec-feedback
+## Intent feedback
 
 None this entry. The surfaces intent deliberately leaves open — per-type front-matter fields, the
 on-disk layout, the doctor check set — were decided here as design without rubbing against any

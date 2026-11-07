@@ -1,11 +1,12 @@
-# 0042 — Spec-feedback
+# 0042 — Intent feedback
 
 > Intent frictions found while giving convergence one owner.
 
 This file is the entry's adjudication surface and is read on its own — an adjudication session loads
-it without the entry's README, so each SF carries enough context to be ruled on directly.
+it without the entry's README, so each intent-feedback item carries enough context to be ruled on
+directly.
 
-## SF-001 — re-running creation is stated as the update path, and it can no longer be one
+## IF-001 — re-running creation is stated as the update path, and it can no longer be one
 
 - **Slice:**
   [`intent/01-concepts/06-workspace-lifecycle.md`](../../intent/01-concepts/06-workspace-lifecycle.md)
@@ -69,13 +70,13 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   [`intent/00-foundation/01-principles.md`](../../intent/00-foundation/01-principles.md) **§6**
   needs no change: it states idempotency for operations that resume, open, or wake a thread and for
   setup/teardown actions, and it does not use creation's re-run as its example. Named here so a
-  reader settling this SF does not go looking for a §6 edit that is not owed.
+  reader settling this intent-feedback item does not go looking for a §6 edit that is not owed.
 
 - **Status:** adjudicated — [#86](https://github.com/crumley/ward/pull/86) (owner's ruling: creation
   is a one-time, located act that refuses a path already carrying a workspace and names the update
   path; convergence, with every property it had, belongs to update).
 
-## SF-002 — the update owns the record's shape, and the map does not say so
+## IF-002 — the update owns the record's shape, and the map does not say so
 
 - **Slice:**
   [`intent/01-concepts/06-workspace-lifecycle.md`](../../intent/01-concepts/06-workspace-lifecycle.md)
@@ -91,7 +92,7 @@ it without the entry's README, so each SF carries enough context to be ruled on 
   artifacts — the standing project's existence and its floor, the ignore policy, the reserved scope
   directories, the guidance symlink, the recorded main-line name, the baseline record itself — also
   go out of date as Ward ships, and the slice never says which operation brings them forward. In
-  practice creation did, which is what SF-001 is about; with creation becoming one-time, the
+  practice creation did, which is what IF-001 is about; with creation becoming one-time, the
   question has no answer written down anywhere.
 
   The two kinds of alignment are genuinely different in a way the slice's own rules already

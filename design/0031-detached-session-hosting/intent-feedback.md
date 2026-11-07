@@ -1,9 +1,10 @@
-# 0031 — Spec-feedback
+# 0031 — Intent feedback
 
 > Intent frictions found while designing detached session hosting.
 
 This file is the entry's adjudication surface and is read on its own — an adjudication session loads
-it without the entry's README, so each SF carries enough context to be ruled on directly.
+it without the entry's README, so each intent-feedback item carries enough context to be ruled on
+directly.
 
 Context for adjudicating without the entry open: [0031](README.md) designs the
 [session-multiplexer](../../intent/02-subsystems/01-session-multiplexer.md) seam's **added
@@ -12,12 +13,12 @@ technique** — Ward-launched agent sessions hosted detached in tmux, beside the
 session) holding one window per Ward session, with the workspace's coordinator linked into every
 floor host; a window's placement is derived from the record (its floor, or its recorded parent's).
 The record stays the only source of truth; the live half is a cache; `attach`, `observe`, `resume`,
-and `close` are the verbs over it. The design is proposed and unbuilt: SF-001..004 surfaced while
-drawing its boundaries, SF-005..006 while testing it against a prior-art survey of eleven comparable
-systems ([`prior-art/`](prior-art/) holds the evidence the later SFs cite), and SF-007 when the
-design was regrouped from one host per session to floor hosts.
+and `close` are the verbs over it. The design is proposed and unbuilt: IF-001..004 surfaced while
+drawing its boundaries, IF-005..006 while testing it against a prior-art survey of eleven comparable
+systems ([`prior-art/`](prior-art/) holds the evidence the later intent-feedback items cite), and
+IF-007 when the design was regrouped from one host per session to floor hosts.
 
-## SF-001 — "map … for resume" conflates attaching a live run with re-creating a stopped one
+## IF-001 — "map … for resume" conflates attaching a live run with re-creating a stopped one
 
 - **Slice:** [`session-multiplexer`](../../intent/02-subsystems/01-session-multiplexer.md),
   _Constraints_ ("map a recorded session reference … back to a live session **for resume**, and
@@ -39,7 +40,7 @@ design was regrouped from one host per session to floor hosts.
   routing note already had to apologize for.
 - **Status:** pending.
 
-## SF-002 — the multiplexer-vs-messaging split needs a provisional floor
+## IF-002 — the multiplexer-vs-messaging split needs a provisional floor
 
 - **Slice:** [`session-multiplexer`](../../intent/02-subsystems/01-session-multiplexer.md) /
   [`messaging-coordination`](../../intent/02-subsystems/02-messaging-coordination.md), the shared
@@ -60,7 +61,7 @@ design was regrouped from one host per session to floor hosts.
   reason it is opinionated.
 - **Status:** pending.
 
-## SF-003 — hosting does not gate on the harness seam's fork-mode question
+## IF-003 — hosting does not gate on the harness seam's fork-mode question
 
 - **Slice:** [`agent-harness`](../../intent/02-subsystems/03-agent-harness.md), _Open questions_
   (fork mode first) with
@@ -81,7 +82,7 @@ design was regrouped from one host per session to floor hosts.
   assuming hosting prejudged the mode.
 - **Status:** pending.
 
-## SF-004 — the seam is silent on who may destroy live state
+## IF-004 — the seam is silent on who may destroy live state
 
 - **Slice:** [`session-multiplexer`](../../intent/02-subsystems/01-session-multiplexer.md),
   _Constraints_ (cache-over-record) with [`principles`](../../intent/00-foundation/01-principles.md)
@@ -102,7 +103,7 @@ design was regrouped from one host per session to floor hosts.
   one way and "just a cache" arguing the other.
 - **Status:** pending.
 
-## SF-005 — attach multiplicity and write ownership are unstated
+## IF-005 — attach multiplicity and write ownership are unstated
 
 - **Slice:** [`session-multiplexer`](../../intent/02-subsystems/01-session-multiplexer.md),
   _Constraints_ ("Let a human or agent **(re-)attach**, and **observe read-only**").
@@ -128,7 +129,7 @@ design was regrouped from one host per session to floor hosts.
   floor share the keyboard when both are on the same window. The seam sentence is still to land in
   intent; this line then reads adjudicated with its link.
 
-## SF-006 — mapping a record to a live session says nothing about verifying it belongs
+## IF-006 — mapping a record to a live session says nothing about verifying it belongs
 
 - **Slice:** [`session-multiplexer`](../../intent/02-subsystems/01-session-multiplexer.md),
   _Constraints_ ("Map a recorded session reference … back to a live session").
@@ -152,7 +153,7 @@ design was regrouped from one host per session to floor hosts.
   stranger's pane wearing the right name.
 - **Status:** pending.
 
-## SF-007 — "group by the work they belong to (by scope)" vs grouping by lineage
+## IF-007 — "group by the work they belong to (by scope)" vs grouping by lineage
 
 - **Slice:** [`session-multiplexer`](../../intent/02-subsystems/01-session-multiplexer.md),
   _Constraints_ ("**Group sessions by the work they belong to** (by scope) and **label them by

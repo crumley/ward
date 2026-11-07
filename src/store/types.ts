@@ -16,7 +16,7 @@ export const workspaceRecordSchema = z.object({
    * intent/01-concepts/06-workspace-lifecycle.md, the main line's name is
    * recorded — here too). With it recorded, a root checkout standing on
    * another branch is ordinary record↔disk drift doctor can name, instead of
-   * a quiet redefinition of what the main line is (0019's SF-001, resolved).
+   * a quiet redefinition of what the main line is (0019's IF-001, resolved).
    * Optional so every pre-0020 record stays valid unchanged; doctor points
    * the absence at the upgrade that records it.
    */
@@ -305,7 +305,7 @@ export const sessionSchema = z
      * (intent/01-concepts/02-sessions-and-lifecycle.md), and recording it here
      * is what keeps the workspace self-sufficient once a per-user
      * configuration layer exists: reproduction reads the session, not the
-     * machine that happened to launch it (0028's SF-001, its thin half).
+     * machine that happened to launch it (0028's IF-001, its thin half).
      */
     model: z.string().min(1).optional(),
     effort: z.string().min(1).optional(),

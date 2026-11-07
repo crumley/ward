@@ -141,7 +141,7 @@ read rather than assumed), no network.
 
 **Next.** Entry 0004: the work spine — project / task / worktree / session records / status / close.
 
-## Spec-feedback
+## Intent feedback
 
 None this entry. The one candidate — whether "adopt" may leave the human's checkout in place rather
 than moving it — is already settled by intent's own wording ("moved in, **or used as a local

@@ -176,7 +176,7 @@ recordInvocation(process.argv.slice(2));
 // it is a single small read in the steady state — the write happens only when
 // the order actually changes. The interaction layer's own machinery — a
 // completion callback, a shell-layer candidate feed — is not usage
-// (design/0022-shell-completion/ SF-002, design/0025-fish-shell-layer/), so
+// (design/0022-shell-completion/ IF-002, design/0025-fish-shell-layer/), so
 // it never churns the MRU.
 await touchInvokedWorkspace(process.argv.slice(2));
 

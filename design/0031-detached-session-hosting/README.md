@@ -11,7 +11,7 @@
 > **Reviewed:** 2026-11-06
 
 [0029](../0029-launched-sessions/README.md) made Ward launch agents — foreground, in the caller's
-terminal, dying with it — and its SF-002, since adjudicated into the
+terminal, dying with it — and its IF-002, since adjudicated into the
 [multiplexer seam](../../intent/02-subsystems/01-session-multiplexer.md)'s baseline/added split,
 names what remains unpaid: the capability the seam **adds** over that baseline,
 keep-alive-when-detached. A session must be able to outlive the human walking away, be re-attached,
@@ -35,7 +35,7 @@ This entry is **design-only**, resting on [ADR 0006](../decisions/0006-tmux-deta
 choice of tmux. It was tested against a survey of eleven comparable systems, kept under
 [`prior-art/`](prior-art/); [`build-log.md`](build-log.md) records what the survey and then the
 regrouping moved, and the intent frictions the design surfaced are in
-[`spec-feedback.md`](spec-feedback.md).
+[`intent-feedback.md`](intent-feedback.md).
 
 **Vocabulary.** A _session_ is always a Ward agent session. The tmux object that holds a floor's
 windows is the **host** (the **floor host**); "tmux session" is tmux's word for it and appears only
@@ -169,12 +169,12 @@ where this entry describes tmux's own mechanics — never in a Ward surface, mes
     one `send-keys` away from its coordinator, which makes the temptation sharper, not weaker. Safe
     to defer because that is the messaging seam's own arc, and its contract is already
     recorded-first — live delivery is an optimization it may later hang on this host, and nothing
-    built here closes that door (SF-002 in [`spec-feedback.md`](spec-feedback.md) records the line
-    this entry draws).
+    built here closes that door (IF-002 in [`intent-feedback.md`](intent-feedback.md) records the
+    line this entry draws).
   - **Fork (`--fork-session`) in any mode.** Safe to defer because forking is the harness seam's
     open question, orthogonal to hosting — a fork, whenever it lands, is a new session with its own
     identity and handle (and, under 0052, a parent), and this design places and hosts any session it
-    is handed (SF-003).
+    is handed (IF-003).
   - **The scoped launches themselves.** Project-scope launch is 0051's; task-scope launch remains
     deferred as 0029 left it. Safe to defer here because attach, observe, locate, and close are
     id-addressed and scope-blind, and placement already maps every scope to a floor (workspace scope
@@ -345,9 +345,9 @@ say what changed.
     link is recorded, so placement is a pure function of records and survives a reboot exactly. The
     cost: placement is recursive over parents (bounded by the chain's length, and computed from
     records already read), and a child grouped by lineage sits in a host that is not its scope's —
-    the grouping constraint reads "by scope", and SF-007 in [`spec-feedback.md`](spec-feedback.md)
-    records lineage accepted as a reading of "the work they belong to" (2026-11-06), with the intent
-    wording still to follow.
+    the grouping constraint reads "by scope", and IF-007 in
+    [`intent-feedback.md`](intent-feedback.md) records lineage accepted as a reading of "the work
+    they belong to" (2026-11-06), with the intent wording still to follow.
   - **The coordinator floats: a workspace-scope session with no recorded parent is linked into every
     floor host, never copied and never killed by another floor.** That is the whole rule: a window
     **floats** exactly when its session is at **workspace scope** and records **no parent** — the
@@ -530,7 +530,7 @@ say what changed.
     behind, and loses to the yank. The cost: while a human is attached, a view appears in `tmux ls`
     beside its host (named `<host>-v<n>`), and doctor must tell views from strays (it does, by
     `@ward_view`). Two attaches to one session still share one window — and one keyboard — which is
-    SF-005's question, unchanged by the regrouping and ruled in review (2026-11-06; pending the
+    IF-005's question, unchanged by the regrouping and ruled in review (2026-11-06; pending the
     intent edit): shared-write attach is by design, and observe is the protected grain.
   - **Observe is a read-only, single-window view — the grain the first version got for free, rebuilt
     with a link.** Under one host per session, `attach -r` showed exactly one session. Against a
@@ -550,7 +550,7 @@ say what changed.
     transient entry in `tmux ls` while someone watches.
   - **Close kills the session's window, and only that. A host's lifetime is tmux's own rule. Nothing
     else ever kills.** The alternative — automatic healing, doctor reaping strays and recovery
-    restarting the gone — loses on §18: a sweep spends teardown authority on a heuristic (SF-004
+    restarting the gone — loses on §18: a sweep spends teardown authority on a heuristic (IF-004
     proposes the seam say this outright), and the one tool in the survey that auto-heals in both
     directions needed a lifecycle lock, a stale-operation sweep, a paused watcher, and
     kill-verification retries just to stop its own healer ([dmux](prior-art/dmux.md)). Teardown
