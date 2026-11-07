@@ -3,7 +3,8 @@
 > Intent frictions found while designing detached session hosting.
 
 This file is the entry's adjudication surface and is read on its own — an adjudication session loads
-it without the entry's README, so each IF carries enough context to be ruled on directly.
+it without the entry's README, so each intent-feedback item carries enough context to be ruled on
+directly.
 
 Context for adjudicating without the entry open: [0031](README.md) designs the
 [session-multiplexer](../../intent/02-subsystems/01-session-multiplexer.md) seam's **added
@@ -14,8 +15,8 @@ floor host; a window's placement is derived from the record (its floor, or its r
 The record stays the only source of truth; the live half is a cache; `attach`, `observe`, `resume`,
 and `close` are the verbs over it. The design is proposed and unbuilt: IF-001..004 surfaced while
 drawing its boundaries, IF-005..006 while testing it against a prior-art survey of eleven comparable
-systems ([`prior-art/`](prior-art/) holds the evidence the later IFs cite), and IF-007 when the
-design was regrouped from one host per session to floor hosts.
+systems ([`prior-art/`](prior-art/) holds the evidence the later intent-feedback items cite), and
+IF-007 when the design was regrouped from one host per session to floor hosts.
 
 ## IF-001 — "map … for resume" conflates attaching a live run with re-creating a stopped one
 

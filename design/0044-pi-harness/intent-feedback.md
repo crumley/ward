@@ -3,7 +3,8 @@
 > Intent frictions found while adding the pi coding agent as a second harness.
 
 This file is the entry's adjudication surface and is read on its own — an adjudication session loads
-it without the entry's README, so each IF carries enough context to be ruled on directly.
+it without the entry's README, so each intent-feedback item carries enough context to be ruled on
+directly.
 
 ## IF-001 — a thinking-depth value is not portable across harnesses
 

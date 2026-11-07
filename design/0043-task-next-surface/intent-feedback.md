@@ -3,7 +3,8 @@
 > Intent frictions found while making the pull request visible and deriving a task's next step.
 
 This file is the entry's adjudication surface and is read on its own — an adjudication session loads
-it without the entry's README, so each IF carries enough context to be ruled on directly.
+it without the entry's README, so each intent-feedback item carries enough context to be ruled on
+directly.
 
 ## IF-001 — the PR facts Ward tracks stop short of the one that most often decides what to do next
 

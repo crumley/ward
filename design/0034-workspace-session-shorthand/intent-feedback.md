@@ -3,7 +3,8 @@
 > Intent frictions found while building the workspace session shorthand.
 
 This file is the entry's adjudication surface and is read on its own — an adjudication session loads
-it without the entry's README, so each IF carries enough context to be ruled on directly.
+it without the entry's README, so each intent-feedback item carries enough context to be ruled on
+directly.
 
 ## IF-001 — the purpose minimum assumes every session is opened _for_ a goal
 

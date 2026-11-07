@@ -58,7 +58,7 @@ The repo stands on four parallel trees; **`intent` governs the other three** (se
   choices as ADRs in [`design/decisions/`](design/decisions/). A later entry supersedes (never
   overwrites) the one it replaces. The build authors `design/`, `src/`, `test/`; it does **not**
   silently rewrite `intent/` — friction goes to the entry's `intent-feedback.md` for human review
-  (created only when there is friction — no **IF** (intent-feedback item), no file).
+  (created only when there is friction — no intent feedback, no file).
 
 ## Conventions
 

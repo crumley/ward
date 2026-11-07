@@ -3,7 +3,8 @@
 > Intent frictions found while giving convergence one owner.
 
 This file is the entry's adjudication surface and is read on its own — an adjudication session loads
-it without the entry's README, so each IF carries enough context to be ruled on directly.
+it without the entry's README, so each intent-feedback item carries enough context to be ruled on
+directly.
 
 ## IF-001 — re-running creation is stated as the update path, and it can no longer be one
 
@@ -69,7 +70,7 @@ it without the entry's README, so each IF carries enough context to be ruled on 
   [`intent/00-foundation/01-principles.md`](../../intent/00-foundation/01-principles.md) **§6**
   needs no change: it states idempotency for operations that resume, open, or wake a thread and for
   setup/teardown actions, and it does not use creation's re-run as its example. Named here so a
-  reader settling this IF does not go looking for a §6 edit that is not owed.
+  reader settling this intent-feedback item does not go looking for a §6 edit that is not owed.
 
 - **Status:** adjudicated — [#86](https://github.com/crumley/ward/pull/86) (owner's ruling: creation
   is a one-time, located act that refuses a path already carrying a workspace and names the update

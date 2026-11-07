@@ -3,7 +3,8 @@
 > Intent frictions found while building repository → floor affinity.
 
 This file is the entry's adjudication surface and is read on its own — an adjudication session loads
-it without the entry's README, so each IF carries enough context to be ruled on directly.
+it without the entry's README, so each intent-feedback item carries enough context to be ruled on
+directly.
 
 ## IF-001 — a project has no recorded relationship to repositories, and the model does not say it may
 

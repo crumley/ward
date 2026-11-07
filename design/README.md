@@ -55,16 +55,18 @@ triangle, all governed by `intent`.
   attractive, the reason it lost, and the cost of the choice made), the module **boundaries**
   established and why (not a file inventory — the commits carry that), the key mechanisms.
 
-**`intent-feedback.md`** — intent frictions found while building. Each item is an **IF** (an
-intent-feedback item) with a stable id (`IF-NNN`), the slice it touches, the assumption made to keep
-moving, and a proposed revision. The file is created only when the build raises an IF: an entry
-without one is normal, and the absence is the record that building found no friction — a file saying
-"none" is tokens every later reader pays for nothing. Each IF carries a `**Status:**` line — the
-IF's one mutable line, written `pending` from the start and edited in place when it settles:
-`adjudicated` with a link to the intent change that settled it, or `declined` with a one-line why.
-Everything below Status is never rewritten, so what building surfaced stays on the record; only the
-IF's state moves. Writing `pending` down rather than implying it by silence is what lets the open
-queue be found mechanically.
+**`intent-feedback.md`** — intent frictions found while building, each with a stable id (`IF-NNN`),
+the slice it touches, the assumption made to keep moving, and a proposed revision. The file is
+created only when the build raises an intent-feedback item: an entry without one is normal, and the
+absence is the record that building found no friction — a file saying "none" is tokens every later
+reader pays for nothing. Each intent-feedback item carries a `**Status:**` line — the item's one
+mutable line, written `pending` from the start and edited in place when it settles: `adjudicated`
+with a link to the intent change that settled it, or `declined` with a one-line why. Everything
+below Status is never rewritten, so what building surfaced stays on the record; only the item's
+state moves. Writing `pending` down rather than implying it by silence is what lets the open queue
+be found mechanically. An id is always written with its number (`IF-005`), and there is no bare
+"IF": in prose an item is _an intent-feedback item_, because dictation and speech read a bare "IF"
+as "if".
 
 **Legacy spelling.** `SF-NNN` is the legacy spelling of `IF-NNN`: intent feedback was once called
 spec feedback (`spec-feedback.md`). Dated history keeps the old spelling; `SF-012` in an old commit
@@ -96,9 +98,9 @@ pull request that delivers the entry carries their run.
    review. Each accepted change is its **own small intent-edit change** (its own branch and PR,
    never bundled into a build PR): kept separate, the adjudication stays reviewable and atomic, and
    a build PR cannot smuggle intent changes past review. The human's **merge is the adjudication
-   act** — auditable in history, not in chat; on merge, the IF gets its disposition appended. (One
-   exception: appending to a slice's own _Open questions_, or noting the build _resolved_ one, is
-   allowed and logged.)
+   act** — auditable in history, not in chat; on merge, the intent-feedback item gets its
+   disposition appended. (One exception: appending to a slice's own _Open questions_, or noting the
+   build _resolved_ one, is allowed and logged.)
 4. **Plural techniques converge through use.** When an entry realizes a mechanism the intent left
    open (principle §19), it may build **more than one technique behind the same contract** — a
    universal baseline plus environment-specific alternates (e.g. polling plus a harness's native
@@ -113,8 +115,8 @@ pull request that delivers the entry carries their run.
    failures — never from who asked for it: no owner, brief, directive, agent, or session appears in
    it, and it quotes no one. Whoever or whatever commissioned the work is delivery metadata and
    lives with the delivery (the branch, the pull request), not in the ledger. The one exception is
-   an intent-feedback **disposition**, which records that a human settled the IF — adjudication is a
-   recorded act, not narrative.
+   an intent-feedback **disposition**, which records that a human settled the intent-feedback item —
+   adjudication is a recorded act, not narrative.
 6. **Each fact has one home.** Within an entry, a claim is stated in full exactly once — the summary
    previews, Scope bounds, Design explains — and every other section links or mentions rather than
    restates. (The repo-wide one-home rule, applied inside the entry.)
@@ -127,33 +129,34 @@ the act of building Ward.
 
 ## Finding open intent feedback
 
-The entries are the queue. Each IF carries a `**Status:**` line, so what is still open is a question
-the entries answer directly:
+The entries are the queue. Each intent-feedback item carries a `**Status:**` line, so what is still
+open is a question the entries answer directly:
 
 ```sh
 grep -rn '\*\*Status:\*\* *pending' design/*/
 ```
 
-**Why there is no index here.** This README used to carry a hand-maintained list of the pending IFs,
-because `pending` used to be the _absence_ of a disposition line and absence cannot be found any
-other way. A list nothing derives and nothing checks is a cache, and this one drifted: it carried
-`0035`'s IF-001 and IF-002 as open long after both were adjudicated in
+**Why there is no index here.** This README used to carry a hand-maintained list of the pending
+intent-feedback items, because `pending` used to be the _absence_ of a disposition line and absence
+cannot be found any other way. A list nothing derives and nothing checks is a cache, and this one
+drifted: it carried `0035`'s IF-001 and IF-002 as open long after both were adjudicated in
 [#75](https://github.com/crumley/ward/pull/75) and [#76](https://github.com/crumley/ward/pull/76).
-Every other line it held pointed at an IF whose entry already stated the same thing, so removing it
-loses nothing — the entries were always the authoritative copy.
+Every other line it held pointed at an intent-feedback item whose entry already stated the same
+thing, so removing it loses nothing — the entries were always the authoritative copy.
 
 ## The reconciliation still owed
 
-**34 IFs in entries 0001–0033 carry no Status line at all.** They predate the convention, and they
-were never in the index either — so they have been invisible the whole time, which is the debt this
-README has recorded since it was written: some were settled in their own text, some were settled by
-later intent edits that left no mark, some are genuinely open. Nothing here guesses which.
+**34 intent-feedback items in entries 0001–0033 carry no Status line at all.** They predate the
+convention, and they were never in the index either — so they have been invisible the whole time,
+which is the debt this README has recorded since it was written: some were settled in their own
+text, some were settled by later intent edits that left no mark, some are genuinely open. Nothing
+here guesses which.
 
 ```sh
 # the unconverted ones, to be read and given a Status
 grep -rn 'IF-[0-9]' design/00*/ design/001*/ design/002*/ design/003[0-3]*/
 ```
 
-The pass is judgment, not conversion: read the IF, find whether the intent change landed, write the
-Status. Worth doing one entry at a time, whenever one is next touched, rather than as a sweep that
-would be guessing at the oldest ones.
+The pass is judgment, not conversion: read the intent-feedback item, find whether the intent change
+landed, write the Status. Worth doing one entry at a time, whenever one is next touched, rather than
+as a sweep that would be guessing at the oldest ones.

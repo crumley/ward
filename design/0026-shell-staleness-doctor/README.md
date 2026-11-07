@@ -185,11 +185,11 @@ This entry builds the visibility half, for the layer and for the completions
 ### 2026-08-21 — The whole entry in one iteration
 
 **Goal.** Everything in Scope. **What was done.** Read 0024 (the machine-findings pattern and its
-never-`error` posture), 0025 whole (the emission layout and the IF this answers), the human-shell
-slice, and `src/workspace/doctor.ts` before writing anything. Then: the completion re-render and its
-proof that it matches the CLI; `emitShellLayer` and the print site that now uses it; the marker
-constant; `xdgConfigHome`; `installed.ts`; the two findings; the `XDG_CONFIG_HOME` pin in
-`test/helpers.ts`; and `test/cli/shell-staleness.test.ts` (11 cases).
+never-`error` posture), 0025 whole (the emission layout and the intent-feedback item this answers),
+the human-shell slice, and `src/workspace/doctor.ts` before writing anything. Then: the completion
+re-render and its proof that it matches the CLI; `emitShellLayer` and the print site that now uses
+it; the marker constant; `xdgConfigHome`; `installed.ts`; the two findings; the `XDG_CONFIG_HOME`
+pin in `test/helpers.ts`; and `test/cli/shell-staleness.test.ts` (11 cases).
 
 **What works now — with the exact commands that prove it** (Bun 1.3.14, git 2.54.0, Linux), in a
 scratch `$XDG_CONFIG_HOME`:
