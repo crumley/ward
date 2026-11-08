@@ -48,8 +48,9 @@ relevant slice (and reflected in tests and code).
 - [`01-concepts/05-context-loading.md`](../01-concepts/05-context-loading.md) — none open (_the
   append-vs-rewrite line now settled as the two-zone model — below_).
 - [`01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md) — repository
-  rename/remote-moves (_removal now settled: refused under live tasks, autonomous otherwise_); more
-  than one workspace on a machine (and whether a machine-level registry may exist); **what runs the
+  rename/remote-moves (_removal now settled: refused under live tasks, autonomous otherwise_); two
+  checkouts of one workspace on one machine (_more than one workspace per machine now settled as
+  expected, and a machine-level registry as permitted under a stated test_); **what runs the
   cadence** (also cross-cutting, above); precedence between composed layers; deletion rather than
   shadowing (_the configuration half now settled as replace, not merge_); semantic drift across an
   upgrade; migration safety; how improvements bound for Ward itself cross the local↔remote boundary.

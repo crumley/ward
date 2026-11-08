@@ -170,11 +170,13 @@ anchor whenever the toil looks (§17: derive shared state rather than store it),
 conflicted by anything at all, Ward or not, is recognized and skipped.
 
 **What is durable here is the intent, not the catalog.** Ward **owns the toil**: it performs what it
-safely can autonomously (local, reversible work — §18) and **surfaces only what needs a human** —
-what is behind, what is conflicted, what is blocked, what is ready. **Why:** which worktrees are
-behind, which are clean, which are blocked should be readable at a glance, not held in the human's
-head; and anything gated or outward (the merge itself) still requires authority (§18). The evolving
-set of operations is a _how_ — `../../design/`.
+safely can autonomously (local, reversible work — §18) and **surfaces the rest where its weight
+belongs**: what is behind or clean, readable at a glance; what is conflicted, blocked, or ready,
+routed to the human's attention (`../02-subsystems/07-human-shell.md`, "what needs me?"). **Why:**
+which worktrees are behind, which are clean, which are blocked should be readable at a glance, not
+held in the human's head — but a condition that recurs mechanically on every merge and waits on no
+judgment belongs to the glance, not to the attention list; and anything gated or outward (the merge
+itself) still requires authority (§18). The evolving set of operations is a _how_ — `../../design/`.
 
 ## Completion: pull requests, merge, and cleanup
 

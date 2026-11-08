@@ -18,6 +18,12 @@ principle (§8) and feeds the compounding loop
   (workspace, project, task, worktree, room, session, repo), verbs are the operations (create, list,
   open, close, resume, dispatch…). _Why:_ a noun/verb structure is discoverable and predictable for
   both audiences and stays coherent as it grows.
+- **The machine-readable output contract is discoverable from the tool itself.** The structured
+  CLI's machine-readable output shapes are **self-describing**: the running tool can state them, so
+  an agent never has to read Ward's repository to learn a shape, and what it learns cannot drift
+  from the build it is calling. _Why:_ a contract documented only beside the source is one the agent
+  audience (§8) must go looking for, and one that can silently disagree with the binary in hand
+  (§6). (The exact verb is a design choice; the capability is the constraint.)
 - **The interactive layer adds mnemonic shorthands** for common operations — thin plumbing,
   **evolvable** as telemetry reveals real usage. And because churn is expected, churn must be
   **deliverable**: whatever installed form the shorthands take in the human's shell configuration,
@@ -92,11 +98,12 @@ principle (§8) and feeds the compounding loop
   [`../01-concepts/03-work-lifecycle.md`](../01-concepts/03-work-lifecycle.md)), wakes the human
   asked for — recorded by the messaging seam
   ([`02-messaging-coordination.md`](02-messaging-coordination.md)) — and the conditions
-  **derivable** from the record and the world's live state (a task's PR set fully merged and
-  awaiting the gated close, changes requested awaiting action, version skew), which are presented
-  directly and **never stored as requests just to be presentable** (§17). This layer's job is to
-  present both as **one glanceable, deduplicated answer**, and to make acting on each — grant,
-  decline, jump to the session — one step; which items are recorded and which derived is the
+  **derivable** from the record and the world's live state (for example, a task's PR set fully
+  merged and awaiting the gated close, changes requested awaiting action, work aimed at a target
+  that cannot deliver it — a PR based on a branch that is not the main line —, version skew), which
+  are presented directly and **never stored as requests just to be presentable** (§17). This layer's
+  job is to present both as **one glanceable, deduplicated answer**, and to make acting on each —
+  grant, decline, jump to the session — one step; which items are recorded and which derived is the
   implementation's business, invisible at the surface. Where a condition is derivable but its
   **addressee** is not — a review pending on a reviewer the record does not name is the standing
   case — the surface **presents it rather than dropping it, and presents it as either-way**: naming
@@ -125,7 +132,8 @@ principle (§8) and feeds the compounding loop
   time the signal is analyzed (a natural reflection type) to decide what needs a new alias, which
   flows are clumsy, which tooling is missing — how the interaction layer compounds — and rows
   written per keystroke would bury the commands under the machinery, degrading the very analysis
-  this constraint exists to enable.
+  this constraint exists to enable. Rows are recorded in the enclosing workspace; an invocation
+  outside any workspace records nothing.
 - **Settled work leaves the glanceable surface, and stays retrievable.** Work that has been finished
   for longer than a stated window drops off the surfaces that answer "where does everything stand?"
   and "what needs me?", and is shown again **on request**. The surface **says what it left out** and
@@ -151,6 +159,14 @@ principle (§8) and feeds the compounding loop
   ledger, not doing the work. _Why:_ occupation is a deliberate act that names its purpose; a browse
   location that silently targeted a write would spend exactly the attention this constraint exists
   to save, on the least recoverable kind of mistake.
+
+  **Outside a workspace**, the same reasoning holds: a human in a neutral directory who has one
+  workspace should not have to restate what their machine already implies. There Ward **may resolve
+  to a registered default** for a **human** caller — **echoing what it resolved**, never prompting —
+  and **refuses** that resolution to a declared **agent**, which must stand in a workspace or name
+  one explicitly. Verbs whose **purpose** is to answer about the registry itself serve both
+  audiences from anywhere: there the registry is the subject of the query, not an inference about
+  the caller's location.
 - **Long free-text arguments accept a file, not only an inline string.** Any argument that can carry
   substantial text — a brief's title or body the clearest case
   ([`../01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md), Briefs) — must accept a
@@ -188,20 +204,24 @@ principle (§8) and feeds the compounding loop
   is inside an initialized workspace. _Why:_ a delightful, predictable developer experience is a
   stated **quality bar**, not a nicety — a tool people reach for configures itself the way the best
   CLIs do, and a location-blind or surprising configuration model is friction the prime directive
-  rejects. Which axis wins is settled, **per key**: the workspace-local axis overrides the global
-  one **key by key**, never as a whole block, and a key set at neither level is **unset** — not
-  defaulted by either. A **collection-valued** setting **replaces** at the level that sets it rather
-  than merging into what a broader level offered, so an empty collection is a value and means
-  "none". _Why:_ the narrower layer must be able to **un-say** what the broader one added, not only
-  add to it — merging leaves a human unable to remove a global entry from inside the workspace that
-  disagrees with it, and whole-block override would make setting one key silently discard every
-  other. (Composition into an agent's context is the same tension without the same answer —
-  [`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md), _Deletion,
-  not just shadowing_.) These two axes are the rungs configuration resolves on **today**: the
-  narrower rungs of the model-selection ladder ([`04-model-selection.md`](04-model-selection.md)) —
-  project, task, room/session — are **not yet built**, so a harness, model, or thinking-depth choice
-  presently holds for a whole workspace and cannot yet be made for one task. The ladder's promise
-  stands; this line keeps it honest until resolution is widened.
+  rejects. **What may live on the global axis is bounded** by
+  [`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md)'s
+  global-state boundary: preferences and conveniences only — never anything the understanding or
+  resumption of work depends on. Which axis wins is settled, **per key**: the workspace-local axis
+  overrides the global one **key by key**, never as a whole block, and a key set at neither level is
+  **unset** — not defaulted by either. A **collection-valued** setting **replaces** at the level
+  that sets it rather than merging into what a broader level offered, so an empty collection is a
+  value and means "none". _Why:_ the narrower layer must be able to **un-say** what the broader one
+  added, not only add to it — merging leaves a human unable to remove a global entry from inside the
+  workspace that disagrees with it, and whole-block override would make setting one key silently
+  discard every other. (Composition into an agent's context is the same tension without the same
+  answer — [`../01-concepts/06-workspace-lifecycle.md`](../01-concepts/06-workspace-lifecycle.md),
+  _Deletion, not just shadowing_.) These two axes are the rungs configuration resolves on **today**:
+  the narrower rungs of the model-selection ladder
+  ([`04-model-selection.md`](04-model-selection.md)) — project, task, room/session — are **not yet
+  built**, so a harness, model, or thinking-depth choice presently holds for a whole workspace and
+  cannot yet be made for one task. The ladder's promise stands; this line keeps it honest until
+  resolution is widened.
 - **A guided setup, runnable at any time.** Ward offers a **guided, interactive setup** that walks
   the human through inspecting and changing that configuration — the **global** axis always, the
   **workspace-local** axis additionally when invoked inside a workspace — and the workspace choices
