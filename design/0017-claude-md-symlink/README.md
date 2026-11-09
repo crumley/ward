@@ -180,7 +180,10 @@ other harness filenames if one ever operates these workspaces.
   nothing can drift and no harness is privileged in substance. **Proposed revision:** one sentence
   in that section acknowledging the adapter pattern — harness-expected filenames may be satisfied by
   links onto `AGENTS.md` without breaking neutrality — so the next harness filename is a decision
-  the intent already covers.
+  the intent already covers. _Status:_ pending — ruled by Ryan 2026-11-08 (review pass 3), awaiting
+  the intent edit: a harness that reads only its own filename is served by an adapter onto
+  `AGENTS.md` — a link with no content of its own — never a copy
+  ([#118](https://github.com/crumley/ward/pull/118)).
 
 Near-candidate, not filed: the installed-baseline mechanism
 ([`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md), "Divergence must be

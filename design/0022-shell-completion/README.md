@@ -281,7 +281,8 @@ the code".
   process, human-audience but harmless to agents, cues limited to what the shell protocol carries)
   and **interactive resolution** (in-process, TTY-owning, `callerIsAgent()`-branching, where the
   accent/glyph requirement lives), stating that the first reduces demand for the second and that
-  both serve the same "do not make them recall a handle" purpose.
+  both serve the same "do not make them recall a handle" purpose. _Disposition:_ adjudicated —
+  [`26df8b9`](https://github.com/crumley/ward/commit/26df8b9) (PR #44, this entry's own).
 - **IF-002** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Record command usage
   as local telemetry_. _Friction:_ the constraint says "**per invocation**", and a completion
   callback is, mechanically, an invocation of the binary — several per typed command, one per TAB.
@@ -294,4 +295,5 @@ the code".
   under verb `completion`. _Proposed revision:_ say in the slice that telemetry records **commands
   the caller invoked**, explicitly excluding machinery invocations the interaction layer makes of
   itself (completion callbacks today; anything similar later) — and note the reason, that such rows
-  would degrade the very analysis the constraint exists to enable.
+  would degrade the very analysis the constraint exists to enable. _Disposition:_ adjudicated —
+  [`a96f699`](https://github.com/crumley/ward/commit/a96f699) (PR #44, this entry's own).

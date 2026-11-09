@@ -224,4 +224,6 @@ anchor kinds arrive.
   worktree **record** nests under its task and carries the directory as its `path` field — which is
   exactly what this entry's resolver follows, keeping the physical placement swappable without
   touching the mechanism. Nesting would have collapsed worktree-cwd and record-cwd into one rule —
-  deciding IF-001 by fiat in the direction the resolution above rejects.
+  deciding IF-001 by fiat in the direction the resolution above rejects. _Disposition:_ adjudicated
+  — [`c07622f`](https://github.com/crumley/ward/commit/c07622f) (PR #19; the Resolution paragraph
+  above records the human adopting it).

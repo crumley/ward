@@ -191,6 +191,6 @@ coverage (the test table follows automatically). When the write verbs gain `--js
   which license it without naming it. _Proposed revision:_ the human-shell Constraints gain a bullet
   — the structured CLI's machine-readable output shapes are **discoverable from the tool itself** (a
   self-describing contract), so an agent never has to read Ward's repository to learn a shape; the
-  exact verb stays left to implementation. _Status:_ pending — ruled by Ryan 2026-11-08 (review pass
-  2), awaiting the intent edit: the machine-readable output contract is discoverable from the tool
-  itself; the exact verb stays design ([#116](https://github.com/crumley/ward/pull/116)).
+  exact verb stays left to implementation. _Disposition:_ adjudicated —
+  [#116](https://github.com/crumley/ward/pull/116) (owner's ruling: the machine-readable output
+  contract is discoverable from the tool itself; the exact verb stays design).

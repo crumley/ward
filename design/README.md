@@ -133,7 +133,7 @@ The entries are the queue. Each intent-feedback item carries a `**Status:**` lin
 open is a question the entries answer directly:
 
 ```sh
-grep -rn '\*\*Status:\*\* *pending' design/*/
+grep -rnE '(\*\*Status:\*\*|_Status:_) *pending' design/*/
 ```
 
 **Why there is no index here.** This README used to carry a hand-maintained list of the pending
@@ -144,19 +144,13 @@ drifted: it carried `0035`'s IF-001 and IF-002 as open long after both were adju
 Every other line it held pointed at an intent-feedback item whose entry already stated the same
 thing, so removing it loses nothing — the entries were always the authoritative copy.
 
-## The reconciliation still owed
+## The legacy items, reconciled
 
-**34 intent-feedback items in entries 0001–0033 carry no Status line at all.** They predate the
-convention, and they were never in the index either — so they have been invisible the whole time,
-which is the debt this README has recorded since it was written: some were settled in their own
-text, some were settled by later intent edits that left no mark, some are genuinely open. Nothing
-here guesses which.
-
-```sh
-# the unconverted ones, to be read and given a Status
-grep -rn 'IF-[0-9]' design/00*/ design/001*/ design/002*/ design/003[0-3]*/
-```
-
-The pass is judgment, not conversion: read the intent-feedback item, find whether the intent change
-landed, write the Status. Worth doing one entry at a time, whenever one is next touched, rather than
-as a sweep that would be guessing at the oldest ones.
+Entries 0001–0033 predate the Status convention and record their intent feedback **inline**, as
+`- **IF-NNN** — …` bullets in the entry's README. Many of those items once carried no Status line at
+all, invisible to the grep above. Every one has since been read against the intent change that
+settled it, or ruled on, and carries its state at the end of its bullet:
+`_Status:_ pending — ruled …` while its intent change is open, then
+`_Disposition:_ adjudicated — <link>` (or `declined — <why>`) once it has merged, as the oldest
+settled items already read. An inline item's state is still its one mutable line, and everything
+before it in the bullet is never rewritten.

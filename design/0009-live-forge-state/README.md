@@ -255,4 +255,5 @@ resolution decides the constraint wording they join under); `--json` on the muta
   surface presents "the requests addressed to the human — **recorded by the messaging seam** … —
   **and the conditions derivable from the record and live forge state** (a PR set awaiting the gated
   close, changes requested awaiting action)" as one deduplicated answer; which items are recorded
-  versus derived stays left to implementation.
+  versus derived stays left to implementation. _Disposition:_ adjudicated —
+  [`393c338`](https://github.com/crumley/ward/commit/393c338) (PR #23).

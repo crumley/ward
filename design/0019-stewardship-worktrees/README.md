@@ -321,7 +321,8 @@ derivation for landed-but-unclosed stewardship tasks.
   ("the workspace's main line is, by definition, the branch its root checkout is on — moving the
   root moves the main line") or, if drift should be detectable, name where the workspace records its
   own main-line name (the workspace document is the natural home) so doctor can check the root
-  against it.
+  against it. _Disposition:_ adjudicated —
+  [`71aeee1`](https://github.com/crumley/ward/commit/71aeee1) (PR #39).
 
 Two near-candidates adjudicated rather than filed: the stewardship-copy rule's "addresses the
 enclosing workspace, or refuses plainly" is stated latitude, and this entry's uniform refuse-plainly
