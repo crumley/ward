@@ -68,7 +68,7 @@ test('workspace upgrade --json: the converge steps ride the document, satisfied 
   const report = validated('workspace upgrade', workspaceUpgradeShape, result.stdout);
   expect(report.vehicle).toBe('none'); // no default moved, so no vehicle
   expect(report.outcome).toBe('current');
-  expect(report.converged.length).toBe(13);
+  expect(report.converged.length).toBe(14);
   expect(report.converged.every((step) => step.outcome === 'satisfied')).toBe(true);
   expect(report.converged.map((step) => step.step)).toContain('standing project');
 });

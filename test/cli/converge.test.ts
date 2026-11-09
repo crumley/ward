@@ -32,7 +32,7 @@ test('upgrade --json on a workspace behind on its record: converged rides the do
   const report = workspaceUpgradeShape.parse(JSON.parse(result.stdout));
   expect(report.vehicle).toBe('none'); // no default moved: no task, no branch
   expect(report.outcome).toBe('current');
-  expect(report.converged.length).toBe(13);
+  expect(report.converged.length).toBe(14);
   const standing = report.converged.find((step) => step.step === 'standing project');
   expect(standing).toMatchObject({ outcome: 'established', detail: `${GROUND_FLOOR_DIR}/` });
 });
