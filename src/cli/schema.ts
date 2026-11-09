@@ -147,6 +147,11 @@ export type StatusSessionShape = z.infer<typeof statusSessionShape>;
 
 export const statusShape = z.strictObject({
   workspace: workStateSchema,
+  /**
+   * The workspace's immutable id (0054) — absent exactly while a workspace made
+   * before it has not been upgraded; never derived from the path or the name.
+   */
+  workspaceId: z.string().optional(),
   projects: z.array(
     z.strictObject({
       /** The floor number — 0 is the ground floor, the standing project's (0041). */
@@ -376,6 +381,8 @@ export const doctorShape = z.strictObject({
   workspaceRoot: z.string().nullable(),
   /** This machine's name and its source (0038). */
   machineName: doctorMachineShape,
+  /** The workspace's immutable id (0054); null outside a workspace or before it is minted. */
+  workspaceId: z.string().nullable(),
   /** Null outside a workspace, where only half the resolution exists. */
   agent: doctorAgentShape.nullable(),
   machine: z.array(findingShape),

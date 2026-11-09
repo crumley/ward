@@ -32,6 +32,7 @@ import {
 import { taskAddress } from './address.ts';
 import { sha256OfFile } from './baselines.ts';
 import { git, gitAvailable, gitOrThrow, hasCommits } from './git.ts';
+import { mintWorkspaceId } from './identity.ts';
 import { IGNORE_LINES, inspectClaudeGuidance, MARKER_DIR, SCOPE_DIRS } from './layout.ts';
 import {
   type FoundProject,
@@ -96,6 +97,7 @@ export async function convergeWorkspace(root: string): Promise<ConvergeReport> {
   await withStoreLock(root, 'workspace converge', async () => {
     steps.push(await establishMarker(ctx));
     steps.push(await establishWorkspaceRecord(ctx));
+    steps.push(await establishWorkspaceId(ctx));
     steps.push(await establishCatalog(ctx));
     steps.push(await establishAgentsGuidance(ctx));
     steps.push(await establishClaudeGuidance(ctx));
@@ -141,6 +143,34 @@ async function establishWorkspaceRecord(ctx: ConvergeContext): Promise<StepRepor
   });
   ctx.establishedPaths.push(relPath);
   return { step, outcome: 'established', detail: relPath };
+}
+
+/**
+ * The workspace's immutable id (design/0054-workspace-id/): minted here, the
+ * one place Ward mints it, and never rewritten. A fresh create mints it with
+ * the record; a workspace made before the id existed is given one by the
+ * first `ward workspace upgrade`, whose phase 1 is this list — the one time
+ * an id is minted outside creation (intent/01-concepts/06-workspace-lifecycle.md,
+ * What creation establishes). Check-then-do makes "exactly once" structural:
+ * a record that carries an id is satisfied, so no later converge, upgrade,
+ * move, or clone can mint a second. The write rides the run's one journal
+ * commit under the store lock already held, like the main-line backfill.
+ */
+async function establishWorkspaceId(ctx: ConvergeContext): Promise<StepReport> {
+  const step = 'workspace id';
+  const existing = await readDocument(ctx.root, workspaceRecordType);
+  if (existing.data.id !== undefined) {
+    return { step, outcome: 'satisfied', detail: existing.data.id };
+  }
+  const id = mintWorkspaceId();
+  await writeDocument(ctx.root, workspaceRecordType, {
+    data: { ...existing.data, id },
+    body: existing.body,
+  });
+  if (!ctx.establishedPaths.includes(workspaceRecordType.relPath)) {
+    ctx.establishedPaths.push(workspaceRecordType.relPath);
+  }
+  return { step, outcome: 'established', detail: id };
 }
 
 async function establishCatalog(ctx: ConvergeContext): Promise<StepReport> {

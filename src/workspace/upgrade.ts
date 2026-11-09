@@ -319,8 +319,18 @@ async function assessUpgrade(root: string, dir: string, apply: boolean): Promise
   const stampAction = record.data.wardVersion === pkg.version ? 'current' : 'advanced';
   if (mainLineAction === 'recorded' || stampAction === 'advanced') {
     if (apply) {
+      // The id is the root's, minted by phase 1 (design/0054-workspace-id/).
+      // A copy cut before that mint lacks it; carrying the root's value means
+      // both lines add the same line at the same place, so the stewardship
+      // merge cannot conflict on it — and the copy never mints its own.
+      const id = record.data.id ?? (await readDocument(root, workspaceRecordType)).data.id;
       await writeDocument(dir, workspaceRecordType, {
-        data: { ...record.data, wardVersion: pkg.version, mainLine: mainLineName },
+        data: {
+          ...record.data,
+          wardVersion: pkg.version,
+          mainLine: mainLineName,
+          ...(id === undefined ? {} : { id }),
+        },
         body: record.body,
       });
     }

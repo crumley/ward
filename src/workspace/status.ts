@@ -27,6 +27,7 @@ import {
   taskAddress,
   taskFloor,
 } from './address.ts';
+import { recordedWorkspaceId } from './identity.ts';
 import { type NextStep, nextStep, prAttention } from './next.ts';
 import { type FoundProject, readProjects } from './projects.ts';
 import { listRepositories } from './repos.ts';
@@ -331,6 +332,11 @@ export interface SessionStatus {
 
 export interface StatusReport {
   readonly workspace: WorkState;
+  /**
+   * The workspace's immutable id (design/0054-workspace-id/), as the record
+   * carries it — absent on a workspace made before the id, until its upgrade.
+   */
+  readonly workspaceId?: string;
   readonly projects: readonly ProjectStatus[];
   readonly bareTasks: readonly TaskStatus[];
   /**
@@ -427,8 +433,10 @@ export async function statusReport(
     (status) => status.task.state,
   );
   const all = [...projectStatuses.flatMap((project) => project.tasks), ...bareStatuses];
+  const id = await recordedWorkspaceId(root);
   return {
     workspace,
+    ...(id === undefined ? {} : { workspaceId: id }),
     projects: projectStatuses,
     bareTasks: bareStatuses,
     machine: (await readMachine()).name,
