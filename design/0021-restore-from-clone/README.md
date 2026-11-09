@@ -302,7 +302,9 @@ exists; recovery (`attach`) taking over the session adjudication restore current
   world the record describes still on disk, and can it be honestly rebuilt from the record?"; owns:
   re-materializing canonical checkouts and anchors from recorded state, naming what cannot be (lost
   work is adjudicated, never fabricated) — and note the composition: doctor recommends restore;
-  recovery assumes restore has run.
+  recovery assumes restore has run. _Status:_ pending — ruled by Ryan 2026-11-08 (review pass 2),
+  awaiting the intent edit: Restore becomes the fourth row of the map that puts a workspace right,
+  running before recovery ([#116](https://github.com/crumley/ward/pull/116)).
 - **IF-002** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md),
   _Workspace integrity_ (record↔harness), with
   [`sessions-and-lifecycle`](../../intent/01-concepts/02-sessions-and-lifecycle.md). _Friction:_ the

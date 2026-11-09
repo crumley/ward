@@ -1,6 +1,6 @@
 # 0006 — tmux as the detached session host
 
-> **Status:** proposed · **Date:** 2026-08-24
+> **Status:** accepted · **Date:** 2026-08-24
 
 ## Context
 
@@ -142,3 +142,12 @@ the added technique beside the foreground baseline. The two techniques serve the
 - **Reversible at the adapter.** Everything tmux-specific lives in one file; swapping hosts (or
   adding zellij as a third technique, should its read-only story change) touches the adapter and the
   ADR that supersedes this one, not the session model or the store.
+- **tmux stays behind a host interface, so other hosts can be added.** The adapter is one
+  implementation of an interface the Ward side calls in host terms — place a session in a floor's
+  group, tag it, find it by its tags, view it, close it — and no tmux call is made from outside
+  `src/host/`. A further host, such as a terminal app that hosts sessions itself
+  ([herdr](../0031-detached-session-hosting/prior-art/herdr.md), rex), is then a second
+  implementation of that interface selected by configuration, a change to neither the callers nor
+  this ADR's choice of tmux as the first added technique. _Why:_ tmux is a good host today, and the
+  seam is explicitly not a commitment to one multiplexer; an interface written in tmux's vocabulary
+  would make every later host a rewrite of the Ward side rather than an addition beside it.

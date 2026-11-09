@@ -110,3 +110,27 @@ branch. **Next.**
 2. Build the workspace-id mint.
 3. Adjudicate SF-005 and SF-007 in intent.
 4. Start this entry's build with the premise validation.
+
+## 2026-11-08 — Second review pass: ADR 0006 accepted, host interface named
+
+**Goal.** Record what the intent review of 2026-11-08 settled for this entry. **What was done.**
+
+- **ADR 0006 is accepted.** tmux is the first added technique. A later change to the choice goes
+  through a superseding ADR, never an in-place amendment.
+- **The adapter boundary is now a host interface.** It is stated in host terms (place, tag, find by
+  tag, view, close), and no tmux call is made outside `src/host/`. A further host, such as a
+  terminal app that hosts sessions itself, is then one more implementation selected by `agent.host`.
+  The ADR records this as a consequence, and the Layout states it.
+- **IF-001, IF-004, IF-005, IF-006, and IF-007 are ruled.** Their intent edits ride
+  [#116](https://github.com/crumley/ward/pull/116), its own PR (rule 3). Each Status line reads
+  ruled-and-awaiting until #116 merges. Two of the rulings sharpen what the build must do. Close
+  tears down only the session's own verified window, and every other pass reports and never kills.
+  Ownership is confirmed by launch-placed evidence, and the binding survives identifiers that move.
+
+**What works now — with the exact command that proves it:**
+`bun install --frozen-lockfile && env -u WARD_AGENT mise run check` → exit 0 on this branch.
+**Next.**
+
+1. Merge #116, then flip the five Status lines to adjudicated.
+2. Build the workspace-id mint.
+3. Start this entry's build with the premise validation.

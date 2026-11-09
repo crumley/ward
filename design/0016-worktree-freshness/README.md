@@ -277,4 +277,7 @@ when occupancy is recorded; checks state when the forge probe grows it.
   distinction the design record has now argued twice (0009's two springs, this entry's adjudication)
   is intent's own language. One near-candidate not filed: the freshness answer's vintage ("as fresh
   as the last refresh") presumes the refresh cadence that does not exist yet — a build-order fact
-  exactly parallel to 0011's occupancy deferral, not an intent gap.
+  exactly parallel to 0011's occupancy deferral, not an intent gap. _Status:_ pending — ruled by
+  Ryan 2026-11-08 (review pass 2), awaiting the intent edit: the toil surfaces where its weight
+  belongs — behind or clean at a glance; conflicted, blocked, or ready to the human's attention
+  ([#116](https://github.com/crumley/ward/pull/116)).

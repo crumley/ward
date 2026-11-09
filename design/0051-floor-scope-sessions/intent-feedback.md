@@ -39,4 +39,7 @@ directly.
   work" to link that rule rather than state an absolute. Delegation is how senior context is kept
   free, and a cheap act done directly spends less of it than a brief would.
 
-- **Status:** pending.
+- **Status:** pending — ruled by Ryan 2026-11-08 (review pass 2), awaiting the intent edit:
+  delegation is the default, not an absolute — a senior scope may act directly where briefing costs
+  more than doing, and what it does directly is still a task
+  ([#116](https://github.com/crumley/ward/pull/116)).
