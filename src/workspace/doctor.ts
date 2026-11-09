@@ -706,11 +706,17 @@ async function workspaceChecks(
  */
 function agentConfigFinding(agent: ResolvedAgentConfig): Finding {
   const check = 'agent configuration';
-  const configured = [agent.harness, agent.model, agent.effort, agent.args, agent.command].some(
-    (key) => key.provenance === 'workspace' || key.provenance === 'global',
-  );
+  const configured = [
+    agent.harness,
+    agent.host,
+    agent.model,
+    agent.effort,
+    agent.args,
+    agent.command,
+  ].some((key) => key.provenance === 'workspace' || key.provenance === 'global');
   const summary = [
     describeKey('harness', agent.harness),
+    describeKey('host', agent.host),
     describeKey('model', agent.model),
     describeKey('effort', agent.effort),
     describeKey('args', agent.args, renderArgs),

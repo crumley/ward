@@ -12,6 +12,7 @@ import { readMachine } from '../global/machine.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
 import { withStoreLock } from '../store/lock.ts';
 import {
+  type HostedKind,
   type SessionEvent,
   type SessionRecord,
   sessionRecordType,
@@ -33,6 +34,18 @@ export interface OpenSessionOptions {
    * (`parentOf`, design/0052-session-parent-link/).
    */
   readonly startedBy?: string;
+  /**
+   * The detached host the launch is placed in, recorded on the `opened` event
+   * (design/0031-detached-session-hosting/); absent for a foreground run.
+   */
+  readonly host?: HostedKind;
+  /**
+   * Work that must run INSIDE the store write that records the open, after its
+   * commit: the hosted open's probe, host lookup-or-mint, and window create
+   * (design/0031-detached-session-hosting/, the race), so two concurrent opens
+   * on an empty floor cannot each mint a host.
+   */
+  readonly withinLock?: (opened: OpenSessionListing) => Promise<void>;
 }
 
 /**
@@ -147,6 +160,7 @@ export async function openWorkspaceSession(
       ...(options.model === undefined ? {} : { model: options.model }),
       ...(options.effort === undefined ? {} : { effort: options.effort }),
       ...(options.startedBy === undefined ? {} : { startedBy: options.startedBy }),
+      ...hosting(options),
       subject: `Open session ${id} at workspace scope`,
     });
   });
@@ -189,12 +203,23 @@ export async function openFloorSession(
       ...(options.model === undefined ? {} : { model: options.model }),
       ...(options.effort === undefined ? {} : { effort: options.effort }),
       ...(options.startedBy === undefined ? {} : { startedBy: options.startedBy }),
+      ...hosting(options),
       subject: `Open session ${id} on floor ${floor}`,
     });
   });
 }
 
-export async function closeSession(root: string, id: string): Promise<SessionRecord> {
+/**
+ * Close a session's record — and, through `afterClose`, run whatever must
+ * follow the record mutation inside the same store write: the hosted
+ * session's teardown (design/0031-detached-session-hosting/), record first and
+ * window second, serialized against a resume that would place a new one.
+ */
+export async function closeSession(
+  root: string,
+  id: string,
+  afterClose?: (closed: OpenSessionListing) => Promise<void>,
+): Promise<SessionRecord> {
   return withStoreLock(root, `session close ${id}`, async () => {
     const open = await requireOpenSession(root, id);
     const closedAt = new Date().toISOString();
@@ -207,6 +232,7 @@ export async function closeSession(root: string, id: string): Promise<SessionRec
     );
     await writeSession(root, open.scopeDir, record);
     commitRecords(root, `Close session ${id}`, sessionRecordType(open.scopeDir, id).relPath);
+    await afterClose?.({ scopeDir: open.scopeDir, record });
     return record;
   });
 }
@@ -236,6 +262,50 @@ export async function appendSessionEvent(
       `Record ${event} on session ${id}`,
       sessionRecordType(open.scopeDir, id).relPath,
     );
+    return record;
+  });
+}
+
+export interface ResumeRecording {
+  /** The detached host the resumed run is placed in; absent for a foreground one. */
+  readonly host?: HostedKind;
+  /**
+   * Checked under the lock BEFORE the event is written: it may refuse (a live
+   * hosted window means the run is still going) or return a cause for the
+   * `resumed` event (how the previous hosted run ended).
+   */
+  readonly guard?: (open: OpenSessionListing) => Promise<string | undefined>;
+  /** Run under the lock AFTER the event's commit — the hosted resume's placement. */
+  readonly withinLock?: (resumed: OpenSessionListing) => Promise<void>;
+}
+
+/**
+ * Append the `resumed` event (design/0029-launched-sessions/), with the
+ * hosted resume's gate and placement inside the same store write
+ * (design/0031-detached-session-hosting/): two resumes racing past each other
+ * are serialized, and the second sees the first's live window and is refused.
+ */
+export async function recordResume(
+  root: string,
+  id: string,
+  recording: ResumeRecording = {},
+): Promise<SessionRecord> {
+  return withStoreLock(root, `session resumed ${id}`, async () => {
+    const open = await requireOpenSession(root, id);
+    const cause = await recording.guard?.(open);
+    const record = withEvent(open.record, {
+      event: 'resumed',
+      at: new Date().toISOString(),
+      ...(cause === undefined ? {} : { cause }),
+      ...(recording.host === undefined ? {} : { host: recording.host }),
+    });
+    await writeSession(root, open.scopeDir, record);
+    commitRecords(
+      root,
+      `Record resumed on session ${id}`,
+      sessionRecordType(open.scopeDir, id).relPath,
+    );
+    await recording.withinLock?.({ scopeDir: open.scopeDir, record });
     return record;
   });
 }
@@ -428,7 +498,16 @@ interface OpenedFields {
   readonly effort?: string;
   /** The caller's declared session, not yet checked against the store. */
   readonly startedBy?: string;
+  readonly host?: HostedKind;
+  readonly withinLock?: (opened: OpenSessionListing) => Promise<void>;
   readonly subject: string;
+}
+
+function hosting(options: OpenSessionOptions): Pick<OpenedFields, 'host' | 'withinLock'> {
+  return {
+    ...(options.host === undefined ? {} : { host: options.host }),
+    ...(options.withinLock === undefined ? {} : { withinLock: options.withinLock }),
+  };
 }
 
 /**
@@ -488,11 +567,18 @@ async function writeOpened(
     ...(fields.effort === undefined ? {} : { effort: fields.effort }),
     ...(parent === undefined ? {} : { parent }),
     state: 'open',
-    events: [{ event: 'opened', at: openedAt }],
+    events: [
+      {
+        event: 'opened',
+        at: openedAt,
+        ...(fields.host === undefined ? {} : { host: fields.host }),
+      },
+    ],
     openedAt,
   };
   await writeSession(root, scopeDir, record);
   commitRecords(root, fields.subject, sessionRecordType(scopeDir, fields.id).relPath);
+  await fields.withinLock?.({ scopeDir, record });
   return record;
 }
 

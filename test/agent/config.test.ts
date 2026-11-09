@@ -40,6 +40,7 @@ const mergeRows: ReadonlyArray<{
     name: 'nothing configured anywhere: only the two keys Ward has an opinion about answer',
     expected: {
       harness: fromDefault('claude'),
+      host: fromDefault('foreground'),
       model: unset,
       effort: unset,
       args: fromDefault([]),
@@ -56,6 +57,7 @@ const mergeRows: ReadonlyArray<{
     },
     expected: {
       harness: fromGlobal('claude'),
+      host: fromDefault('foreground'),
       model: fromGlobal('fable'),
       effort: fromGlobal('high'),
       args: fromGlobal(['--dangerously-skip-permissions']),
@@ -67,6 +69,7 @@ const mergeRows: ReadonlyArray<{
     workspace: { harness: 'claude', model: 'sonnet', effort: 'low', args: ['--verbose'] },
     expected: {
       harness: fromWorkspace('claude'),
+      host: fromDefault('foreground'),
       model: fromWorkspace('sonnet'),
       effort: fromWorkspace('low'),
       args: fromWorkspace(['--verbose']),
@@ -79,6 +82,7 @@ const mergeRows: ReadonlyArray<{
     workspace: { model: 'sonnet' },
     expected: {
       harness: fromDefault('claude'),
+      host: fromDefault('foreground'),
       model: fromWorkspace('sonnet'),
       effort: fromGlobal('high'),
       args: fromGlobal(['--dangerously-skip-permissions']),
@@ -91,6 +95,7 @@ const mergeRows: ReadonlyArray<{
     workspace: {},
     expected: {
       harness: fromDefault('claude'),
+      host: fromDefault('foreground'),
       model: fromGlobal('fable'),
       effort: unset,
       args: fromDefault([]),
@@ -102,6 +107,7 @@ const mergeRows: ReadonlyArray<{
     global: { model: 'fable', args: ['--flag'] },
     expected: {
       harness: fromDefault('claude'),
+      host: fromDefault('foreground'),
       model: fromGlobal('fable'),
       effort: unset,
       args: fromGlobal(['--flag']),
@@ -113,6 +119,7 @@ const mergeRows: ReadonlyArray<{
     workspace: { harness: 'claude' },
     expected: {
       harness: fromWorkspace('claude'),
+      host: fromDefault('foreground'),
       model: unset,
       effort: unset,
       args: fromDefault([]),
@@ -125,6 +132,7 @@ const mergeRows: ReadonlyArray<{
     workspace: { args: ['--c'] },
     expected: {
       harness: fromDefault('claude'),
+      host: fromDefault('foreground'),
       model: unset,
       effort: unset,
       args: fromWorkspace(['--c']),
@@ -137,6 +145,7 @@ const mergeRows: ReadonlyArray<{
     workspace: { args: [] },
     expected: {
       harness: fromDefault('claude'),
+      host: fromDefault('foreground'),
       model: unset,
       effort: unset,
       args: fromWorkspace([]),
@@ -148,6 +157,7 @@ const mergeRows: ReadonlyArray<{
     global: { command: ['npx', 'claude'] },
     expected: {
       harness: fromDefault('claude'),
+      host: fromDefault('foreground'),
       model: unset,
       effort: unset,
       args: fromDefault([]),
@@ -160,6 +170,7 @@ const mergeRows: ReadonlyArray<{
     workspace: { command: ['/opt/claude/bin/claude'] },
     expected: {
       harness: fromDefault('claude'),
+      host: fromDefault('foreground'),
       model: fromGlobal('fable'),
       effort: unset,
       args: fromDefault([]),
@@ -172,6 +183,7 @@ const mergeRows: ReadonlyArray<{
     workspace: { command: ['claude'] },
     expected: {
       harness: fromDefault('claude'),
+      host: fromDefault('foreground'),
       model: unset,
       effort: unset,
       args: fromDefault([]),

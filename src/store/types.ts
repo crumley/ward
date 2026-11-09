@@ -269,6 +269,14 @@ export const sessionScopeSchema = z.enum(['workspace', 'project', 'task']);
 export type SessionScope = z.infer<typeof sessionScopeSchema>;
 
 /**
+ * The detached hosts a launch can be placed in (design/0031-detached-session-hosting/):
+ * the `agent.host` values other than the foreground baseline. A new host is a
+ * new value here and an implementation under src/host/.
+ */
+export const hostedKindSchema = z.enum(['tmux']);
+export type HostedKind = z.infer<typeof hostedKindSchema>;
+
+/**
  * One lifecycle event on a session (intent/01-concepts/02-sessions-and-lifecycle.md,
  * the session log): append-only entries for opened / resumed / resume-failed /
  * closed. Events are not states — the stored state stays `open | closed` — but
@@ -279,8 +287,23 @@ export type SessionScope = z.infer<typeof sessionScopeSchema>;
 export const sessionEventSchema = z.object({
   event: z.enum(['opened', 'resumed', 'resume-failed', 'closed']),
   at: z.string().min(1),
-  /** Why it failed — present exactly on `resume-failed`, per the intent's "with its cause". */
+  /**
+   * Why it failed — on `resume-failed`, per the intent's "with its cause". A
+   * `resumed` event may carry one too (design/0031-detached-session-hosting/):
+   * how the previous hosted run ended, read from its host before the new run
+   * replaced it ("previous run exited 0").
+   */
   cause: z.string().min(1).optional(),
+  /**
+   * The detached host this launch was placed in, on an `opened` or `resumed`
+   * event (design/0031-detached-session-hosting/) — absent for a foreground
+   * run, so every earlier record reads as what it was. Launch provenance, never
+   * live state: where the run stands now and whether it is running are derived
+   * from the host at read time. On the EVENT rather than the record because a
+   * session can be opened in one place and resumed in another, and the latest
+   * launch is the one whose `at` is the hosted window's epoch.
+   */
+  host: hostedKindSchema.optional(),
 });
 export type SessionEvent = z.infer<typeof sessionEventSchema>;
 

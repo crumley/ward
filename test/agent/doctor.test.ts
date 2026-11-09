@@ -27,6 +27,7 @@ test('doctor resolves both axes and names the layer that answered, per key', asy
   const report = await runDoctor(root);
   expect(report.agent).toEqual({
     harness: { provenance: 'default', value: 'claude' },
+    host: { provenance: 'default', value: 'foreground' },
     model: { provenance: 'workspace', value: 'sonnet' },
     effort: { provenance: 'global', value: 'high' },
     args: { provenance: 'global', value: ['--dangerously-skip-permissions'] },
@@ -36,7 +37,8 @@ test('doctor resolves both axes and names the layer that answered, per key', asy
     check: 'agent configuration',
     severity: 'ok',
     message:
-      "harness claude (ward's default) · model sonnet (this workspace) · " +
+      "harness claude (ward's default) · host foreground (ward's default) · " +
+      'model sonnet (this workspace) · ' +
       'effort high (global config) · args --dangerously-skip-permissions (global config) · ' +
       'command not set',
   });
@@ -152,6 +154,7 @@ test('doctor --json carries the resolution as data, an absent key without a valu
   const configured = doctorShape.parse(JSON.parse(ward(['doctor', '--json'], root).stdout));
   expect(configured.agent).toEqual({
     harness: { provenance: 'default', value: 'claude' },
+    host: { provenance: 'default', value: 'foreground' },
     model: { provenance: 'global', value: 'fable' },
     effort: { provenance: 'workspace', value: 'max' },
     args: { provenance: 'global', value: [] },
@@ -165,6 +168,7 @@ test('doctor --json carries the resolution as data, an absent key without a valu
   );
   expect(bare.agent).toEqual({
     harness: { provenance: 'default', value: 'claude' },
+    host: { provenance: 'default', value: 'foreground' },
     model: { provenance: 'absent' },
     effort: { provenance: 'absent' },
     args: { provenance: 'default', value: [] },

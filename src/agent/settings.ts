@@ -36,6 +36,17 @@ export const agentHarnessSchema = z.enum(['claude', 'pi']);
 export type AgentHarness = z.infer<typeof agentHarnessSchema>;
 
 /**
+ * Where a launched run is HOSTED (design/0031-detached-session-hosting/): in
+ * the caller's own terminal (`foreground`, the multiplexer seam's baseline —
+ * the run ends with the terminal), or in a detached host that outlives it.
+ * Enum-validated for the reason `harness` is: the set is Ward's own (the host
+ * implementations under src/host/), so a value outside it names something Ward
+ * cannot do. `foreground` is the default, because it needs nothing installed.
+ */
+export const agentHostSchema = z.enum(['foreground', 'tmux']);
+export type AgentHost = z.infer<typeof agentHostSchema>;
+
+/**
  * One agent settings block. The SAME schema is embedded in the global config
  * (`agent:`) and in the workspace record (`agent:`), so the two axes cannot
  * drift into different spellings of the same idea, and a human who learns the
@@ -43,6 +54,8 @@ export type AgentHarness = z.infer<typeof agentHarnessSchema>;
  */
 export const agentSettingsSchema = z.object({
   harness: agentHarnessSchema.optional(),
+  /** Where a launched run is hosted (design/0031-detached-session-hosting/). */
+  host: agentHostSchema.optional(),
   /**
    * The model, passed to the harness verbatim. Never validated against a list
    * of names: model identifiers are configuration that tracks the best
@@ -97,8 +110,9 @@ export type AgentSettings = z.infer<typeof agentSettingsSchema>;
  */
 export const AGENT_DEFAULTS: {
   readonly harness: AgentHarness;
+  readonly host: AgentHost;
   readonly args: readonly string[];
-} = { harness: 'claude', args: [] };
+} = { harness: 'claude', host: 'foreground', args: [] };
 
 /** Which layer answered a key — reported per key, for display and for debugging. */
 export type AgentProvenance = 'workspace' | 'global' | 'default' | 'absent';
@@ -116,6 +130,8 @@ export type Resolved<T> =
 /** Every key answered, each with the layer that answered it. */
 export interface ResolvedAgentConfig {
   readonly harness: Resolved<AgentHarness>;
+  /** Always answered: `foreground` unless a layer chose a detached host. */
+  readonly host: Resolved<AgentHost>;
   readonly model: Resolved<string>;
   readonly effort: Resolved<string>;
   readonly args: Resolved<readonly string[]>;
@@ -148,6 +164,7 @@ export interface AgentLayers {
 export function resolveAgentConfig({ workspace, global }: AgentLayers): ResolvedAgentConfig {
   return {
     harness: pick(workspace?.harness, global?.harness, AGENT_DEFAULTS.harness),
+    host: pick(workspace?.host, global?.host, AGENT_DEFAULTS.host),
     model: pick(workspace?.model, global?.model),
     effort: pick(workspace?.effort, global?.effort),
     args: pick<readonly string[]>(workspace?.args, global?.args, AGENT_DEFAULTS.args),

@@ -30,17 +30,54 @@ import type { SessionRecord } from '../store/types.ts';
 import {
   appendSessionEvent,
   findSession,
+  type OpenSessionListing,
+  type OpenSessionOptions,
   openFloorSession,
   openWorkspaceSession,
+  recordResume,
   requireOpenSession,
 } from '../workspace/sessions.ts';
 import { readAgentConfig } from './config.ts';
+import {
+  chooseHost,
+  guardResume,
+  type HostChoice,
+  type HostFlag,
+  type LiveState,
+  liveStateOf,
+  type PlacedRun,
+  placeLaunch,
+} from './host.ts';
 import type { Resolved } from './settings.ts';
 
-export interface LaunchedSession {
-  readonly record: SessionRecord;
-  readonly run: RunResult;
+/**
+ * A launch's outcome: a foreground run that has exited (the caller waited on
+ * it), or a run placed in a detached host that is still going
+ * (design/0031-detached-session-hosting/) — the open returns once the host
+ * holds it, because Ward is no longer the run's parent.
+ */
+export type LaunchedSession =
+  | { readonly record: SessionRecord; readonly run: RunResult }
+  | { readonly record: SessionRecord; readonly hosted: HostedRun };
+
+export interface HostedRun extends PlacedRun {
+  /** The window read back a beat after placing it — an instant exit shows here. */
+  readonly live: LiveState | undefined;
 }
+
+export interface LaunchOptions {
+  /** `--detach` or `--foreground`, over the configured `agent.host`. */
+  readonly hostFlag?: HostFlag | undefined;
+  /** Told when a configured host is unavailable and the run degrades to the foreground. */
+  readonly onNotice?: (notice: string) => void;
+}
+
+/**
+ * How long a hosted launch waits before reading its window back: long enough
+ * for a run that cannot start (a missing program, a bad flag) to have died,
+ * short enough not to be felt.
+ */
+const VERIFY_BEAT_MS = 300;
 
 /**
  * Called with the record as it stands the instant before the process starts.
@@ -86,6 +123,7 @@ export async function launchSession(
   workingDirectory: string | undefined,
   startedBy: string | undefined,
   onRecorded: Recorded = () => {},
+  launch: LaunchOptions = {},
 ): Promise<LaunchedSession> {
   const nativeId = randomUUID();
   // Resolved BEFORE the record is written, because what the run is started
@@ -103,18 +141,68 @@ export async function launchSession(
     ...(workingDirectory === undefined ? {} : { workingDirectory }),
     ...(startedBy === undefined ? {} : { startedBy }),
   };
-  const record =
+  const argv = adapter.startArgv({ nativeId, ...model, ...effort, args: argsOf(agent.args) });
+  const open = (extra: Partial<OpenSessionOptions>) =>
     at.floor === undefined
-      ? await openWorkspaceSession(root, purpose, options)
-      : await openFloorSession(root, at.floor, purpose, options);
-  onRecorded(record);
-  const run = await runHarness(adapter, {
-    argv: adapter.startArgv({ nativeId, ...model, ...effort, args: argsOf(agent.args) }),
-    command: commandOf(agent.command),
-    cwd: resolve(root, record.workingDirectory),
-    env: { WARD_AGENT: record.id },
-  });
-  return { record, run };
+      ? openWorkspaceSession(root, purpose, { ...options, ...extra })
+      : openFloorSession(root, at.floor, purpose, { ...options, ...extra });
+  // Chosen BEFORE the record is written, because the record says where the
+  // run was placed — and before the store lock, because the host's readiness
+  // check and hygiene preamble are not the critical section's to pay for.
+  const choice = await chooseHost(root, launch.hostFlag, agent.host);
+  if (choice.kind === 'foreground') {
+    if (choice.notice !== undefined) launch.onNotice?.(choice.notice);
+    const record = await open({});
+    onRecorded(record);
+    const run = await runHarness(adapter, {
+      argv,
+      command: commandOf(agent.command),
+      cwd: resolve(root, record.workingDirectory),
+      env: { WARD_AGENT: record.id },
+    });
+    return { record, run };
+  }
+  // Hosted: the record and its `opened` event first, then — inside the same
+  // store write — the floor host found or minted and the window created.
+  let placed: { listing: OpenSessionListing; run: PlacedRun } | undefined;
+  let recorded: string | undefined;
+  try {
+    const record = await open({
+      host: choice.kind,
+      withinLock: async (listing) => {
+        recorded = listing.record.id;
+        const run = await placeLaunch(root, choice, listing, {
+          harness: adapter,
+          configuredCommand: commandOf(agent.command),
+          argv,
+        });
+        placed = { listing, run };
+      },
+    });
+    return { record, hosted: await verified(root, choice, placed) };
+  } catch (error) {
+    if (recorded === undefined) throw error;
+    throw new WardError(
+      `the agent did not start in ${choice.kind} — ${messageOf(error)}. Session ${recorded} is ` +
+        `recorded and open: resume it with ward session resume ${recorded}`,
+    );
+  }
+}
+
+/** Read a placed window back a beat later, so an instant exit is reported now. */
+async function verified(
+  root: string,
+  choice: Extract<HostChoice, { host: unknown }>,
+  placed: { listing: OpenSessionListing; run: PlacedRun } | undefined,
+): Promise<HostedRun> {
+  if (placed === undefined) throw new WardError('the host placed nothing');
+  await Bun.sleep(VERIFY_BEAT_MS);
+  const live = await liveStateOf(root, placed.listing, process.env, choice.host);
+  return { ...placed.run, live };
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 /**
@@ -151,16 +239,56 @@ export async function resumeSession(
   root: string,
   id: string,
   onRecorded: Recorded = () => {},
+  launch: LaunchOptions = {},
 ): Promise<LaunchedSession> {
   const open = await requireOpenSession(root, id);
   const { adapter, nativeId } = adapterAndIdOf(open.record);
+  // A run still going in its host is not a run to resume, whatever its
+  // transcript says — refused first, with the way to join it, before a
+  // missing history is recorded as a failure it is not. (Read-only: the
+  // binding check, and any clearing, happen again under the lock.)
+  await guardResume(root, open, process.env, undefined, false);
   const history = adapter.locate(nativeId, resolve(root, open.record.workingDirectory));
   if (history.outcome === 'gone') await refuseUnresumable(root, open.record, history.path);
   const agent = await readAgentConfig(root);
-  const record = await appendSessionEvent(root, id, 'resumed');
+  const argv = adapter.resumeArgv(nativeId, argsOf(agent.args));
+  const choice = await chooseHost(root, launch.hostFlag, agent.host);
+  // The gate runs whatever this resume's host: a window still running from a
+  // hosted launch refuses a foreground resume exactly as a hosted one.
+  const guard = (listing: OpenSessionListing) => guardResume(root, listing);
+  if (choice.kind !== 'foreground') {
+    let placed: { listing: OpenSessionListing; run: PlacedRun } | undefined;
+    let wrote = false;
+    try {
+      const record = await recordResume(root, id, {
+        host: choice.kind,
+        guard,
+        withinLock: async (listing) => {
+          wrote = true;
+          const run = await placeLaunch(root, choice, listing, {
+            harness: adapter,
+            configuredCommand: commandOf(agent.command),
+            argv,
+          });
+          placed = { listing, run };
+        },
+      });
+      return { record, hosted: await verified(root, choice, placed) };
+    } catch (error) {
+      if (!wrote) throw error;
+      const cause = `${choice.kind}: ${messageOf(error)}`;
+      await appendSessionEvent(root, id, 'resume-failed', cause);
+      throw new WardError(
+        `the agent did not start in ${choice.kind} — ${messageOf(error)}. Session ${id} is still ` +
+          'open and the failure is recorded on it (resume-failed)',
+      );
+    }
+  }
+  if (choice.notice !== undefined) launch.onNotice?.(choice.notice);
+  const record = await recordResume(root, id, { guard });
   onRecorded(record);
   const run = await runHarness(adapter, {
-    argv: adapter.resumeArgv(nativeId, argsOf(agent.args)),
+    argv,
     command: commandOf(agent.command),
     cwd: resolve(root, record.workingDirectory),
     env: { WARD_AGENT: record.id },

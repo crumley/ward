@@ -7,7 +7,7 @@
 > `attach` re-joins or re-creates, `observe` watches read-only, `close` tears down, and
 > `locate`/`doctor` report honestly.
 >
-> **Status:** proposed · **Started:** 2026-08-24 · **Regrouped:** 2026-10-16 (floor hosts) ·
+> **Status:** in-progress · **Started:** 2026-08-24 · **Regrouped:** 2026-10-16 (floor hosts) ·
 > **Reviewed:** 2026-11-06
 
 [0029](../0029-launched-sessions/README.md) made Ward launch agents — foreground, in the caller's
