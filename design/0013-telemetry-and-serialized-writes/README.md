@@ -313,10 +313,10 @@ canonical checkout, asserting `workspace`, `task:t1`, `task:t1`, `repo:demo` in 
   working directory, scope (anchor-shaped today), human-or-agent, the declared agent value, outcome,
   and duration; persona is omitted entirely (absence over `null`/`"default"`) until it exists.
   _Proposed revision:_ "per invocation: the caller's context as it exists — working directory, scope
-  as far as it resolves, and human-or-agent today; persona as it comes to exist." _Status:_ pending
-  — ruled by Ryan 2026-11-08 (review pass 3), awaiting the intent edit: telemetry rows carry the
-  caller's context as it exists — working directory, scope as far as it resolves, and human-or-agent
-  today; persona as it comes to exist ([#118](https://github.com/crumley/ward/pull/118)).
+  as far as it resolves, and human-or-agent today; persona as it comes to exist." _Disposition:_
+  adjudicated — [#118](https://github.com/crumley/ward/pull/118) (owner's ruling: telemetry rows
+  carry the caller's context as it exists — working directory, scope as far as it resolves, and
+  human-or-agent today; persona as it comes to exist).
 - **IF-002** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), the same bullet read
   with the Not-list ("not telemetry that ever leaves the workspace"). _Friction:_ "record usage
   **per invocation**" is unqualified, but some invocations run outside any workspace (`ward doctor`

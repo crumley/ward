@@ -60,10 +60,9 @@ IF-007 when the design was regrouped from one host per session to floor hosts.
   on it is the messaging seam's design, built on the record. It keeps a future hosting change from
   quietly becoming an unrecorded delivery channel — the leak the messaging seam calls out as the
   reason it is opinionated.
-- **Status:** pending — ruled by Ryan 2026-11-08 (review pass 3), awaiting the intent edit: the
+- **Status:** adjudicated — [#118](https://github.com/crumley/ward/pull/118) (owner's ruling: the
   multiplexer hosts and nothing more, and anything message-shaped that later rides on a host is the
-  messaging seam's design — stated as each open question's provisional line
-  ([#118](https://github.com/crumley/ward/pull/118)).
+  messaging seam's design — stated as each open question's provisional line).
 
 ## IF-003 — hosting does not gate on the harness seam's fork-mode question
 
