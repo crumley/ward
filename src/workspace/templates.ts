@@ -42,9 +42,9 @@ operated with the \`ward\` CLI and tracked in git.
   skips its lock, its validation, and its journal commit.
 - **A task is addressed \`f<floor>t<room>\`** — \`f3t1\` is room 1 on floor 3, \`f0t1\` room 1 on
   the ground floor. Every task lives on a floor; only legacy bare tasks, opened before the ground
-  floor existed, carry a bare \`t<room>\`. Spelling is case-insensitive. A bare \`t1\` is also a
-  shorthand that works while exactly one open task holds that room; when several do, Ward names
-  them and asks for one.
+  floor existed, are addressed \`legacy-t<room>\` (\`legacy-t2\`). Spelling is case-insensitive. A
+  bare \`t1\` is also a shorthand that works while exactly one open task holds that room; when
+  several do, Ward names each by its full address and asks for one.
 - Standing inside a task's worktree, task-addressed verbs need no address — Ward derives the task
   from the working directory (\`ward task pr URL\`, \`ward worktree rebase\`) and echoes what it
   derived. An explicit address always works, and \`ward task close\` always takes one.

@@ -12,6 +12,10 @@
 > `no ground floor — establish it: ward workspace create ROOT` and doctor's relocation findings —
 > names `ward workspace upgrade` instead, without its path argument. The steps, the relocation, and
 > the refusal are unchanged.
+>
+> **Partially superseded by [0053](../0053-legacy-task-address/README.md):** a legacy bare task is
+> addressed `legacy-t<room>`. The claim below that a bare `t<room>` is its full address held only
+> until a floor reused the room; the rest of this entry is unchanged.
 
 The workspace record carries two address forms and two task containers. A task on a floor is `f3t22`
 under `projects/3-…/tasks/`; a bare task is `t7` under `tasks/` at the root

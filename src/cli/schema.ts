@@ -60,7 +60,7 @@ export const taskShape = z.strictObject({
   code: z.string(),
   /**
    * The task's full address — `f3t22` on a floor, `f0t1` on the ground floor,
-   * `t18` for a legacy bare task (0036, 0041). Derived from `code` and the
+   * `legacy-t18` for a legacy bare task (0036, 0041, 0053). Derived from `code` and the
    * floor, never stored, and the string a task-addressed verb should be given:
    * a bare `code` is a shorthand that resolves only while it is unique among
    * the workspace's open tasks.

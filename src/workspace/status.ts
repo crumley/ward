@@ -20,7 +20,13 @@ import type {
   TaskRecord,
   WorkState,
 } from '../store/types.ts';
-import { requireTaskAddress, taskAddress, taskFloor, taskRoom } from './address.ts';
+import {
+  addressMatches,
+  requireTaskAddress,
+  spellAddress,
+  taskAddress,
+  taskFloor,
+} from './address.ts';
 import { type NextStep, nextStep, prAttention } from './next.ts';
 import { type FoundProject, readProjects } from './projects.ts';
 import { listRepositories } from './repos.ts';
@@ -257,7 +263,7 @@ function staleBase(
 
 export interface TaskStatus {
   readonly task: TaskRecord;
-  /** The derived address — `f3t22` on a floor, `t18` in the bare pool (0036). */
+  /** The derived address — `f3t22` on a floor, `legacy-t18` in the legacy bare pool (0036, 0053). */
   readonly address: string;
   readonly inReview: boolean;
   /** Live forge state per linked PR; absent when the forge did not answer. */
@@ -566,11 +572,7 @@ export async function resolveTaskForRead(
   now: number = Date.now(),
 ): Promise<FoundTask> {
   const wanted = requireTaskAddress(input);
-  const matches = (await readTasks(root)).filter(
-    (task) =>
-      taskRoom(task) === wanted.room &&
-      (wanted.floor === undefined || taskFloor(task) === wanted.floor),
-  );
+  const matches = (await readTasks(root)).filter((task) => addressMatches(task, wanted));
   const open = matches.filter((task) => task.record.state !== 'closed');
   const resolved = pickOne(open, input);
   if (resolved !== undefined) return resolved;
@@ -587,9 +589,12 @@ export async function resolveTaskForRead(
     );
   }
   throw new WardError(
-    wanted.floor === undefined
-      ? `no task has code '${input}' — see: ward task list`
-      : `no task at ${input.toLowerCase()} — floor ${wanted.floor} holds no task in room ` +
+    wanted.legacy === true
+      ? `no task at ${spellAddress(wanted)} — the legacy pool (tasks/) holds no task in room ` +
+          `${wanted.room} (see: ward task list)`
+      : wanted.floor === undefined
+        ? `no task has code '${input}' — see: ward task list`
+        : `no task at ${spellAddress(wanted)} — floor ${wanted.floor} holds no task in room ` +
           `${wanted.room} (see: ward task list)`,
   );
 }

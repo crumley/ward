@@ -13,6 +13,10 @@
 > destination — every task now opens on a floor, and `tasks/` holds only the tasks opened before
 > that. The bare address itself is untouched: a legacy bare task is still addressed `t<room>`, and
 > the bare room is still the shorthand this entry built.
+>
+> **Partially superseded by [0053](../0053-legacy-task-address/README.md):** a legacy bare task's
+> full address is `legacy-t<room>`, no longer the bare `t<room>`, which stays a shorthand for it
+> while unique. The floor address, the shorthand, and the refusal are otherwise unchanged.
 
 A task code is allocated as the smallest room no open task holds, workspace-wide, and every
 task-addressed verb resolves a bare code against the open set. Two failures follow from that, and

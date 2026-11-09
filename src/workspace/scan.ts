@@ -9,7 +9,7 @@ import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
 import { readDocument } from '../store/document.ts';
 import { type TaskRecord, taskRecordType } from '../store/types.ts';
-import { requireTaskAddress, taskAddress, taskFloor, taskRoom } from './address.ts';
+import { addressMatches, requireTaskAddress, spellAddress, taskAddress } from './address.ts';
 import { gitOrThrow } from './git.ts';
 import { warnJournalOffMainLine } from './steward.ts';
 
@@ -43,11 +43,13 @@ export async function readTasks(root: string): Promise<FoundTask[]> {
  * Resolve what a caller typed to its non-closed task
  * (design/0036-floor-addressed-tasks/).
  *
- * The full address `f<floor>t<room>` names exactly one container and one room
- * in it, so it always resolves or refuses. A bare `t<room>` is a SHORTHAND:
+ * The full address — `f<floor>t<room>`, or `legacy-t<room>` for a legacy bare
+ * task (design/0053-legacy-task-address/) — names exactly one container and
+ * one room in it, so it always resolves or refuses. A bare `t<room>` is a SHORTHAND:
  * it resolves while it is unique among the workspace's open tasks — the bare
  * pool and every floor — and when several floors hold that room it refuses
- * deterministically, naming every candidate by address and slug. Refusing is
+ * deterministically, naming every candidate by its full address and slug — so
+ * the refusal itself spells what to type, the legacy candidate included. Refusing is
  * the point: the alternative is picking one, and a verb that picks silently
  * between two live tasks is how a close lands on the wrong one. Closed tasks
  * are addressable by neither form; their rooms belong to whoever holds them
@@ -56,18 +58,17 @@ export async function readTasks(root: string): Promise<FoundTask[]> {
 export async function resolveOpenTask(root: string, input: string): Promise<FoundTask> {
   const wanted = requireTaskAddress(input);
   const open = (await readTasks(root)).filter((task) => task.record.state !== 'closed');
-  const matches = open.filter(
-    (task) =>
-      taskRoom(task) === wanted.room &&
-      (wanted.floor === undefined || taskFloor(task) === wanted.floor),
-  );
+  const matches = open.filter((task) => addressMatches(task, wanted));
   const first = matches[0];
   if (first === undefined) {
     throw new WardError(
-      wanted.floor === undefined
-        ? `no open task has code '${input}' — see: ward task list`
-        : `no open task at ${input.toLowerCase()} — floor ${wanted.floor} holds no open task in ` +
-            `room ${wanted.room} (see: ward task list)`,
+      wanted.legacy === true
+        ? `no open task at ${spellAddress(wanted)} — the legacy pool (tasks/) holds no open ` +
+            `task in room ${wanted.room} (see: ward task list)`
+        : wanted.floor === undefined
+          ? `no open task has code '${input}' — see: ward task list`
+          : `no open task at ${spellAddress(wanted)} — floor ${wanted.floor} holds no open ` +
+            `task in room ${wanted.room} (see: ward task list)`,
     );
   }
   if (matches.length > 1) {
