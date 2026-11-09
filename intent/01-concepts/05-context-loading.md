@@ -26,9 +26,12 @@ load for that scope, rather than relying on the agent to discover them.
 
 **Why harness-neutral (`AGENTS.md`, not a harness-specific file).** Per §5: whichever harness
 operates the session must find the right context, and harnesses must be mixable. Standardizing on
-`AGENTS.md` keeps the workspace portable. **Why keyed to working directory.** It makes "scope +
-working directory" operational: where you start determines what you load, so a room is specialized
-to its anchor while the attending sees the project.
+`AGENTS.md` keeps the workspace portable. A harness that reads only its own filename is served by an
+**adapter, not a copy**: the expected name may be satisfied by a link onto `AGENTS.md` that carries
+no content of its own — the guidance still lives in one harness-neutral file, nothing can drift, and
+no harness is privileged in substance. **Why keyed to working directory.** It makes "scope + working
+directory" operational: where you start determines what you load, so a room is specialized to its
+anchor while the attending sees the project.
 
 ## Context is built from stable artifacts in a deterministic order
 
@@ -89,12 +92,12 @@ not span a mix of harnesses, and recovery would depend on a human remembering wh
 
 ## Canonical home for
 
-- **Context assembly** — the `AGENTS.md`-hierarchy-by-working-directory model, the
-  deterministic/append-oriented bias for cache sharing, the **two-zone model** (stable prefix +
-  mutable tail, graduation, adoption boundaries) **and its ordering, which serves authorship as well
-  as volatility** (Ward's part first, the human's after —
-  [`06-workspace-lifecycle.md`](06-workspace-lifecycle.md) owns the ownership split), and the
-  harness-handle-per-session rule.
+- **Context assembly** — the `AGENTS.md`-hierarchy-by-working-directory model (a harness-specific
+  filename served by an adapter onto `AGENTS.md`, never a copy), the deterministic/append-oriented
+  bias for cache sharing, the **two-zone model** (stable prefix + mutable tail, graduation, adoption
+  boundaries) **and its ordering, which serves authorship as well as volatility** (Ward's part
+  first, the human's after — [`06-workspace-lifecycle.md`](06-workspace-lifecycle.md) owns the
+  ownership split), and the harness-handle-per-session rule.
 
 Other slices reference these; the _working directory_ axis itself is defined in
 [`00-domain-model.md`](00-domain-model.md), and the economy principle in

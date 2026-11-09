@@ -219,5 +219,5 @@ the human to distrust both: the surface that degraded and the one that green-lit
 
 ## Open questions
 
-- None specific. Boundary-drift watches (what/why vs. how creep; intent-file granularity) are
-  cross-cutting and live in [`open-questions.md`](open-questions.md).
+- None specific. Boundary-drift and granularity are standing watches, not questions: they live in
+  [`../README.md`](../README.md) (_Standing watches_).

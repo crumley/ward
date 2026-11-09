@@ -10,11 +10,6 @@ relevant slice (and reflected in tests and code).
 
 ## Cross-cutting tensions
 
-- **What/why-vs-how boundary drift.** As [`../../design/`](../../design/) fills in, watch both
-  directions: tool names creeping into `intent/`, and durable constraints stranded in `design/` that
-  should be lifted up. Revisit at every scope boundary.
-- **Intent-file granularity.** Is the current concept/subsystem split right, or will some slices
-  want to split or merge as they grow?
 - **Cross-chunk reflection learnings.** In the chunk → distill → roll-up flow, how are insights that
   emerge only in aggregate preserved? (Owned by
   [`../01-concepts/04-reflection-and-evolution.md`](../01-concepts/04-reflection-and-evolution.md);
