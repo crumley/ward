@@ -62,7 +62,7 @@ export async function openProject(
             'repositories, never a restriction on what its tasks may touch.'),
     });
     // The floor's manifest is written with its record, in the same commit
-    // (design/0054-floor-manifests/): a floor is never observable without
+    // (design/0055-floor-manifests/): a floor is never observable without
     // the guidance a session on it loads.
     await establishFloorManifest(root, { dir, record });
     commitRecords(root, `Open project ${slug} (floor ${floor})`, dir);
@@ -189,7 +189,7 @@ export async function taskContainer(root: string, floor: number): Promise<string
   return `${project.dir}/tasks`;
 }
 
-// -- the floor's notes: the one write path (design/0054-floor-manifests/) ----
+// -- the floor's notes: the one write path (design/0055-floor-manifests/) ----
 
 export interface FloorNoteReport {
   readonly floor: number;

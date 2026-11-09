@@ -961,7 +961,7 @@ function claudeGuidanceFinding(root: string): Finding {
 }
 
 /**
- * The floor manifests (design/0054-floor-manifests/): every floor that is not
+ * The floor manifests (design/0055-floor-manifests/): every floor that is not
  * closed carries `AGENTS.md`, a `CLAUDE.md` link onto it, and `notes.md`. One
  * `ok` finding when all of them do; otherwise one `info` per floor naming what
  * it lacks, with the remedy that backfills it — nothing is broken (a session

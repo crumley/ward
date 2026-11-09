@@ -494,7 +494,7 @@ export const projectClaimShape = z.strictObject({
 export type ProjectClaimShape = z.infer<typeof projectClaimShape>;
 
 /**
- * `project note` (design/0054-floor-manifests/): the one bullet appended to a
+ * `project note` (design/0055-floor-manifests/): the one bullet appended to a
  * floor's `notes.md`, and where. `seeded` says the file had to be created
  * first — a floor the backfill had not yet reached.
  */

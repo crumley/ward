@@ -198,7 +198,7 @@ This file is yours: sharpen it as the workspace learns how it likes to work.
 `;
 
 /**
- * Ward's part of a floor's manifest (design/0054-floor-manifests/), installed
+ * Ward's part of a floor's manifest (design/0055-floor-manifests/), installed
  * as `projects/<floor>-<slug>/AGENTS.md` on every floor that is not closed.
  * BYTE-IDENTICAL across floors and workspaces at a given Ward version: nothing
  * floor-specific is in it — the floor's facts are read from `project.md`

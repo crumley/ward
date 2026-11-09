@@ -399,7 +399,7 @@ function moveTracked(root: string, from: string, to: string): void {
 }
 
 /**
- * Backfill the floor manifests (design/0054-floor-manifests/): every floor
+ * Backfill the floor manifests (design/0055-floor-manifests/): every floor
  * that is not closed — the ground floor included, which the step above has
  * just put in place — gets whichever of `AGENTS.md`, `CLAUDE.md`, and
  * `notes.md` it lacks. Runs after the standing project so a relocated ground

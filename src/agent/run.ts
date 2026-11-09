@@ -207,7 +207,7 @@ export async function locateSession(root: string, id: string): Promise<SessionLo
 /**
  * The environment a launched or resumed run is started with. Every run is
  * declared (`WARD_AGENT`); a floor session is also told where its floor's
- * manifest is (design/0054-floor-manifests/), because it stands at the
+ * manifest is (design/0055-floor-manifests/), because it stands at the
  * workspace root (design/0051) and the harness's working-directory loading
  * never reaches the floor's directory. A floor that no longer resolves names
  * no manifest rather than failing the run: the variable is guidance, and the

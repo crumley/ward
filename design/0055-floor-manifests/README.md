@@ -1,4 +1,4 @@
-# 0054 — Floor manifests: an `AGENTS.md` and notes for every floor
+# 0055 — Floor manifests: an `AGENTS.md` and notes for every floor
 
 > Every floor that is not closed carries a manifest beside its record: Ward's part (`AGENTS.md`, the
 > same on every floor and lineage-tracked) and the floor's part (`notes.md`, appended through
@@ -117,7 +117,7 @@ accessor this entry exposes.
        about a closed floor.
      - A floor-1 and a floor-0 launch carry `WARD_FLOOR_MANIFEST` with the right absolute path, and
        a workspace launch carries none.
-  2. `bun test test/workspace/lineage.test.ts` shows the 0053 root manifest in history and the 0054
+  2. `bun test test/workspace/lineage.test.ts` shows the 0053 root manifest in history and the 0055
      default pinned.
   3. `bun test test/workspace/create.test.ts test/workspace/converge.test.ts test/cli/converge.test.ts test/workspace/upgrade.test.ts test/cli/upgrade.test.ts test/cli/mutation-json.test.ts`
      carries the fourteenth create step and the ground floor's `AGENTS.md` row in the upgrade

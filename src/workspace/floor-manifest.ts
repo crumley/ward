@@ -1,4 +1,4 @@
-// Floor manifests (design/0054-floor-manifests/): every floor that is not
+// Floor manifests (design/0055-floor-manifests/): every floor that is not
 // closed carries, beside its `project.md`, the manifest for its level
 // (intent/01-concepts/05-context-loading.md) — composed from two parts in a
 // fixed order, Ward's first and the floor's after
@@ -57,7 +57,7 @@ export function carriesManifest(record: ProjectRecord): boolean {
 
 /**
  * The environment variable a launched floor session is started with: the
- * absolute path of its floor's `AGENTS.md` (design 0054). The session stands
+ * absolute path of its floor's `AGENTS.md` (design 0055). The session stands
  * at the workspace root (design 0051), so the harness's own working-directory
  * loading never reaches the floor's directory; this names it instead.
  */
@@ -73,7 +73,7 @@ export const FLOOR_MANIFEST_ENV = 'WARD_FLOOR_MANIFEST';
  * appended here, or every floor still carrying it would read as customized.
  */
 export const FLOOR_AGENTS_MD_HISTORY: readonly DefaultVersion[] = [
-  // Current since design 0054: the first floor manifest.
+  // Current since design 0055: the first floor manifest.
 ];
 
 /**

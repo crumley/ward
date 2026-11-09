@@ -264,7 +264,7 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '517b99b03e9275eb900bb1ac30dd04ce8ba9f496fcc365ec148fc3bb2486c473',
         era: 'design 0053 (legacy task address)',
       },
-      // Current since design 0054: every open floor carries AGENTS.md and
+      // Current since design 0055: every open floor carries AGENTS.md and
       // notes.md, a floor session is told WARD_FLOOR_MANIFEST, and notes are
       // written with `ward project note`.
     ],

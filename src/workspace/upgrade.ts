@@ -264,7 +264,7 @@ async function assessUpgrade(root: string, dir: string, apply: boolean): Promise
     : [];
   const baselineByPath = new Map(existing.map((entry) => [entry.path, entry]));
   // The root's exact-path lineage, then one entry per floor manifest in this
-  // tree (design/0054-floor-manifests/): one default, many instances, each
+  // tree (design/0055-floor-manifests/): one default, many instances, each
   // decided exactly like the root's. The floor entries take no baseline
   // (step 4 reads the root lineage only): their lineage is complete from the
   // first default, so a fingerprint would add nothing.

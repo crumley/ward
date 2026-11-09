@@ -1,4 +1,4 @@
-// Floor manifests (design/0054-floor-manifests/): every floor that is not
+// Floor manifests (design/0055-floor-manifests/): every floor that is not
 // closed carries AGENTS.md (Ward's part, byte-identical on every floor and
 // lineage-tracked), a CLAUDE.md link onto it, and notes.md (the floor's part,
 // seeded once, appended only through `ward project note`). Written at project
@@ -40,7 +40,7 @@ const TODAY = new Date().toISOString().slice(0, 10);
 
 test('the floor default is pinned; changing it must move its old hash into the history', () => {
   expect(sha256OfText(FLOOR_AGENTS_MD)).toBe(
-    '05b327c6866d9a2998a51315b86edc0361fa3ef3a9a77c9099e75d2bdede4ab2', // since design 0054
+    '05b327c6866d9a2998a51315b86edc0361fa3ef3a9a77c9099e75d2bdede4ab2', // since design 0055
   );
   const hashes = [...FLOOR_AGENTS_MD_HISTORY.map((v) => v.sha256), sha256OfText(FLOOR_AGENTS_MD)];
   expect(new Set(hashes).size).toBe(hashes.length);
@@ -347,7 +347,7 @@ async function closeFloor(ws: string, floor: number): Promise<void> {
   commitAll(ws, `close floor ${floor}`);
 }
 
-/** Remove every floor's manifest — the shape of a workspace from before 0054. */
+/** Remove every floor's manifest — the shape of a workspace from before 0055. */
 function stripManifests(ws: string): void {
   for (const dir of new Bun.Glob('projects/*').scanSync({ cwd: ws, onlyFiles: false })) {
     for (const file of ['AGENTS.md', 'CLAUDE.md', 'notes.md']) {
