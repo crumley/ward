@@ -110,8 +110,9 @@ would leak live, unrecoverable state.
 
 ## Open questions
 
-- **Multiplexer-vs-store split** — drawn provisionally; revisit with real usage (with
-  [`01-session-multiplexer.md`](01-session-multiplexer.md)).
+- **Multiplexer-vs-store split** — drawn provisionally: the multiplexer hosts and nothing more, and
+  any live delivery that later rides on it is this seam's design, recorded-first (above); revisit
+  with real usage (with [`01-session-multiplexer.md`](01-session-multiplexer.md)).
 - **Routing-path mechanics.** _Settled:_ **both** paths hold — **direct** identity-addressing when
   the sender knows the target, and **routing through the originating scope's status persona**
   (charge nurse / supervisor) when it does not (a constraint, above). _Open:_ the **mechanism** —

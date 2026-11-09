@@ -99,4 +99,6 @@ resumed — by both humans and agents — and survive a human walking away. It i
 ## Open questions
 
 - **Messaging vs. multiplexer overlap** — how much of dispatch/wake rides on the multiplexer vs. the
-  store (with [`02-messaging-coordination.md`](02-messaging-coordination.md)).
+  store (with [`02-messaging-coordination.md`](02-messaging-coordination.md)). _Provisionally:_ this
+  seam's responsibility ends at hosting; anything message-shaped that later rides on a host is the
+  messaging seam's design, built on the record.
