@@ -392,10 +392,10 @@ the two; and the guided `ward setup` that edits both. (Wiring `repo.refresh.stas
   in the slice, stating (a) that multiple workspaces per machine are expected, and (b) that a
   machine-level registry is permitted **under a stated test** — it may hold only what is derivable
   from the workspaces themselves, and no verb may depend on it for correctness — with a pointer to
-  this entry as the worked instance. _Status:_ pending — ruled by Ryan 2026-11-08 (review pass 2),
-  awaiting the intent edit: more than one workspace per machine is expected and a machine-level
-  registry is permitted under a stated test; the two-checkouts case stays open
-  ([#116](https://github.com/crumley/ward/pull/116)).
+  this entry as the worked instance. _Disposition:_ adjudicated —
+  [#116](https://github.com/crumley/ward/pull/116) (owner's ruling: more than one workspace per
+  machine is expected and a machine-level registry is permitted under a stated test; the
+  two-checkouts case stays open).
 - **IF-002** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Workspace- and
   scope-aware from any working directory_. _Friction:_ the clause is written entirely about being
   **inside** a workspace ("invoked anywhere inside an initialized workspace … Ward discovers the
@@ -412,10 +412,9 @@ the two; and the guided `ward setup` that edits both. (Wiring `repo.refresh.stas
   outside-a-workspace case: Ward may resolve to a **registered default** for a human caller, must
   **echo what it resolved**, must not prompt, and must refuse the resolution to a declared agent —
   plus the carve-out that verbs whose _purpose_ is to answer about the registry serve both audiences
-  from anywhere. _Status:_ pending — ruled by Ryan 2026-11-08 (review pass 2), awaiting the intent
-  edit: outside a workspace a human may resolve to a registered default, echoed; a declared agent is
-  refused; registry verbs serve both from anywhere
-  ([#116](https://github.com/crumley/ward/pull/116)).
+  from anywhere. _Disposition:_ adjudicated — [#116](https://github.com/crumley/ward/pull/116)
+  (owner's ruling: outside a workspace a human may resolve to a registered default, echoed; a
+  declared agent is refused; registry verbs serve both from anywhere).
 - **IF-003** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), _Opinionated
   configuration, global and workspace-local_. _Friction:_ the slice names the two axes and the
   quality bar, but leaves unstated the thing a builder most needs: **what may live on the global
@@ -429,6 +428,6 @@ the two; and the guided `ward setup` that edits both. (Wiring `repo.refresh.stas
   the global-state boundary as its governing limit ("what may live on the global axis is bounded by
   [`06-workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md): preferences and
   conveniences only"), so the constraint is discoverable from the slice a CLI builder starts in.
-  _Status:_ pending — ruled by Ryan 2026-11-08 (review pass 2), awaiting the intent edit: what may
-  live on the global axis is bounded by the global-state boundary — preferences and conveniences
-  only ([#116](https://github.com/crumley/ward/pull/116)).
+  _Disposition:_ adjudicated — [#116](https://github.com/crumley/ward/pull/116) (owner's ruling:
+  what may live on the global axis is bounded by the global-state boundary — preferences and
+  conveniences only).

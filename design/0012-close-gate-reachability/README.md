@@ -256,4 +256,5 @@ messaging-seam successors to `needs you` (IF-001 of 0009).
   [`remote-provider`](../../intent/02-subsystems/06-remote-provider.md) contract's "report PR
   status" does not name the merge commit among what the adapter reports — adjudicated as adapter
   detail under the existing "PR status" clause, the same way `reviewDecision` needed no contract
-  change in 0009.
+  change in 0009. _Disposition:_ adjudicated —
+  [`cdd9ac3`](https://github.com/crumley/ward/commit/cdd9ac3) (PR #28).

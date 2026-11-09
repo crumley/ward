@@ -38,9 +38,8 @@ IF-007 when the design was regrouped from one host per session to floor hosts.
   the host) when it is not." The two-verb distinction holds for any host technique, and a design
   following the current wording literally could build resume-as-attach — the exact conflation 0029's
   routing note already had to apologize for.
-- **Status:** pending — ruled by Ryan 2026-11-08 (review pass 2), awaiting the intent edit: the
-  mapping names both acts — attach when the session is running, re-create it when it is not
-  ([#116](https://github.com/crumley/ward/pull/116)).
+- **Status:** adjudicated — [#116](https://github.com/crumley/ward/pull/116) (owner's ruling: the
+  mapping names both acts — attach when the session is running, re-create it when it is not).
 
 ## IF-002 — the multiplexer-vs-messaging split needs a provisional floor
 
@@ -61,7 +60,10 @@ IF-007 when the design was regrouped from one host per session to floor hosts.
   on it is the messaging seam's design, built on the record. It keeps a future hosting change from
   quietly becoming an unrecorded delivery channel — the leak the messaging seam calls out as the
   reason it is opinionated.
-- **Status:** pending.
+- **Status:** pending — ruled by Ryan 2026-11-08 (review pass 3), awaiting the intent edit: the
+  multiplexer hosts and nothing more, and anything message-shaped that later rides on a host is the
+  messaging seam's design — stated as each open question's provisional line
+  ([#118](https://github.com/crumley/ward/pull/118)).
 
 ## IF-003 — hosting does not gate on the harness seam's fork-mode question
 
@@ -82,7 +84,9 @@ IF-007 when the design was regrouped from one host per session to floor hosts.
   question stays open without blocking (or being reopened by) hosting work. Marking the
   non-dependency keeps a future builder from re-deriving this entry's neutrality argument — or
   assuming hosting prejudged the mode.
-- **Status:** pending.
+- **Status:** declined — a fork is a new session, perhaps with postfix id. (A follow-up idea, not a
+  ruling: a fork's id derived from its parent's, such as `<parent-id>-fork-1`, is a candidate for
+  whoever designs fork mode — the harness seam's open question.)
 
 ## IF-004 — the seam is silent on who may destroy live state
 
@@ -103,11 +107,10 @@ IF-007 when the design was regrouped from one host per session to floor hosts.
   explains is surfaced to the human with its remedy, never reaped automatically." It holds for any
   host, and without it every future design re-litigates whether doctor may kill — with §18 arguing
   one way and "just a cache" arguing the other.
-- **Status:** pending — ruled by Ryan 2026-11-08 (review pass 2), awaiting the intent edit: live
+- **Status:** adjudicated — [#116](https://github.com/crumley/ward/pull/116) (owner's ruling: live
   state is torn down only by a session's deliberate close; every hygiene pass reports what no open
   record explains, with its remedy, and never ends it — accepted with the clause reworded so the
-  headline's "lifecycle" and "hygiene" are spelled out
-  ([#116](https://github.com/crumley/ward/pull/116)).
+  headline's "lifecycle" and "hygiene" are spelled out).
 
 ## IF-005 — attach multiplicity and write ownership are unstated
 
@@ -130,10 +133,9 @@ IF-007 when the design was regrouped from one host per session to floor hosts.
   shared by design; observe is the protected grain" or "a design must keep attach single-writer,
   with takeover an explicit act" — whichever the intent means. The answer holds for any host
   technique and changes what every design builds.
-- **Status:** pending — ruled by Ryan 2026-11-08 (review pass 2, confirming the 2026-11-06 ruling on
-  #109), awaiting the intent edit: concurrent attach is shared by design and observe is the
-  protected grain; attach is interactive by default and read-only observe a deliberate extra act, a
-  default command telemetry may later swap ([#116](https://github.com/crumley/ward/pull/116)).
+- **Status:** adjudicated — [#116](https://github.com/crumley/ward/pull/116) (owner's ruling:
+  concurrent attach is shared by design and observe is the protected grain; attach is interactive by
+  default and read-only observe a deliberate extra act, a default command telemetry may later swap).
 
 ## IF-006 — mapping a record to a live session says nothing about verifying it belongs
 
@@ -157,11 +159,10 @@ IF-007 when the design was regrouped from one host per session to floor hosts.
   for any host technique (a socket path, a pid, a container id, a window id are all recyclable
   addresses), and a design following the current wording literally would attach a human to a
   stranger's pane wearing the right name.
-- **Status:** pending — ruled by Ryan 2026-11-08 (review pass 2), awaiting the intent edit: the
+- **Status:** adjudicated — [#116](https://github.com/crumley/ward/pull/116) (owner's ruling: the
   mapped-to live session must belong to the record — confirmed by evidence the launch placed in it,
   or bound through identifiers structured so nothing else wears them by accident — and the link
-  outlasts identifiers that change over the session's life
-  ([#116](https://github.com/crumley/ward/pull/116)).
+  outlasts identifiers that change over the session's life).
 
 ## IF-007 — "group by the work they belong to (by scope)" vs grouping by lineage
 
@@ -185,7 +186,6 @@ IF-007 when the design was regrouped from one host per session to floor hosts.
   derived from the record, never from co-location)", or, if scope is meant strictly, say so — in
   which case a design must place a dispatched session in its own scope's group and reach its parent
   some other way.
-- **Status:** pending — ruled by Ryan 2026-11-08 (review pass 2, confirming the 2026-11-06 ruling on
-  #109), awaiting the intent edit: lineage is the intended reading — sessions group by the scope or
-  the lineage that owns them, derived from the record; the floor-0 and coordinator placement rules
-  stay design in this entry ([#116](https://github.com/crumley/ward/pull/116)).
+- **Status:** adjudicated — [#116](https://github.com/crumley/ward/pull/116) (owner's ruling:
+  lineage is the intended reading — sessions group by the scope or the lineage that owns them,
+  derived from the record; the floor-0 and coordinator placement rules stay design in this entry).

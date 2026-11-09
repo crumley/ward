@@ -240,4 +240,5 @@ exists).
   blessing it ("a workspace is never done being a workspace; `active` over an empty standing project
   is that, stated") or directing a future entry to treat the never-begun standing project distinctly
   in derivation. As it stands, a reader of the derivation rule alone would expect a fully-delivered
-  workspace to read `closed` and be surprised.
+  workspace to read `closed` and be surprised. _Disposition:_ adjudicated —
+  [`71aeee1`](https://github.com/crumley/ward/commit/71aeee1) (PR #39).

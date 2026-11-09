@@ -272,4 +272,6 @@ revisit the fixed cap of 8 only if telemetry on real workspaces says the client 
   and skipped. _Adjudicated:_ the task brief carried the human's decision to make this amendment
   rather than leave it for review, so the revision above is **applied** to the slice in this PR, as
   its own commit citing this id — the convention [0022](../0022-shell-completion/README.md) set. The
-  build did not decide it; it proposed it and was answered.
+  build did not decide it; it proposed it and was answered. _Disposition:_ adjudicated —
+  [`3009c24`](https://github.com/crumley/ward/commit/3009c24) (PR #45, as the _Adjudicated:_ note
+  above records).

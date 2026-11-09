@@ -313,7 +313,10 @@ canonical checkout, asserting `workspace`, `task:t1`, `task:t1`, `repo:demo` in 
   working directory, scope (anchor-shaped today), human-or-agent, the declared agent value, outcome,
   and duration; persona is omitted entirely (absence over `null`/`"default"`) until it exists.
   _Proposed revision:_ "per invocation: the caller's context as it exists — working directory, scope
-  as far as it resolves, and human-or-agent today; persona as it comes to exist."
+  as far as it resolves, and human-or-agent today; persona as it comes to exist." _Status:_ pending
+  — ruled by Ryan 2026-11-08 (review pass 3), awaiting the intent edit: telemetry rows carry the
+  caller's context as it exists — working directory, scope as far as it resolves, and human-or-agent
+  today; persona as it comes to exist ([#118](https://github.com/crumley/ward/pull/118)).
 - **IF-002** — [`human-shell`](../../intent/02-subsystems/07-human-shell.md), the same bullet read
   with the Not-list ("not telemetry that ever leaves the workspace"). _Friction:_ "record usage
   **per invocation**" is unqualified, but some invocations run outside any workspace (`ward doctor`
@@ -329,7 +332,7 @@ canonical checkout, asserting `workspace`, `task:t1`, `task:t1`, `repo:demo` in 
   _mechanism's_ transient files (the lock) belong to the tracked record or the ignored mechanics —
   adjudicated here as ignored mechanics (the lock lives and dies within a command; tracking it would
   commit churn with no reader), consistent with the contract's own `.gitignore`-policy latitude.
-  _Status:_ pending — ruled by Ryan 2026-11-08 (review pass 2), awaiting the intent edit: telemetry
-  is workspace-scoped — rows are recorded in the enclosing workspace, and an invocation outside any
-  workspace records nothing (the workspace owner's 2026-08-12 confirmation, now landing)
-  ([#116](https://github.com/crumley/ward/pull/116)).
+  _Disposition:_ adjudicated — [#116](https://github.com/crumley/ward/pull/116) (owner's ruling:
+  telemetry is workspace-scoped — rows are recorded in the enclosing workspace, and an invocation
+  outside any workspace records nothing (the workspace owner's 2026-08-12 confirmation, now
+  landing)).

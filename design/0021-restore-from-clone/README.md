@@ -302,9 +302,9 @@ exists; recovery (`attach`) taking over the session adjudication restore current
   world the record describes still on disk, and can it be honestly rebuilt from the record?"; owns:
   re-materializing canonical checkouts and anchors from recorded state, naming what cannot be (lost
   work is adjudicated, never fabricated) — and note the composition: doctor recommends restore;
-  recovery assumes restore has run. _Status:_ pending — ruled by Ryan 2026-11-08 (review pass 2),
-  awaiting the intent edit: Restore becomes the fourth row of the map that puts a workspace right,
-  running before recovery ([#116](https://github.com/crumley/ward/pull/116)).
+  recovery assumes restore has run. _Disposition:_ adjudicated —
+  [#116](https://github.com/crumley/ward/pull/116) (owner's ruling: Restore becomes the fourth row
+  of the map that puts a workspace right, running before recovery).
 - **IF-002** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md),
   _Workspace integrity_ (record↔harness), with
   [`sessions-and-lifecycle`](../../intent/01-concepts/02-sessions-and-lifecycle.md). _Friction:_ the
@@ -318,7 +318,9 @@ exists; recovery (`attach`) taking over the session adjudication restore current
   a session record is **never machine-portable live state** (the handle is meaningful only where it
   was recorded), and charter **recovery** (`attach`) as the operation that adjudicates relocated
   sessions — re-attach where the harness resolves, surface the rest — with restore and doctor
-  limited to naming the condition.
+  limited to naming the condition. _Disposition:_ adjudicated —
+  [`fe12d4b`](https://github.com/crumley/ward/commit/fe12d4b) (PR #79), in substance through 0038
+  IF-002 and 0029 IF-003.
 
 One near-candidate adjudicated rather than filed: _Ward does not defend its own presence_ says
 "there is no operation that restores a workspace to Ward's shape", which a reader could hear this

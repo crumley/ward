@@ -264,7 +264,7 @@ noise rather than signal.
   filed: the [`remote-provider`](../../intent/02-subsystems/06-remote-provider.md) contract's
   "report PR status" does not name the base branch among what the adapter reports — adjudicated as
   adapter detail under the existing "PR status" clause, the same call 0012 made for the merge commit
-  and 0009 for the review decision. _Status:_ pending — ruled by Ryan 2026-11-08 (review pass 2),
-  awaiting the intent edit: the derivable conditions are examples, not a closed list, and work aimed
-  at a target that cannot deliver it is named among them
-  ([#116](https://github.com/crumley/ward/pull/116)).
+  and 0009 for the review decision. _Disposition:_ adjudicated —
+  [#116](https://github.com/crumley/ward/pull/116) (owner's ruling: the derivable conditions are
+  examples, not a closed list, and work aimed at a target that cannot deliver it is named among
+  them).
