@@ -346,7 +346,10 @@ agent-orchestrated reconciliation entry that consumes the residue report; record
   deterministic fast path explicitly in the slice (the tool act for untouched artifacts, no task and
   no adjudication needed), and state what the stamp asserts when residue exists — either bless
   "mechanically upgraded, residue named" as sufficient, or direct that the stamp advance only when a
-  reconciliation task has adjudicated the residue.
+  reconciliation task has adjudicated the residue. _Status:_ pending — ruled by Ryan 2026-11-08
+  (review pass 2), awaiting the intent edit: where nothing needs deciding the upgrade is a tool act,
+  and a stamp advanced with residue means the mechanical upgrade landed and the residue was named
+  ([#116](https://github.com/crumley/ward/pull/116)).
 - **IF-002** — [`workspace-lifecycle`](../../intent/01-concepts/06-workspace-lifecycle.md),
   _Reconciliation_ (the trigger rule: "Ward's default changed **between the stamped version and the
   CLI in hand**"). _Friction:_ the trigger is keyed on version numbers, but Ward's actual practice
@@ -358,7 +361,9 @@ agent-orchestrated reconciliation entry that consumes the residue report; record
   that default is no longer current — with no version algebra anywhere. _Proposed revision:_ restate
   the trigger as content-keyed ("Ward's default moved since the default the workspace's copy was
   installed from"), leaving the stamp to mean what _Version skew_ needs (schema generation), not
-  artifact deltas.
+  artifact deltas. _Status:_ pending — ruled by Ryan 2026-11-08 (review pass 2), awaiting the intent
+  edit: adjudication triggers on content — a default that moved since the copy's installed default —
+  never on version numbers ([#116](https://github.com/crumley/ward/pull/116)).
 
 One near-candidate adjudicated rather than filed: intent's "comparison is always
 current-versus-current-default, never a delta between two Ward versions" might seem to forbid a

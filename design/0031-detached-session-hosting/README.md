@@ -283,9 +283,10 @@ say what changed.
 
 - **Decisions:** rests on
   [ADR 0006 — tmux as the detached session host](../decisions/0006-tmux-detached-host.md) (proposed
-  with this entry, and amended against the survey and the regrouping): the candidates surveyed
-  against the seam's constraints, tmux recommended as the **added technique** beside the foreground
-  baseline. Entry-local decisions, each with the alternative it beat and the cost it accepts:
+  with this entry, amended against the survey and the regrouping, and accepted 2026-11-08): the
+  candidates surveyed against the seam's constraints, tmux recommended as the **added technique**
+  beside the foreground baseline. Entry-local decisions, each with the alternative it beat and the
+  cost it accepts:
 
   - **Two techniques, one contract — and how convergence will be judged.** The alternative — one
     technique, tmux replacing the foreground start — is attractive for its single code path, and
@@ -623,16 +624,18 @@ say what changed.
     field's continue-latest recovery gets a refusal naming `locate` instead.
 - **Layout:** two boundaries, mirroring the harness seam's. `src/host/` knows tmux — argv shapes,
   host and window stamps, view construction, probe classification, the hygiene preamble — and
-  nothing about Ward's records (a second host would be a second file here), while
-  `src/agent/host.ts` is the Ward-shaped half: placement, the ensure function, the
+  nothing about Ward's records (a second host would be a second file here, implementing the same
+  interface), while `src/agent/host.ts` is the Ward-shaped half: placement, the ensure function, the
   attach/observe/re-create flows, ownership verification, floating links, and close teardown,
   consuming `src/agent/run.ts`'s argv building rather than duplicating it. Placement lives on the
   Ward side because it reads records (scope, task floor, parent); the adapter receives a floor
-  number and never learns why. The record grows one provenance field and two events; the session
-  verbs, doctor, configuration (`agent.host`, enum-validated exactly as `harness` is), and the
-  manifest extend in place. Tests mirror the boundary: a stub tmux beside the stub harness drives
-  the suites hermetically, and the real-tmux premise smoke lives beside them, outside the hermetic
-  gate.
+  number and never learns why. The boundary is a **host interface** stated in host terms (place,
+  tag, find by tag, view, close), never tmux's: no tmux call is made outside `src/host/`, so a
+  further host is one more implementation selected by `agent.host`, and the Ward-shaped half does
+  not change. The record grows one provenance field and two events; the session verbs, doctor,
+  configuration (`agent.host`, enum-validated exactly as `harness` is), and the manifest extend in
+  place. Tests mirror the boundary: a stub tmux beside the stub harness drives the suites
+  hermetically, and the real-tmux premise smoke lives beside them, outside the hermetic gate.
 - **Mechanisms:**
   - _Placement._ `placementFloor(session)` = `placementFloor(parent)` when the session records a
     parent whose record exists and whose placement floor is not 0; otherwise the session's own floor

@@ -260,4 +260,6 @@ without a redirect they had to remember.
   shell artifacts), reported against what the running Ward would produce today, never repaired, and
   never an error, since by the global-state boundary their worst state costs a shortcut. That gives
   the growing set of machine findings a stated home instead of three entries each widening the same
-  sentence by implication.
+  sentence by implication. _Status:_ pending — ruled by Ryan 2026-11-08 (review pass 2), awaiting
+  the intent edit: doctor has a third subject, Ward's per-user footprint, reported and never
+  repaired or an error ([#116](https://github.com/crumley/ward/pull/116)).
