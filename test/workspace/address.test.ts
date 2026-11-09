@@ -12,6 +12,7 @@ import {
   nextRoom,
   parseTaskAddress,
   ROOMS_PER_FLOOR,
+  type TaskAddress,
   taskAddress,
   taskFloor,
 } from '../../src/workspace/address.ts';
@@ -34,8 +35,8 @@ const addresses: ReadonlyArray<{
   { dir: 'projects/12-big/tasks/t22-a', code: 't22', floor: 12, on: 12, address: 'f12t22' },
   // Containment answers even when the record carries no floor field.
   { dir: 'projects/5-x/tasks/t9-a', code: 't9', on: 5, address: 'f5t9' },
-  // A bare task's room IS its full address.
-  { dir: 'tasks/t18-a', code: 't18', address: 't18' },
+  // A legacy bare task names its pool where a floor would be (0053).
+  { dir: 'tasks/t18-a', code: 't18', address: 'legacy-t18' },
   // Read outside its tree, the record's own field still composes one.
   { dir: 'elsewhere/t4-a', code: 't4', floor: 7, on: 7, address: 'f7t4' },
 ];
@@ -50,7 +51,7 @@ for (const { dir, code, floor, on, address } of addresses) {
 
 // -- parsing: one form, case-folded ---------------------------------------
 
-const parses: ReadonlyArray<{ input: string; parsed: { floor?: number; room: number } | null }> = [
+const parses: ReadonlyArray<{ input: string; parsed: TaskAddress | null }> = [
   { input: 'f3t1', parsed: { floor: 3, room: 1 } },
   { input: 'F3T1', parsed: { floor: 3, room: 1 } }, // case-insensitive, one canonical spelling
   { input: 't18', parsed: { room: 18 } },
@@ -63,6 +64,16 @@ const parses: ReadonlyArray<{ input: string; parsed: { floor?: number; room: num
   { input: 't100', parsed: null }, // and stop at the ceiling
   { input: 'f0t1', parsed: { floor: 0, room: 1 } }, // the ground floor (0041)
   { input: 'f-1t1', parsed: null }, // and there is nothing below it
+  // The legacy pool's full address (0053): one spelling, case-folded, and
+  // no slip of a floor address lands on it.
+  { input: 'legacy-t2', parsed: { legacy: true, room: 2 } },
+  { input: 'LEGACY-T2', parsed: { legacy: true, room: 2 } },
+  { input: 'ft2', parsed: null }, // f3t2 with the digit dropped is nothing, not legacy
+  { input: 'legacy:t2', parsed: null },
+  { input: 'legacyt2', parsed: null },
+  { input: 'legacy-f3t2', parsed: null },
+  { input: 'legacy-t0', parsed: null },
+  { input: 'legacy-t100', parsed: null },
   { input: 'json-output', parsed: null },
   { input: '', parsed: null },
 ];
@@ -173,6 +184,22 @@ test('the refusals name the two forms and the listing', async () => {
   expect(resolveOpenTask(ws, 't7')).rejects.toThrow(/no open task has code 't7'/);
 });
 
+test('a legacy task sharing a floor task’s room is named by its own full address', async () => {
+  await openProject(ws, 'a'); // floor 1
+  await openTask(ws, 'on-a-floor', { floor: 1 });
+  await seedTask(ws, 'tasks', 1, 'from-before', '2026-08-01T00:00:00.000Z', 'active');
+
+  expect((await resolveOpenTask(ws, 'legacy-t1')).record.slug).toBe('from-before');
+  expect((await resolveOpenTask(ws, 'f1t1')).record.slug).toBe('on-a-floor');
+  expect(resolveOpenTask(ws, 't1')).rejects.toThrow(
+    't1 is ambiguous — f1t1 (on-a-floor), legacy-t1 (from-before); name one',
+  );
+  // Closed, it answers to neither form (Identity: closed rooms belong to whoever is next).
+  await closeTask(ws, 'legacy-t1', 'abandoned');
+  expect(resolveOpenTask(ws, 'legacy-t1')).rejects.toThrow(/no open task at legacy-t1/);
+  expect((await resolveOpenTask(ws, 't1')).record.slug).toBe('on-a-floor');
+});
+
 // -- setup ----------------------------------------------------------------
 // A fresh workspace per case: allocation is about what a container already
 // holds, so no case may inherit another's rooms.
@@ -205,6 +232,7 @@ async function seedTask(
   room: number,
   slug: string,
   openedAt: string,
+  state: 'active' | 'closed' = 'closed',
 ): Promise<void> {
   const dir = `${container}/t${room}-${slug}`;
   mkdirSync(join(root, dir), { recursive: true });
@@ -212,11 +240,10 @@ async function seedTask(
     type: 'task',
     code: `t${room}`,
     slug,
-    state: 'closed',
-    outcome: 'delivered',
+    state,
     prs: [],
     openedAt,
-    closedAt: openedAt,
+    ...(state === 'closed' ? { outcome: 'delivered' as const, closedAt: openedAt } : {}),
   };
   await writeDocument(root, taskRecordType(dir), { data: record, body: 'seeded' });
 }

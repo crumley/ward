@@ -2,7 +2,8 @@
 // addressed `f<floor>t<room>` — `f3t1` is room 1 on floor 3, and `f0t1` is
 // room 1 on the ground floor (design/0041-ground-floor/) — while a LEGACY
 // bare task (no floor, opened under `tasks/` before every task had a floor)
-// keeps `t<room>`, which IS its full address. The address is
+// is addressed `legacy-t<room>`, its pool named where a floor would be
+// (design/0053-legacy-task-address/). The address is
 // DERIVED, never stored: the record keeps carrying the room as its `code`,
 // and the floor is already known from containment (the task's directory under
 // `projects/<floor>-<slug>/tasks/`) and from the optional `floor` field, so
@@ -39,13 +40,27 @@ export interface AddressedTask {
   readonly record: { readonly code: string; readonly floor?: number | undefined };
 }
 
-/** A parsed address: a room, and the floor when the caller named one. */
+/**
+ * A parsed address: a room, and the container when the caller named one — a
+ * floor, or the legacy pool. Neither named is the bare shorthand.
+ */
 export interface TaskAddress {
   readonly floor?: number;
+  readonly legacy?: true;
   readonly room: number;
 }
 
-const ADDRESS = /^(?:f(\d+))?t(\d+)$/;
+/**
+ * The legacy pool's name in an address (design/0053-legacy-task-address/).
+ * A word rather than a sigil because it must survive every place an address
+ * travels — a worktree directory, a stewardship branch name (`:` is not legal
+ * in a git ref), a shell argument, the telemetry scope — and because it can
+ * be produced by no slip of a floor address: dropping a digit from `f3t2`
+ * yields `ft2`, which parses as nothing, never as the legacy task.
+ */
+export const LEGACY_PREFIX = 'legacy-';
+
+const ADDRESS = /^(?:(legacy-)|f(\d+))?t(\d+)$/;
 const PROJECT_DIR = /^projects\/(\d+)-/;
 
 /**
@@ -68,44 +83,71 @@ export function taskRoom(task: AddressedTask): number | undefined {
 }
 
 /**
- * The address Ward speaks: `f3t22` for a floor task, `t18` for a legacy bare
- * one.
+ * The address Ward speaks: `f3t22` for a floor task, `legacy-t18` for a
+ * legacy bare one — never the bare room, which is a shorthand that stops
+ * resolving the moment a floor opens the same room.
  * Every human-facing identity line and every `address` field in `--json`
  * comes through here, so the two audiences can never be told different
  * addresses for the same task (§8).
  */
 export function taskAddress(task: AddressedTask): string {
   const floor = taskFloor(task);
-  return floor === undefined ? task.record.code : `f${floor}${task.record.code}`;
+  return floor === undefined
+    ? `${LEGACY_PREFIX}${task.record.code}`
+    : `f${floor}${task.record.code}`;
+}
+
+/**
+ * Whether a task answers to a parsed address: the room, and the container
+ * the caller named — a floor, or the legacy pool (a task with no floor). The
+ * bare shorthand names no container, so every task in the room answers and
+ * the caller decides what several answers mean. Both resolvers (open-only
+ * and read) match through here, so the two can never disagree on what an
+ * address names.
+ */
+export function addressMatches(task: AddressedTask, wanted: TaskAddress): boolean {
+  if (taskRoom(task) !== wanted.room) return false;
+  if (wanted.legacy === true) return taskFloor(task) === undefined;
+  return wanted.floor === undefined || taskFloor(task) === wanted.floor;
+}
+
+/** The address a parsed one canonically spells — `f3t1`, `legacy-t2`, or the bare `t1`. */
+export function spellAddress(wanted: TaskAddress): string {
+  if (wanted.legacy === true) return `${LEGACY_PREFIX}t${wanted.room}`;
+  return wanted.floor === undefined ? `t${wanted.room}` : `f${wanted.floor}t${wanted.room}`;
 }
 
 /**
  * Parse what a caller typed. Canonical spelling is lowercase and parsing is
  * case-insensitive, so `F3T1` and `f3t1` resolve to the same task: one form
  * plus case-folding, never a family of spellings (`3t1`, `3-1`) that would
- * make the surface unpredictable for both audiences. Returns null for
+ * make the surface unpredictable for both audiences. The legacy pool's
+ * `legacy-` takes the floor's place, so `legacy-t2` is the one spelling of a
+ * legacy task's full address. Returns null for
  * anything that is not an address at all, so callers can say what a bad
  * argument was rather than reporting a lookup miss.
  */
 export function parseTaskAddress(input: string): TaskAddress | null {
   const match = ADDRESS.exec(input.trim().toLowerCase());
   if (match === null) return null;
-  const room = Number.parseInt(match[2] ?? '', 10);
+  const room = Number.parseInt(match[3] ?? '', 10);
   if (room < 1 || room > ROOMS_PER_FLOOR) return null;
-  const floor = match[1] === undefined ? undefined : Number.parseInt(match[1], 10);
+  if (match[1] !== undefined) return { legacy: true, room };
+  const floor = match[2] === undefined ? undefined : Number.parseInt(match[2], 10);
   // Floor 0 is the ground floor (design/0041-ground-floor/), so `f0t7` is an
   // address like any other; a negative floor cannot be spelled at all.
   if (floor !== undefined && floor < 0) return null;
   return floor === undefined ? { room } : { floor, room };
 }
 
-/** The parse, or the refusal that names the two accepted forms. */
+/** The parse, or the refusal that names the accepted forms. */
 export function requireTaskAddress(input: string): TaskAddress {
   const parsed = parseTaskAddress(input);
   if (parsed === null) {
     throw new WardError(
-      `'${input}' is not a task address — floor tasks are f<floor>t<room> (f3t1) and legacy ` +
-        `bare tasks are t<room> (t18), rooms 1–${ROOMS_PER_FLOOR} (see: ward task list)`,
+      `'${input}' is not a task address — floor tasks are f<floor>t<room> (f3t1), legacy ` +
+        `bare tasks are legacy-t<room> (legacy-t18), and a bare t<room> is a shorthand for ` +
+        `either while unique; rooms 1–${ROOMS_PER_FLOOR} (see: ward task list)`,
     );
   }
   return parsed;

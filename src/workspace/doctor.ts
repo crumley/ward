@@ -1044,7 +1044,7 @@ async function legacyBareTaskFinding(root: string): Promise<Finding[]> {
         severity: 'info',
         message:
           `${bare.length} task${bare.length === 1 ? '' : 's'} under tasks/ from before the ` +
-          `ground floor (${open} still open) — addressed t<room>, read and never written again`,
+          `ground floor (${open} still open) — addressed legacy-t<room>, read and never written again`,
       },
     ];
   } catch (error) {

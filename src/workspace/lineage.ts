@@ -250,9 +250,16 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '7fe60b83fd9707011ed538f239ae4def9c5d3877bffe20d41ece06436c2dd616',
         era: 'design 0051 revert (session open always launches)',
       },
-      // Current since design 0052: a session opened while WARD_AGENT holds a
-      // session's id records it as parent, and agents are told to pass it to
-      // the agents they start.
+      // design 0052 — a session opened while WARD_AGENT holds a session's id
+      // records it as parent, and agents are told to pass it to the agents
+      // they start. Legacy bare tasks still carried a bare `t<room>`.
+      {
+        sha256: '1f1d055a78cc30504e9278bfc28baf939649edb2c8c4d37a21307addfa0caa25',
+        era: 'design 0052 (session parent link)',
+      },
+      // Current since design 0053: legacy bare tasks are addressed
+      // `legacy-t<room>`, and an ambiguous shorthand names each candidate by
+      // its full address.
     ],
   },
 ];

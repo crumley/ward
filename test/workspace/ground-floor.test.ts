@@ -167,22 +167,23 @@ test('a legacy bare task keeps its address, resolves, lists, and settles', async
 
   const bare = (await readTasks(ws)).find((task) => task.record.slug === 'from-before');
   expect(bare?.dir).toBe('tasks/t7-from-before');
-  expect(taskAddress(bare as { dir: string; record: TaskRecord })).toBe('t7'); // the FULL address
-  expect((await resolveOpenTask(ws, 't7')).record.slug).toBe('from-before');
+  expect(taskAddress(bare as { dir: string; record: TaskRecord })).toBe('legacy-t7'); // 0053
+  expect((await resolveOpenTask(ws, 'legacy-t7')).record.slug).toBe('from-before');
+  expect((await resolveOpenTask(ws, 't7')).record.slug).toBe('from-before'); // the shorthand
 
   const report = await statusReport(ws);
   expect(report.projects[0]?.project.floor).toBe(GROUND_FLOOR); // the ground floor leads
-  expect(report.bareTasks.map((task) => task.address)).toEqual(['t7']); // settled t3 is hidden
+  expect(report.bareTasks.map((task) => task.address)).toEqual(['legacy-t7']); // t3 settled
   expect(report.hidden.tasks).toBe(1);
   expect((await statusReport(ws, { all: true })).bareTasks.map((t) => t.address)).toEqual([
-    't7',
-    't3',
+    'legacy-t7',
+    'legacy-t3',
   ]);
 
   const finding = (await runDoctor(ws)).workspace.find((f) => f.check === 'legacy bare tasks');
   expect(finding).toMatchObject({ severity: 'info' });
   expect(finding?.message).toContain(
-    '2 tasks under tasks/ from before the ground floor (1 still open)',
+    '2 tasks under tasks/ from before the ground floor (1 still open) — addressed legacy-t<room>',
   );
   expect((await runDoctor(ws)).healthy).toBe(true);
 });
