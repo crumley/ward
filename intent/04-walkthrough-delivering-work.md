@@ -83,11 +83,12 @@ has earned its keep, and the session **acts directly** as the anchor's occupant
 (`01-concepts/00-domain-model.md`, occupancy). Elision changes ceremony, never semantics — the
 anchor still has **at most one occupant**, and is still **written only through that occupant**.
 
-The session runs in the worktree's own working directory, loading _that_ directory's `AGENTS.md`
-context and skills (`01-concepts/05-context-loading.md`) rather than the workspace's — its whole
-context spent on the code. It writes the output mode, adds tests, and may produce **artifacts** (a
-decision note, a sample of the new output) that persist beyond it, each with provenance
-(`01-concepts/00-domain-model.md`, artifacts).
+The session starts at the workspace root, like every session, and works in the worktree: before it
+touches the code it reads each `AGENTS.md` on the path down — the workspace's, its project's, the
+repository's own — and loads the worktree's skills (`01-concepts/05-context-loading.md`), its
+context spent on the code rather than on the rest of the workspace. It writes the output mode, adds
+tests, and may produce **artifacts** (a decision note, a sample of the new output) that persist
+beyond it, each with provenance (`01-concepts/00-domain-model.md`, artifacts).
 
 **Records written:** appended _session log_ entries as work proceeds — including the session's
 **purpose** and, where the harness exposes it, the **resources it consumed**

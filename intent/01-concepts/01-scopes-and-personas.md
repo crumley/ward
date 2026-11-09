@@ -48,12 +48,12 @@ A session is bound on two independent axes (`00-domain-model.md`):
 
 - **Scope** — the level in the hierarchy it is responsible for (workspace / project / task / room —
   the vocabulary is `00-domain-model.md`'s). _What_ it is responsible for.
-- **Working directory** — where it stands and loads its context from. _Where_ it operates.
+- **Working directory** — where it works, and so the path along which it loads its context, read
+  down from the workspace root where every session starts. _Where_ it operates.
 
-The two are chosen independently when a session starts, and together they bound what an agent
-attends to. **Why two:** what an agent is responsible for and where it stands are genuinely
-different choices — separating them is what lets a project-scope agent read broadly while a room
-stays narrow.
+The two are chosen independently, and together they bound what an agent attends to. **Why two:**
+what an agent is responsible for and where it works are genuinely different choices — separating
+them is what lets a project-scope agent read broadly while a room stays narrow.
 
 How an agent attends — whether it reasons about outcomes and delegates, or does the hands-on work —
 is shaped by its **persona**, not by a further axis.
@@ -259,7 +259,7 @@ narrower overriding broader):
 - **Model / thinking depth** — fast and shallow for bookkeeping; deep and high-thinking for hard
   work.
 - **Agent harness** — which agent runtime backs the session.
-- **Working directory** — where the session runs and loads context from.
+- **Working directory** — the directory the session works in, below the workspace root it starts at.
 
 These are _what_ can vary per scope; the mechanism that applies them is a _how_
 ([`../02-subsystems/`](../02-subsystems/), [`../../design/`](../../design/)).

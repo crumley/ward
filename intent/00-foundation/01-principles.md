@@ -78,10 +78,10 @@ importantly, the **human is the default audience** unless the caller declares it
 
 ## 9. Scope and working directory are explicit and bounded
 
-Every agent session is started at a **specific scope** (what it is responsible for) and a **specific
-working directory** (where it operates and from which it loads context). A session does not silently
-widen either. **Why:** an unbounded session is an unfocused one; bounding both axes is how placement
-and focus (§1) become operational.
+Every agent session is started at a **specific scope** (what it is responsible for) and works in a
+**specific working directory** (where it operates, and the path down to which it loads context). A
+session does not silently widen either. **Why:** an unbounded session is an unfocused one; bounding
+both axes is how placement and focus (§1) become operational.
 
 ## 10. Teaching and learning flow both ways
 

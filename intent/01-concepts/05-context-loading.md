@@ -10,28 +10,54 @@ recoverable. This is the concrete face of several principles —
 below are durable; the **build** (the exact ordering algorithm, field conventions, handle formats)
 is left to [`design/`](../../design/).
 
-## Context loads from an `AGENTS.md` hierarchy keyed to the working directory
+## Context loads downward from the workspace root, along the path a session works in
 
 A session's default context is assembled from **harness-neutral `AGENTS.md` files arranged through
-the filesystem hierarchy**, loaded relative to the session's **working directory**
-([`00-domain-model.md`](00-domain-model.md), the two axes).
+the filesystem hierarchy**, read **from the workspace root down** to the directory the session works
+in ([`00-domain-model.md`](00-domain-model.md), the two axes).
 
-- A broad-scope session started near the **workspace root** loads the workspace-level `AGENTS.md`
-  and the top-level skills it points to.
-- A narrow-scope session started in a **repository or anchor directory** loads _that_ directory's
-  `AGENTS.md` and _its_ skills, staying specialized.
+- **Every session starts at the workspace root**, whatever its scope, so the workspace-level
+  `AGENTS.md` and the top-level skills it points to are the first context any session loads.
+- **Its scope comes from its identity, not its location.** A session learns what it is responsible
+  for (the workspace, a project, a task) from its own record, which its declared identity names,
+  never by inferring it from the directory it stands in.
+- **Before it works in a directory, it reads each `AGENTS.md` on the path from the root down to that
+  directory**, broadest first and nearest last. A narrow-scope session working in a repository or
+  anchor directory thereby loads _that_ directory's `AGENTS.md` and _its_ skills after everything
+  above it, and stays specialized.
+- **The layout makes the path carry the context.** A project's working places sit beneath a
+  directory that carries the project's `AGENTS.md`, so the path down to any anchor passes through
+  every level whose guidance applies to the work there. No level is reached by a pointer, a
+  variable, or a file named for one harness.
 
 Each `AGENTS.md` is the **manifest for its level**: it names the artifacts, skills, and records to
-load for that scope, rather than relying on the agent to discover them.
+load for that scope, rather than relying on the agent to discover them. An anchor's `AGENTS.md` is
+its repository's own: Ward writes nothing inside an anchor, because the level above it already
+carries what the workspace knows about the work there.
 
 **Why harness-neutral (`AGENTS.md`, not a harness-specific file).** Per §5: whichever harness
 operates the session must find the right context, and harnesses must be mixable. Standardizing on
 `AGENTS.md` keeps the workspace portable. A harness that reads only its own filename is served by an
 **adapter, not a copy**: the expected name may be satisfied by a link onto `AGENTS.md` that carries
 no content of its own — the guidance still lives in one harness-neutral file, nothing can drift, and
-no harness is privileged in substance. **Why keyed to working directory.** It makes "scope + working
-directory" operational: where you start determines what you load, so a room is specialized to its
-anchor while the attending sees the project.
+no harness is privileged in substance.
+
+**Why downward from the root.** It is the one direction every harness follows. Harnesses agree on
+loading the guidance of the directory they start in and of its parents; they disagree on what, if
+anything, they load below it, and on whether moving to another directory later loads anything at
+all. A session that starts at the root is therefore guaranteed the workspace's manifest under any
+harness, and that manifest can state one rule (read downward to where you work) that holds under all
+of them. A harness that loads nested guidance natively does part of that reading for the agent; it
+never has to do all of it. The alternative, starting low and loading upward, reads a level's
+guidance only where a session happens to start: a session whose scope and starting directory differ
+misses its own level, and each such case then needs a mechanism of its own (a pointer file, an
+environment variable, a harness's local file) that is custom, harness-specific, and only as reliable
+as the convention it leans on. **Why scope from identity.** The scope is a recorded fact; a
+directory is only where the work happens to be. Read from the record, the scope is exact for every
+session, wherever it works next. **Why the layout carries it.** A rule to read downward is only as
+good as the path it walks. When a level's working places sit beneath that level's directory, walking
+the path is the whole mechanism, and nothing has to be kept in step with it — so a room is
+specialized to its anchor while the attending sees the project.
 
 ## Context is built from stable artifacts in a deterministic order
 
@@ -92,12 +118,15 @@ not span a mix of harnesses, and recovery would depend on a human remembering wh
 
 ## Canonical home for
 
-- **Context assembly** — the `AGENTS.md`-hierarchy-by-working-directory model (a harness-specific
-  filename served by an adapter onto `AGENTS.md`, never a copy), the deterministic/append-oriented
-  bias for cache sharing, the **two-zone model** (stable prefix + mutable tail, graduation, adoption
-  boundaries) **and its ordering, which serves authorship as well as volatility** (Ward's part
-  first, the human's after — [`06-workspace-lifecycle.md`](06-workspace-lifecycle.md) owns the
-  ownership split), and the harness-handle-per-session rule.
+- **Context assembly** — the downward-from-the-root model (every session starts at the workspace
+  root, takes its scope from its identity, and reads each `AGENTS.md` from the root down to where it
+  works, in a layout whose paths carry each level's guidance; an anchor's `AGENTS.md` is its
+  repository's; a harness-specific filename served by an adapter onto `AGENTS.md`, never a copy),
+  the deterministic/append-oriented bias for cache sharing, the **two-zone model** (stable prefix +
+  mutable tail, graduation, adoption boundaries) **and its ordering, which serves authorship as well
+  as volatility** (Ward's part first, the human's after —
+  [`06-workspace-lifecycle.md`](06-workspace-lifecycle.md) owns the ownership split), and the
+  harness-handle-per-session rule.
 
 Other slices reference these; the _working directory_ axis itself is defined in
 [`00-domain-model.md`](00-domain-model.md), and the economy principle in
@@ -105,8 +134,10 @@ Other slices reference these; the _working directory_ axis itself is defined in
 
 ## Left to implementation
 
-- The precise `AGENTS.md` field conventions and how skills are referenced/resolved; the **exact
-  ordering algorithm** within each zone and which document types classify into prefix vs. tail; the
+- The precise `AGENTS.md` field conventions and how skills are referenced/resolved; the on-disk
+  layout that puts each level's working places beneath it, and how the downward reading is offered
+  to an agent (a harness's native nested loading, a verb that names the chain); the **exact ordering
+  algorithm** within each zone and which document types classify into prefix vs. tail; the
   **graduation mechanics** (who decides a document has stabilized, and how); the per-harness handle
   formats and history locations; any caching configuration. Bound: the result must stay
   harness-neutral, deterministic for the cacheable prefix, and append-biased — with prefix rewrites
