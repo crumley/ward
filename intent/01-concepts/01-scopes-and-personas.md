@@ -112,9 +112,9 @@ routing, not deep reasoning. (Call it "house supervisor," or just "supervisor.")
 
 Owns the outcome of a **project**. Understands deeply what success means and how the tasks fit
 together to achieve it. Sets direction and gives the **final approval** that a unit of work is good
-to go. Delegates and evaluates; does not do the hands-on work. As a teacher, it **defines the
-standards** the project's work is held to and **evolves them** as it notices sessions repeatedly
-needing the same correction — feeding those refinements into reflection
+to go. Delegates and evaluates by default; does hands-on work only under the elision rule below. As
+a teacher, it **defines the standards** the project's work is held to and **evolves them** as it
+notices sessions repeatedly needing the same correction — feeding those refinements into reflection
 (`04-reflection-and-evolution.md`). It raises the standard of everyone beneath it.
 
 ### Charge nurse — status across a project's work, teacher
@@ -159,6 +159,12 @@ get the room to produce it_. By delegating deep work to a room and validating th
 resident keeps its context free for judgment. The same logic applies at every boundary —
 specialization (`../00-foundation/01-principles.md` §2) made concrete: depth lives where depth
 belongs.
+
+Delegation is the **default**, not an absolute, and elision applies to sessions as it applies to
+levels (`00-domain-model.md`, _Levels are elided, not faked_): a senior scope may act directly on
+work whose briefing would cost more of its context than doing it — separating directing from doing
+when the separation earns its keep. What it does directly is still a **task** (the universal
+quantum), acted on as an elided session, so the record stays as true as if it had delegated.
 
 ## Teaching and learning — and how it feeds the system
 

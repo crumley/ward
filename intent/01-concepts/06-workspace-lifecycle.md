@@ -173,6 +173,13 @@ serve — credentials expired the canonical case, already a drift class below �
 precondition wearing a healthy one's name, and a check that stops at "installed" green-lights
 exactly the failure the runtime surfaces will be degrading around (§20).
 
+**Doctor has a third subject: Ward's per-user footprint.** The files Ward emitted or wrote
+**outside** any workspace — global configuration, the workspace registry, installed shell artifacts
+— are neither preconditions (nothing needs them; every verb works without them) nor record↔world
+drift (no record mentions them). They are reported against what the running Ward would produce
+today, **never repaired and never an error**: by the global-state boundary (below), their worst
+state costs a shortcut.
+
 **What may live outside the workspace.** Ward carries global, machine-level configuration alongside
 workspace-local configuration
 ([`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md)). The durable boundary:
@@ -500,14 +507,17 @@ sharply below, where it is what stops the upgrade machinery from deadlocking on 
 ### Reconciliation is one task, and its close asserts adjudication
 
 **What triggers adjudication is a default that moved, not a file that differs.** An artifact needs
-the human only where **Ward's default changed between the stamped version and the CLI in hand**
-_and_ the workspace's copy no longer matches the default it was installed with. Where the default
-moved and the copy was untouched, the new default simply applies — there is no decision to make.
-Where the copy was customized but the default stood still, there is nothing new to say about it, and
-raising it would be asking the human to adjudicate their own edits. **Why this precise trigger:**
-"differs from what Ward ships" is true of every customized workspace permanently, so triggering on
-it would turn every upgrade — and every re-run of creation — into a re-litigation of choices already
-made.
+the human only where **Ward's default moved since the default the workspace's copy was installed
+from** _and_ the copy no longer matches that default. The key is **content, not version numbers**: a
+workspace's stamp may stand still while Ward's defaults move many times, so whether a default moved
+is read from the lineage of defaults Ward actually shipped, and the stamp keeps only the job
+_Version skew_ gives it — the schema generation — never a claim about artifact deltas. Where the
+default moved and the copy was untouched, the new default simply applies — there is no decision to
+make. Where the copy was customized but the default stood still, there is nothing new to say about
+it, and raising it would be asking the human to adjudicate their own edits. **Why this precise
+trigger:** "differs from what Ward ships" is true of every customized workspace permanently, so
+triggering on it would turn every upgrade — and every re-run of creation — into a re-litigation of
+choices already made.
 
 (This does not reintroduce version deltas into what the human sees. Whether a default moved is a
 question about **Ward's own shipped versions**, answerable on Ward's side alone; what gets
@@ -584,6 +594,15 @@ this version's changes were **considered and decided**, never that the workspace
 every upgrade a silent rollback of the fit the workspace has accumulated — precisely what §14 exists
 to prevent. **After first install, Ward's defaults are proposals.**
 
+**Where nothing needs deciding, the upgrade is a tool act.** Artifacts whose copies are untouched
+take the new default deterministically — no task opens and no adjudication is asked for; the human's
+one act is the gated merge of the stewardship branch. **And where residue is left, the stamp says
+what it asserts.** An upgrade may advance the stamp while customized artifacts still await
+reconciliation; the stamp then means **the mechanical upgrade landed and the residue was named** —
+in the upgrade's own report, and kept visible artifact by artifact by `doctor` until a
+reconciliation decides it. The gated merge of a diff that names its residue is the human's
+adjudication of that upgrade; nothing is hidden by the stamp.
+
 **And this is why update and migrate are separate paths.** Artifact reconciliation runs **as
 ordinary work in a fully functioning workspace**: the record's shape is unchanged, so nothing is
 blocked while the task is open. Structural **migration** is the path that gates writes (_Version
@@ -651,23 +670,26 @@ What this slice owns beyond the stamp and the update/migrate paths above is **be
   _Why:_ keeping the risky path rare and explicit (above) means little unless the rare path is also
   recoverable — and a migration is the change most worth reading before it lands.
 
-## Putting a workspace right: three operations, one map
+## Putting a workspace right: four operations, one map
 
-Three operations converge a workspace toward good order. They overlap enough to be confused, so the
+Four operations converge a workspace toward good order. They overlap enough to be confused, so the
 division of labor is stated here once:
 
-| Operation                 | Asks                                                                              | Owns                                                                                                                                                                                                                                                                                    |
-| ------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Recovery** (cold start) | "Which threads were in flight, and are they back?"                                | Re-establishing live work from the record ([`02-sessions-and-lifecycle.md`](02-sessions-and-lifecycle.md), Recovery); its CLI verb reads as `attach` ([`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md), verbs read true).                                     |
-| **Doctor**                | "Can this machine run this workspace, and does the record still match the world?" | Preconditions and integrity (above).                                                                                                                                                                                                                                                    |
-| **Update / migrate**      | "Is this workspace the generation this CLI expects?"                              | Bringing **any existing workspace, whatever version made it**, to the shape this Ward expects: the record's shape **converged** directly (journal), the installed artifacts **reconciled** through the gated vehicle (above). At the same version it converges and adjudicates nothing. |
+| Operation                 | Asks                                                                                               | Owns                                                                                                                                                                                                                                                                                    |
+| ------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Recovery** (cold start) | "Which threads were in flight, and are they back?"                                                 | Re-establishing live work from the record ([`02-sessions-and-lifecycle.md`](02-sessions-and-lifecycle.md), Recovery); its CLI verb reads as `attach` ([`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md), verbs read true).                                     |
+| **Doctor**                | "Can this machine run this workspace, and does the record still match the world?"                  | Preconditions and integrity (above).                                                                                                                                                                                                                                                    |
+| **Restore**               | "Is the world the record describes still on disk, and can it be honestly rebuilt from the record?" | Re-materializing the canonical checkouts and anchors from recorded state, and naming what cannot be — lost work is adjudicated, never fabricated. Governed by the repair posture (_Workspace integrity_, above).                                                                        |
+| **Update / migrate**      | "Is this workspace the generation this CLI expects?"                                               | Bringing **any existing workspace, whatever version made it**, to the shape this Ward expects: the record's shape **converged** directly (journal), the installed artifacts **reconciled** through the gated vehicle (above). At the same version it converges and adjudicates nothing. |
 
-**Why three and not one:** they run at different moments, on different evidence, with different
-risk. Recovery runs after every reboot and touches live state; doctor is safe to run at any time and
-changes little; migration is rare and gated. Collapsing them would drag the riskiest into the most
-frequent. They compose in one direction: **doctor diagnoses and recommends the other two; recovery
-assumes the environment is already sound.** A recovery that fails on a missing tool has found a
-doctor's finding the hard way — which is itself the signal a recovery reflection reads
+**Why four and not one:** they run at different moments, on different evidence, with different risk.
+Recovery runs after every reboot and touches live state; doctor is safe to run at any time and
+changes little; restore runs when a record stands on a machine without its world — a fresh clone, a
+relocation — and does only local, reversible work; migration is rare and gated. Collapsing them
+would drag the riskiest into the most frequent. They compose in one direction: **doctor diagnoses
+and recommends the other three; restore runs before recovery, and recovery assumes restore has run
+and the environment is already sound.** A recovery that fails on a missing tool has found a doctor's
+finding the hard way — which is itself the signal a recovery reflection reads
 ([`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)).
 
 ## A workspace is not closed
@@ -742,8 +764,8 @@ read as an omission rather than a decision.
   as a "what needs me?" item rather than a nag, and migration as a gated act that rides version
   control — including that **artifact reconciliation does not block the workspace** the way
   structural migration does, or the upgrade machinery would deadlock on itself.
-- **The recovery / doctor / update map** — what each owns and how they compose, including that
-  **update owns convergence of the record's shape** as well as reconciliation of the installed
+- **The recovery / doctor / restore / update map** — what each owns and how they compose, including
+  that **update owns convergence of the record's shape** as well as reconciliation of the installed
   artifacts, and that the two travel differently (journal versus stewardship). (Recovery itself is
   [`02-sessions-and-lifecycle.md`](02-sessions-and-lifecycle.md)'s; its `attach` verb is
   [`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md)'s.)
@@ -770,13 +792,17 @@ read as an omission rather than a decision.
 - **Repository rename and remote-moves.** How a renamed repository, a moved remote, or a renamed
   main line is reconciled. Deferred: the set only adds and removes. (Removal, the third limb this
   question once carried, is settled above — refused under live tasks, autonomous otherwise.)
-- **More than one workspace on a machine.** Whether that is expected, and whether Ward may keep a
-  machine-level registry of workspaces — which would be state outside the workspace and must be
-  reconciled with the global-state boundary above. A narrower case the workspace id makes visible:
-  **two checkouts of one workspace on one machine** share its id (a clone shares it — _What creation
-  establishes_, above), so anything outside the record that recognizes the workspace by that id
-  cannot tell them apart. Whether that arrangement is supported, or named as one workspace standing
-  in two places, is unsettled.
+- **More than one workspace on a machine — settled in part.** More than one workspace per machine
+  **is expected** (the bootstrap workspace beside any other project's is the ordinary case), and a
+  machine-level registry of workspaces is **permitted under a stated test**: it may hold only what
+  is derivable from the workspaces themselves, and no verb may depend on it for correctness —
+  deleting it costs shortcuts, never the understanding or resumption of work (_What may live outside
+  the workspace_, above; [`design/0024`](../../design/0024-global-config-registry/README.md) is the
+  worked instance). Still open is a narrower case the workspace id makes visible: **two checkouts of
+  one workspace on one machine** share its id (a clone shares it — _What creation establishes_,
+  above), so anything outside the record that recognizes the workspace by that id cannot tell them
+  apart. Whether that arrangement is supported, or named as one workspace standing in two places, is
+  unsettled.
 - **What runs the cadence.** Refresh, rebase, and cadence reflection are specified as recurring
   ([`03-work-lifecycle.md`](03-work-lifecycle.md),
   [`04-reflection-and-evolution.md`](04-reflection-and-evolution.md)) but nothing states what fires
