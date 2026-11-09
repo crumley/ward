@@ -494,6 +494,23 @@ export const projectClaimShape = z.strictObject({
 export type ProjectClaimShape = z.infer<typeof projectClaimShape>;
 
 /**
+ * `project note` (design/0054-floor-manifests/): the one bullet appended to a
+ * floor's `notes.md`, and where. `seeded` says the file had to be created
+ * first — a floor the backfill had not yet reached.
+ */
+export const projectNoteShape = z.strictObject({
+  floor: z.number().int().nonnegative(),
+  slug: z.string(),
+  /** Workspace-relative path of the notes file. */
+  path: z.string(),
+  /** The UTC date the bullet carries, `YYYY-MM-DD`. */
+  date: z.string(),
+  text: z.string(),
+  seeded: z.boolean(),
+});
+export type ProjectNoteShape = z.infer<typeof projectNoteShape>;
+
+/**
  * The task record as a mutation wrote it — shared by `task open`, `task
  * pause`, `task resume`, and `task pr`, and carried inside `task close`,
  * because each writes the same record and reports it back. `outcome` and
@@ -908,6 +925,7 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'project open': projectOpenShape,
   'project claim': projectClaimShape,
   'project release': projectClaimShape,
+  'project note': projectNoteShape,
   'task open': taskMutationShape,
   'task pause': taskMutationShape,
   'task resume': taskMutationShape,

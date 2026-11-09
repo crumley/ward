@@ -47,7 +47,7 @@ test('a run that converged the record does not report nothing to do', () => {
   const first = upgrade(ws, []);
   expect(first.exitCode).toBe(0);
   expect(first.stdout).toContain('established  standing project');
-  expect(first.stdout).toContain('record converged — 2 established');
+  expect(first.stdout).toContain('record converged — 3 established');
   expect(first.stdout).toContain('installed artifacts already current');
   expect(first.stdout).not.toContain('nothing to upgrade');
 

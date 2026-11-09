@@ -50,6 +50,7 @@ test('workspace upgrade --json: one validating document; the fixture upgrades me
     ['.ward/README.md', 'upgraded'],
     ['catalog.md', 'current'],
     ['AGENTS.md', 'upgraded'],
+    ['projects/0-workspace/AGENTS.md', 'current'],
     ['CLAUDE.md', 'current'],
   ]);
 });

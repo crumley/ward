@@ -57,6 +57,7 @@ import { type Finding, runDoctor } from '../workspace/doctor.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
 import { closeCommand, rebaseCommand } from '../workspace/next.ts';
 import {
+  appendFloorNote,
   GROUND_FLOOR,
   openProject,
   readProjects,
@@ -117,6 +118,7 @@ import {
   printJson,
   projectClaimJson,
   projectListJson,
+  projectNoteJson,
   projectOpenJson,
   repoAddJson,
   repoListJson,
@@ -553,6 +555,18 @@ const project = command(
       'list',
       object({ action: constant('project-list'), all: allFlag(), json: jsonFlag() }),
       { brief: message`List projects with their derived status.` },
+    ),
+    command(
+      'note',
+      object({
+        action: constant('project-note'),
+        floor: argument(floorNumber()),
+        text: argument(string({ metavar: 'TEXT' })),
+        json: jsonFlag(),
+      }),
+      {
+        brief: message`Append one dated fact to a floor's notes.md — what the next session there needs.`,
+      },
     ),
   ),
   { brief: message`Operate on projects (floors).` },
@@ -998,6 +1012,19 @@ try {
       case 'project-list':
         await cmdProjectList(result.all, result.json);
         break;
+      case 'project-note': {
+        const root = await requireMutableWorkspace();
+        const report = await appendFloorNote(root, result.floor, result.text);
+        if (result.json) {
+          printJson(projectNoteJson(report));
+          break;
+        }
+        console.log(
+          `${pc.green('noted')} on floor ${pc.bold(String(report.floor))} — ${report.slug}` +
+            pc.dim(` (${report.path}${report.seeded ? ', seeded' : ''})`),
+        );
+        break;
+      }
       case 'task-open': {
         const root = await requireMutableWorkspace();
         for (const name of result.repo) requireRegistered(root, name);

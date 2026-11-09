@@ -190,9 +190,15 @@ test('a removed ground floor is re-established at floor 0 — the reserved numbe
   const outcomes = new Map(report.steps.map((step) => [step.step, step.outcome]));
   expect(outcomes.get('standing project')).toBe('established');
   expect((await findStandingProject(root))?.dir).toBe('projects/0-workspace');
-  // The converge commit holds exactly the re-established record.
+  // The converge commit holds exactly the re-established record and its
+  // floor manifest (design 0054) — floor 1's, written at its open, is untouched.
   const committed = git(root, 'show', '--name-only', '--format=', 'HEAD').stdout.trim();
-  expect(committed).toBe('projects/0-workspace/project.md');
+  expect(committed.split('\n')).toEqual([
+    'projects/0-workspace/AGENTS.md',
+    'projects/0-workspace/CLAUDE.md',
+    'projects/0-workspace/notes.md',
+    'projects/0-workspace/project.md',
+  ]);
 });
 
 test('a customized artifact is left alone, even when dirty', async () => {

@@ -50,10 +50,11 @@ import {
 } from '../store/types.ts';
 import { taskAddress } from './address.ts';
 import { convergeWorkspace, type StepReport } from './converge.ts';
+import { floorManifestLineages } from './floor-manifest.ts';
 import { git, gitOrThrow } from './git.ts';
 import { inspectClaudeGuidance } from './layout.ts';
 import { classifyArtifact, INSTALLED_ARTIFACT_LINEAGE, sha256OfText } from './lineage.ts';
-import { requireGroundFloor } from './projects.ts';
+import { readProjects, requireGroundFloor } from './projects.ts';
 import { type Publication, publishStewardshipBranch } from './publish.ts';
 import { commitRecords, type FoundTask, readTasks, resolveOpenTask } from './scan.ts';
 import { refuseStewardshipCopy, resolveWorkspaceMainLine } from './steward.ts';
@@ -262,9 +263,18 @@ async function assessUpgrade(root: string, dir: string, apply: boolean): Promise
     ? (await readDocument(dir, baselinesType)).data.artifacts
     : [];
   const baselineByPath = new Map(existing.map((entry) => [entry.path, entry]));
+  // The root's exact-path lineage, then one entry per floor manifest in this
+  // tree (design/0054-floor-manifests/): one default, many instances, each
+  // decided exactly like the root's. The floor entries take no baseline
+  // (step 4 reads the root lineage only): their lineage is complete from the
+  // first default, so a fingerprint would add nothing.
+  const lineages = [
+    ...INSTALLED_ARTIFACT_LINEAGE,
+    ...floorManifestLineages(await readProjects(dir)),
+  ];
 
   // 1. Each installed artifact: replace, install, keep-and-name, or nothing.
-  for (const lineage of INSTALLED_ARTIFACT_LINEAGE) {
+  for (const lineage of lineages) {
     const verdict = await classifyArtifact(dir, lineage, baselineByPath.get(lineage.path)?.sha256);
     switch (verdict.standing) {
       case 'current':

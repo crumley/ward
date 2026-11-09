@@ -75,6 +75,11 @@ test('the live-workspace fixture upgrades deterministically, end to end through 
       action: 'upgraded',
       detail: 'untouched since c7962cc (design 0004) — brought to the current default',
     },
+    {
+      path: 'projects/0-workspace/AGENTS.md',
+      action: 'current',
+      detail: 'already the current default',
+    },
     { path: 'CLAUDE.md', action: 'current', detail: 'CLAUDE.md → AGENTS.md' },
   ]);
 
