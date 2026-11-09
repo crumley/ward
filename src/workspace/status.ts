@@ -27,6 +27,7 @@ import {
   taskAddress,
   taskFloor,
 } from './address.ts';
+import { type BriefStanding, briefPath, readBrief } from './briefs.ts';
 import { recordedWorkspaceId } from './identity.ts';
 import { type NextStep, nextStep, prAttention } from './next.ts';
 import { type FoundProject, readProjects } from './projects.ts';
@@ -519,6 +520,12 @@ export interface TaskDetail {
   readonly status: TaskStatus;
   /** The floor the task sits on — absent only for a legacy bare task (0041). */
   readonly project?: ProjectRecord;
+  /**
+   * The task's brief (design/0056, design 0057): where it lives and how it
+   * reads leniently. Named even when absent — it is where `ward task brief`
+   * writes. This is where an agent finds its task's brief.
+   */
+  readonly brief: { readonly path: string; readonly standing: BriefStanding['standing'] };
   /** This machine's name — what makes the session rows readable (0038). */
   readonly machine: string;
   /** The task's OPEN sessions, each saying whether its history is on this machine. */
@@ -549,6 +556,7 @@ export async function taskDetail(
   return {
     status,
     ...(project === undefined ? {} : { project }),
+    brief: { path: briefPath(task.dir), standing: (await readBrief(root, task.dir)).standing },
     machine: (await readMachine()).name,
     sessions: openSessionStatuses(root, await readSessions(root, task.dir)),
     next: nextStep({

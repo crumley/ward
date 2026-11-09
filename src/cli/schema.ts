@@ -241,8 +241,8 @@ export type NextShape = z.infer<typeof nextShape>;
 
 /**
  * `ward task show ADDRESS` (0043): one task in full — its record and derived
- * state, the floor it sits on, its worktrees' freshness, its open sessions,
- * and the next step. `worktrees` is absent on a closed task, whose worktrees
+ * state, the floor it sits on, its worktrees' freshness, its brief, its open
+ * sessions, and the next step. `worktrees` is absent on a closed task, whose worktrees
  * settled at the close, exactly as it is in `status`.
  */
 export const taskShowShape = z.strictObject({
@@ -256,6 +256,18 @@ export const taskShowShape = z.strictObject({
     })
     .optional(),
   worktrees: z.array(statusWorktreeShape).optional(),
+  /**
+   * The task's brief (design/0056-worktree-context-bridge/, design 0057): where
+   * it lives and how it reads — `typed` (valid front matter), `untyped` (none:
+   * a brief from before the type, still the brief), `invalid` (front matter
+   * that is not a valid brief), or `absent`. The path is named even when
+   * absent: it is where `ward task brief` writes.
+   */
+  brief: z.strictObject({
+    /** Workspace-relative path of the brief, `<task dir>/brief.md`. */
+    path: z.string(),
+    standing: z.enum(['typed', 'untyped', 'invalid', 'absent']),
+  }),
   /** This machine's name (0038) — which of the sessions below can be resumed here. */
   machine: z.string(),
   /** The task's OPEN sessions; closed ones stay closed and are not listed. */
@@ -562,6 +574,24 @@ export const worktreeCreateShape = z.strictObject({
   createdAt: z.string(),
 });
 export type WorktreeCreateShape = z.infer<typeof worktreeCreateShape>;
+
+/**
+ * `task brief` (design/0056-worktree-context-bridge/): the brief as recorded
+ * — its front matter, where it lives, and whether it replaced one.
+ */
+export const taskBriefShape = z.strictObject({
+  task: z.string(),
+  /** The task's full address (0036). */
+  address: z.string(),
+  /** Workspace-relative path of the brief. */
+  path: z.string(),
+  for: z.string(),
+  createdAt: z.string(),
+  /** The recorded session that wrote it — present exactly when the caller declared one. */
+  session: z.string().optional(),
+  replaced: z.boolean(),
+});
+export type TaskBriefShape = z.infer<typeof taskBriefShape>;
 
 /**
  * `worktree rebase` (0011): one row per worktree. `dirty` is a respected
@@ -932,6 +962,7 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'task pr': taskMutationShape,
   'task close': taskCloseShape,
   'worktree create': worktreeCreateShape,
+  'task brief': taskBriefShape,
   'worktree rebase': worktreeRebaseShape,
   'session open': sessionMutationShape,
   'session resume': sessionMutationShape,

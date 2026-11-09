@@ -67,7 +67,14 @@ export function carriesManifest(record: ProjectRecord): boolean {
  * appended here, or every floor still carrying it would read as customized.
  */
 export const FLOOR_AGENTS_MD_HISTORY: readonly DefaultVersion[] = [
-  // Current since design 0055: the first floor manifest.
+  // design 0055 — the first floor manifest; it did not yet name a task's
+  // brief.
+  {
+    sha256: '79cbe2e51bfc211f3bb465eb3885c02e5b83c5645fb8bef15d5aa8119c4dacbc',
+    era: 'design 0055 (floor manifests)',
+  },
+  // Current since design 0056: a task's brief is `brief.md` beside its
+  // `task.md`, which `ward task show` reports.
 ];
 
 /**

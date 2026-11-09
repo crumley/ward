@@ -257,6 +257,38 @@ export function worktreeRecordType(
 }
 
 /**
+ * A task's brief (design/0056-worktree-context-bridge/): the seeded `brief`
+ * artifact type's runtime schema, and the first artifact Ward validates. A
+ * brief is a handoff that conjures and orients the agent working the task
+ * (intent/01-concepts/00-domain-model.md, Briefs), so its front matter says
+ * who it is for and where it came from; the body is the handoff itself.
+ */
+export const briefSchema = z.object({
+  type: z.literal('brief'),
+  /**
+   * Who the brief is for: the task's full address when it was recorded
+   * (design/0036-floor-addressed-tasks/). The brief lives in its task's
+   * directory, so containment names the task for good; the address is what a
+   * reader of the file alone can act on.
+   */
+  for: z.string().min(1),
+  /** When this version of the brief was recorded. `ward task brief` replaces, so it moves. */
+  createdAt: z.string().min(1),
+  /**
+   * Provenance, present exactly when a source exists: the recorded session
+   * the writer declared itself as (`WARD_AGENT`). Absent for a human writer
+   * or an agent that declared itself without a session id, never guessed.
+   */
+  session: z.string().min(1).optional(),
+});
+export type BriefRecord = z.infer<typeof briefSchema>;
+
+/** A task's brief: `<task dir>/brief.md`, beside the task record. */
+export function briefRecordType(taskDir: string): DocumentType<BriefRecord> {
+  return { name: 'brief', relPath: `${taskDir}/brief.md`, schema: briefSchema };
+}
+
+/**
  * The level a session is responsible for (design/0029-launched-sessions/;
  * intent/01-concepts/00-domain-model.md — a session's scope is workspace /
  * project / task / room). Every session recorded before 0029 is a task

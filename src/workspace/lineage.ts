@@ -264,10 +264,16 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '517b99b03e9275eb900bb1ac30dd04ce8ba9f496fcc365ec148fc3bb2486c473',
         era: 'design 0053 (legacy task address)',
       },
-      // Current since design 0055: every open floor carries AGENTS.md and
-      // notes.md, a session establishes its scope from its record and reads
-      // its floor's manifest (design 0057), and notes are written with
-      // `ward project note`.
+      // design 0055 — every open floor carries AGENTS.md and notes.md, a
+      // session establishes its scope from its record and reads its floor's
+      // manifest (design 0057), and notes are written with `ward project
+      // note`; a task's brief was not yet named by `task show` or a verb.
+      {
+        sha256: '410ba2ed2bdcbc4f927300efd06c3618b699de5349d42a007540c4112d2d8789',
+        era: 'design 0055 (floor manifests)',
+      },
+      // Current since design 0056: a task's brief is named by `ward task
+      // show` (`brief.path`) and written with `ward task brief`.
     ],
   },
 ];
