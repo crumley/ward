@@ -184,6 +184,7 @@ function statusSessionJson(session: SessionStatus): StatusSessionShape {
 export function statusJson(report: StatusReport): StatusShape {
   return {
     workspace: report.workspace,
+    ...(report.workspaceId === undefined ? {} : { workspaceId: report.workspaceId }),
     projects: report.projects.map((project) => ({
       floor: project.project.floor,
       slug: project.project.slug,
@@ -689,6 +690,7 @@ export function doctorJson(report: DoctorReport): DoctorShape {
     healthy: report.healthy,
     workspaceRoot: report.workspaceRoot,
     machineName: { name: report.machineName.name, source: report.machineName.source },
+    workspaceId: report.workspaceId,
     agent: report.agent === null ? null : agentConfigJson(report.agent),
     machine: report.machine.map(finding),
     workspace: report.workspace.map(finding),

@@ -5,6 +5,15 @@ import { z } from 'zod';
 import { agentSettingsSchema } from '../agent/settings.ts';
 import type { DocumentType } from './document.ts';
 
+/**
+ * What a workspace id may be spelled with (design/0054-workspace-id/): tmux's
+ * safe alphabet, the one design/0031-detached-session-hosting/ munges host
+ * names to — which is also URL-unreserved, filename-safe, and YAML-plain. The
+ * shape checked is the property consumers depend on, not the minting format,
+ * so a later format is still a valid id.
+ */
+export const WORKSPACE_ID_PATTERN = /^[A-Za-z0-9_-]{16,64}$/;
+
 export const workspaceRecordSchema = z.object({
   type: z.literal('workspace'),
   name: z.string().min(1),
@@ -34,6 +43,19 @@ export const workspaceRecordSchema = z.object({
    */
   agent: agentSettingsSchema.optional(),
   createdAt: z.string().min(1),
+  /**
+   * The workspace's immutable id (design/0054-workspace-id/;
+   * intent/01-concepts/00-domain-model.md, Identity): minted once by
+   * convergence — at creation, or at the first upgrade of a workspace made
+   * before it existed — and never rewritten, so a move, a rename, or a clone
+   * keeps it. Validated to the tmux-safe alphabet because that is the property
+   * its outside consumers rely on (a floor host's `@ward_workspace` stamp,
+   * design/0031-detached-session-hosting/). Optional only so a pre-0054 record
+   * stays valid until its upgrade mints one; doctor names the absence. Last in
+   * the shape, so the line lands where a converge commit appends it and never
+   * beside the version stamp an upgrade's stewardship commit rewrites.
+   */
+  id: z.string().regex(WORKSPACE_ID_PATTERN).optional(),
 });
 export type WorkspaceRecord = z.infer<typeof workspaceRecordSchema>;
 

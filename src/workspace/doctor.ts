@@ -93,6 +93,13 @@ export interface DoctorReport {
    * resolution feeds both, so the line and the data cannot disagree.
    */
   readonly machineName: MachineName;
+  /**
+   * The workspace's immutable id (design/0054-workspace-id/) — null outside a
+   * workspace, and inside one whose record carries none yet (or will not
+   * parse). Structure beside the `workspace id` finding, the same two-audiences
+   * arrangement `machineName` uses.
+   */
+  readonly workspaceId: string | null;
   readonly healthy: boolean;
 }
 
@@ -114,6 +121,7 @@ export async function runDoctor(cwd: string): Promise<DoctorReport> {
     workspace,
     agent: inside?.agent ?? null,
     machineName: name,
+    workspaceId: inside?.workspaceId ?? null,
     healthy,
   };
 }
@@ -587,7 +595,7 @@ function ghAuthFinding(auth: ForgeAuth): Finding {
 async function workspaceChecks(
   root: string,
   config: GlobalConfig,
-): Promise<{ findings: Finding[]; agent: ResolvedAgentConfig }> {
+): Promise<{ findings: Finding[]; agent: ResolvedAgentConfig; workspaceId: string | null }> {
   const findings: Finding[] = [];
 
   const record = await checkDocument(findings, root, workspaceRecordType, 'workspace record');
@@ -607,6 +615,7 @@ async function workspaceChecks(
               'artifact-only skew, nothing blocked',
           },
     );
+    findings.push(workspaceIdFinding(record.id));
   }
 
   const catalog = await checkDocument(findings, root, catalogType, 'artifact-type catalog');
@@ -676,7 +685,7 @@ async function workspaceChecks(
 
   findings.push(...(await worktreeChecks(root)));
 
-  return { findings, agent };
+  return { findings, agent, workspaceId: record?.id ?? null };
 }
 
 /**
@@ -1085,6 +1094,27 @@ async function claimFindings(root: string): Promise<Finding[]> {
     return [{ check, severity: 'error', message: error.message }];
   }
   return findings;
+}
+
+/**
+ * The workspace's immutable id (design/0054-workspace-id/). Unminted is the
+ * pre-0054 workspace: info, like an unrecorded main line — nothing inside the
+ * record needs the id, only state kept outside it (floor hosts) does — and
+ * the remedy is the upgrade whose convergence mints it, which doctor names
+ * and never runs.
+ */
+function workspaceIdFinding(id: string | undefined): Finding {
+  const check = 'workspace id';
+  if (id === undefined) {
+    return {
+      check,
+      severity: 'info',
+      message:
+        'no workspace id — created by an older ward; a workspace upgrade mints it once: ' +
+        'ward workspace upgrade',
+    };
+  }
+  return { check, severity: 'ok', message: id };
 }
 
 /**

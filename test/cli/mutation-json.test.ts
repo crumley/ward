@@ -53,7 +53,7 @@ test('workspace create --json: the establishment report, one document alone on s
   expect(result.exitCode).toBe(0);
   const report = validated('workspace create', workspaceCreateShape, result.stdout);
   expect(report.root).toBe(ws);
-  expect(report.steps.length).toBe(13); // 0018 added the standing-project step; 0020 the main-line step
+  expect(report.steps.length).toBe(14); // 0018 the standing-project step; 0020 main line; 0054 id
   expect(report.steps.every((step) => step.outcome === 'established')).toBe(true);
 });
 
@@ -68,7 +68,7 @@ test('workspace upgrade --json: the converge steps ride the document, satisfied 
   const report = validated('workspace upgrade', workspaceUpgradeShape, result.stdout);
   expect(report.vehicle).toBe('none'); // no default moved, so no vehicle
   expect(report.outcome).toBe('current');
-  expect(report.converged.length).toBe(12);
+  expect(report.converged.length).toBe(13);
   expect(report.converged.every((step) => step.outcome === 'satisfied')).toBe(true);
   expect(report.converged.map((step) => step.step)).toContain('standing project');
 });
