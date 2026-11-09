@@ -12,7 +12,7 @@ import { type TaskRecord, taskRecordType } from '../../src/store/types.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { openProject } from '../../src/workspace/projects.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { applyGitTestEnv, GIT_ENV, makeTempDir, removeDir, runWard } from '../helpers.ts';
 
 const URL = 'https://example.com/x/pull/67';
 const AMBIGUOUS =
@@ -145,10 +145,14 @@ async function seedLegacyTask(root: string, room: number, slug: string): Promise
 }
 
 function git(...args: string[]): void {
-  const result = Bun.spawnSync(['git', '-C', ws, ...args]);
+  const result = Bun.spawnSync(['git', '-C', ws, ...args], { env: { ...process.env, ...GIT_ENV } });
   if (result.exitCode !== 0) throw new Error(result.stderr.toString());
 }
 
 function lastSubject(): string {
-  return Bun.spawnSync(['git', '-C', ws, 'log', '--format=%s', '-1']).stdout.toString().trim();
+  return Bun.spawnSync(['git', '-C', ws, 'log', '--format=%s', '-1'], {
+    env: { ...process.env, ...GIT_ENV },
+  })
+    .stdout.toString()
+    .trim();
 }
