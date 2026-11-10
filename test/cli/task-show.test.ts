@@ -37,7 +37,7 @@ test('task show: header, PR lines with live state, worktrees, sessions, and the 
   expect(out).toContain(`    ${PR_OPEN} — open · review: none yet · checks: failing`);
 
   expect(out).toContain('worktrees');
-  expect(out).toContain('worktrees/f1t1-shipping');
+  expect(out).toContain('floors/1-delivery/f1t1-shipping');
   expect(out).toContain('sessions');
   expect(out).toContain('shipping-1@test — drive it (no harness handle)');
 
@@ -94,7 +94,7 @@ test('a declared agent gets the same text as a human, deterministic and without 
 // -- deriving the address, and refusing to for an agent --------------------
 
 test('inside a task worktree the address is derived for a human, and echoed', () => {
-  const result = runWardEnv(['task', 'show'], join(ws, 'worktrees/f1t1-shipping'), {
+  const result = runWardEnv(['task', 'show'], join(ws, 'floors/1-delivery/f1t1-shipping'), {
     NO_COLOR: '1',
     WARD_GH: fakeGh,
   });
@@ -104,7 +104,7 @@ test('inside a task worktree the address is derived for a human, and echoed', ()
 });
 
 test('a declared agent is refused the derivation and told the form to pass', () => {
-  const result = runWardEnv(['task', 'show'], join(ws, 'worktrees/f1t1-shipping'), {
+  const result = runWardEnv(['task', 'show'], join(ws, 'floors/1-delivery/f1t1-shipping'), {
     WARD_AGENT: 'task-show-2',
     WARD_GH: fakeGh,
   });
@@ -177,7 +177,7 @@ test('status: one line per PR under the task, in PR-set order, with live check s
   expect(lines[task + 1]).toBe(`    ${PR_MERGED} — merged`);
   expect(lines[task + 2]).toBe(`    ${PR_OPEN} — open · review: none yet · checks: failing`);
   // …then the worktree line, which the PR lines sit above.
-  expect(lines[task + 3]).toContain('worktrees/f1t1-shipping');
+  expect(lines[task + 3]).toContain('floors/1-delivery/f1t1-shipping');
 });
 
 // -- setup -----------------------------------------------------------------

@@ -18,7 +18,7 @@ import { createWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
 
 const BEHIND_LINE =
-  'worktrees/f0t1-feature — behind origin/main by 2 commits — rebase with: ward worktree rebase f0t1';
+  'floors/0-workspace/f0t1-feature — behind origin/main by 2 commits — rebase with: ward worktree rebase f0t1';
 
 test('end to end: remote advances → refresh → behind by N with the remedy → rebase → current', () => {
   advanceRemote('advance-1.txt', 'main moved\n');
@@ -38,7 +38,7 @@ test('end to end: remote advances → refresh → behind by N with the remedy �
     {
       repo: 'demo',
       branch: 'feature',
-      path: 'worktrees/f0t1-feature',
+      path: 'floors/0-workspace/f0t1-feature',
       freshness: 'behind',
       behindBy: 2,
     },
@@ -48,11 +48,16 @@ test('end to end: remote advances → refresh → behind by N with the remedy �
   renameSync(`${remote}.offline`, remote); // rebase refreshes first — it may fetch
   expect(runWard(['worktree', 'rebase', 't1'], ws).exitCode).toBe(0);
   const current = runWard(['status'], ws);
-  expect(current.stdout).toContain('worktrees/f0t1-feature — current (atop origin/main)');
+  expect(current.stdout).toContain('floors/0-workspace/f0t1-feature — current (atop origin/main)');
   expect(current.stdout).not.toContain('behind');
   const after = JSON.parse(runWard(['status', '--json'], ws).stdout);
   expect(after.projects[0].tasks[0].worktrees).toEqual([
-    { repo: 'demo', branch: 'feature', path: 'worktrees/f0t1-feature', freshness: 'current' },
+    {
+      repo: 'demo',
+      branch: 'feature',
+      path: 'floors/0-workspace/f0t1-feature',
+      freshness: 'current',
+    },
   ]);
 });
 
@@ -62,7 +67,7 @@ test('a dirty worktree reads as occupied — never a behind count', () => {
   writeFileSync(join(wt, 'src', 'lib.ts'), 'unrecorded work\n');
   const result = runWard(['status'], ws);
   expect(result.stdout).toContain(
-    'worktrees/f0t1-feature — dirty (uncommitted changes — treated as occupied)',
+    'floors/0-workspace/f0t1-feature — dirty (uncommitted changes — treated as occupied)',
   );
   expect(result.stdout).not.toContain('behind');
   const json = JSON.parse(runWard(['status', '--json'], ws).stdout);
@@ -74,7 +79,7 @@ test('a worktree off its recorded branch reads as drifted, naming both branches'
   gitOrThrow(wt, 'checkout', '-b', 'sidetrack');
   const result = runWard(['status'], ws);
   expect(result.stdout).toContain(
-    "worktrees/f0t1-feature — drifted (checked out 'sidetrack' where the record names 'feature')",
+    "floors/0-workspace/f0t1-feature — drifted (checked out 'sidetrack' where the record names 'feature')",
   );
   const json = JSON.parse(runWard(['status', '--json'], ws).stdout);
   expect(json.projects[0].tasks[0].worktrees[0]).toMatchObject({
@@ -87,7 +92,7 @@ test('a worktree missing on disk reads as unreadable — honest absence', () => 
   rmSync(wt, { recursive: true });
   const result = runWard(['status'], ws);
   expect(result.exitCode).toBe(0); // status still answers everything else
-  expect(result.stdout).toContain('worktrees/f0t1-feature — unreadable (missing on disk)');
+  expect(result.stdout).toContain('floors/0-workspace/f0t1-feature — unreadable (missing on disk)');
   const json = JSON.parse(runWard(['status', '--json'], ws).stdout);
   expect(json.projects[0].tasks[0].worktrees[0].freshness).toBe('unreadable');
 });
@@ -110,7 +115,7 @@ test('a task without worktrees renders no sub-line and carries the honest empty 
 // -- setup ----------------------------------------------------------------
 // A fresh workspace per test (statuses are read, but the scenarios mutate
 // the trees) with one registered repository `demo` on branch `main` and one
-// ground-floor task f0t1 `feature` whose worktree is worktrees/f0t1-feature.
+// ground-floor task f0t1 `feature` whose worktree is floors/0-workspace/f0t1-feature.
 
 let scratch: string;
 let remote: string;

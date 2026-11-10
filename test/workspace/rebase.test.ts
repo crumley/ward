@@ -119,7 +119,7 @@ test('a missing worktree and a wrong checked-out branch are legible failures', a
 // -- setup ----------------------------------------------------------------
 // A fresh workspace per test with one registered repository `demo` (bare
 // remote, branch `main`), one bare task t1 `feature`, and its worktree at
-// worktrees/f0t1-feature. Remote movement goes through a staging clone —
+// floors/0-workspace/f0t1-feature. Remote movement goes through a staging clone —
 // exactly the state a merged PR leaves behind (design/0004-work-spine/).
 
 let scratch: string;

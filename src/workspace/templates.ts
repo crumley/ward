@@ -31,8 +31,12 @@ operated with the \`ward\` CLI and tracked in git.
 - \`repositories/\` — the records of registered repositories (one document each).
 - \`repos/\` — canonical checkouts of registered repositories, kept fresh and never worked in
   directly.
-- \`worktrees/\` — per-task worktrees, where changes are actually made, one directory per
-  task address and branch.
+- \`floors/\` — one directory per floor that is not closed, \`floors/<N>-<slug>/\`: the floor's
+  working place, never a second record. It holds links onto the floor's \`AGENTS.md\` and
+  \`notes.md\` in \`projects/<N>-<slug>/\` (with \`CLAUDE.md\` linked to \`AGENTS.md\`), and the
+  floor's task worktrees, where changes are actually made, one directory per task address and
+  branch. The tree is untracked: everything in it is a link onto the record or a checkout. A
+  legacy bare task has no floor, so its worktrees stand in \`worktrees/\` until it closes.
 - \`.ward/\` — Ward's store internals and bookkeeping, including the store write lock and local
   usage telemetry (\`telemetry/\`, untracked — it never leaves the workspace); nothing in it is
   meant to be edited by hand.
@@ -125,9 +129,8 @@ open is what starts the agent** — there is no id to copy by hand:
 
 ## Driving \`ward\` as an agent
 
-You may be reading this from the workspace root or from inside a task worktree under
-\`worktrees/\` — the workspace above you is the record of the work either way. Drive it with
-\`ward\`:
+You are reading this at the workspace root, where every session starts; the workspace is the
+record of the work wherever you go below it. Drive it with \`ward\`:
 
 - **Declare yourself.** Set \`WARD_AGENT=1\` in the environment before calling \`ward\` — or,
   better, set it to your session id once you have one. (A session Ward launched is born with it
@@ -145,7 +148,7 @@ You may be reading this from the workspace root or from inside a task worktree u
   editing the file.
 - **Read state as JSON.** \`ward status --json\` says where everything stands, derived state
   included; every read verb (\`status\`, \`project list\`, \`task list\`, \`task show ADDRESS\`,
-  \`session show ID\`, \`worktree list\`, \`repo list\`, \`doctor\`) accepts \`--json\`.
+  \`session show ID\`, \`worktree list\`, \`repo list\`, \`doctor\`, \`context\`) accepts \`--json\`.
 - **Ask for the rows you need.** \`ward task list\` filters — \`--slug TEXT\` (a substring),
   \`--state active|paused|closed\`, \`--floor N\`, \`--repo NAME\` — and the filters combine.
   \`--state closed\` reaches all settled history on its own. Filter rather than pulling
@@ -170,21 +173,29 @@ You may be reading this from the workspace root or from inside a task worktree u
   the workspace root. \`WARD_AGENT\` names yours: \`ward session show $WARD_AGENT --json\` gives its
   \`scope\` (workspace, a floor's project, or a task), its \`floor\` or \`task\`, and its \`parent\`, the
   session that started it. A session recorded with \`WARD_AGENT=1\` has no record yet; record it
-  first. A floor session, or a task on floor N, reads \`projects/<N>-<slug>/AGENTS.md\` and the
-  \`notes.md\` beside it before it starts. A task's brief is named by
-  \`ward task show ADDRESS --json\` (\`brief.path\`); read it before you start. When you learned
-  something the next session on that floor needs, leave it with \`ward project note FLOOR TEXT\` —
-  the notes sit in the record tree, so they are written through \`ward\` like everything else
-  there. Write a task's brief with \`ward task brief ADDRESS FILE\` (\`-\` reads stdin), never by
-  hand — it is a record, typed and committed like the rest.
+  first. A task's brief is named by \`ward task show ADDRESS --json\` (\`brief.path\`); read it before
+  you start.
+- **Read downward before you work anywhere.** Before you read or change anything below the root,
+  read every \`AGENTS.md\` on the path from here down to it, root first and nearest last. A task's
+  worktree stands at \`floors/<N>-<slug>/<address>-<branch>/\`, so the path passes the floor's
+  manifest (\`floors/<N>-<slug>/AGENTS.md\`, with the floor's \`notes.md\` beside it) and then the
+  repository's own \`AGENTS.md\` at the worktree's top. \`ward context PATH\` prints that chain. Some
+  harnesses load part of it for you, and none loads all of it, so read it yourself whatever the
+  harness.
+- **Leave what you learned where the next session reads it.** When you learned something the next
+  session on that floor needs, leave it with \`ward project note FLOOR TEXT\` — the notes sit in the
+  record tree, so they are written through \`ward\` like everything else there. Write a task's brief
+  with \`ward task brief ADDRESS FILE\` (\`-\` reads stdin), never by hand — it is a record, typed and
+  committed like the rest.
 - **Name the task explicitly.** Deriving the task from the working directory is a human
   affordance; a declared agent is refused it and passes the **full address** (\`f3t22\`) on every
   task-addressed verb, read from \`address\` in \`--json\` (\`ward task list --json\` says what
   exists; its \`hidden\` block says what the settled-work window left out).
-- **Work in the task's worktree** under \`worktrees/\`, never in \`repos/\` — the canonical
-  checkouts are reference copies of each repository's main line. \`ward worktree create ADDRESS\`
-  needs no \`--repo\` when the task record names exactly one repository; with none or several
-  recorded, name it.
+- **Work in the task's worktree**, under its floor at \`floors/<N>-<slug>/\`, never in \`repos/\` —
+  the canonical checkouts are reference copies of each repository's main line. \`ward task show
+  ADDRESS\` names the worktree's path, and \`ward context PATH\` names the \`AGENTS.md\` files to read
+  before you work there. \`ward worktree create ADDRESS\` needs no \`--repo\` when the task record
+  names exactly one repository; with none or several recorded, name it.
 - **Stay atop the main line.** When it moves, \`ward worktree rebase ADDRESS\` rebases the task's
   worktrees onto the refreshed tip. A dirty tree is refused; a conflict is aborted and reported
   with the tree left as found — resolving it is your work, then rerun. It never pushes: publish
@@ -230,8 +241,10 @@ view, so what follows names each by this directory's name, \`<N>-<slug>\`.
     and, when it has one, its brief: \`brief.md\` beside its \`task.md\`, which \`ward task show\`
     also reports.
   - \`sessions/\` — the floor's own sessions (\`ward session open --floor N\`), when it has any.
-- The floor's task worktrees stand under \`floors/<N>-<slug>/\` in a workspace laid out that way,
-  and under \`worktrees/\` at the root before it; \`ward task show ADDRESS\` names each one's path.
+- \`floors/<N>-<slug>/\` — the floor's view, where its task worktrees stand, one directory per
+  task address and branch. Its \`AGENTS.md\`, \`CLAUDE.md\`, and \`notes.md\` are links onto the
+  files here, so the path down from the workspace root to any of the floor's worktrees passes this
+  manifest. \`ward task show ADDRESS\` names each worktree's path.
 - \`AGENTS.md\` — this file, Ward's part of the floor's manifest. \`ward workspace upgrade\` brings
   it forward while it is untouched, and \`CLAUDE.md\` is a link to it.
 - \`notes.md\` — the floor's part, beside this file: what this floor has learned about how to work

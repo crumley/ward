@@ -122,8 +122,8 @@ test("worktree create with no --repo uses the task's single recorded repository"
   runWard(['task', 'open', 'a-feature', '--repo', 'demo'], ws);
   const created = runWard(['worktree', 'create', 'f1t1'], ws);
   expect(created.exitCode).toBe(0);
-  expect(created.stdout).toContain('created worktrees/f1t1-a-feature');
-  expect(existsSync(join(ws, 'worktrees', 'f1t1-a-feature'))).toBe(true);
+  expect(created.stdout).toContain('created floors/1-toolchain/f1t1-a-feature');
+  expect(existsSync(join(ws, 'floors/1-toolchain/f1t1-a-feature'))).toBe(true);
 
   // Two recorded, and Ward does not choose: the refusal that always stood.
   runWard(['task', 'open', 'crosses', '--project', '1', '--repo', 'demo', '--repo', 'other'], ws);

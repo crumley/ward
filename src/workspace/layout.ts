@@ -11,15 +11,28 @@ export const MARKER_DIR = '.ward';
  * `sessions/` holds the workspace's OWN sessions
  * (design/0029-launched-sessions/) — both are the same move: a scope's records
  * live at that scope's level, because levels are elided, not faked.
+ *
+ * `worktrees/` is not among them (design/0057-context-from-root/): working
+ * checkouts live under their floor's view in `floors/`, and the old directory
+ * is retired by `ward workspace upgrade` once nothing holds it, so converge
+ * must not bring it back. `floors/` is not among them either: each floor's
+ * view is established per floor, by the views module, never as a bare tree.
  */
-export const SCOPE_DIRS = [
-  'repos',
-  'repositories',
-  'worktrees',
-  'projects',
-  'tasks',
-  'sessions',
-] as const;
+export const SCOPE_DIRS = ['repos', 'repositories', 'projects', 'tasks', 'sessions'] as const;
+
+/**
+ * The directory that held every task worktree before design 0057, and still
+ * holds an open legacy bare task's (a legacy task has no floor to stand
+ * under). Named once, because the placement rule, the retirement step, and
+ * doctor all have to agree on it.
+ */
+export const LEGACY_WORKTREES_DIR = 'worktrees';
+
+/** The ignore line `worktrees/` carried while it existed; dropped when it is retired. */
+export const LEGACY_WORKTREES_IGNORE = '/worktrees/';
+
+/** Where the floors' views stand: `floors/<N>-<slug>/`, one per open floor. */
+export const FLOORS_DIR = 'floors';
 
 /**
  * Checkouts and scratch are the world the record describes, not the record;
@@ -29,7 +42,11 @@ export const SCOPE_DIRS = [
  */
 export const IGNORE_LINES = [
   '/repos/',
-  '/worktrees/',
+  // The floors' views (design/0057-context-from-root/): links onto the record
+  // and the floors' task worktrees — derived entirely, so nothing in them is
+  // the record, and a worktree under a tracked directory would be one `git add`
+  // from being recorded as an embedded repository.
+  '/floors/',
   '/workdirs/',
   '/.ward/tmp/',
   '/.ward/store.lock',

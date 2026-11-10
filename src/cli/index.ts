@@ -59,6 +59,7 @@ import {
   requireRegistered,
 } from '../workspace/affinity.ts';
 import { recordBrief } from '../workspace/briefs.ts';
+import { contextChain } from '../workspace/context.ts';
 import type { StepReport } from '../workspace/converge.ts';
 import { createWorkspace } from '../workspace/create.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
@@ -110,7 +111,11 @@ import {
   type TaskStatus,
   taskDetail,
 } from '../workspace/status.ts';
-import { mergeWorkspaceBranch, refuseStewardshipCopy } from '../workspace/steward.ts';
+import {
+  mergeWorkspaceBranch,
+  refuseStewardshipCopy,
+  stewardshipEnclosure,
+} from '../workspace/steward.ts';
 import { addTaskPr, closeTask, openTask, removeTaskPr, setTaskState } from '../workspace/tasks.ts';
 import { selfServiceUpgrade, type UpgradeReport, upgradeWorkspace } from '../workspace/upgrade.ts';
 import {
@@ -123,6 +128,7 @@ import {
 } from '../workspace/worktrees.ts';
 import { callerIsAgent, declaredSession } from './caller.ts';
 import {
+  contextJson,
   doctorJson,
   printJson,
   projectClaimJson,
@@ -306,7 +312,7 @@ const workspaceRestore = command(
     json: jsonFlag(),
   }),
   {
-    brief: message`Re-materialize repos/ and worktrees/ from the record (a fresh clone's verb).`,
+    brief: message`Re-materialize repos/ and the worktrees under floors/ from the record (a fresh clone's verb).`,
   },
 );
 
@@ -878,6 +884,20 @@ const doctor = command('doctor', object({ action: constant('doctor'), json: json
   brief: message`Check machine preconditions and, inside a workspace, its integrity.`,
 });
 
+// The reading rule as one command (design/0057-context-from-root/): every
+// AGENTS.md from the workspace root down to PATH. A read verb — no lock.
+const context = command(
+  'context',
+  object({
+    action: constant('context'),
+    path: optional(argument(string({ metavar: 'PATH' }))),
+    json: jsonFlag(),
+  }),
+  {
+    brief: message`Every AGENTS.md from the workspace root down to PATH (default: here), root first.`,
+  },
+);
+
 // The self-describing contract (design/0008-json-shape-home/): the verb is
 // named by its own CLI words (`ward schema task list`), so discovering a
 // shape and invoking its verb agree by construction. Needs no workspace —
@@ -917,6 +937,7 @@ const cli = or(
   session,
   status,
   doctor,
+  context,
   schema,
   shell,
   version,
@@ -1283,6 +1304,9 @@ try {
       case 'doctor':
         await cmdDoctor(result.json);
         break;
+      case 'context':
+        await cmdContext(result.path, result.json);
+        break;
       case 'schema':
         cmdSchema(result.verb);
         break;
@@ -1318,12 +1342,54 @@ async function cmdWorkspaceCreate(path: string, json: boolean): Promise<void> {
     return;
   }
   console.log(`Workspace at ${pc.bold(report.root)}\n`);
-  for (const step of report.steps) {
-    console.log(`  ${renderOutcome(step)}  ${step.step} ${pc.dim(`(${step.detail})`)}`);
-  }
+  for (const step of report.steps) printStep(step);
   const established = report.steps.filter((step) => step.outcome === 'established').length;
   const satisfied = report.steps.length - established;
   console.log(`\nWorkspace ready — ${established} established, ${satisfied} already satisfied.`);
+}
+
+/**
+ * `ward context [PATH]` (design/0057-context-from-root/). The chain starts at
+ * the workspace the caller stands in — and from inside a stewardship copy at
+ * the workspace that encloses it, since the copy's own root is one more level
+ * of the chain, not where the walk begins.
+ */
+async function cmdContext(path: string | undefined, json: boolean): Promise<void> {
+  const found = await requireWorkspace();
+  const root = stewardshipEnclosure(found) ?? found;
+  const report = contextChain(root, path ?? process.cwd());
+  if (json) {
+    printJson(contextJson(report));
+    return;
+  }
+  console.log(
+    `Read these before working in ${pc.bold(report.path)} ${pc.dim('(root first, nearest last)')}\n`,
+  );
+  report.chain.forEach((level, index) => {
+    const link = level.link === undefined ? '' : ` → ${level.link}`;
+    const state = level.resolves ? '' : ` ${pc.red('(does not resolve)')}`;
+    const claude = {
+      linked: pc.dim('CLAUDE.md → AGENTS.md'),
+      absent: pc.dim('no CLAUDE.md'),
+      file: pc.yellow('CLAUDE.md is a file of its own'),
+      elsewhere: pc.yellow('CLAUDE.md links elsewhere'),
+    }[level.claude];
+    console.log(`  ${index + 1}. ${level.agents}${link}${state}  ${claude}`);
+  });
+  if (report.chain.length === 0) console.log(pc.dim('  no AGENTS.md on this path'));
+}
+
+/**
+ * One converge step, with whatever it left in place beneath it
+ * (design/0057-context-from-root/): each item named with why, and the command
+ * that clears it where there is one — undimmed, because it is the human's.
+ */
+function printStep(step: StepReport): void {
+  console.log(`  ${renderOutcome(step)}  ${step.step} ${pc.dim(`(${step.detail})`)}`);
+  for (const item of step.residue ?? []) {
+    console.log(`               ${pc.yellow('!')} ${item.path} — ${item.reason}`);
+    if (item.command !== undefined) console.log(`                 ${pc.cyan(item.command)}`);
+  }
 }
 
 function renderOutcome(step: StepReport): string {
@@ -1397,6 +1463,8 @@ async function cmdWorkspaceRestore(json: boolean): Promise<void> {
     const detail = loud ? ` — ${item.detail}` : ` ${pc.dim(`(${item.detail})`)}`;
     console.log(`    ${renderRestore(item.outcome)}  ${identity}${detail}`);
   }
+  console.log(pc.bold('  floor views'));
+  console.log(pc.dim(`    ${report.floorViews.detail}`));
   console.log(pc.bold('  sessions'));
   console.log(
     report.sessions.open === 0
@@ -1500,9 +1568,7 @@ function renderUpgrade(report: UpgradeReport, json: boolean): void {
   );
   // Phase 1 first, in create's step style: the record's own shape is what
   // phase 2 stands on, and it is reported whether or not a vehicle followed.
-  for (const step of report.converged) {
-    console.log(`  ${renderOutcome(step)}  ${step.step} ${pc.dim(`(${step.detail})`)}`);
-  }
+  for (const step of report.converged) printStep(step);
   if (report.converged.length > 0) console.log('');
   for (const artifact of report.artifacts) {
     console.log(

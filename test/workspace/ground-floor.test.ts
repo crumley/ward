@@ -144,7 +144,7 @@ test('a task with no floor named opens on the ground floor, worktree path and al
   expect(opened.record.floor).toBe(GROUND_FLOOR);
 
   const { record: worktree } = await createWorkspaceWorktree(ws, 'f0t1', 'ground-work');
-  expect(worktree.path).toBe('worktrees/f0t1-ground-work');
+  expect(worktree.path).toBe('floors/0-workspace/f0t1-ground-work');
   expect(existsSync(join(ws, worktree.path))).toBe(true);
 });
 

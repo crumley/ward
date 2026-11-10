@@ -60,7 +60,7 @@ test('a second run is satisfied throughout and commits nothing', async () => {
   const again = await selfServiceUpgrade(ws);
   expect(again.vehicle).toBe('none');
   expect(again.outcome).toBe('current');
-  expect(again.converged.map((step) => step.outcome)).toEqual(Array(14).fill('satisfied'));
+  expect(again.converged.map((step) => step.outcome)).toEqual(Array(17).fill('satisfied'));
   expect(commitCount(ws)).toBe(settled);
 });
 
@@ -97,7 +97,7 @@ test('the caller-named path converges before it resolves the task', async () => 
   await createWorkspaceWorktree(ws, 'f0t1');
   const report = await upgradeWorkspace(ws, 'f0t1');
   expect(report.vehicle).toBe('given');
-  expect(report.converged.map((step) => step.outcome)).toEqual(Array(14).fill('satisfied'));
+  expect(report.converged.map((step) => step.outcome)).toEqual(Array(17).fill('satisfied'));
 });
 
 // The one module, from the other side: `create` no longer holds a copy of any

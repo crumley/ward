@@ -42,12 +42,12 @@ test('session open with no TASK is workspace scope, even inside a worktree (0029
   expect(await readSessions(ws, 'projects/0-workspace/tasks/t1-feature')).toEqual([]);
 });
 
-test('session open TASK records the task session, the worktree as its directory', async () => {
+test('session open TASK records the task session at the root, wherever it is typed (0057)', async () => {
   const result = runWard(['session', 'open', 't1', '--purpose', 'drive the feature'], wtDir);
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('opened session feature-1@test');
   const sessions = await readSessions(ws, 'projects/0-workspace/tasks/t1-feature');
-  expect(sessions[0]?.workingDirectory).toBe('worktrees/f0t1-feature');
+  expect(sessions[0]?.workingDirectory).toBe('.');
 });
 
 test('task pr, inferred: one argument is the URL, the task comes from the location', () => {
@@ -79,7 +79,7 @@ test('worktree create, inferred: a second worktree for the task the caller stand
   const result = runWard(['worktree', 'create', '--repo', 'demo', '--branch', 'second'], wtDir);
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('task f0t1 — from the working directory');
-  expect(result.stdout).toContain('created worktrees/f0t1-second');
+  expect(result.stdout).toContain('created floors/0-workspace/f0t1-second');
   const worktrees = JSON.parse(runWard(['worktree', 'list', '--json'], ws).stdout);
   expect(worktrees.map((w: { task: string; branch: string }) => `${w.task}:${w.branch}`)).toEqual([
     't1:feature',

@@ -27,30 +27,37 @@ import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
 test('a fresh clone restores: checkout re-cloned, worktrees re-created, doctor clean', async () => {
   await buildRepoWorktree({ push: true });
   await buildWorkspaceWorktree();
-  const featureTip = tipOf(join(ws, 'worktrees/f0t1-feature-work'));
-  const stewardTip = tipOf(join(ws, 'worktrees/f0t2-steward-steward-work'));
+  const featureTip = tipOf(join(ws, 'floors/0-workspace/f0t1-feature-work'));
+  const stewardTip = tipOf(join(ws, 'floors/0-workspace/f0t2-steward-steward-work'));
   const clone = cloneWorkspace();
 
   // The clone is record without world: that is what gitignore promises.
   expect(existsSync(join(clone, 'projects/0-workspace/tasks/t1-feature-work/task.md'))).toBe(true);
   expect(existsSync(join(clone, 'repos'))).toBe(false);
-  expect(existsSync(join(clone, 'worktrees'))).toBe(false);
+  expect(existsSync(join(clone, 'floors'))).toBe(false);
 
   const report = await restoreWorkspace(clone);
   expect(restoreConverged(report)).toBe(true);
   expect(report.repositories).toMatchObject([{ name: 'demo', outcome: 'restored' }]);
   expect(report.repositories[0]?.detail).toContain('on trunk');
   expect(report.worktrees.map((item) => item.outcome)).toEqual(['restored', 'restored']);
+  // The ground floor's view, last (design/0057-context-from-root/): its three
+  // links around the two worktrees restore just put under it.
+  expect(report.floorViews.written).toEqual([
+    'floors/0-workspace/AGENTS.md',
+    'floors/0-workspace/CLAUDE.md',
+    'floors/0-workspace/notes.md',
+  ]);
 
   // The canonical checkout: recorded remote, recorded main line.
   const canonical = checkoutPath(clone, 'demo');
   expect(gitOrThrow(canonical, 'symbolic-ref', '--short', 'HEAD').stdout.trim()).toBe('trunk');
   // The worktrees stand at the recorded paths, on the recorded branches, at
   // the tips the branches survived with — never fabricated from a main line.
-  const feature = join(clone, 'worktrees/f0t1-feature-work');
+  const feature = join(clone, 'floors/0-workspace/f0t1-feature-work');
   expect(gitOrThrow(feature, 'symbolic-ref', '--short', 'HEAD').stdout.trim()).toBe('feature-work');
   expect(tipOf(feature)).toBe(featureTip);
-  const steward = join(clone, 'worktrees/f0t2-steward-steward-work');
+  const steward = join(clone, 'floors/0-workspace/f0t2-steward-steward-work');
   expect(gitOrThrow(steward, 'symbolic-ref', '--short', 'HEAD').stdout.trim()).toBe(
     'steward/steward-work',
   );
@@ -85,7 +92,7 @@ test('a workspace-source worktree is restored from an origin remote-tracking bra
   expect(git(clone, 'rev-parse', '--verify', 'refs/heads/steward/steward-work').exitCode).toBe(0);
   expect(tipOf(join(clone, stewardPath))).toBe(tip);
   expect(gitOrThrow(clone, 'worktree', 'list').stdout).toContain(
-    stewardPath.slice('worktrees/'.length),
+    stewardPath.slice('floors/0-workspace/'.length),
   );
 });
 
@@ -110,7 +117,7 @@ test('a never-pushed branch is named lost — loudly, record kept, exit posture 
       join(clone, 'projects/0-workspace/tasks/t1-feature-work/worktrees/demo--feature-work.md'),
     ),
   ).toBe(true);
-  expect(existsSync(join(clone, 'worktrees/f0t1-feature-work'))).toBe(false);
+  expect(existsSync(join(clone, 'floors/0-workspace/f0t1-feature-work'))).toBe(false);
 
   // Converge-stable: a re-run names the same loss, resolving nothing by fiat.
   const again = await restoreWorkspace(clone);
@@ -137,7 +144,7 @@ test('a partial state restores only what is absent', async () => {
 
   // The worktree directory alone: its branch survives in the canonical
   // checkout, so restore checks it out where it stands.
-  rmSync(join(ws, 'worktrees/f0t1-feature-work'), { recursive: true });
+  rmSync(join(ws, 'floors/0-workspace/f0t1-feature-work'), { recursive: true });
   let report = await restoreWorkspace(ws);
   expect(report.repositories.map((item) => item.outcome)).toEqual(['satisfied']);
   const restoredRow = report.worktrees.find((item) => item.record.repo === 'demo');
@@ -150,7 +157,7 @@ test('a partial state restores only what is absent', async () => {
   // The whole checkout (worktree and local branch die with it): the pushed
   // branch survives on origin, and the re-clone brings it back.
   rmSync(checkoutPath(ws, 'demo'), { recursive: true });
-  rmSync(join(ws, 'worktrees/f0t1-feature-work'), { recursive: true });
+  rmSync(join(ws, 'floors/0-workspace/f0t1-feature-work'), { recursive: true });
   report = await restoreWorkspace(ws);
   expect(report.repositories.map((item) => item.outcome)).toEqual(['restored']);
   expect(report.worktrees.find((item) => item.record.repo === 'demo')?.detail).toContain(
@@ -195,8 +202,8 @@ test('doctor on a fresh clone names each missing materialization with the remedy
   }
   const worktreeChecks = findings.filter((finding) => finding.check.startsWith('worktree '));
   expect(worktreeChecks.map((finding) => finding.check).sort()).toEqual([
-    'worktree worktrees/f0t1-feature-work',
-    'worktree worktrees/f0t2-steward-steward-work',
+    'worktree floors/0-workspace/f0t1-feature-work',
+    'worktree floors/0-workspace/f0t2-steward-steward-work',
   ]);
   expect(worktreeChecks[0]?.message).toContain("branch 'feature-work' of repos/demo");
   expect(worktreeChecks[1]?.message).toContain("the workspace's own repository");
@@ -251,7 +258,7 @@ async function buildRepoWorktree(options: { push: boolean }): Promise<void> {
   await addRepository(ws, remote, 'demo');
   await openTask(ws, 'feature-work', { floor: GROUND_FLOOR });
   await createWorktree(ws, 't1', 'demo');
-  const worktree = join(ws, 'worktrees/f0t1-feature-work');
+  const worktree = join(ws, 'floors/0-workspace/f0t1-feature-work');
   writeFileSync(join(worktree, 'work.txt'), 'the work\n');
   gitOrThrow(worktree, 'add', '-A');
   gitOrThrow(worktree, 'commit', '-m', 'the work');

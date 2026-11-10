@@ -100,6 +100,11 @@ test('the AGENTS.md 0029 supersedes is in history — every workspace still on i
   expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
     '410ba2ed2bdcbc4f927300efd06c3618b699de5349d42a007540c4112d2d8789', // design 0055
   );
+  // …and the 0056 manifest, superseded by design/0057-context-from-root/,
+  // which added the downward-reading rule and the `floors/` layout.
+  expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
+    '5f3ce047d99d5cb5d49d2a2fe5c65e5b788d721cde47ed1ef2c2559fc603f0b8', // design 0056
+  );
 });
 
 // The maintenance guard-rail: the lineage's history is maintained by hand, so
@@ -109,7 +114,7 @@ test('the AGENTS.md 0029 supersedes is in history — every workspace still on i
 // exactly the bookkeeping that keeps every shipped default recognizable.
 test('the current defaults are pinned; changing one must move its old hash into history', () => {
   expect(sha256OfText(AGENTS_MD)).toBe(
-    '5f3ce047d99d5cb5d49d2a2fe5c65e5b788d721cde47ed1ef2c2559fc603f0b8', // since design 0056
+    'b942afc03d90c477197b96630f25a8d9ddcfa0984549f3f7bf75b57324bf3242', // since design 0057
   );
   expect(sha256OfText(WARD_INTERNAL_README)).toBe(
     '6f10845611635508f006727f83bdc2222d840a9da972393781662c9f6ff04ac4', // since 65f1e8b (0013)

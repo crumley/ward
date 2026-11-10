@@ -3,14 +3,23 @@
 // record names and teardown is `git worktree remove`. Disposition is recorded
 // from day one; this entry builds only `deliverable`
 // (intent/01-concepts/00-domain-model.md, Anchor).
-import { existsSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, realpathSync } from 'node:fs';
+import { mkdir } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { WardError } from '../errors.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
 import { withStoreLock } from '../store/lock.ts';
-import { repositoryRecordType, type WorktreeRecord, worktreeRecordType } from '../store/types.ts';
-import { taskAddress } from './address.ts';
+import {
+  repositoryRecordType,
+  type SessionRecord,
+  type WorktreeRecord,
+  worktreeRecordType,
+} from '../store/types.ts';
+import { taskAddress, taskFloor } from './address.ts';
+import { establishFloorView, floorViewDir } from './floor-views.ts';
 import { git, gitOrThrow } from './git.ts';
+import { LEGACY_WORKTREES_DIR } from './layout.ts';
+import { readProjects } from './projects.ts';
 import { type RefreshReport, refreshRepositories } from './repos.ts';
 import { commitRecords, type FoundTask, readTasks, resolveOpenTask } from './scan.ts';
 // The workspace's own main line resolves through the recorded name when the
@@ -18,6 +27,40 @@ import { commitRecords, type FoundTask, readTasks, resolveOpenTask } from './sca
 // another branch is drift, and branching, rebase, and freshness must not
 // silently follow it there.
 import { resolveWorkspaceMainLine } from './steward.ts';
+
+// -- placement (design/0057-context-from-root/) ------------------------------
+
+/**
+ * Where a task's worktree on `branch` belongs: under its floor's view,
+ * `floors/<N>-<slug>/<address>-<branch>`, so the path down from the workspace
+ * root to it passes the floor's manifest. A legacy bare task has no floor and
+ * so no view; its worktrees stay at `worktrees/<address>-<branch>` while it
+ * is open. The directory name keeps the task's address (0036) — the room is
+ * not in the parent directory, and a worktree a human knows by name keeps it
+ * when it moves. The one function every caller asks — create, the migration,
+ * restore, doctor — so none of them spells the path.
+ */
+export function worktreePlacement(task: FoundTask, branch: string): string {
+  const name = `${taskAddress(task)}-${branch.replaceAll('/', '-')}`;
+  const projectDir = taskProjectDir(task);
+  if (projectDir === undefined) return `${LEGACY_WORKTREES_DIR}/${name}`;
+  return `${floorViewDir(projectDir)}/${name}`;
+}
+
+/** The record directory of the floor a task sits on, `projects/<N>-<slug>`, or undefined. */
+function taskProjectDir(task: FoundTask): string | undefined {
+  if (taskFloor(task) === undefined) return undefined;
+  const match = /^(projects\/[^/]+)\/tasks\//.exec(task.dir);
+  return match?.[1];
+}
+
+/** Put the floor's view in place before a worktree is created under it. */
+async function prepareFloorView(root: string, task: FoundTask): Promise<void> {
+  const projectDir = taskProjectDir(task);
+  if (projectDir === undefined) return;
+  const project = (await readProjects(root)).find((candidate) => candidate.dir === projectDir);
+  if (project !== undefined) await establishFloorView(root, project);
+}
 
 export async function createWorktree(
   root: string,
@@ -33,11 +76,9 @@ export async function createWorktree(
   const branch = branchInput ?? task.record.slug;
   const fileName = `${repoName}--${branch.replaceAll('/', '-')}`;
   const recordType = worktreeRecordType(task.dir, fileName);
-  // The directory carries the task's ADDRESS (design/0036-floor-addressed-tasks/),
-  // so two floors' room-1 tasks never propose the same path and a human
-  // reading `worktrees/` knows which task each belongs to. Existing worktree
-  // records carry their own `path`, so nothing on disk moves.
-  const path = `worktrees/${taskAddress(task)}-${branch.replaceAll('/', '-')}`;
+  // Under the task's floor (design/0057-context-from-root/); the directory
+  // still carries the task's ADDRESS (design/0036-floor-addressed-tasks/).
+  const path = worktreePlacement(task, branch);
 
   if (existsSync(join(root, recordType.relPath))) {
     const existing = (await readDocument(root, recordType)).data;
@@ -48,6 +89,7 @@ export async function createWorktree(
 
   // Branch from current code: the refresh the cadence would have done.
   await refreshRepositories(root, repoName);
+  await prepareFloorView(root, task);
 
   const canonical = join(root, 'repos', repoName);
   // A task worktree is always cut fresh from the main line; an existing branch
@@ -120,7 +162,7 @@ export async function createWorkspaceWorktree(
   const branch = branchInput ?? (await defaultStewardshipBranch(root, task));
   const fileName = `workspace--${branch.replaceAll('/', '-')}`;
   const recordType = worktreeRecordType(task.dir, fileName);
-  const path = `worktrees/${taskAddress(task)}-${branch.replaceAll('/', '-')}`;
+  const path = worktreePlacement(task, branch);
 
   let record: WorktreeRecord;
   if (existsSync(join(root, recordType.relPath))) {
@@ -165,6 +207,7 @@ export async function createWorkspaceWorktree(
   // checked out where it stands — its commits are work, never recreated. A
   // stale registration left by a hand-deleted directory is pruned first.
   git(root, 'worktree', 'prune');
+  await prepareFloorView(root, task);
   const args = branchExists(root, record.branch)
     ? ['worktree', 'add', join(root, record.path), record.branch]
     : ['worktree', 'add', '-b', record.branch, join(root, record.path), mainLine];
@@ -539,4 +582,364 @@ export async function listWorktrees(root: string): Promise<WorktreeListing[]> {
     }
   }
   return listings;
+}
+
+// -- relocation (design/0057-context-from-root/) ------------------------------
+// Bringing a worktree to its placement: find where it actually is from git,
+// move it there with `git worktree move`, and rewrite the record's `path`. The
+// caller — the `worktree placement` step of phase 1 — holds the store lock and
+// commits each task's rewrites as one journal commit. The checks run in order
+// and every refusal leaves the worktree exactly where it was: the move is
+// never forced, because a checkout a human has open may hold the only copy of
+// some work.
+
+/** One worktree record as it sits in its task's `worktrees/`, with its file name. */
+export interface WorktreeEntry {
+  readonly fileName: string;
+  readonly record: WorktreeRecord;
+  readonly body: string;
+}
+
+export async function readTaskWorktreeEntries(
+  root: string,
+  taskDir: string,
+): Promise<WorktreeEntry[]> {
+  const dir = join(root, taskDir, 'worktrees');
+  if (!existsSync(dir)) return [];
+  const entries: WorktreeEntry[] = [];
+  for (const file of readdirSync(dir)
+    .filter((name) => name.endsWith('.md'))
+    .sort()) {
+    const fileName = file.slice(0, -3);
+    const document = await readDocument(root, worktreeRecordType(taskDir, fileName));
+    entries.push({ fileName, record: document.data, body: document.body });
+  }
+  return entries;
+}
+
+/** One checkout `git worktree list --porcelain` names, its path absolute. */
+export interface RegisteredCheckout {
+  readonly path: string;
+  /** The checked-out branch's short name; absent for a detached HEAD. */
+  readonly branch?: string;
+  readonly locked: boolean;
+  readonly prunable: boolean;
+}
+
+/**
+ * Every linked worktree registered in the repository at `repoDir` — the main
+ * checkout itself excluded. Null when git cannot answer (no repository there).
+ */
+export function registeredCheckouts(repoDir: string): RegisteredCheckout[] | null {
+  if (!existsSync(repoDir)) return null;
+  const list = git(repoDir, 'worktree', 'list', '--porcelain');
+  if (list.exitCode !== 0) return null;
+  const blocks = list.stdout.split('\n\n').filter((block) => block.trim() !== '');
+  const checkouts: RegisteredCheckout[] = [];
+  for (const block of blocks.slice(1)) {
+    const lines = block.split('\n');
+    const path = lines.find((line) => line.startsWith('worktree '))?.slice('worktree '.length);
+    if (path === undefined) continue;
+    const ref = lines.find((line) => line.startsWith('branch '))?.slice('branch '.length);
+    checkouts.push({
+      path,
+      ...(ref === undefined ? {} : { branch: ref.replace(/^refs\/heads\//, '') }),
+      locked: lines.some((line) => line === 'locked' || line.startsWith('locked ')),
+      prunable: lines.some((line) => line === 'prunable' || line.startsWith('prunable ')),
+    });
+  }
+  return checkouts;
+}
+
+/** The repository a worktree record's checkout is a worktree of. */
+export function sourceRepositoryDir(root: string, record: WorktreeRecord): string {
+  return record.repo === undefined ? root : join(root, 'repos', record.repo);
+}
+
+/** A path git reported, made workspace-relative; undefined when it is outside the workspace. */
+export function workspaceRelative(root: string, absolute: string): string | undefined {
+  const base = existsSync(root) ? realpathSync(root) : resolve(root);
+  const target = existsSync(absolute) ? realpathSync(absolute) : resolve(absolute);
+  const rel = relative(base, target);
+  if (rel.startsWith('..') || isAbsolute(rel)) return undefined;
+  return rel === '' ? '.' : rel;
+}
+
+/** Whether `inner` is `outer` or lies beneath it (both workspace-relative). */
+function within(inner: string, outer: string): boolean {
+  return inner === outer || inner.startsWith(`${outer}/`);
+}
+
+/** The open sessions a relocation must not move a directory out from under. */
+export type OpenSessionsAt = readonly Pick<SessionRecord, 'id' | 'workingDirectory'>[];
+
+/**
+ * What relocating one worktree would do, decided from the record, git, and
+ * the open sessions — mutating nothing. `placed`: already there, record and
+ * disk. `record`: the record alone is behind — the checkout already stands at
+ * its placement (a move whose commit failed), or there is no checkout of the
+ * branch here to move. `move`: a clean checkout to move. `refused`: left
+ * where it is, with the reason and, where there is one, the command that
+ * clears it.
+ */
+export type RelocationPlan =
+  | { readonly kind: 'placed'; readonly placement: string }
+  | { readonly kind: 'record'; readonly placement: string; readonly detail: string }
+  | { readonly kind: 'move'; readonly placement: string; readonly from: string }
+  | {
+      readonly kind: 'refused';
+      readonly placement: string;
+      readonly at: string;
+      readonly reason: string;
+      readonly command?: string;
+    };
+
+/** One open task's worktree record — what every claim on a path is read from. */
+export interface WorktreeClaim {
+  readonly task: FoundTask;
+  readonly record: WorktreeRecord;
+}
+
+/** Every worktree record of every task that is not closed: the paths the record claims. */
+export async function openWorktreeClaims(root: string): Promise<WorktreeClaim[]> {
+  const claims: WorktreeClaim[] = [];
+  for (const task of await readTasks(root)) {
+    if (task.record.state === 'closed') continue;
+    for (const record of await readTaskWorktrees(root, task.dir)) claims.push({ task, record });
+  }
+  return claims;
+}
+
+/**
+ * The paths one record can stand for: where it says it is, its placement,
+ * and the pre-0057 spelling of the placement's name under `worktrees/` —
+ * where a machine that never upgraded still has the checkout.
+ */
+function claimedBy(claim: WorktreeClaim): string[] {
+  const placement = worktreePlacement(claim.task, claim.record.branch);
+  return [claim.record.path, placement, `${LEGACY_WORKTREES_DIR}/${basename(placement)}`];
+}
+
+/**
+ * The checkout git has of `record`'s branch, workspace-relative — when it is
+ * this record's. Git holds a branch in at most one worktree, so there is one
+ * candidate; it is refused when it stands at a path another open record
+ * claims. Two open tasks can record the same branch name (a task reopened
+ * as another), and the branch's one checkout then belongs to whichever task
+ * stands there: taking it for the other would move one task's work under
+ * another's name.
+ */
+export function ownCheckout(
+  root: string,
+  record: WorktreeRecord,
+  checkouts: readonly RegisteredCheckout[],
+  own: WorktreeClaim,
+  claims: readonly WorktreeClaim[],
+): { readonly checkout: RegisteredCheckout; readonly actual: string } | undefined {
+  const found = checkouts.find(
+    (checkout) => checkout.branch === record.branch && !checkout.prunable,
+  );
+  const actual = found === undefined ? undefined : workspaceRelative(root, found.path);
+  if (found === undefined || actual === undefined) return undefined;
+  if (claimedBy(own).includes(actual)) return { checkout: found, actual };
+  const others = claims.filter(
+    (claim) => !(claim.task.dir === own.task.dir && claim.record.path === own.record.path),
+  );
+  if (others.some((claim) => claimedBy(claim).includes(actual))) return undefined;
+  return { checkout: found, actual };
+}
+
+export function planRelocation(
+  root: string,
+  task: FoundTask,
+  record: WorktreeRecord,
+  sessions: OpenSessionsAt,
+  claims: readonly WorktreeClaim[],
+): RelocationPlan {
+  const placement = worktreePlacement(task, record.branch);
+  const repoDir = sourceRepositoryDir(root, record);
+  const checkouts = registeredCheckouts(repoDir);
+  if (checkouts === null) {
+    if (record.path === placement) return { kind: 'placed', placement };
+    return {
+      kind: 'refused',
+      placement,
+      at: record.path,
+      reason: `repos/${record.repo ?? '?'} is not on this machine to ask where the branch is`,
+      command: 'ward workspace restore',
+    };
+  }
+  // Where the branch actually is — git's answer, never the record's.
+  const found = ownCheckout(root, record, checkouts, { task, record }, claims);
+  const actual = found?.actual;
+  if (actual === undefined) {
+    // Nothing of this branch is checked out here. A checkout still standing at
+    // the recorded path on some other branch is drift the move must not
+    // compound; anything else at that path is not a checkout git knows.
+    if (record.path !== placement && existsSync(join(root, record.path))) {
+      return {
+        kind: 'refused',
+        placement,
+        at: record.path,
+        reason: `the checkout there is not on '${record.branch}', the branch the record names`,
+      };
+    }
+    if (record.path === placement) return { kind: 'placed', placement };
+    return {
+      kind: 'record',
+      placement,
+      detail: `no checkout of '${record.branch}' on this machine — the record moves alone`,
+    };
+  }
+  if (actual === placement) {
+    if (record.path === placement) return { kind: 'placed', placement };
+    return { kind: 'record', placement, detail: `already standing at ${placement}` };
+  }
+  if (existsSync(join(root, placement))) {
+    return {
+      kind: 'refused',
+      placement,
+      at: actual,
+      reason: `${placement} already exists — move it aside, then upgrade again`,
+    };
+  }
+  const refusal = moveRefusal(root, actual, record.path, sessions);
+  if (refusal !== undefined) return { kind: 'refused', placement, at: actual, ...refusal };
+  // A locked worktree, or one holding submodules, is refused by git itself;
+  // the move reports git's own words rather than second-guessing them here.
+  return { kind: 'move', placement, from: actual };
+}
+
+/**
+ * Why a checkout at `actual` must not be moved now, or undefined when it may:
+ * uncommitted changes (evidence of unrecorded work), or an open session whose
+ * working directory lies inside it or inside the path its record names — a
+ * session resumed there would land in a directory that is gone. Shared by the
+ * migration and by restore's move, so the two can never disagree on what is
+ * safe to move.
+ */
+export function moveRefusal(
+  root: string,
+  actual: string,
+  recordPath: string,
+  sessions: OpenSessionsAt,
+): { readonly reason: string; readonly command?: string } | undefined {
+  const tree = git(join(root, actual), 'status', '--porcelain');
+  if (tree.exitCode !== 0) return { reason: `git cannot read it: ${tree.stderr.trim()}` };
+  if (tree.stdout.trim() !== '') {
+    return { reason: 'uncommitted changes — commit or clean them, then run it again' };
+  }
+  const inside = sessions.find((session) => {
+    const at = workspaceRelative(root, resolve(root, session.workingDirectory));
+    return at !== undefined && (within(at, actual) || within(at, recordPath));
+  });
+  if (inside === undefined) return undefined;
+  return {
+    reason: `open session ${inside.id} works inside it — close it or let it finish, then run it again`,
+    command: `ward session close ${inside.id}`,
+  };
+}
+
+/**
+ * Move a checkout from `from` to `to` (both workspace-relative) with `git
+ * worktree move`, run from its source repository, creating the parent first.
+ * Returns git's refusal in its own words, or undefined on success.
+ */
+export async function moveCheckout(
+  root: string,
+  record: WorktreeRecord,
+  from: string,
+  to: string,
+): Promise<string | undefined> {
+  await mkdir(dirname(join(root, to)), { recursive: true });
+  const move = git(
+    sourceRepositoryDir(root, record),
+    'worktree',
+    'move',
+    join(root, from),
+    join(root, to),
+  );
+  if (move.exitCode === 0) return undefined;
+  return `git refused to move it: ${move.stderr.trim().replace(/^fatal: /, '')}`;
+}
+
+/** What relocating one worktree did. */
+export type RelocationOutcome =
+  | { readonly kind: 'placed'; readonly path: string }
+  | {
+      readonly kind: 'moved';
+      readonly from: string;
+      readonly path: string;
+      /** The record file rewritten — absent when the record already said `path`. */
+      readonly relPath?: string;
+    }
+  | {
+      readonly kind: 'recorded';
+      readonly path: string;
+      readonly relPath: string;
+      readonly detail: string;
+    }
+  | {
+      readonly kind: 'refused';
+      readonly at: string;
+      readonly reason: string;
+      readonly command?: string;
+    };
+
+/**
+ * Relocate one worktree: plan, then move with `git worktree move` from its
+ * source repository, then rewrite the record's `path` — no commit, which is
+ * the caller's (one per task, under the lock it holds). If the move succeeds
+ * and the caller's commit then fails, the next run finds the checkout at its
+ * placement and the record behind, and finishes the update (`record`).
+ */
+export async function relocateWorktree(
+  root: string,
+  task: FoundTask,
+  entry: WorktreeEntry,
+  sessions: OpenSessionsAt,
+  claims: readonly WorktreeClaim[],
+): Promise<RelocationOutcome> {
+  const plan = planRelocation(root, task, entry.record, sessions, claims);
+  switch (plan.kind) {
+    case 'placed':
+      return { kind: 'placed', path: plan.placement };
+    case 'refused':
+      return {
+        kind: 'refused',
+        at: plan.at,
+        reason: plan.reason,
+        ...(plan.command === undefined ? {} : { command: plan.command }),
+      };
+    case 'record':
+      return {
+        kind: 'recorded',
+        path: plan.placement,
+        relPath: (await rewriteWorktreePath(root, task, entry, plan.placement)) ?? '',
+        detail: plan.detail,
+      };
+    case 'move': {
+      const refused = await moveCheckout(root, entry.record, plan.from, plan.placement);
+      if (refused !== undefined) return { kind: 'refused', at: plan.from, reason: refused };
+      const relPath = await rewriteWorktreePath(root, task, entry, plan.placement);
+      return {
+        kind: 'moved',
+        from: plan.from,
+        path: plan.placement,
+        ...(relPath === undefined ? {} : { relPath }),
+      };
+    }
+  }
+}
+
+async function rewriteWorktreePath(
+  root: string,
+  task: FoundTask,
+  entry: WorktreeEntry,
+  path: string,
+): Promise<string | undefined> {
+  if (entry.record.path === path) return undefined; // a second machine: the record already moved
+  const type = worktreeRecordType(task.dir, entry.fileName);
+  await writeDocument(root, type, { data: { ...entry.record, path }, body: entry.body });
+  return type.relPath;
 }

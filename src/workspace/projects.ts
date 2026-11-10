@@ -15,6 +15,7 @@ import {
   isoDate,
   seedNotes,
 } from './floor-manifest.ts';
+import { establishFloorView } from './floor-views.ts';
 import { commitRecords, projectDirs, requireSlug } from './scan.ts';
 
 export interface OpenProjectOptions {
@@ -66,6 +67,10 @@ export async function openProject(
     // the guidance a session on it loads.
     await establishFloorManifest(root, { dir, record });
     commitRecords(root, `Open project ${slug} (floor ${floor})`, dir);
+    // Its view too (design/0057-context-from-root/): links onto the files
+    // just committed, under the ignored `floors/` — so the floor's working
+    // place exists the moment the floor does, and journals nothing.
+    await establishFloorView(root, { dir, record });
     return record;
   });
 }

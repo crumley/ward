@@ -20,7 +20,6 @@ import {
 } from '../store/types.ts';
 import { resolveProject } from './projects.ts';
 import { commitRecords, projectDirs, readTasks, resolveOpenTask } from './scan.ts';
-import { readTaskWorktrees } from './worktrees.ts';
 
 export interface OpenSessionOptions {
   readonly handle?: string;
@@ -118,7 +117,6 @@ export async function openSession(
   // section (§17, design/0013-telemetry-and-serialized-writes/).
   return withStoreLock(root, `session open ${taskCode}`, async () => {
     const task = await resolveOpenTask(root, taskCode);
-    const worktrees = await readTaskWorktrees(root, task.dir);
     const machine = (await readMachine()).name;
     const id = await allocateId(root, task.record.slug, machine);
     return writeOpened(root, task.dir, {
@@ -127,7 +125,12 @@ export async function openSession(
       task: task.record.code,
       machine,
       purpose,
-      workingDirectory: options.workingDirectory ?? worktrees[0]?.path ?? '.',
+      // Every session starts at the workspace root
+      // (design/0057-context-from-root/), so the root is the honest default:
+      // the first worktree was a guess, and after the move to `floors/` a
+      // guess that names a path that moved. `--dir` still records what the
+      // caller names.
+      workingDirectory: options.workingDirectory ?? '.',
       ...(options.handle === undefined ? {} : { handle: options.handle }),
       ...(options.startedBy === undefined ? {} : { startedBy: options.startedBy }),
       subject: `Open session ${id} on task ${taskCode}`,

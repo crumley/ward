@@ -51,17 +51,25 @@ import {
   repositoryRecordType,
   workspaceRecordType,
 } from '../store/types.ts';
-import { taskAddress } from './address.ts';
+import { taskAddress, taskFloor } from './address.ts';
 import { claimsOf } from './affinity.ts';
 import { sha256OfFile } from './baselines.ts';
 import { readBrief } from './briefs.ts';
 import { carriesManifest, floorManifestPaths } from './floor-manifest.ts';
+import { carriesView, floorViewDir, floorViewGaps } from './floor-views.ts';
 import { git, gitAvailable, gitIdentityConfigured, hasCommits } from './git.ts';
-import { discoverWorkspace, IGNORE_LINES, inspectClaudeGuidance } from './layout.ts';
+import {
+  discoverWorkspace,
+  IGNORE_LINES,
+  inspectClaudeGuidance,
+  LEGACY_WORKTREES_DIR,
+  LEGACY_WORKTREES_IGNORE,
+} from './layout.ts';
 import { findStandingProject, GROUND_FLOOR, readProjects } from './projects.ts';
 import { checkoutPath, listRepositoryNames } from './repos.ts';
 import { type FoundTask, readTasks } from './scan.ts';
-import { readTaskWorktrees } from './worktrees.ts';
+import { readOpenSessions } from './sessions.ts';
+import { openWorktreeClaims, planRelocation, readTaskWorktrees } from './worktrees.ts';
 
 export type Severity = 'ok' | 'info' | 'warn' | 'error';
 
@@ -635,6 +643,7 @@ async function workspaceChecks(
   findings.push(...(await legacyBareTaskFinding(root)));
   findings.push(...(await claimFindings(root)));
   findings.push(...(await floorManifestFindings(root)));
+  findings.push(...(await floorViewFindings(root)));
   findings.push(...(await briefFindings(root)));
 
   // The agent configuration, resolved from the record just validated above
@@ -651,7 +660,13 @@ async function workspaceChecks(
   const ignoreLines = existsSync(ignoreFile)
     ? new Set((await readFile(ignoreFile, 'utf8')).split('\n'))
     : new Set<string>();
-  const missingIgnores = IGNORE_LINES.filter((line) => !ignoreLines.has(line));
+  // `/worktrees/` is expected only while the directory exists
+  // (design/0057-context-from-root/): once it is retired, its line goes too.
+  const expectedIgnores = [
+    ...IGNORE_LINES,
+    ...(existsSync(join(root, LEGACY_WORKTREES_DIR)) ? [LEGACY_WORKTREES_IGNORE] : []),
+  ];
+  const missingIgnores = expectedIgnores.filter((line) => !ignoreLines.has(line));
   findings.push(
     missingIgnores.length === 0
       ? { check: 'ignore policy', severity: 'ok', message: 'checkouts and scratch are ignored' }
@@ -688,6 +703,7 @@ async function workspaceChecks(
   }
 
   findings.push(...(await worktreeChecks(root)));
+  findings.push(...(await worktreePlacementFindings(root)));
 
   return { findings, agent, workspaceId: record?.id ?? null };
 }
@@ -1028,6 +1044,43 @@ async function floorManifestFindings(root: string): Promise<Finding[]> {
 }
 
 /**
+ * Each open floor's view, `floors/<N>-<slug>/` (design/0057-context-from-root/):
+ * `info` per floor whose view is missing or whose links do not resolve to
+ * its record, with the upgrade as the remedy — the view is derived, so
+ * nothing is broken that the next converge does not put right, except a link
+ * a human aimed elsewhere, which is named and kept.
+ */
+async function floorViewFindings(root: string): Promise<Finding[]> {
+  const check = 'floor views';
+  let floors: Awaited<ReturnType<typeof readProjects>>;
+  try {
+    floors = (await readProjects(root)).filter(carriesView);
+  } catch {
+    return []; // an unreadable project record is already reported above
+  }
+  const findings: Finding[] = [];
+  for (const project of floors) {
+    const gaps = floorViewGaps(root, project);
+    if (gaps.length === 0) continue;
+    findings.push({
+      check,
+      severity: 'info',
+      message:
+        `floor ${project.record.floor} (${floorViewDir(project.dir)}/): ${gaps.join(', ')} — ` +
+        'establish it: ward workspace upgrade',
+    });
+  }
+  if (findings.length > 0) return findings;
+  return [
+    {
+      check,
+      severity: 'ok',
+      message: `${floors.length} open floor${floors.length === 1 ? '' : 's'} viewed under floors/`,
+    },
+  ];
+}
+
+/**
  * The standing workspace project
  * (design/0018-standing-workspace-project/), which is the **ground floor** —
  * floor 0 in every workspace (design/0041-ground-floor/). Three states worth
@@ -1336,6 +1389,47 @@ async function worktreeChecks(root: string): Promise<Finding[]> {
     } else {
       throw error;
     }
+  }
+  return findings;
+}
+
+/**
+ * Each open floor task's worktree against its placement
+ * (design/0057-context-from-root/): `info` per worktree whose record or
+ * checkout is not at `floors/<N>-<slug>/<address>-<branch>`, with the reason
+ * the next move would refuse when one applies — the same plan the upgrade's
+ * migration runs, asked read-only, so doctor and upgrade cannot disagree.
+ * Silent when every worktree is placed (no `ok` row per worktree: the
+ * missing-worktree check above already lists each one). Legacy bare tasks
+ * have no floor and no placement to miss.
+ */
+async function worktreePlacementFindings(root: string): Promise<Finding[]> {
+  const check = 'worktree placement';
+  const findings: Finding[] = [];
+  try {
+    const sessions = (await readOpenSessions(root)).map((listing) => listing.record);
+    const claims = await openWorktreeClaims(root);
+    for (const task of await readTasks(root)) {
+      if (task.record.state === 'closed' || taskFloor(task) === undefined) continue;
+      for (const record of await readTaskWorktrees(root, task.dir)) {
+        const plan = planRelocation(root, task, record, sessions, claims);
+        if (plan.kind === 'placed') continue;
+        const where =
+          plan.kind === 'move' ? plan.from : plan.kind === 'refused' ? plan.at : record.path;
+        const why =
+          plan.kind === 'refused'
+            ? ` — the move would be refused: ${plan.reason}`
+            : ' — move it: ward workspace upgrade';
+        findings.push({
+          check,
+          severity: 'info',
+          message: `task ${taskAddress(task)}: ${where} belongs at ${plan.placement}${why}`,
+        });
+      }
+    }
+  } catch (error) {
+    if (error instanceof WardError) return []; // already reported by the worktree checks
+    throw error;
   }
   return findings;
 }

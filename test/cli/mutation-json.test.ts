@@ -53,8 +53,11 @@ test('workspace create --json: the establishment report, one document alone on s
   expect(result.exitCode).toBe(0);
   const report = validated('workspace create', workspaceCreateShape, result.stdout);
   expect(report.root).toBe(ws);
-  expect(report.steps.length).toBe(15); // 0018 the standing project; 0020 the main line; 0054 workspace id; 0055 floor manifests
-  expect(report.steps.every((step) => step.outcome === 'established')).toBe(true);
+  expect(report.steps.length).toBe(18); // through 0057: floor views, placement, retirement
+  // Nothing to move and nothing to retire on a fresh workspace: the two
+  // migration steps are the satisfied tail (design/0057-context-from-root/).
+  expect(report.steps.slice(0, -2).every((step) => step.outcome === 'established')).toBe(true);
+  expect(report.steps.slice(-2).map((step) => step.outcome)).toEqual(['satisfied', 'satisfied']);
 });
 
 test('workspace upgrade --json: the converge steps ride the document, satisfied and legible', () => {
@@ -68,7 +71,7 @@ test('workspace upgrade --json: the converge steps ride the document, satisfied 
   const report = validated('workspace upgrade', workspaceUpgradeShape, result.stdout);
   expect(report.vehicle).toBe('none'); // no default moved, so no vehicle
   expect(report.outcome).toBe('current');
-  expect(report.converged.length).toBe(14);
+  expect(report.converged.length).toBe(17);
   expect(report.converged.every((step) => step.outcome === 'satisfied')).toBe(true);
   expect(report.converged.map((step) => step.step)).toContain('standing project');
 });
@@ -143,7 +146,7 @@ test('worktree create --json: identity flat, like the worktree list rows', () =>
     repo: 'demo',
     branch: 'json-output',
     disposition: 'deliverable',
-    path: 'worktrees/f1t1-json-output',
+    path: 'floors/1-agent-output/f1t1-json-output',
   });
 });
 
@@ -157,7 +160,7 @@ test('session open --json: the session record, handle included', () => {
     id: 'json-output-1@test',
     task: 't1',
     purpose: 'drive the feature',
-    workingDirectory: 'worktrees/f1t1-json-output',
+    workingDirectory: '.',
     handle: 'claude:run',
     state: 'open',
   });
@@ -199,12 +202,17 @@ test('worktree rebase --json: per-worktree rows; current when already atop', () 
   expect(report.task).toBe('t1');
   expect(report.address).toBe('f1t1');
   expect(report.reports).toMatchObject([
-    { repo: 'demo', branch: 'json-output', path: 'worktrees/f1t1-json-output', outcome: 'current' },
+    {
+      repo: 'demo',
+      branch: 'json-output',
+      path: 'floors/1-agent-output/f1t1-json-output',
+      outcome: 'current',
+    },
   ]);
 });
 
 test('the derivation echo moves to stderr under --json — stdout stays one document', () => {
-  const wtDir = join(ws, 'worktrees', 'f1t1-json-output');
+  const wtDir = join(ws, 'floors/1-agent-output/f1t1-json-output');
   const result = runWard(['task', 'pr', 'https://example.com/pr/2', '--json'], wtDir);
   expect(result.exitCode).toBe(0);
   expect(result.stderr).toContain('task f1t1 — from the working directory');
@@ -233,7 +241,7 @@ test('task close --json, forge unavailable: the named trust survives in the step
   expect(typeof report.task.closedAt).toBe('string');
   const steps = new Map(report.steps.map((step) => [step.step, step.detail]));
   expect(steps.get('pr set')).toBe("forge unavailable — trusting the stated outcome 'delivered'");
-  expect(steps.get('worktree worktrees/f1t1-json-output')).toBe('removed');
+  expect(steps.get('worktree floors/1-agent-output/f1t1-json-output')).toBe('removed');
   expect(steps.get('record')).toBe('closed with outcome delivered');
 });
 
@@ -258,7 +266,7 @@ test('a refused close emits no document: stderr + exit 1, stdout empty', () => {
 
 test('a rebase conflict under --json: the outcome in the document, the verdict in $?', () => {
   runWard(['worktree', 'create', refusedCode, '--repo', 'demo', '--json'], ws);
-  const wtDir = join(ws, 'worktrees', `${refusedCode}-refused`);
+  const wtDir = join(ws, 'floors/0-workspace', `${refusedCode}-refused`);
   writeFileSync(join(wtDir, 'README.md'), 'ours\n');
   gitOrThrow(wtDir, 'add', '-A');
   gitOrThrow(wtDir, 'commit', '-m', 'ours');

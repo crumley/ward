@@ -1,7 +1,7 @@
 // Restoring the materialized state from the record
 // (design/0021-restore-from-clone/): a fresh clone of the workspace
 // repository carries the complete record and none of the world it describes —
-// repos/, worktrees/, and the branches living in them are ignored by the
+// repos/, floors/, and the branches living in them are ignored by the
 // workspace's own git and die with the machine that held them. This verb is
 // where "self-sufficient" is proven: the record alone re-materializes the
 // working state (intent/01-concepts/06-workspace-lifecycle.md, §3).
@@ -19,12 +19,21 @@ import { WardError } from '../errors.ts';
 import { readDocument } from '../store/document.ts';
 import { repositoryRecordType, type WorktreeRecord } from '../store/types.ts';
 import { taskAddress } from './address.ts';
+import { establishFloorViews } from './floor-views.ts';
 import { git } from './git.ts';
+import { readProjects } from './projects.ts';
 import { addRepository, checkoutPath, listRepositoryNames } from './repos.ts';
-import { readTasks } from './scan.ts';
 import { readOpenSessions } from './sessions.ts';
 import { refuseStewardshipCopy } from './steward.ts';
-import { readTaskWorktrees } from './worktrees.ts';
+import {
+  moveCheckout,
+  moveRefusal,
+  type OpenSessionsAt,
+  openWorktreeClaims,
+  ownCheckout,
+  registeredCheckouts,
+  type WorktreeClaim,
+} from './worktrees.ts';
 
 export type RestoreRepositoryOutcome = 'restored' | 'satisfied' | 'failed';
 
@@ -49,10 +58,19 @@ export interface RestoreSessionsNote {
   readonly detail: string;
 }
 
+/** The floors' views, established after the worktrees (design/0057-context-from-root/). */
+export interface RestoreFloorViewsNote {
+  readonly floors: number;
+  /** Workspace-relative links written this run. */
+  readonly written: readonly string[];
+  readonly detail: string;
+}
+
 export interface RestoreReport {
   readonly root: string;
   readonly repositories: readonly RestoreRepositoryItem[];
   readonly worktrees: readonly RestoreWorktreeItem[];
+  readonly floorViews: RestoreFloorViewsNote;
   readonly sessions: RestoreSessionsNote;
 }
 
@@ -87,15 +105,30 @@ export async function restoreWorkspace(root: string): Promise<RestoreReport> {
   // Every scope's open sessions, the workspace's own included since
   // design/0029-launched-sessions/ — one reader, so a launched workspace
   // session is named here exactly as a task session is.
-  const open = (await readOpenSessions(root)).length;
-  for (const task of await readTasks(root)) {
-    // Closed tasks are not asked: their worktrees settled at the gated close,
-    // and re-materializing one would undo a correct teardown (the 0016 posture).
-    if (task.record.state === 'closed') continue;
-    for (const record of await readTaskWorktrees(root, task.dir)) {
-      worktrees.push(restoreWorktree(root, taskAddress(task), record, repositories));
-    }
+  const openSessions = (await readOpenSessions(root)).map((listing) => listing.record);
+  const open = openSessions.length;
+  // Closed tasks are not asked: their worktrees settled at the gated close,
+  // and re-materializing one would undo a correct teardown (the 0016 posture).
+  const claims = await openWorktreeClaims(root);
+  for (const claim of claims) {
+    worktrees.push(
+      await restoreWorktree(root, claim, repositories, { sessions: openSessions, claims }),
+    );
   }
+
+  // The floors' views last (design/0057-context-from-root/): `floors/` is
+  // ignored, so a fresh clone has none until now — and the worktrees above
+  // are what first gives a view anything to hold.
+  const views = await establishFloorViews(root, await readProjects(root));
+  const floorViews: RestoreFloorViewsNote = {
+    floors: views.floors,
+    written: views.written,
+    detail:
+      views.written.length === 0
+        ? `${views.floors} open floor${views.floors === 1 ? '' : 's'}, every view in place`
+        : `${views.floors} open floor${views.floors === 1 ? '' : 's'}; ${views.written.length} ` +
+          `link${views.written.length === 1 ? '' : 's'} written under floors/`,
+  };
 
   const detail =
     open === 0
@@ -103,7 +136,7 @@ export async function restoreWorkspace(root: string): Promise<RestoreReport> {
       : `${open} open session record${open === 1 ? '' : 's'} — a session is not restorable ` +
         'state: its run lived in a harness on the machine that recorded it. Resume the work ' +
         'in new sessions, or close what died there: ward session close ID';
-  return { root, repositories, worktrees, sessions: { open, detail } };
+  return { root, repositories, worktrees, floorViews, sessions: { open, detail } };
 }
 
 /**
@@ -144,12 +177,14 @@ async function restoreRepository(root: string, name: string): Promise<RestoreRep
  * the last refresh" into a false loss). A branch reachable nowhere is LOST:
  * the record stays, the outcome says so, and nothing is fabricated.
  */
-function restoreWorktree(
+async function restoreWorktree(
   root: string,
-  taskCode: string,
-  record: WorktreeRecord,
+  claim: WorktreeClaim,
   repositories: readonly RestoreRepositoryItem[],
-): RestoreWorktreeItem {
+  around: { readonly sessions: OpenSessionsAt; readonly claims: readonly WorktreeClaim[] },
+): Promise<RestoreWorktreeItem> {
+  const { record } = claim;
+  const taskCode = taskAddress(claim.task);
   const item = (outcome: RestoreWorktreeOutcome, detail: string): RestoreWorktreeItem => ({
     taskCode,
     record,
@@ -179,6 +214,33 @@ function restoreWorktree(
   // A hand-deleted directory can leave a stale registration behind; prune
   // first so re-adding at the recorded path cannot collide with a ghost.
   git(repoDir, 'worktree', 'prune');
+
+  // The branch already checked out at another path is how a clone that missed
+  // the move to `floors/` looks (design/0057-context-from-root/): the record
+  // moved on another machine, the checkout here did not. That checkout is
+  // moved, never cut a second time beside it — under the same guards the
+  // migration applies, because it may be in use.
+  // A checkout another open record claims is that task's, never this one's.
+  const from = ownCheckout(
+    root,
+    record,
+    registeredCheckouts(repoDir) ?? [],
+    claim,
+    around.claims,
+  )?.actual;
+  if (from !== undefined) {
+    const refusal = moveRefusal(root, from, record.path, around.sessions);
+    if (refusal !== undefined) {
+      return item(
+        'failed',
+        `branch '${record.branch}' is checked out at ${from}, which cannot be moved to the ` +
+          `recorded path now: ${refusal.reason}`,
+      );
+    }
+    const refused = await moveCheckout(root, record, from, record.path);
+    if (refused !== undefined) return item('failed', `${from}: ${refused}`);
+    return item('restored', `moved the checkout of '${record.branch}' here from ${from}`);
+  }
 
   if (
     git(repoDir, 'rev-parse', '--verify', '--quiet', `refs/heads/${record.branch}`).exitCode === 0
