@@ -4,7 +4,7 @@
 > `AGENTS.md` on the path from the root down to where it works; task worktrees move under their
 > floor, to `floors/<N>-<slug>/`, so that path passes through the floor's manifest.
 >
-> **Status:** proposed · **Started:** 2026-11-09
+> **Status:** accepted (2026-11-10) · **Started:** 2026-11-09
 
 Two entries in review each built a custom mechanism to get one level's context to the session that
 needs it. [0055](https://github.com/crumley/ward/pull/123) gives every floor a manifest beside its
@@ -55,9 +55,10 @@ rests on is its own pull request ([#126](https://github.com/crumley/ward/pull/12
 
 - **In:**
   - **The `floors/` tree.** For every floor that is not closed, `floors/<N>-<slug>/` is a view of
-    that floor, named after its record directory `projects/<N>-<slug>/`. It holds three relative
-    links: `AGENTS.md` → `../../projects/<N>-<slug>/AGENTS.md`, `CLAUDE.md` → `AGENTS.md`, and
-    `notes.md` → `../../projects/<N>-<slug>/notes.md`. It also holds the floor's task worktrees.
+    that floor, named after its record directory `projects/<N>-<slug>/`. A floor is its project's
+    address, so the view is a working place for that project, never a second record. It holds three
+    relative links: `AGENTS.md` → `../../projects/<N>-<slug>/AGENTS.md`, `CLAUDE.md` → `AGENTS.md`,
+    and `notes.md` → `../../projects/<N>-<slug>/notes.md`. It also holds the floor's task worktrees.
     Nothing else is written there. The whole tree is ignored by the workspace's git: `/floors/`
     joins `IGNORE_LINES`. Converge establishes it in three places: `ward project open`, the
     `floor views` step in phase 1 of `workspace upgrade`, and `workspace restore`. Each fills in
@@ -65,8 +66,33 @@ rests on is its own pull request ([#126](https://github.com/crumley/ward/pull/12
   - **Where a worktree is placed.** A new task worktree on floor N is created at
     `floors/<N>-<slug>/<address>-<branch>`, a stewardship worktree included. The directory name is
     the same one `worktrees/` uses today, so only its parent changes. A legacy bare task
-    (`legacy-t<room>`, [0053](../0053-legacy-task-address/README.md)) keeps `worktrees/`, which
-    stays in `IGNORE_LINES`.
+    (`legacy-t<room>`, [0053](../0053-legacy-task-address/README.md)) has no floor, so its worktrees
+    stay at `worktrees/` while it is open, and that directory is retired once nothing holds it (next
+    bullet).
+  - **Retiring `worktrees/`.** `floors/` becomes the one home for working checkouts, and
+    `worktrees/` is removed shortly after the last worktree in it goes away. Phase 1 of
+    `ward workspace upgrade` gains a `retire worktrees/` step, after `worktree placement`. It acts
+    only when three things hold:
+    1. no worktree record of a task that is not closed names a path under `worktrees/`, which after
+       placement can only be an open legacy bare task's;
+    2. `git worktree list --porcelain`, in every canonical checkout and in the workspace's own
+       repository, names no checkout under `worktrees/`;
+    3. nothing else is left in the directory.
+
+    Then it removes the empty directory (`rmdir`, never recursive) and drops the `/worktrees/` line
+    from the workspace's `.gitignore`, in one journal commit (`Retire worktrees/`). While any of the
+    three fails, the step lists what holds the directory as residue and changes nothing. An open
+    legacy task is named by its address. Anything left behind, such as a checkout a close did not
+    tear down or one no record names, is listed with the command that removes it
+    (`git -C repos/<name> worktree remove <path>`). The step never deletes a checkout itself,
+    because a checkout left behind may hold the only copy of some work. In the layout code,
+    `worktrees` leaves `SCOPE_DIRS`, so converge no longer recreates the directory, and
+    `/worktrees/` leaves `IGNORE_LINES`. Doctor's ignore check expects the line only while the
+    directory exists. A workspace with no open legacy bare task, like every workspace whose legacy
+    tasks have all closed, retires the directory on its first upgrade once its leftovers are
+    cleared. No new bare task can be opened, so the set that holds `worktrees/` only shrinks, and
+    the step converges on its own as those tasks close. A legacy task's closed records keep the
+    `worktrees/` paths they had, since those paths are history.
   - **The migration.** Phase 1 of `ward workspace upgrade` gains a `worktree placement` step, after
     `floor views`. For every worktree of an open floor task whose recorded `path` is not its
     placement, it does three things:
@@ -89,11 +115,12 @@ rests on is its own pull request ([#126](https://github.com/crumley/ward/pull/12
     the branch is already checked out at another path, which is how a clone that missed the move
     looks, restore moves that checkout instead of cutting a second one. It then establishes the
     floor views.
-  - **Doctor.** One `floor views` finding: `info` per open floor whose view is missing or whose
-    links do not resolve to its record, with `ward workspace upgrade` as the remedy. One
-    `worktree placement` finding: `info` per open floor task's worktree that is not at its
-    placement, naming the reason the last move would refuse if one applies (dirty, an open session
-    inside it). The existing missing-worktree check reads the record's `path` and needs no change.
+  - **Doctor.** No check expects `worktrees/` to exist. One `floor views` finding: `info` per open
+    floor whose view is missing or whose links do not resolve to its record, with
+    `ward workspace upgrade` as the remedy. One `worktree placement` finding: `info` per open floor
+    task's worktree that is not at its placement, naming the reason the last move would refuse if
+    one applies (dirty, an open session inside it). The existing missing-worktree check reads the
+    record's `path` and needs no change.
   - **Task sessions default to the root.** `ward session open TASK` without `--dir` records
     `workingDirectory: .`. Today it guesses the task's first worktree. `--dir` still records what
     the caller names.
@@ -126,7 +153,7 @@ rests on is its own pull request ([#126](https://github.com/crumley/ward/pull/12
     `/workdirs/` stays ignored.
   - **Moving legacy bare tasks' worktrees.** _Safe to defer because_ legacy bare tasks have no floor
     and so no floor manifest to pass through. Moving them would change nothing an agent loads, and
-    the pool only shrinks.
+    the pool only shrinks. Retirement removes `worktrees/` once the last of them is gone.
 - **Acceptance:**
   1. `bun test test/workspace/floor-views.test.ts` covers the following:
      - `project open` writes three links for the new floor. They resolve to the record's files, and
@@ -146,6 +173,11 @@ rests on is its own pull request ([#126](https://github.com/crumley/ward/pull/12
        path, upgrade and restore both move it, and neither creates a second checkout.
      - Doctor's `worktree placement` names each worktree that is not at its placement, and is silent
        once all are.
+     - Retirement: with no open legacy task and no checkout under it, upgrade removes an empty
+       `worktrees/` and its `.gitignore` line in one commit, and a second upgrade does nothing. An
+       open legacy task's worktree, a leftover registered checkout, and a stray file each keep the
+       directory, are named as residue, and are left untouched. Converge does not recreate the
+       directory, and doctor's ignore check is silent once it is gone.
   3. `bun test test/cli/context.test.ts`:
      - For a file inside a floor task's worktree, `ward context` lists the root's, the floor's and
        the repository's `AGENTS.md` in that order.
@@ -160,7 +192,8 @@ rests on is its own pull request ([#126](https://github.com/crumley/ward/pull/12
 ## Design
 
 - **Decisions:** no new ADRs. The store stack ([ADR 0005](../decisions/0005-store-stack.md)) governs
-  the worktree record whose `path` the migration rewrites. Entry-local:
+  the worktree record whose `path` the migration rewrites. Each entry-local decision below was
+  decided at the entry's review on 2026-11-10. Entry-local:
   - **Start at the root, and read downward.** Two alternatives were weighed. The first is to start
     low and load upward: each session starts in its scope's own directory, a floor session in its
     floor and a task session in its worktree, and the harness loads every `AGENTS.md` from there up
@@ -221,6 +254,14 @@ rests on is its own pull request ([#126](https://github.com/crumley/ward/pull/12
     _Cost:_ the walk down passes the workspace's root `AGENTS.md` twice: once at the root, and once
     as the stewardship branch's own copy at the worktree's top. That is correct, since the branch's
     copy is what the change is about.
+  - **`worktrees/` is retired, not kept as a second home.** _Alternative:_ keep `worktrees/` for
+    good, as the place for legacy bare tasks and anything without a floor. _Attractive_ because it
+    needs no step, and nothing in it is harmful once it is ignored. _It lost_ because a second home
+    for checkouts is a second place every reader, placement rule and doctor check has to know about,
+    for a set of tasks that can only shrink. A directory that stays after its last checkout also
+    keeps converge and the ignore list spelling a layout the workspace no longer has. _Cost:_ one
+    upgrade step and a conditional ignore check, and a leftover checkout blocks retirement until a
+    human removes it.
   - **The migration runs in `workspace upgrade`, not in a verb of its own.** _Alternative:_ a
     dedicated `ward worktree relocate [ADDRESS]`. _Attractive_ because moving a live working
     directory is a deliberate act, and a verb names it. _It lost_ because 0042 makes upgrade the one
@@ -396,10 +437,12 @@ entry may open a floor host's spare shells in the floor's view, which is out of 
 
   #126 is the intent edit that settles the friction the item raised.
 - **0056 IF-001: declined.** Ward writes nothing inside an anchor, so there is no harness-named file
-  to name in intent. Its Status line records the human's ruling verbatim:
+  to name in intent. Its Status line becomes:
 
-  > declined — "I don't love the custom nature of this all… we're going against the grain… I don't
-  > like the claude.local file or using non-standard agents files that are possibly unreliable."
+  > declined — a custom, harness-specific context file written into each worktree and hidden by a
+  > git exclude works against the grain of how harnesses load guidance, and is non-standard and
+  > unreliable; context reaches a worktree through the standard `AGENTS.md` hierarchy instead, read
+  > downward from the workspace root ([#126](https://github.com/crumley/ward/pull/126))
 
 ### Order of work
 
@@ -413,7 +456,7 @@ entry may open a floor host's spare shells in the floor's view, which is out of 
    entry's Status to built.
 5. **Run `ward workspace upgrade` in each workspace**, as the human, on each machine. This moves the
    worktrees. Open sessions inside old worktrees are named and left. Close them, or let them finish,
-   and run the upgrade again.
+   and run the upgrade again. Once nothing holds `worktrees/`, the same upgrade retires it.
 
 ### Risks
 

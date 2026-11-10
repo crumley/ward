@@ -51,7 +51,9 @@ directly.
   needed once scope comes from the record. 0056 IF-001 is declined: Ward adds no file inside an
   anchor.
 
-- **Status:** pending
+- **Status:** pending — ruled by Ryan 2026-11-10 (design review), awaiting the intent edit: context
+  loads downward from the workspace root along the path a session works in, with scope read from the
+  session's record ([#126](https://github.com/crumley/ward/pull/126))
 
 ### The edits, before and after
 
