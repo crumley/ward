@@ -27,8 +27,6 @@ import {
 } from '../harness/adapter.ts';
 import { adapterForHandle, adapterNamed } from '../harness/index.ts';
 import type { SessionRecord } from '../store/types.ts';
-import { FLOOR_MANIFEST_ENV, floorManifestPaths } from '../workspace/floor-manifest.ts';
-import { resolveProject } from '../workspace/projects.ts';
 import {
   appendSessionEvent,
   findSession,
@@ -114,7 +112,7 @@ export async function launchSession(
     argv: adapter.startArgv({ nativeId, ...model, ...effort, args: argsOf(agent.args) }),
     command: commandOf(agent.command),
     cwd: resolve(root, record.workingDirectory),
-    env: await sessionEnv(root, record),
+    env: { WARD_AGENT: record.id },
   });
   return { record, run };
 }
@@ -165,7 +163,7 @@ export async function resumeSession(
     argv: adapter.resumeArgv(nativeId, argsOf(agent.args)),
     command: commandOf(agent.command),
     cwd: resolve(root, record.workingDirectory),
-    env: await sessionEnv(root, record),
+    env: { WARD_AGENT: record.id },
   });
   if (run.outcome === 'failed') {
     return { record: await appendSessionEvent(root, id, 'resume-failed', run.cause), run };
@@ -202,27 +200,6 @@ export async function locateSession(root: string, id: string): Promise<SessionLo
     nativeId,
     ...adapter.locate(nativeId, resolve(root, found.record.workingDirectory)),
   };
-}
-
-/**
- * The environment a launched or resumed run is started with. Every run is
- * declared (`WARD_AGENT`); a floor session is also told where its floor's
- * manifest is (design/0055-floor-manifests/), because it stands at the
- * workspace root (design/0051) and the harness's working-directory loading
- * never reaches the floor's directory. A floor that no longer resolves names
- * no manifest rather than failing the run: the variable is guidance, and the
- * session's own record still says which floor it answers for.
- */
-async function sessionEnv(root: string, record: SessionRecord): Promise<Record<string, string>> {
-  const env: Record<string, string> = { WARD_AGENT: record.id };
-  if (record.floor === undefined) return env;
-  try {
-    const project = await resolveProject(root, record.floor);
-    env[FLOOR_MANIFEST_ENV] = resolve(root, floorManifestPaths(project.dir).agents);
-  } catch {
-    // An unresolvable floor: no manifest to name.
-  }
-  return env;
 }
 
 /**

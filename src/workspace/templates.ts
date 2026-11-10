@@ -166,12 +166,14 @@ You may be reading this from the workspace root or from inside a task worktree u
 - **Record your session.** If Ward launched you, it is already recorded and \`WARD_AGENT\` holds
   its id — nothing to do. If it did not, record yourself before you start work:
   \`ward session open TASK --purpose TEXT\` (see **Sessions**, above, for the handle).
-- **Load your floor.** A floor session Ward launched is started with \`WARD_FLOOR_MANIFEST\`
-  naming its floor's \`AGENTS.md\`; one you recorded yourself at floor N finds it at
-  \`projects/<N>-<slug>/AGENTS.md\`. Read it, and the \`notes.md\` beside it, before you start.
-  Working a task, read its floor's \`notes.md\` too. When you learned something the next session
-  on that floor needs, leave it with \`ward project note FLOOR TEXT\` — the notes sit in the record
-  tree, so they are written through \`ward\` like everything else there.
+- **Establish your scope from the record, not from where you stand.** Every session starts here, at
+  the workspace root. \`WARD_AGENT\` names yours: \`ward session show $WARD_AGENT --json\` gives its
+  \`scope\` (workspace, a floor's project, or a task), its \`floor\` or \`task\`, and its \`parent\`, the
+  session that started it. A session recorded with \`WARD_AGENT=1\` has no record yet; record it
+  first. A floor session, or a task on floor N, reads \`projects/<N>-<slug>/AGENTS.md\` and the
+  \`notes.md\` beside it before it starts. When you learned something the next session on that
+  floor needs, leave it with \`ward project note FLOOR TEXT\` — the notes sit in the record tree,
+  so they are written through \`ward\` like everything else there.
 - **Name the task explicitly.** Deriving the task from the working directory is a human
   affordance; a declared agent is refused it and passes the **full address** (\`f3t22\`) on every
   task-addressed verb, read from \`address\` in \`--json\` (\`ward task list --json\` says what
@@ -209,21 +211,26 @@ This file is yours: sharpen it as the workspace learns how it likes to work.
  */
 export const FLOOR_AGENTS_MD = `# Ward Floor
 
-This directory is one floor of a Ward workspace: a project, with its tasks nested under
-\`tasks/\`. A session responsible for this floor, or working a task on it, reads this file and
-then the floor's notes below. The workspace's own guidance is the \`AGENTS.md\` at the workspace
-root, and everything it says holds here too.
+This file is the manifest for one floor of a Ward workspace: a project and its tasks. A session
+responsible for this floor, or working a task on it, reads this file and then the floor's notes
+below. The workspace's own guidance is the \`AGENTS.md\` at the workspace root, and everything it
+says holds here too. The same file is reached through the floor's record directory and through its
+view, so what follows names each by this directory's name, \`<N>-<slug>\`.
 
 ## What is here
 
-- \`project.md\` — the floor's record: its number, slug, state, and the repositories it claims (a
-  routing default for new tasks, never a limit on what they touch). Read the floor's facts there:
-  this file is the same on every floor and says nothing about any one of them.
-- \`tasks/\` — the floor's tasks, each addressed \`f<floor>t<room>\`, each with its own sessions.
-- \`sessions/\` — the floor's own sessions (\`ward session open --floor N\`), when it has any.
+- \`projects/<N>-<slug>/\` — the floor's record directory:
+  - \`project.md\` — the floor's record: its number, slug, state, and the repositories it claims (a
+    routing default for new tasks, never a limit on what they touch). Read the floor's facts there:
+    this file is the same on every floor and says nothing about any one of them.
+  - \`tasks/\` — the floor's tasks, each addressed \`f<floor>t<room>\`, each with its own sessions.
+  - \`sessions/\` — the floor's own sessions (\`ward session open --floor N\`), when it has any.
+- The floor's task worktrees stand under \`floors/<N>-<slug>/\` in a workspace laid out that way,
+  and under \`worktrees/\` at the root before it; \`ward task show ADDRESS\` names each one's path.
 - \`AGENTS.md\` — this file, Ward's part of the floor's manifest. \`ward workspace upgrade\` brings
   it forward while it is untouched, and \`CLAUDE.md\` is a link to it.
-- \`notes.md\` — the floor's part: what this floor has learned about how to work here.
+- \`notes.md\` — the floor's part, beside this file: what this floor has learned about how to work
+  here.
 
 ## The floor's notes
 

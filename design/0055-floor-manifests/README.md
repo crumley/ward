@@ -17,12 +17,13 @@ conventions dies with the session that learned it.
 
 [0051](../0051-floor-scope-sessions/README.md) made the gap sharper. A floor session is now a
 recorded, launchable thing, and it stands at the workspace root, so a harness that loads guidance by
-working directory reads the root's manifest and never the floor's. A floor manifest is only useful
-if the session it is for is pointed at it. This entry builds the manifest, writes it at
-`project open`, backfills it on every converge, brings it forward on upgrade, names its gaps in
-doctor, points a launched floor session at it, and gives agents one verb to add to the floor's
-notes. The worktree bridge that carries a floor's manifest into its tasks' worktrees builds on the
-accessor this entry exposes.
+working directory reads the root's manifest and never the floor's. This entry builds the manifest,
+writes it at `project open`, backfills it on every converge, brings it forward on upgrade, names its
+gaps in doctor, and gives agents one verb to add to the floor's notes. A session reaches the
+manifest the way [0057](https://github.com/crumley/ward/pull/127) settles for every level: it starts
+at the root, establishes its scope from its own record, and reads downward to its floor's manifest.
+The root manifest says so; no variable names the file. The `floors/` views 0057 builds link onto the
+files this entry writes, through the accessor it exposes.
 
 ## Serves intent
 
@@ -36,7 +37,7 @@ accessor this entry exposes.
   lineage, so an untouched one moves forward and a hand-edited one is kept and named.
 - [`01-scopes-and-personas.md`](../../intent/01-concepts/01-scopes-and-personas.md) — _Charge
   nurse_: the role that holds a project's status needs that project's working knowledge in front of
-  it, and the floor session that plays it is now told where that knowledge is.
+  it, and the floor session that plays it now has a manifest to read.
 - [`01-principles.md`](../../intent/00-foundation/01-principles.md) — §13 (the workspace compounds:
   a floor's lessons outlive the session that learned them), §16 (one source of truth: `CLAUDE.md` is
   a link), §17 (notes are written under the store lock and journaled, like every record write).
@@ -63,21 +64,25 @@ accessor this entry exposes.
     `notes.md` under the store lock and commits it as `Note on floor N`. It refuses empty text, more
     than one line, an unknown floor, or a closed one. A floor whose notes are missing is seeded
     first. `ward schema project note` documents the shape.
-  - **The load path.** A launched or resumed floor session gets `WARD_FLOOR_MANIFEST`, the absolute
-    path of its floor's `AGENTS.md`, beside `WARD_AGENT`. The root manifest tells an agent to read
-    it and the notes beside it before starting, how a self-recorded floor session finds the same
-    file, to read a task's floor's notes too, and to add to them with `ward project note`.
+  - **The load path is the reading rule.** A launched or resumed session is started with
+    `WARD_AGENT` alone. The root manifest's _Establish your scope_ bullet tells an agent to read its
+    scope from its own record (`ward session show $WARD_AGENT --json`), and a floor session, or a
+    task on floor N, to read `projects/<N>-<slug>/AGENTS.md` and the `notes.md` beside it before it
+    starts, and to add to them with `ward project note`. No variable names the file
+    ([0057](https://github.com/crumley/ward/pull/127); the dropped variable is under _Decisions_).
   - **Doctor.** One `floor manifests` finding: `ok` when every floor that is not closed carries all
     three files, otherwise one `info` per floor naming each gap, with `ward workspace upgrade` as
     the remedy where a file is missing.
-  - **The root manifest** gains the layout sentence and the _Load your floor_ bullet. The outgoing
-    0053 default joins the root lineage.
+  - **The root manifest** gains the layout sentence and the _Establish your scope_ bullet, in 0057's
+    interim wording until its `floors/` layout lands. The outgoing 0053 default joins the root
+    lineage.
 - **Deferred:**
-  - **The worktree bridge.** Carrying a floor's manifest into its tasks' worktrees is the next
-    entry. _Safe to defer because_ this entry gives it everything it needs to read:
-    `floorManifestPaths(projectDir)` names the three files, and `FLOOR_MANIFEST_ENV` is the variable
-    a task session can be started with. Until it lands, the root manifest's bullet tells a task's
-    agent to read its floor's notes.
+  - **The `floors/` views.** Putting each floor's task worktrees beneath a directory that carries
+    its manifest is [0057](https://github.com/crumley/ward/pull/127)'s build. _Safe to defer
+    because_ this entry gives it everything it needs: `floorManifestPaths(projectDir)` names the
+    three files the views link onto, and `FLOOR_AGENTS_MD` reads correctly through either directory.
+    Until it lands, the root manifest's bullet tells a task's agent to read its floor's manifest and
+    notes.
   - **Importing the ground floor's notes from the root manifest.** Since
     [0041](../0041-ground-floor/README.md) the ground floor's directory is the same in every
     workspace, so the import would no longer break the root's lineage. _Safe to defer because_ 0051
@@ -89,9 +94,9 @@ accessor this entry exposes.
     should be shaped by real notes. The notes file is append-only and dated, so nothing written now
     blocks either later.
   - **Harness-native injection** of the floor manifest (a system-prompt flag per adapter). _Safe to
-    defer because_ the environment variable reaches every harness through one code path. A native
-    flag is an adapter-surface addition, made once there is a reason to prefer one harness's
-    mechanism.
+    defer because_ the root manifest's reading rule reaches every harness, since every harness loads
+    the root manifest. A native flag is an adapter-surface addition, made once there is a reason to
+    prefer one harness's mechanism.
   - **Manifests on closed floors.** _Safe to defer because_ a closed floor takes no tasks and no
     sessions, so nothing would load one. Whatever a closed floor already carries is left alone, and
     doctor does not ask about it.
@@ -115,8 +120,8 @@ accessor this entry exposes.
        `projectNoteShape`.
      - Doctor: `ok` with every floor manifested, one `info` per floor naming each gap, and nothing
        about a closed floor.
-     - A floor-1 and a floor-0 launch carry `WARD_FLOOR_MANIFEST` with the right absolute path, and
-       a workspace launch carries none.
+     - A floor-1, a floor-0, and a workspace launch each carry `WARD_AGENT` and no
+       `WARD_FLOOR_MANIFEST`.
   2. `bun test test/workspace/lineage.test.ts` shows the 0053 root manifest in history and the 0055
      default pinned.
   3. `bun test test/workspace/create.test.ts test/workspace/converge.test.ts test/cli/converge.test.ts test/workspace/upgrade.test.ts test/cli/upgrade.test.ts test/cli/mutation-json.test.ts`
@@ -171,32 +176,34 @@ accessor this entry exposes.
     touch. `floorManifestLineages(projects)` returns ordinary exact-path entries, one per floor that
     is not closed, and the upgrade concatenates them after the root's. _Cost:_ the floor history
     lives in its own constant, guarded by its own pin.
-  - **The load path is an environment variable plus the root manifest's instruction.**
-    _Alternatives:_ launch a floor session in its project directory, which 0051 rejected because a
-    record directory is where an agent is told not to write; pass the manifest through each
-    harness's own system-prompt flag; or have the agent derive the path from its id (`f7-1@mbp`). _A
-    launch in the floor directory is attractive_ because Claude Code would load the floor's
-    `CLAUDE.md` natively. _A harness flag is attractive_ because loading would not depend on the
-    agent following an instruction. _They lost_ because one breaks 0051's decision and the other
-    grows the adapter seam per harness. _Derivation lost_ because it is a guess about the directory
-    layout, which an agent should never be asked to make. Ward knows the floor at launch and says
-    it. _Cost:_ loading is one instruction-following step, read from the root manifest that every
-    root session already loads. A self-recorded floor session reads the path from the manifest's
-    rule instead.
+  - **The load path is the root manifest's reading rule, with the scope read from the record.**
+    _Alternatives:_ start a launched floor session with an environment variable,
+    `WARD_FLOOR_MANIFEST`, naming its floor's `AGENTS.md`; launch a floor session in its project
+    directory, which 0051 rejected because a record directory is where an agent is told not to
+    write; or pass the manifest through each harness's own system-prompt flag. _The variable is
+    attractive_ because Ward knows the floor at launch and can say exactly where its manifest is.
+    This entry's first build shipped it, and the IF-001 below proposed keying context to the scope
+    to justify it. _It lost_ to [0057](https://github.com/crumley/ward/pull/127): it was a custom
+    mechanism for one level, still depended on the agent following an instruction under every
+    harness, reached only sessions Ward launched, and would have needed a sibling mechanism for the
+    next level down. Once a session reads its scope from its record and reads downward from the
+    root, no variable is needed. _A launch in the floor directory is attractive_ because Claude Code
+    would load the floor's `CLAUDE.md` natively, and _a harness flag_ because loading would not
+    depend on an instruction. _They lost_ because one breaks 0051's decision and the other grows the
+    adapter seam per harness. _Cost:_ loading is one instruction-following step, read from the root
+    manifest that every session loads.
   - **Closed floors are skipped everywhere.** The reason is the deferral in Scope. A floor that
     closes keeps what it carried, so closing never deletes the floor's notes.
 - **Layout:** `src/workspace/floor-manifest.ts` is the one home for where a floor's manifest lives
   (`floorManifestPaths`), which floors carry one (`carriesManifest`), how one is established
-  (`establishFloorManifest`), the seed, the lineage expansion and its history, and the load-path
-  variable's name. It imports no project reader, so the project module, converge, upgrade, doctor,
-  and the launch path all depend on it without an import cycle. The note verb lives with the other
-  project mutations in `projects.ts`. `lineage.ts` changes only by the one history entry the root
-  manifest owes, and `create.ts` does not change.
+  (`establishFloorManifest`), the seed, and the lineage expansion and its history. It imports no
+  project reader, so the project module, converge, upgrade, and doctor all depend on it without an
+  import cycle. The launch path does not change. The note verb lives with the other project
+  mutations in `projects.ts`. `lineage.ts` changes only by the one history entry the root manifest
+  owes, and `create.ts` does not change.
 - **Mechanisms:**
   - `openProject` calls `establishFloorManifest` inside its lock before it commits the floor
     directory. Converge's step calls the same function per floor that is not closed, and stages
     exactly what it wrote.
   - `assessUpgrade` builds its list as the root lineage followed by the tree's floor lineages, and
     runs the existing decide loop over it. The baseline loop still reads only the root lineage.
-  - `launchSession` and `resumeSession` build the child's environment in one `sessionEnv`. A floor
-    that no longer resolves names no manifest rather than failing a resume.

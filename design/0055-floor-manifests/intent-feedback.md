@@ -38,4 +38,5 @@ directly.
   directory_ paragraph, and add the reason the scope is a second key: the axes are chosen
   independently, so a manifest keyed to only one of them misses every session whose two axes differ.
 
-- **Status:** pending
+- **Status:** declined — superseded by design 0057: context loads downward from the workspace root
+  (intent edit [#126](https://github.com/crumley/ward/pull/126))

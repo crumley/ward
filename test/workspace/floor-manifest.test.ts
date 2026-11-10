@@ -2,8 +2,9 @@
 // closed carries AGENTS.md (Ward's part, byte-identical on every floor and
 // lineage-tracked), a CLAUDE.md link onto it, and notes.md (the floor's part,
 // seeded once, appended only through `ward project note`). Written at project
-// open, backfilled by converge, brought forward by upgrade, named by doctor,
-// and pointed at by WARD_FLOOR_MANIFEST when a floor session launches.
+// open, backfilled by converge, brought forward by upgrade, and named by
+// doctor. A session reaches it by reading downward from the root (design 0057):
+// a floor session is launched with no variable naming it.
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { existsSync, lstatSync, readFileSync, readlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -15,7 +16,6 @@ import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import {
   FLOOR_AGENTS_MD_HISTORY,
-  FLOOR_MANIFEST_ENV,
   floorManifestLineages,
   floorManifestPaths,
   seedNotes,
@@ -40,7 +40,7 @@ const TODAY = new Date().toISOString().slice(0, 10);
 
 test('the floor default is pinned; changing it must move its old hash into the history', () => {
   expect(sha256OfText(FLOOR_AGENTS_MD)).toBe(
-    '05b327c6866d9a2998a51315b86edc0361fa3ef3a9a77c9099e75d2bdede4ab2', // since design 0055
+    '79cbe2e51bfc211f3bb465eb3885c02e5b83c5645fb8bef15d5aa8119c4dacbc', // since design 0055
   );
   const hashes = [...FLOOR_AGENTS_MD_HISTORY.map((v) => v.sha256), sha256OfText(FLOOR_AGENTS_MD)];
   expect(new Set(hashes).size).toBe(hashes.length);
@@ -50,7 +50,8 @@ test('the floor default says nothing floor-specific and loads the notes last', (
   expect(FLOOR_AGENTS_MD).not.toMatch(/projects\/[1-9]/); // only the ground floor is named
   expect(FLOOR_AGENTS_MD.endsWith('\n\n@notes.md\n')).toBe(true);
   expect(FLOOR_AGENTS_MD).toContain('ward project note FLOOR TEXT');
-  expect(AGENTS_MD).toContain(FLOOR_MANIFEST_ENV);
+  expect(AGENTS_MD).not.toContain('WARD_FLOOR_MANIFEST');
+  expect(AGENTS_MD).toContain('projects/<N>-<slug>/AGENTS.md');
   expect(AGENTS_MD).toContain('ward project note FLOOR TEXT');
 });
 
@@ -281,21 +282,23 @@ test('doctor: ok when every open floor is manifested; one info per floor naming 
   ]);
 });
 
-// -- the load path: a floor session is told where its manifest is ------------
+// -- no load-path variable: scope comes from the record (design 0057) --------
 
-const launches: ReadonlyArray<readonly [string, string[], string | null]> = [
-  ['a floor session', ['session', 'open', '--floor', '1'], 'projects/1-alpha/AGENTS.md'],
-  ['a ground-floor session', ['session', 'open', '--floor', '0'], 'projects/0-workspace/AGENTS.md'],
-  ['a workspace session', ['session', 'open'], null],
+const launches: ReadonlyArray<readonly [string, string[]]> = [
+  ['a floor session', ['session', 'open', '--floor', '1']],
+  ['a ground-floor session', ['session', 'open', '--floor', '0']],
+  ['a workspace session', ['session', 'open']],
 ];
 
-for (const [name, argv, manifest] of launches) {
-  test(`${name} is launched ${manifest === null ? 'without' : 'with'} ${FLOOR_MANIFEST_ENV}`, async () => {
+for (const [name, argv] of launches) {
+  test(`${name} is launched with WARD_AGENT and no floor-manifest variable`, async () => {
     const ws = await workspaceWith(['alpha']);
     const result = runWard([...argv, '--on-exit', 'keep'], ws);
     expect(result.exitCode).toBe(0);
     const [run] = runs();
-    expect(run?.floorManifest).toBe(manifest === null ? null : join(ws, manifest));
+    expect(run?.wardAgent).toMatch(/\S/);
+    expect(run?.wardEnv).toContain('WARD_AGENT');
+    expect(run?.wardEnv).not.toContain('WARD_FLOOR_MANIFEST');
   });
 }
 
@@ -306,7 +309,8 @@ let caseId = 0;
 let logFile: string;
 
 interface Run {
-  readonly floorManifest: string | null;
+  readonly wardAgent: string | null;
+  readonly wardEnv: readonly string[];
 }
 
 beforeAll(() => {

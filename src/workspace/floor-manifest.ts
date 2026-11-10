@@ -12,9 +12,11 @@
 //   through `ward project note`; never lineage-tracked, never reconciled.
 //
 // This module is the one home for where those files are and how they are
-// established, so every caller — project open, converge, upgrade, doctor, the
-// session launch, and the worktree bridge that carries a floor's manifest into
-// its tasks' worktrees — asks the same accessor rather than spelling the paths.
+// established, so every caller — project open, converge, upgrade, doctor, and
+// the views design 0057 links onto these files — asks the same accessor rather
+// than spelling the paths. A session reaches the manifest by reading downward
+// from the workspace root (design/0057-context-from-root/), never through a
+// variable.
 import { existsSync } from 'node:fs';
 import { symlink } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -54,14 +56,6 @@ export function floorManifestPaths(projectDir: string): FloorManifestPaths {
 export function carriesManifest(record: ProjectRecord): boolean {
   return record.state !== 'closed';
 }
-
-/**
- * The environment variable a launched floor session is started with: the
- * absolute path of its floor's `AGENTS.md` (design 0055). The session stands
- * at the workspace root (design 0051), so the harness's own working-directory
- * loading never reaches the floor's directory; this names it instead.
- */
-export const FLOOR_MANIFEST_ENV = 'WARD_FLOOR_MANIFEST';
 
 // -- the lineage ------------------------------------------------------------
 
