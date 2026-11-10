@@ -257,9 +257,17 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '1f1d055a78cc30504e9278bfc28baf939649edb2c8c4d37a21307addfa0caa25',
         era: 'design 0052 (session parent link)',
       },
-      // Current since design 0053: legacy bare tasks are addressed
-      // `legacy-t<room>`, and an ambiguous shorthand names each candidate by
-      // its full address.
+      // design 0053 — legacy bare tasks are addressed `legacy-t<room>`, and
+      // an ambiguous shorthand names each candidate by its full address; no
+      // floor carried a manifest of its own yet.
+      {
+        sha256: '517b99b03e9275eb900bb1ac30dd04ce8ba9f496fcc365ec148fc3bb2486c473',
+        era: 'design 0053 (legacy task address)',
+      },
+      // Current since design 0055: every open floor carries AGENTS.md and
+      // notes.md, a session establishes its scope from its record and reads
+      // its floor's manifest (design 0057), and notes are written with
+      // `ward project note`.
     ],
   },
 ];

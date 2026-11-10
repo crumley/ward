@@ -32,7 +32,7 @@ test('upgrade --json on a workspace behind on its record: converged rides the do
   const report = workspaceUpgradeShape.parse(JSON.parse(result.stdout));
   expect(report.vehicle).toBe('none'); // no default moved: no task, no branch
   expect(report.outcome).toBe('current');
-  expect(report.converged.length).toBe(13);
+  expect(report.converged.length).toBe(14);
   const standing = report.converged.find((step) => step.step === 'standing project');
   expect(standing).toMatchObject({ outcome: 'established', detail: `${GROUND_FLOOR_DIR}/` });
 });
@@ -47,7 +47,7 @@ test('a run that converged the record does not report nothing to do', () => {
   const first = upgrade(ws, []);
   expect(first.exitCode).toBe(0);
   expect(first.stdout).toContain('established  standing project');
-  expect(first.stdout).toContain('record converged — 2 established');
+  expect(first.stdout).toContain('record converged — 3 established');
   expect(first.stdout).toContain('installed artifacts already current');
   expect(first.stdout).not.toContain('nothing to upgrade');
 

@@ -2,11 +2,19 @@
 // never-reused floor number; status above the leaves is derived, never stored
 // (intent/01-concepts/00-domain-model.md).
 import { existsSync } from 'node:fs';
+import { appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { WardError } from '../errors.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
 import { withStoreLock } from '../store/lock.ts';
 import { type ProjectRecord, projectRecordType } from '../store/types.ts';
+import {
+  carriesManifest,
+  establishFloorManifest,
+  floorManifestPaths,
+  isoDate,
+  seedNotes,
+} from './floor-manifest.ts';
 import { commitRecords, projectDirs, requireSlug } from './scan.ts';
 
 export interface OpenProjectOptions {
@@ -53,6 +61,10 @@ export async function openProject(
           : ` It claims ${claims.join(', ')}: a routing default for tasks opened against those ` +
             'repositories, never a restriction on what its tasks may touch.'),
     });
+    // The floor's manifest is written with its record, in the same commit
+    // (design/0055-floor-manifests/): a floor is never observable without
+    // the guidance a session on it loads.
+    await establishFloorManifest(root, { dir, record });
     commitRecords(root, `Open project ${slug} (floor ${floor})`, dir);
     return record;
   });
@@ -175,4 +187,59 @@ export async function taskContainer(root: string, floor: number): Promise<string
     throw new WardError(`project directory ${project.dir} is missing — run: ward doctor`);
   }
   return `${project.dir}/tasks`;
+}
+
+// -- the floor's notes: the one write path (design/0055-floor-manifests/) ----
+
+export interface FloorNoteReport {
+  readonly floor: number;
+  readonly slug: string;
+  /** Workspace-relative path of the notes file written. */
+  readonly path: string;
+  /** The UTC date the bullet carries. */
+  readonly date: string;
+  readonly text: string;
+  /** Whether the notes file had to be seeded first (a floor not yet backfilled). */
+  readonly seeded: boolean;
+}
+
+/**
+ * Append one dated bullet to a floor's notes and commit it, under the store
+ * lock — the one way an agent writes into the record tree's notes, so the
+ * write is serialized and journaled like every other. Append-only by
+ * construction: nothing already in the file is rewritten. One
+ * fact per bullet is enforced as one line per note; a closed floor takes no
+ * notes, since no session will ever load them.
+ */
+export async function appendFloorNote(
+  root: string,
+  floor: number,
+  textInput: string,
+  now: Date = new Date(),
+): Promise<FloorNoteReport> {
+  const text = textInput.trim();
+  if (text === '') throw new WardError('a note needs text — one fact, in one line');
+  if (/[\r\n]/.test(text)) {
+    throw new WardError(
+      'a note is one fact on one line — run ward project note once for each fact',
+    );
+  }
+  return withStoreLock(root, `project note ${floor}`, async () => {
+    const project = await resolveProject(root, floor);
+    if (!carriesManifest(project.record)) {
+      throw new WardError(
+        `floor ${floor} is closed — no session will load its notes; note it on an open floor`,
+      );
+    }
+    const paths = floorManifestPaths(project.dir);
+    const file = join(root, paths.notes);
+    const date = isoDate(now);
+    const seeded = !existsSync(file);
+    if (seeded) await Bun.write(file, seedNotes(project.record.slug, date));
+    const existing = await Bun.file(file).text();
+    const lead = existing === '' || existing.endsWith('\n') ? '' : '\n';
+    await appendFile(file, `${lead}- ${date} — ${text}\n`);
+    commitRecords(root, `Note on floor ${floor}`, paths.notes);
+    return { floor, slug: project.record.slug, path: paths.notes, date, text, seeded };
+  });
 }

@@ -184,6 +184,7 @@ if (behavior.logFile) {
     argv: process.argv.slice(2),
     cwd: process.cwd(),
     wardAgent: id,
+    wardEnv: Object.keys(process.env).filter((key) => key.startsWith('WARD_')).sort(),
     recordSeen: recordSeen(id),
   }) + '\\n');
 }

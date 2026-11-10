@@ -16,7 +16,7 @@ import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
 
 test('a fresh create establishes every step and commits once', async () => {
   const report = await createWorkspace(root);
-  expect(report.steps.map((step) => step.outcome)).toEqual(Array(14).fill('established'));
+  expect(report.steps.map((step) => step.outcome)).toEqual(Array(15).fill('established'));
   for (const file of [
     'workspace.md',
     'catalog.md',
@@ -36,7 +36,7 @@ test('a fresh create establishes every step and commits once', async () => {
 test('re-converging an existing workspace is satisfied throughout and changes nothing', async () => {
   await createWorkspace(root);
   const report = await convergeWorkspace(root);
-  expect(report.steps.map((step) => step.outcome)).toEqual(Array(13).fill('satisfied'));
+  expect(report.steps.map((step) => step.outcome)).toEqual(Array(14).fill('satisfied'));
   expect(commitCount()).toBe(1);
   expect(git(root, 'status', '--porcelain').stdout).toBe('');
 });
@@ -78,7 +78,7 @@ test('a run interrupted after the marker is finished by a converge, not by a sec
   mkdirSync(join(root, '.ward', 'tmp'), { recursive: true });
   expect(createWorkspace(root)).rejects.toThrow(/already a Ward workspace/);
   const report = await convergeWorkspace(root);
-  expect(report.steps.map((step) => step.outcome)).toEqual(Array(13).fill('established'));
+  expect(report.steps.map((step) => step.outcome)).toEqual(Array(14).fill('established'));
   expect(existsSync(join(root, 'projects/0-workspace/project.md'))).toBe(true);
   expect(commitCount()).toBe(1);
   expect(git(root, 'status', '--porcelain').stdout).toBe('');
@@ -190,9 +190,15 @@ test('a removed ground floor is re-established at floor 0 — the reserved numbe
   const outcomes = new Map(report.steps.map((step) => [step.step, step.outcome]));
   expect(outcomes.get('standing project')).toBe('established');
   expect((await findStandingProject(root))?.dir).toBe('projects/0-workspace');
-  // The converge commit holds exactly the re-established record.
+  // The converge commit holds exactly the re-established record and its
+  // floor manifest (design 0055) — floor 1's, written at its open, is untouched.
   const committed = git(root, 'show', '--name-only', '--format=', 'HEAD').stdout.trim();
-  expect(committed).toBe('projects/0-workspace/project.md');
+  expect(committed.split('\n')).toEqual([
+    'projects/0-workspace/AGENTS.md',
+    'projects/0-workspace/CLAUDE.md',
+    'projects/0-workspace/notes.md',
+    'projects/0-workspace/project.md',
+  ]);
 });
 
 test('a customized artifact is left alone, even when dirty', async () => {

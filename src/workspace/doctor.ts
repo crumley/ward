@@ -54,6 +54,7 @@ import {
 import { taskAddress } from './address.ts';
 import { claimsOf } from './affinity.ts';
 import { sha256OfFile } from './baselines.ts';
+import { carriesManifest, floorManifestPaths } from './floor-manifest.ts';
 import { git, gitAvailable, gitIdentityConfigured, hasCommits } from './git.ts';
 import { discoverWorkspace, IGNORE_LINES, inspectClaudeGuidance } from './layout.ts';
 import { findStandingProject, GROUND_FLOOR, readProjects } from './projects.ts';
@@ -632,6 +633,7 @@ async function workspaceChecks(
   findings.push(await standingProjectFinding(root));
   findings.push(...(await legacyBareTaskFinding(root)));
   findings.push(...(await claimFindings(root)));
+  findings.push(...(await floorManifestFindings(root)));
 
   // The agent configuration, resolved from the record just validated above
   // and the global config already read — never from a second read of either.
@@ -956,6 +958,65 @@ function claudeGuidanceFinding(root: string): Finding {
           'Claude Code reads that target instead of the workspace guidance',
       };
   }
+}
+
+/**
+ * The floor manifests (design/0055-floor-manifests/): every floor that is not
+ * closed carries `AGENTS.md`, a `CLAUDE.md` link onto it, and `notes.md`. One
+ * `ok` finding when all of them do; otherwise one `info` per floor naming what
+ * it lacks, with the remedy that backfills it — nothing is broken (a session
+ * on that floor still works, it just loads less), so never warn. A
+ * `CLAUDE.md` of the floor's own is named the way the root's is, never as
+ * something to delete. Closed floors are not asked about: no session loads a
+ * closed floor's manifest, so its absence is not drift.
+ */
+async function floorManifestFindings(root: string): Promise<Finding[]> {
+  const check = 'floor manifests';
+  let floors: Awaited<ReturnType<typeof readProjects>>;
+  try {
+    floors = (await readProjects(root)).filter((project) => carriesManifest(project.record));
+  } catch {
+    return []; // an unreadable project record is already reported by the checks above
+  }
+  const findings: Finding[] = [];
+  for (const project of floors) {
+    const paths = floorManifestPaths(project.dir);
+    const gaps: string[] = [];
+    if (!existsSync(join(root, paths.agents))) gaps.push('no AGENTS.md');
+    switch (inspectClaudeGuidance(join(root, paths.dir))) {
+      case 'linked':
+        break;
+      case 'absent':
+        gaps.push('no CLAUDE.md link');
+        break;
+      case 'file':
+        gaps.push('CLAUDE.md is a regular file of its own (kept)');
+        break;
+      case 'elsewhere':
+        gaps.push('CLAUDE.md links away from AGENTS.md (kept)');
+        break;
+    }
+    if (!existsSync(join(root, paths.notes))) gaps.push('no notes.md');
+    if (gaps.length === 0) continue;
+    const missing = gaps.some((gap) => gap.startsWith('no '));
+    findings.push({
+      check,
+      severity: 'info',
+      message:
+        `floor ${project.record.floor} (${project.dir}/): ${gaps.join(', ')}` +
+        (missing ? ' — backfill it: ward workspace upgrade' : ''),
+    });
+  }
+  if (findings.length > 0) return findings;
+  return [
+    {
+      check,
+      severity: 'ok',
+      message:
+        `${floors.length} open floor${floors.length === 1 ? '' : 's'} carr` +
+        `${floors.length === 1 ? 'ies' : 'y'} AGENTS.md, CLAUDE.md, and notes.md`,
+    },
+  ];
 }
 
 /**

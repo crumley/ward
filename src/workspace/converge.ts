@@ -31,6 +31,7 @@ import {
 } from '../store/types.ts';
 import { taskAddress } from './address.ts';
 import { sha256OfFile } from './baselines.ts';
+import { carriesManifest, establishFloorManifest } from './floor-manifest.ts';
 import { git, gitAvailable, gitOrThrow, hasCommits } from './git.ts';
 import { mintWorkspaceId } from './identity.ts';
 import { IGNORE_LINES, inspectClaudeGuidance, MARKER_DIR, SCOPE_DIRS } from './layout.ts';
@@ -39,6 +40,7 @@ import {
   findStandingProject,
   GROUND_FLOOR,
   GROUND_FLOOR_DIR,
+  readProjects,
   STANDING_PROJECT_SLUG,
 } from './projects.ts';
 import { readTasks } from './scan.ts';
@@ -104,6 +106,7 @@ export async function convergeWorkspace(root: string): Promise<ConvergeReport> {
     steps.push(await establishIgnorePolicy(ctx));
     steps.push(await establishScopeDirs(ctx));
     steps.push(await establishStandingProject(ctx));
+    steps.push(await establishFloorManifests(ctx));
     steps.push(await establishBaselines(ctx));
     steps.push(establishGitRepository(ctx));
     steps.push(await establishMainLine(ctx));
@@ -393,6 +396,39 @@ function moveTracked(root: string, from: string, to: string): void {
     return;
   }
   renameSync(join(root, from), join(root, to));
+}
+
+/**
+ * Backfill the floor manifests (design/0055-floor-manifests/): every floor
+ * that is not closed — the ground floor included, which the step above has
+ * just put in place — gets whichever of `AGENTS.md`, `CLAUDE.md`, and
+ * `notes.md` it lacks. Runs after the standing project so a relocated ground
+ * floor is manifested at its new address. Nothing here is fingerprinted: the
+ * floor manifest's lineage is complete from its first default, so the
+ * lineage alone tells untouched from customized and a baseline per floor
+ * would add a write to every `project open` for nothing. A file that is
+ * already there is never touched: bringing an untouched `AGENTS.md` forward
+ * is the upgrade's artifact pass, not convergence.
+ */
+async function establishFloorManifests(ctx: ConvergeContext): Promise<StepReport> {
+  const step = 'floor manifests';
+  const floors = (await readProjects(ctx.root)).filter((project) =>
+    carriesManifest(project.record),
+  );
+  const established: number[] = [];
+  for (const project of floors) {
+    const written = await establishFloorManifest(ctx.root, project);
+    if (written.length === 0) continue;
+    ctx.establishedPaths.push(...written);
+    established.push(project.record.floor);
+  }
+  const count = `${floors.length} open floor${floors.length === 1 ? '' : 's'}`;
+  if (established.length === 0) return { step, outcome: 'satisfied', detail: count };
+  return {
+    step,
+    outcome: 'established',
+    detail: `${count}; written on floor${established.length === 1 ? '' : 's'} ${established.join(', ')}`,
+  };
 }
 
 /**

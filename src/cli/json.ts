@@ -30,6 +30,7 @@ import { taskAddress } from '../workspace/address.ts';
 import type { ClaimReport, ReleaseReport } from '../workspace/affinity.ts';
 import type { CreateReport } from '../workspace/create.ts';
 import type { DoctorReport } from '../workspace/doctor.ts';
+import type { FloorNoteReport } from '../workspace/projects.ts';
 import type { AddReport, RefreshReport, RemoveReport } from '../workspace/repos.ts';
 import type { RestoreReport } from '../workspace/restore.ts';
 import type {
@@ -50,6 +51,7 @@ import type {
   PrForgeShape,
   ProjectClaimShape,
   ProjectListShape,
+  ProjectNoteShape,
   ProjectOpenShape,
   RepoAddShape,
   RepoListShape,
@@ -446,6 +448,18 @@ export function projectClaimJson(
       slug: task.slug,
       ...(task.floor === undefined ? {} : { floor: task.floor }),
     })),
+  };
+}
+
+/** `project note` — the appended bullet, as the report carries it. */
+export function projectNoteJson(report: FloorNoteReport): ProjectNoteShape {
+  return {
+    floor: report.floor,
+    slug: report.slug,
+    path: report.path,
+    date: report.date,
+    text: report.text,
+    seeded: report.seeded,
   };
 }
 
