@@ -8,7 +8,15 @@
 // WARD_TMUX_SOCKET), started here with no configuration file and killed in
 // afterAll — nothing here can see or touch a human's own tmux sessions. When
 // tmux is not installed the suite is skipped, saying so; CI installs it.
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from 'bun:test';
 import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -24,6 +32,10 @@ import { GROUND_FLOOR, openProject } from '../../src/workspace/projects.ts';
 import { readAllSessions } from '../../src/workspace/sessions.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { applyGitTestEnv, type CliResult, makeTempDir, removeDir } from '../helpers.ts';
+
+// Real tmux on a shared CI runner: a re-create-then-join round trip took over
+// 5s on macOS (Bun's default per-test limit) while passing on Linux.
+setDefaultTimeout(30_000);
 
 const TMUX = Bun.which('tmux');
 if (TMUX === null) {
