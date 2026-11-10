@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@v5
 
       # The real-tmux suite (test/host/tmux-live.test.ts,
       # design/0031-detached-session-hosting/) needs a tmux binary; it skips
