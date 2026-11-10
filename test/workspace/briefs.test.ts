@@ -200,8 +200,9 @@ function cliEnv(): Record<string, string> {
     ...WARD_GLOBAL_ENV,
   };
   delete env.WARD_AGENT;
-  delete env.NO_COLOR;
   delete env.FORCE_COLOR;
+  // Plain text, whatever the runner says: CI sets CI=true, which turns color on.
+  env.NO_COLOR = '1';
   return Object.fromEntries(
     Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined),
   );
