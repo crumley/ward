@@ -421,6 +421,21 @@ const convergeStepShape = z.strictObject({
   step: z.string(),
   outcome: z.enum(['established', 'satisfied']),
   detail: z.string(),
+  /**
+   * What the step left in place on purpose (design/0057-context-from-root/):
+   * a worktree the migration would not move, or what still holds
+   * `worktrees/` — each with why, and the command that clears it where there
+   * is one. Present exactly when the step left something.
+   */
+  residue: z
+    .array(
+      z.strictObject({
+        path: z.string(),
+        reason: z.string(),
+        command: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export const workspaceCreateShape = z.strictObject({
@@ -670,6 +685,16 @@ export const workspaceRestoreShape = z.strictObject({
       detail: z.string(),
     }),
   ),
+  /**
+   * The floors' views under `floors/`, established after the worktrees
+   * (design/0057-context-from-root/): how many open floors, and the links
+   * this run wrote.
+   */
+  floorViews: z.strictObject({
+    floors: z.number().int().nonnegative(),
+    written: z.array(z.string()),
+    detail: z.string(),
+  }),
   /** Open session records found in the record — named, never restored. */
   sessions: z.strictObject({
     open: z.number().int().nonnegative(),
@@ -943,6 +968,38 @@ export const sessionLocateShape = z.strictObject({
 export type SessionLocateShape = z.infer<typeof sessionLocateShape>;
 
 /**
+ * `ward context PATH` (design/0057-context-from-root/): every `AGENTS.md` on
+ * the path from the workspace root down to PATH, root first and nearest last
+ * — the chain the root manifest's reading rule walks. Each entry says whether
+ * the file is a link (a floor view's is) and where it points, whether it
+ * resolves, and what serves Claude Code's filename beside it.
+ */
+export const contextShape = z.strictObject({
+  /** The workspace root, absolute. */
+  root: z.string(),
+  /** PATH, workspace-relative (`.` for the root itself). */
+  path: z.string(),
+  chain: z.array(
+    z.strictObject({
+      /** The directory, workspace-relative (`.` for the root). */
+      dir: z.string(),
+      /** The `AGENTS.md`, workspace-relative. */
+      agents: z.string(),
+      /** The link's text, present exactly when the `AGENTS.md` is a link. */
+      link: z.string().optional(),
+      /** Whether the `AGENTS.md` can be read: a dangling link cannot. */
+      resolves: z.boolean(),
+      /**
+       * The `CLAUDE.md` beside it: `linked` onto this `AGENTS.md`, `absent`,
+       * a regular `file`, or a link aimed `elsewhere`.
+       */
+      claude: z.enum(['linked', 'absent', 'file', 'elsewhere']),
+    }),
+  ),
+});
+export type ContextShape = z.infer<typeof contextShape>;
+
+/**
  * The registry: each key is exactly what the caller types after `ward` (minus
  * `--json`), so discovering a shape and invoking its verb agree by
  * construction. Order matches the documented verb list; JSON.stringify
@@ -959,6 +1016,7 @@ export const readVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'repo list': repoListShape,
   'workspace list': workspaceListShape,
   doctor: doctorShape,
+  context: contextShape,
 };
 
 /**

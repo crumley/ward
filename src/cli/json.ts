@@ -30,6 +30,8 @@ import {
 import { taskAddress } from '../workspace/address.ts';
 import type { ClaimReport, ReleaseReport } from '../workspace/affinity.ts';
 import type { BriefReport } from '../workspace/briefs.ts';
+import type { ContextChain } from '../workspace/context.ts';
+import type { StepReport } from '../workspace/converge.ts';
 import type { CreateReport } from '../workspace/create.ts';
 import type { DoctorReport } from '../workspace/doctor.ts';
 import type { FloorNoteReport } from '../workspace/projects.ts';
@@ -49,6 +51,7 @@ import type { RebaseReport, WorktreeListing, WorktreeStatus } from '../workspace
 import { callerIsAgent } from './caller.ts';
 import { writeOut } from './output.ts';
 import type {
+  ContextShape,
   DoctorShape,
   PrForgeShape,
   ProjectClaimShape,
@@ -380,13 +383,42 @@ export function repoListJson(records: readonly RepositoryRecord[]): RepoListShap
 // before producing a report emits nothing here: refusals stay the error path
 // (stderr + exit 1, stdout empty), the posture 0005 set.
 
+/** One converge step, its residue carried when it left any (design/0057-context-from-root/). */
+function convergeStepJson(step: StepReport): WorkspaceCreateShape['steps'][number] {
+  return {
+    step: step.step,
+    outcome: step.outcome,
+    detail: step.detail,
+    ...(step.residue === undefined
+      ? {}
+      : {
+          residue: step.residue.map((item) => ({
+            path: item.path,
+            reason: item.reason,
+            ...(item.command === undefined ? {} : { command: item.command }),
+          })),
+        }),
+  };
+}
+
 export function workspaceCreateJson(report: CreateReport): WorkspaceCreateShape {
   return {
     root: report.root,
-    steps: report.steps.map((step) => ({
-      step: step.step,
-      outcome: step.outcome,
-      detail: step.detail,
+    steps: report.steps.map(convergeStepJson),
+  };
+}
+
+/** `ward context` (design/0057-context-from-root/): the chain, verbatim. */
+export function contextJson(report: ContextChain): ContextShape {
+  return {
+    root: report.root,
+    path: report.path,
+    chain: report.chain.map((level) => ({
+      dir: level.dir,
+      agents: level.agents,
+      ...(level.link === undefined ? {} : { link: level.link }),
+      resolves: level.resolves,
+      claude: level.claude,
     })),
   };
 }
@@ -576,6 +608,11 @@ export function workspaceRestoreJson(report: RestoreReport): WorkspaceRestoreSha
       outcome: item.outcome,
       detail: item.detail,
     })),
+    floorViews: {
+      floors: report.floorViews.floors,
+      written: [...report.floorViews.written],
+      detail: report.floorViews.detail,
+    },
     sessions: { open: report.sessions.open, detail: report.sessions.detail },
   };
 }
@@ -584,11 +621,7 @@ export function workspaceRestoreJson(report: RestoreReport): WorkspaceRestoreSha
 export function workspaceUpgradeJson(report: UpgradeReport): WorkspaceUpgradeShape {
   return {
     vehicle: report.vehicle,
-    converged: report.converged.map((step) => ({
-      step: step.step,
-      outcome: step.outcome,
-      detail: step.detail,
-    })),
+    converged: report.converged.map(convergeStepJson),
     ...(report.task === undefined ? {} : { task: report.task }),
     ...(report.branch === undefined ? {} : { branch: report.branch }),
     ...(report.path === undefined ? {} : { path: report.path }),

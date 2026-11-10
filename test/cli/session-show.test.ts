@@ -91,6 +91,20 @@ test('--handle still wins over the run, and outside any run nothing is recorded'
   expect(sessionMutationShape.parse(JSON.parse(outside.stdout)).handle).toBeUndefined();
 });
 
+// Every session starts at the workspace root (design/0057-context-from-root/):
+// a task session opened without --dir records the root, never a guessed
+// worktree; --dir still records exactly what the caller names.
+test('a task session defaults its working directory to the root; --dir keeps its value', () => {
+  const opened = (argv: string[]) =>
+    sessionMutationShape.parse(
+      JSON.parse(runWard(['session', 'open', 'f0t1', ...argv, '--json'], ws).stdout),
+    ).workingDirectory;
+  expect(opened(['--purpose', 'at the root'])).toBe('.');
+  expect(opened(['--purpose', 'elsewhere', '--dir', 'floors/0-workspace/somewhere'])).toBe(
+    'floors/0-workspace/somewhere',
+  );
+});
+
 test('ambientHandle: the run Claude Code names, and an empty value is no run', () => {
   expect(ambientHandle({ CLAUDE_CODE_SESSION_ID: RUN_ID })).toBe(`claude:${RUN_ID}`);
   expect(ambientHandle({ CLAUDE_CODE_SESSION_ID: '' })).toBeNull();

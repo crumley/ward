@@ -92,7 +92,7 @@ test('statusReport carries worktrees per non-closed task and never asks settled 
   // Both tasks are on the ground floor, which leads the listing (0041).
   const [t1, t2] = report.projects[0]?.tasks ?? [];
   expect(t1?.worktrees?.map((s) => s.freshness)).toEqual(['current']);
-  expect(t1?.worktrees?.[0]?.record.path).toBe('worktrees/f0t1-feature');
+  expect(t1?.worktrees?.[0]?.record.path).toBe('floors/0-workspace/f0t1-feature');
   expect(t2?.worktrees).toEqual([]); // none recorded — the honest empty, not absence
 
   await closeTask(ws, 't2', 'abandoned');
@@ -119,7 +119,7 @@ test('without git on PATH the rows keep their identity and freshness vanishes', 
 // -- setup ----------------------------------------------------------------
 // A fresh workspace per test with one registered repository `demo` (bare
 // remote, branch `main`), one bare task t1 `feature`, and its worktree at
-// worktrees/f0t1-feature — the rebase suite's scaffold, read instead of mutated.
+// floors/0-workspace/f0t1-feature — the rebase suite's scaffold, read instead of mutated.
 
 let scratch: string;
 let remote: string;

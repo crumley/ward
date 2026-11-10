@@ -14,9 +14,18 @@ import { discoverWorkspace } from '../../src/workspace/layout.ts';
 import { findStandingProject, openProject } from '../../src/workspace/projects.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
 
+// The two layout-migration steps (design/0057-context-from-root/) close the
+// list; on a fresh workspace there is nothing to move and nothing to retire.
+const MIGRATION_STEPS = ['worktree placement', 'retire worktrees/'];
+
 test('a fresh create establishes every step and commits once', async () => {
   const report = await createWorkspace(root);
-  expect(report.steps.map((step) => step.outcome)).toEqual(Array(15).fill('established'));
+  expect(report.steps.map((step) => step.outcome)).toEqual([
+    ...Array(16).fill('established'),
+    'satisfied',
+    'satisfied',
+  ]);
+  expect(report.steps.slice(-2).map((step) => step.step)).toEqual(MIGRATION_STEPS);
   for (const file of [
     'workspace.md',
     'catalog.md',
@@ -36,7 +45,7 @@ test('a fresh create establishes every step and commits once', async () => {
 test('re-converging an existing workspace is satisfied throughout and changes nothing', async () => {
   await createWorkspace(root);
   const report = await convergeWorkspace(root);
-  expect(report.steps.map((step) => step.outcome)).toEqual(Array(14).fill('satisfied'));
+  expect(report.steps.map((step) => step.outcome)).toEqual(Array(17).fill('satisfied'));
   expect(commitCount()).toBe(1);
   expect(git(root, 'status', '--porcelain').stdout).toBe('');
 });
@@ -67,7 +76,7 @@ test('create still succeeds on an absent path and on an existing empty directory
   ] as const) {
     const report = await createWorkspace(path);
     expect(report.steps[0]).toMatchObject({ step: 'root directory', outcome: first });
-    expect(report.steps.slice(1).every((step) => step.outcome === 'established')).toBe(true);
+    expect(report.steps.slice(1, -2).every((step) => step.outcome === 'established')).toBe(true);
     expect(existsSync(join(path, 'projects/0-workspace/project.md'))).toBe(true);
   }
 });
@@ -78,7 +87,11 @@ test('a run interrupted after the marker is finished by a converge, not by a sec
   mkdirSync(join(root, '.ward', 'tmp'), { recursive: true });
   expect(createWorkspace(root)).rejects.toThrow(/already a Ward workspace/);
   const report = await convergeWorkspace(root);
-  expect(report.steps.map((step) => step.outcome)).toEqual(Array(14).fill('established'));
+  expect(report.steps.map((step) => step.outcome)).toEqual([
+    ...Array(15).fill('established'),
+    'satisfied',
+    'satisfied',
+  ]);
   expect(existsSync(join(root, 'projects/0-workspace/project.md'))).toBe(true);
   expect(commitCount()).toBe(1);
   expect(git(root, 'status', '--porcelain').stdout).toBe('');

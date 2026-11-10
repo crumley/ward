@@ -18,17 +18,17 @@ import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
 const rows: readonly { name: string; dir: () => string; task: string | null }[] = [
   {
     name: "a worktree's root resolves to its task",
-    dir: () => join(ws, 'worktrees/f0t1-feature'),
+    dir: () => join(ws, 'floors/0-workspace/f0t1-feature'),
     task: 't1',
   },
   {
     name: 'a directory nested deep inside a worktree resolves the same',
-    dir: () => join(ws, 'worktrees/f0t1-feature/deep/down'),
+    dir: () => join(ws, 'floors/0-workspace/f0t1-feature/deep/down'),
     task: 't1',
   },
   {
     name: "a second task's worktree resolves to the second task",
-    dir: () => join(ws, 'worktrees/f0t2-other'),
+    dir: () => join(ws, 'floors/0-workspace/f0t2-other'),
     task: 't2',
   },
   { name: 'the workspace root implies no task', dir: () => ws, task: null },
@@ -44,7 +44,7 @@ const rows: readonly { name: string; dir: () => string; task: string | null }[] 
   },
   {
     name: "a closed task's stale record claims nothing, even if the directory returns",
-    dir: () => join(ws, 'worktrees/f0t3-gone'),
+    dir: () => join(ws, 'floors/0-workspace/f0t3-gone'),
     task: null,
   },
   { name: 'a directory outside the workspace implies no task', dir: () => outside, task: null },
@@ -58,8 +58,8 @@ for (const row of rows) {
 }
 
 test('the resolved scope carries the claiming worktree record', async () => {
-  const scope = await scopeFromCwd(ws, join(ws, 'worktrees/f0t1-feature/deep/down'));
-  expect(scope?.worktree.path).toBe('worktrees/f0t1-feature');
+  const scope = await scopeFromCwd(ws, join(ws, 'floors/0-workspace/f0t1-feature/deep/down'));
+  expect(scope?.worktree.path).toBe('floors/0-workspace/f0t1-feature');
   expect(scope?.worktree.repo).toBe('demo');
   expect(scope?.task.record.slug).toBe('feature');
 });
@@ -99,8 +99,8 @@ beforeAll(async () => {
   await openTask(ws, 'gone', { floor: GROUND_FLOOR });
   await createWorktree(ws, 't3', 'demo', 'gone');
   await closeTask(ws, 't3', 'abandoned');
-  mkdirSync(join(ws, 'worktrees/f0t3-gone'), { recursive: true });
-  mkdirSync(join(ws, 'worktrees/f0t1-feature/deep/down'), { recursive: true });
+  mkdirSync(join(ws, 'floors/0-workspace/f0t3-gone'), { recursive: true });
+  mkdirSync(join(ws, 'floors/0-workspace/f0t1-feature/deep/down'), { recursive: true });
 });
 
 afterAll(() => {

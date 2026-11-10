@@ -20,7 +20,7 @@ test('inferred inside the worktree: the echoed task, then the per-worktree repor
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('task f0t1 — from the working directory');
   expect(result.stdout).toContain('rebased');
-  expect(result.stdout).toContain('worktrees/f0t1-feature');
+  expect(result.stdout).toContain('floors/0-workspace/f0t1-feature');
 });
 
 test('a declared agent is refused the inference; with an explicit code it proceeds', () => {
@@ -77,7 +77,7 @@ test('a task with no worktrees says so and succeeds', async () => {
 // -- setup ----------------------------------------------------------------
 // A fresh workspace per test (the verbs mutate) with one registered
 // repository `demo` on branch `main` and one bare task t1 `feature` whose
-// worktree is worktrees/f0t1-feature.
+// worktree is floors/0-workspace/f0t1-feature.
 
 let scratch: string;
 let remote: string;

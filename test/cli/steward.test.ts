@@ -29,7 +29,7 @@ import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts'
 test('worktree create --workspace: the stewardship worktree, both renderings', () => {
   const human = runWard(['worktree', 'create', 't1', '--workspace'], ws);
   expect(human.exitCode).toBe(0);
-  expect(human.stdout).toContain('created worktrees/f0t1-steward-steward-work');
+  expect(human.stdout).toContain('created floors/0-workspace/f0t1-steward-steward-work');
   expect(human.stdout).toContain("the workspace's own repository");
   expect(human.stdout).toContain('branch steward/steward-work');
 
@@ -43,7 +43,7 @@ test('worktree create --workspace: the stewardship worktree, both renderings', (
     source: 'workspace',
     branch: 'steward/steward-work',
     disposition: 'deliverable',
-    path: 'worktrees/f0t1-steward-steward-work',
+    path: 'floors/0-workspace/f0t1-steward-steward-work',
     createdAt: doc.createdAt,
   });
   expect(Object.keys(doc)).not.toContain('repo');

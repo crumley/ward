@@ -40,7 +40,7 @@ const TODAY = new Date().toISOString().slice(0, 10);
 
 test('the floor default is pinned; changing it must move its old hash into the history', () => {
   expect(sha256OfText(FLOOR_AGENTS_MD)).toBe(
-    'b86cab9ade1cfa0528d144fe03f5a02a79ba1fdb2fd10b5c4d0f6bfb792b4e59', // since design 0056
+    '13957e84d33b1b1d328d53a84d99a47f948e568660872dc947ab7fbe17dbcae7', // since design 0057
   );
   const hashes = [...FLOOR_AGENTS_MD_HISTORY.map((v) => v.sha256), sha256OfText(FLOOR_AGENTS_MD)];
   expect(new Set(hashes).size).toBe(hashes.length);
@@ -51,7 +51,7 @@ test('the floor default says nothing floor-specific and loads the notes last', (
   expect(FLOOR_AGENTS_MD.endsWith('\n\n@notes.md\n')).toBe(true);
   expect(FLOOR_AGENTS_MD).toContain('ward project note FLOOR TEXT');
   expect(AGENTS_MD).not.toContain('WARD_FLOOR_MANIFEST');
-  expect(AGENTS_MD).toContain('projects/<N>-<slug>/AGENTS.md');
+  expect(AGENTS_MD).toContain('floors/<N>-<slug>/AGENTS.md');
   expect(AGENTS_MD).toContain('ward project note FLOOR TEXT');
 });
 

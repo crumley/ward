@@ -4,7 +4,7 @@
 > `AGENTS.md` on the path from the root down to where it works; task worktrees move under their
 > floor, to `floors/<N>-<slug>/`, so that path passes through the floor's manifest.
 >
-> **Status:** accepted (2026-11-10) · **Started:** 2026-11-09
+> **Status:** built — awaiting review (design accepted 2026-11-10) · **Started:** 2026-11-09
 
 Two entries in review each built a custom mechanism to get one level's context to the session that
 needs it. [0055](https://github.com/crumley/ward/pull/123) gives every floor a manifest beside its

@@ -30,7 +30,7 @@ test('the bootstrap loop: project → task → worktree → work → merge → d
 
   const session = await openSession(ws, 't1', 'write the feature', { handle: 'claude-code:abc' });
   expect(session.id).toBe('json-output-1@test');
-  expect(session.workingDirectory).toBe(wt.path);
+  expect(session.workingDirectory).toBe('.'); // every session starts at the root (0057)
 
   await Bun.write(join(wtDir, 'out.json'), '{}\n');
   gitOrThrow(wtDir, 'add', '-A');

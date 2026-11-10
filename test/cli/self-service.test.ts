@@ -67,7 +67,7 @@ test('bare and human: the derived vehicle, the pull request, and the four acts t
   // The derivation is echoed, never silent — and under --json it echoes on
   // stderr, so stdout carries one document alone (0005/0006).
   expect(result.stderr).toContain('task f0t1 — opened for this upgrade');
-  expect(result.stderr).toContain('worktree worktrees/f0t1-steward-workspace-upgrade');
+  expect(result.stderr).toContain('worktree floors/0-workspace/f0t1-steward-workspace-upgrade');
   expect(report.derived?.map((step) => step.step)).toEqual(['task', 'worktree']);
 });
 
@@ -131,7 +131,12 @@ test('the no-op case manufactures nothing: no task, no worktree, no branch, no p
   expect(report.pullRequest).toBeUndefined();
   expect(report.remaining).toEqual([]);
   expect(JSON.parse(ward(ws, ['task', 'list', '--json'], {}).stdout).tasks).toEqual([]);
-  expect(readdirSync(join(ws, 'worktrees'))).toEqual([]);
+  // The ground floor's view holds its three links and no worktree (0057).
+  expect(readdirSync(join(ws, 'floors/0-workspace')).sort()).toEqual([
+    'AGENTS.md',
+    'CLAUDE.md',
+    'notes.md',
+  ]);
   expect(localBranches(ws)).toEqual([mainLine]);
 });
 

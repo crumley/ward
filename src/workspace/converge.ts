@@ -14,8 +14,8 @@
 // directories, a symlink, the baseline backfill — so they land on the
 // workspace's own main line directly, as one journal commit, the way every
 // mutation verb's bookkeeping does (design/0019-stewardship-worktrees/).
-import { existsSync, renameSync } from 'node:fs';
-import { appendFile, mkdir, readFile, symlink } from 'node:fs/promises';
+import { existsSync, readdirSync, renameSync, rmdirSync } from 'node:fs';
+import { appendFile, mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
@@ -29,12 +29,20 @@ import {
   taskRecordType,
   workspaceRecordType,
 } from '../store/types.ts';
-import { taskAddress } from './address.ts';
+import { taskAddress, taskFloor } from './address.ts';
 import { sha256OfFile } from './baselines.ts';
 import { carriesManifest, establishFloorManifest } from './floor-manifest.ts';
+import { establishFloorViews } from './floor-views.ts';
 import { git, gitAvailable, gitOrThrow, hasCommits } from './git.ts';
 import { mintWorkspaceId } from './identity.ts';
-import { IGNORE_LINES, inspectClaudeGuidance, MARKER_DIR, SCOPE_DIRS } from './layout.ts';
+import {
+  IGNORE_LINES,
+  inspectClaudeGuidance,
+  LEGACY_WORKTREES_DIR,
+  LEGACY_WORKTREES_IGNORE,
+  MARKER_DIR,
+  SCOPE_DIRS,
+} from './layout.ts';
 import {
   type FoundProject,
   findStandingProject,
@@ -43,7 +51,9 @@ import {
   readProjects,
   STANDING_PROJECT_SLUG,
 } from './projects.ts';
-import { readTasks } from './scan.ts';
+import { listRepositoryNames } from './repos.ts';
+import { commitRecords, readTasks } from './scan.ts';
+import { readOpenSessions } from './sessions.ts';
 import { warnJournalOffMainLine, workspaceMainLine } from './steward.ts';
 import {
   AGENTS_MD,
@@ -52,13 +62,34 @@ import {
   WARD_INTERNAL_README,
   WORKSPACE_RECORD_BODY,
 } from './templates.ts';
+import {
+  openWorktreeClaims,
+  readTaskWorktreeEntries,
+  registeredCheckouts,
+  relocateWorktree,
+  workspaceRelative,
+} from './worktrees.ts';
 
 export type StepOutcome = 'established' | 'satisfied';
+
+/**
+ * Something a step left in place on purpose, with why — and, where there is
+ * one, the command that clears it (design/0057-context-from-root/). A step
+ * with residue converges on a later run once the residue is cleared.
+ */
+export interface StepResidue {
+  /** Workspace-relative path, or a task address, naming what was left. */
+  readonly path: string;
+  readonly reason: string;
+  readonly command?: string;
+}
 
 export interface StepReport {
   readonly step: string;
   readonly outcome: StepOutcome;
   readonly detail: string;
+  /** Present exactly when the step left something in place. */
+  readonly residue?: readonly StepResidue[];
 }
 
 export interface ConvergeReport {
@@ -107,10 +138,18 @@ export async function convergeWorkspace(root: string): Promise<ConvergeReport> {
     steps.push(await establishScopeDirs(ctx));
     steps.push(await establishStandingProject(ctx));
     steps.push(await establishFloorManifests(ctx));
+    steps.push(await establishFloorViewsStep(ctx));
     steps.push(await establishBaselines(ctx));
     steps.push(establishGitRepository(ctx));
     steps.push(await establishMainLine(ctx));
     steps.push(establishCommit(ctx));
+    // The layout move (design/0057-context-from-root/) runs after the
+    // convergence commit, because it journals on its own terms: one commit per
+    // task whose worktree record moves, then one for the retirement. By then
+    // `/floors/` is in the committed ignore list, so nothing moved under it
+    // can surface as untracked.
+    steps.push(await placeWorktrees(ctx));
+    steps.push(await retireWorktreesDir(ctx));
   });
   return { root, steps };
 }
@@ -428,6 +467,203 @@ async function establishFloorManifests(ctx: ConvergeContext): Promise<StepReport
     step,
     outcome: 'established',
     detail: `${count}; written on floor${established.length === 1 ? '' : 's'} ${established.join(', ')}`,
+  };
+}
+
+/**
+ * Every open floor's view, `floors/<N>-<slug>/` (design/0057-context-from-root/):
+ * the three links onto the floor's record, written only where absent. The
+ * tree is ignored, so nothing here joins the convergence commit. Runs after
+ * the floor manifests so each view's links resolve the moment they exist.
+ */
+async function establishFloorViewsStep(ctx: ConvergeContext): Promise<StepReport> {
+  const step = 'floor views';
+  const { floors, written } = await establishFloorViews(ctx.root, await readProjects(ctx.root));
+  const count = `${floors} open floor${floors === 1 ? '' : 's'} under floors/`;
+  if (written.length === 0) return { step, outcome: 'satisfied', detail: count };
+  return {
+    step,
+    outcome: 'established',
+    detail: `${count}; ${written.length} link${written.length === 1 ? '' : 's'} written`,
+  };
+}
+
+/**
+ * The migration (design/0057-context-from-root/): every worktree of an open
+ * floor task that is not at its placement is found through git, moved with
+ * `git worktree move`, and its record's `path` rewritten — one journal commit
+ * per task. A dirty worktree, one with an open session inside it, and one git
+ * refuses to move are each left exactly where they are and listed as residue;
+ * the step converges on a later run once they are cleared. Legacy bare tasks
+ * are not asked: they have no floor, so their worktrees stay at
+ * `worktrees/`. Closed tasks are not asked either: their worktrees were torn
+ * down at close, and the paths their records keep are history.
+ */
+async function placeWorktrees(ctx: ConvergeContext): Promise<StepReport> {
+  const step = 'worktree placement';
+  const sessions = (await readOpenSessions(ctx.root)).map((listing) => listing.record);
+  const claims = await openWorktreeClaims(ctx.root);
+  const residue: StepResidue[] = [];
+  let moved = 0;
+  let placed = 0;
+  for (const task of await readTasks(ctx.root)) {
+    if (task.record.state === 'closed' || taskFloor(task) === undefined) continue;
+    const rewritten: string[] = [];
+    const branches: string[] = [];
+    for (const entry of await readTaskWorktreeEntries(ctx.root, task.dir)) {
+      const outcome = await relocateWorktree(ctx.root, task, entry, sessions, claims);
+      switch (outcome.kind) {
+        case 'placed':
+          placed += 1;
+          break;
+        case 'moved':
+        case 'recorded':
+          moved += 1;
+          branches.push(entry.record.branch);
+          if (outcome.relPath !== undefined) rewritten.push(outcome.relPath);
+          break;
+        case 'refused':
+          residue.push({
+            path: outcome.at,
+            reason: `${taskAddress(task)} — ${outcome.reason}`,
+            ...(outcome.command === undefined ? {} : { command: outcome.command }),
+          });
+          break;
+      }
+    }
+    if (rewritten.length > 0) {
+      requireGitIdentity(ctx.root);
+      const plural = branches.length === 1 ? '' : 's';
+      commitRecords(
+        ctx.root,
+        `Move worktree${plural} ${branches.join(', ')} for task ${taskAddress(task)} to floors/`,
+        ...rewritten,
+      );
+    }
+  }
+  const parts = [
+    `${moved} moved`,
+    `${placed} already placed`,
+    ...(residue.length === 0 ? [] : [`${residue.length} left in place`]),
+    // `mise trust` and `direnv allow` are keyed to a path, so the first
+    // command in a moved worktree may ask for trust again — said here, where
+    // the move is reported, rather than discovered there.
+    ...(moved === 0 ? [] : ['a moved worktree may ask for mise trust or direnv allow again']),
+  ];
+  return {
+    step,
+    outcome: moved > 0 ? 'established' : 'satisfied',
+    detail: parts.join(', '),
+    ...(residue.length === 0 ? {} : { residue }),
+  };
+}
+
+/**
+ * Retiring `worktrees/` (design/0057-context-from-root/): `floors/` is the one
+ * home for working checkouts, so the old directory goes once nothing holds
+ * it. Three things must hold — no worktree record of an open task names a
+ * path under it; no repository's `git worktree list` (every canonical
+ * checkout's, and the workspace's own) names a checkout under it; and nothing
+ * else is left in it — and then the empty directory is removed (`rmdir`,
+ * never recursive) and `/worktrees/` leaves `.gitignore`, in one journal
+ * commit. While any fails, what holds the directory is listed and nothing
+ * changes. The step never deletes a checkout: a checkout left behind may hold
+ * the only copy of some work, so it is named with the command that removes
+ * it, for a human to run.
+ */
+async function retireWorktreesDir(ctx: ConvergeContext): Promise<StepReport> {
+  const step = 'retire worktrees/';
+  const dir = join(ctx.root, LEGACY_WORKTREES_DIR);
+  const ignoreFile = join(ctx.root, '.gitignore');
+  const ignore = existsSync(ignoreFile) ? await readFile(ignoreFile, 'utf8') : '';
+  const ignoreHasLine = ignore.split('\n').includes(LEGACY_WORKTREES_IGNORE);
+  if (!existsSync(dir) && !ignoreHasLine) {
+    return { step, outcome: 'satisfied', detail: 'worktrees/ is retired' };
+  }
+  const residue: StepResidue[] = [];
+  const named = new Set<string>();
+  const under = (path: string) =>
+    path === LEGACY_WORKTREES_DIR || path.startsWith(`${LEGACY_WORKTREES_DIR}/`);
+
+  // 1. An open task's record still naming a path under it.
+  for (const task of await readTasks(ctx.root)) {
+    if (task.record.state === 'closed') continue;
+    for (const entry of await readTaskWorktreeEntries(ctx.root, task.dir)) {
+      if (!under(entry.record.path)) continue;
+      named.add(entry.record.path);
+      residue.push({
+        path: entry.record.path,
+        reason:
+          taskFloor(task) === undefined
+            ? `the worktree of open legacy task ${taskAddress(task)} — it goes when the task closes`
+            : `the worktree of open task ${taskAddress(task)}, not yet moved to floors/ (see worktree placement)`,
+      });
+    }
+  }
+  // 2. A checkout git still has registered under it.
+  const sources = [
+    { dir: ctx.root, spell: 'git' },
+    ...listRepositoryNames(ctx.root).map((name) => ({
+      dir: join(ctx.root, 'repos', name),
+      spell: `git -C repos/${name}`,
+    })),
+  ];
+  for (const source of sources) {
+    for (const checkout of registeredCheckouts(source.dir) ?? []) {
+      const rel = workspaceRelative(ctx.root, checkout.path);
+      if (rel === undefined || !under(rel) || named.has(rel)) continue;
+      named.add(rel);
+      residue.push(
+        checkout.prunable
+          ? {
+              path: rel,
+              reason: 'a stale registration — its directory is gone, but git still names it',
+              command: `${source.spell} worktree prune`,
+            }
+          : {
+              path: rel,
+              reason:
+                'a checkout no open task records — a close that did not tear it down, or one made by hand; ' +
+                'it may hold the only copy of some work, so check it before removing it',
+              command: `${source.spell} worktree remove ${rel}`,
+            },
+      );
+    }
+  }
+  // 3. Anything else left in it.
+  if (existsSync(dir)) {
+    for (const name of readdirSync(dir).sort()) {
+      const rel = `${LEGACY_WORKTREES_DIR}/${name}`;
+      if (named.has(rel)) continue;
+      residue.push({
+        path: rel,
+        reason: 'not a checkout Ward or git knows — yours to move or remove',
+      });
+    }
+  }
+  if (residue.length > 0) {
+    return {
+      step,
+      outcome: 'satisfied',
+      detail: `worktrees/ kept — ${residue.length} thing${residue.length === 1 ? '' : 's'} still in it`,
+      residue,
+    };
+  }
+
+  if (existsSync(dir)) rmdirSync(dir); // never recursive: it is empty, or this throws
+  if (ignoreHasLine) {
+    const kept = ignore
+      .split('\n')
+      .filter((line) => line !== LEGACY_WORKTREES_IGNORE)
+      .join('\n');
+    await writeFile(ignoreFile, kept);
+    requireGitIdentity(ctx.root);
+    commitRecords(ctx.root, 'Retire worktrees/', '.gitignore');
+  }
+  return {
+    step,
+    outcome: 'established',
+    detail: 'worktrees/ removed, and its line dropped from .gitignore',
   };
 }
 

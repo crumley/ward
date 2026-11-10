@@ -38,7 +38,7 @@ test('a workspace worktree: branched from main, record encoding, the root never 
   expect(record.repo).toBeUndefined();
   expect(record.branch).toBe('steward/steward-work');
   expect(record.disposition).toBe('deliverable');
-  expect(record.path).toBe('worktrees/f0t1-steward-steward-work');
+  expect(record.path).toBe('floors/0-workspace/f0t1-steward-steward-work');
   // The root checkout IS the main-line checkout and never leaves it.
   expect(gitOrThrow(ws, 'symbolic-ref', '--short', 'HEAD').stdout.trim()).toBe(mainLine);
   // Only tracked files materialize: the record is there, the world is not.
@@ -80,7 +80,7 @@ test('a leftover default-named branch behind main is never adopted: the address 
   leaveStaleBranch('steward/steward-work');
   const { record } = await createWorkspaceWorktree(ws, 'f0t1');
   expect(record.branch).toBe('steward/steward-work-f0t1');
-  expect(record.path).toBe('worktrees/f0t1-steward-steward-work-f0t1');
+  expect(record.path).toBe('floors/0-workspace/f0t1-steward-steward-work-f0t1');
   // Cut from the current tip — zero commits behind, not the leftover's distance.
   expect(gitOrThrow(ws, 'rev-list', '--count', `${record.branch}..${mainLine}`).stdout.trim()).toBe(
     '0',
@@ -117,7 +117,7 @@ test('a NAMED branch behind main is refused legibly, before any record is writte
   // Nothing recorded, nothing journaled, no worktree.
   expect(gitOrThrow(ws, 'rev-parse', 'HEAD').stdout.trim()).toBe(head);
   expect(await readTaskWorktrees(ws, (await readTasks(ws))[0]?.dir ?? '')).toEqual([]);
-  expect(existsSync(join(ws, 'worktrees/f0t1-old-steward'))).toBe(false);
+  expect(existsSync(join(ws, 'floors/0-workspace/f0t1-old-steward'))).toBe(false);
 });
 
 test('a NAMED branch at or after the main tip is adopted; a fresh name is cut from it', async () => {

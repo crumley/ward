@@ -73,8 +73,15 @@ export const FLOOR_AGENTS_MD_HISTORY: readonly DefaultVersion[] = [
     sha256: '79cbe2e51bfc211f3bb465eb3885c02e5b83c5645fb8bef15d5aa8119c4dacbc',
     era: 'design 0055 (floor manifests)',
   },
-  // Current since design 0056: a task's brief is `brief.md` beside its
-  // `task.md`, which `ward task show` reports.
+  // design 0056 — a task's brief is `brief.md` beside its `task.md`, which
+  // `ward task show` reports; the floor's worktrees were said to stand under
+  // `floors/` only "in a workspace laid out that way".
+  {
+    sha256: 'b86cab9ade1cfa0528d144fe03f5a02a79ba1fdb2fd10b5c4d0f6bfb792b4e59',
+    era: 'design 0056 (typed brief)',
+  },
+  // Current since design 0057: the floor's view, `floors/<N>-<slug>/`, holds
+  // its task worktrees and links onto this directory's files.
 ];
 
 /**

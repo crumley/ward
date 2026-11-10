@@ -78,7 +78,7 @@ test('worktree list --json: identity, disposition, and presence on disk', () => 
       repo: 'demo',
       branch: 'json-output',
       disposition: 'deliverable',
-      path: 'worktrees/f1t1-json-output',
+      path: 'floors/1-agent-output/f1t1-json-output',
       present: true,
     },
   ]);

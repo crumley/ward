@@ -272,8 +272,17 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '410ba2ed2bdcbc4f927300efd06c3618b699de5349d42a007540c4112d2d8789',
         era: 'design 0055 (floor manifests)',
       },
-      // Current since design 0056: a task's brief is named by `ward task
-      // show` (`brief.path`) and written with `ward task brief`.
+      // design 0056 — a task's brief is named by `ward task show`
+      // (`brief.path`) and written with `ward task brief`; task worktrees
+      // still stood under `worktrees/`, and a session read its floor's
+      // manifest from `projects/` rather than reading downward.
+      {
+        sha256: '5f3ce047d99d5cb5d49d2a2fe5c65e5b788d721cde47ed1ef2c2559fc603f0b8',
+        era: 'design 0056 (typed brief)',
+      },
+      // Current since design 0057: every session reads each AGENTS.md from
+      // the root down to where it works (`ward context PATH`), and task
+      // worktrees stand under their floor's view in `floors/`.
     ],
   },
 ];

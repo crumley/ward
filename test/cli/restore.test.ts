@@ -29,8 +29,8 @@ test('the fresh-clone flow: restore re-materializes, doctor reads clean', () => 
   // The spawned CLI stands at the clone's real path (macOS /var → /private/var).
   expect(result.stdout).toContain(`Restoring workspace at ${realpathSync(clone)}`);
   expect(result.stdout).toContain('restored  demo (cloned from');
-  expect(result.stdout).toContain('worktrees/f0t1-feature-work');
-  expect(result.stdout).toContain('worktrees/f0t2-steward-steward-work');
+  expect(result.stdout).toContain('floors/0-workspace/f0t1-feature-work');
+  expect(result.stdout).toContain('floors/0-workspace/f0t2-steward-steward-work');
   expect(result.stdout).toContain('no open session records');
   expect(result.stdout).toContain('Workspace restored — 3 restored, 0 already satisfied.');
   expect(existsSync(join(clone, 'repos/demo/seed.txt'))).toBe(true);
@@ -88,7 +88,7 @@ test('a lost branch: the document names it, the record survives, the exit is 1',
 });
 
 test('restore refuses inside a stewardship copy, naming the enclosing workspace', () => {
-  const copy = join(ws, 'worktrees/f0t2-steward-steward-work');
+  const copy = join(ws, 'floors/0-workspace/f0t2-steward-steward-work');
   const result = runWard(['workspace', 'restore'], copy);
   expect(result.exitCode).toBe(1);
   expect(result.stdout).toBe('');
@@ -128,7 +128,7 @@ beforeAll(async () => {
   await addRepository(ws, makeRemote('remote-main'), 'demo');
   await openTask(ws, 'feature-work', { floor: GROUND_FLOOR });
   await createWorktree(ws, 't1', 'demo');
-  const worktree = join(ws, 'worktrees/f0t1-feature-work');
+  const worktree = join(ws, 'floors/0-workspace/f0t1-feature-work');
   writeFileSync(join(worktree, 'work.txt'), 'the work\n');
   gitOrThrow(worktree, 'add', '-A');
   gitOrThrow(worktree, 'commit', '-m', 'the work');
@@ -145,7 +145,7 @@ beforeAll(async () => {
   await addRepository(lostWs, makeRemote('remote-lost'), 'demo');
   await openTask(lostWs, 'doomed-work', { floor: GROUND_FLOOR });
   await createWorktree(lostWs, 't1', 'demo', 'unpushed');
-  const doomed = join(lostWs, 'worktrees/f0t1-unpushed');
+  const doomed = join(lostWs, 'floors/0-workspace/f0t1-unpushed');
   writeFileSync(join(doomed, 'doomed.txt'), 'never pushed\n');
   gitOrThrow(doomed, 'add', '-A');
   gitOrThrow(doomed, 'commit', '-m', 'doomed');
