@@ -11,7 +11,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { type SessionMutationShape, sessionMutationShape } from '../../src/cli/schema.ts';
+import {
+  doctorShape,
+  type SessionMutationShape,
+  sessionLocateShape,
+  sessionMutationShape,
+} from '../../src/cli/schema.ts';
 import { mungeCwd } from '../../src/harness/claude.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { workspaceId } from '../../src/workspace/identity.ts';
@@ -199,6 +204,282 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     });
     expect(session(forced).events?.[0]?.host).toBeUndefined();
   });
+
+  // -- attach, observe, locate, doctor (phase 2) ------------------------------------
+
+  test("attach joins through a view of its own: the host's and other clients' windows stay put", async () => {
+    await openProject(ws, 'alpha');
+    const first = session(ward(['session', 'open', '--floor', '1', '--detach', '--json']));
+    const second = session(ward(['session', 'open', '--floor', '1', '--detach', '--json']));
+    const f1 = `ward-${name}-f1`;
+    const hostCurrent = activeWindow(f1);
+
+    const one = attach(['session', 'attach', second.id]);
+    const view = await clientOn(`${f1}-v1`);
+    expect(sessionOption(view, '@ward_view')).toBe(await workspaceId(ws));
+    expect(activeWindow(view)).toBe(second.live?.window ?? '?'); // the human lands on the session
+    expect(activeWindow(f1)).toBe(hostCurrent); // and the floor host's own current window is unmoved
+
+    // A second human attaching to another session keeps the first one where they are.
+    const two = attach(['session', 'attach', first.id]);
+    await clientOn(`${f1}-v2`);
+    expect(activeWindow(view)).toBe(second.live?.window ?? '?');
+    expect(activeWindow(`${f1}-v2`)).toBe(first.live?.window ?? '?');
+
+    // Leaving ends the view (and only the view): the host and both runs stay.
+    tmux('detach-client', '-s', `=${view}`);
+    tmux('detach-client', '-s', `=${f1}-v2`);
+    expect(await exited(one)).toBe(0);
+    expect(await exited(two)).toBe(0);
+    expect(await groupsSoon((names) => !names.some((n) => n.includes('-v')))).toEqual([f1]);
+    expect(windowsIn(f1).sort()).toEqual([first.id, second.id].sort());
+    const trail = session(ward(['session', 'show', second.id, '--json'])).events;
+    expect(trail?.map((event) => event.event)).toEqual(['opened', 'attached']);
+  });
+
+  test('attach re-creates a run that ended, from its record, then joins it', async () => {
+    const opened = session(ward(['session', 'open', '--detach', '--json'], { stub: exiting }));
+    expect(opened.live?.state).toBe('exited');
+    fabricateTranscript(opened.handle?.replace('claude:', '') ?? '');
+
+    const client = attach(['session', 'attach', opened.id]);
+    await clientOn(`ward-${name}-f0-v1`);
+    const after = session(ward(['session', 'show', opened.id, '--json']));
+    expect(after.live).toMatchObject({ state: 'live', strangers: [] });
+    expect(after.events?.map((e) => [e.event, e.cause])).toEqual([
+      ['opened', undefined],
+      ['resumed', 'previous run exited 3'],
+      ['attached', undefined],
+    ]);
+    tmux('detach-client', '-s', `=ward-${name}-f0-v1`);
+    expect(await exited(client)).toBe(0);
+  });
+
+  test("attach puts back the coordinator's link a human removed — additive only", async () => {
+    const coordinator = session(ward(['session', 'open', '--detach', '--json']));
+    await openProject(ws, 'alpha');
+    const floor = session(ward(['session', 'open', '--floor', '1', '--detach', '--json']));
+    const f1 = `ward-${name}-f1`;
+    tmux('unlink-window', '-t', `=${f1}:${coordinator.live?.window}`);
+    expect(windowsIn(f1)).toEqual([floor.id]);
+    const report = doctor();
+    expect(report).toContainEqual(
+      expect.objectContaining({
+        severity: 'info',
+        message: expect.stringContaining('attach repairs it'),
+      }),
+    );
+
+    const client = attach(['session', 'attach', floor.id]);
+    await clientOn(`${f1}-v1`);
+    expect(windowsIn(f1).sort()).toEqual([coordinator.id, floor.id].sort());
+    tmux('detach-client', '-s', `=${f1}-v1`);
+    expect(await exited(client)).toBe(0);
+  });
+
+  test('observe: one window alone, read-only and never resizing it; refused when not live', async () => {
+    const coordinator = session(ward(['session', 'open', '--detach', '--json']));
+    const helper = session(ward(['session', 'open', '--detach', '--json']));
+    // A human taking part sizes the window; an observer beside them never does.
+    // (tmux honours ignore-size only while an unflagged client is attached: an
+    // observer watching alone sizes the window until a participant returns.)
+    const human = attach(['session', 'attach', helper.id], { cols: 100, rows: 30 });
+    await clientOn(`ward-${name}-f0-v1`);
+    const size = windowSize(helper.live?.window ?? '');
+    expect(size).toBe('100x29');
+
+    const client = attach(['session', 'observe', helper.id], { cols: 60, rows: 15 });
+    const view = await clientOn(`ward-${name}-f0-o1`);
+    expect(windowsIn(view)).toEqual([helper.id]); // no neighbor — not even the coordinator
+    const flags = tmux('list-clients', '-F', '#{client_session}\t#{client_flags}')
+      .split('\n')
+      .find((line) => line.startsWith(`${view}\t`));
+    expect(flags).toContain('read-only');
+    expect(flags).toContain('ignore-size');
+    expect(windowSize(helper.live?.window ?? '')).toBe(size);
+    tmux('detach-client', '-s', `=${view}`);
+    tmux('detach-client', '-s', `=ward-${name}-f0-v1`);
+    expect(await exited(client)).toBe(0);
+    expect(await exited(human)).toBe(0);
+    // Ending the view only unlinked the window: the run is untouched.
+    expect(session(ward(['session', 'show', helper.id, '--json'])).live?.state).toBe('live');
+    expect(
+      session(ward(['session', 'show', helper.id, '--json'])).events?.map((e) => e.event),
+    ).toEqual(['opened', 'attached', 'observed']);
+    expect(windowsIn(`ward-${name}-f0`).sort()).toEqual([coordinator.id, helper.id].sort());
+
+    const ended = session(ward(['session', 'open', '--detach', '--json'], { stub: exiting }));
+    const refused = attach(['session', 'observe', ended.id]);
+    expect(await exited(refused)).toBe(1);
+    expect(refused.output()).toContain('is not running (exited 3)');
+  });
+
+  test('attach and observe refuse a caller with no terminal, changing nothing', () => {
+    const opened = session(ward(['session', 'open', '--detach', '--json']));
+    for (const verb of ['attach', 'observe']) {
+      const refused = ward(['session', verb, opened.id]);
+      expect(refused.exitCode).toBe(1);
+      expect(refused.stderr).toContain('there is no terminal here');
+    }
+    expect(session(ward(['session', 'show', opened.id, '--json'])).events).toHaveLength(1);
+  });
+
+  test("locate --json carries the host block: the live half beside the transcript's answer", () => {
+    const opened = session(ward(['session', 'open', '--detach', '--json']));
+    const located = sessionLocateShape.parse(
+      JSON.parse(ward(['session', 'locate', opened.id, '--json']).stdout),
+    );
+    expect(located.host).toEqual({
+      kind: 'tmux',
+      state: 'live',
+      floor: 0,
+      host: `ward-${name}-f0`,
+      window: opened.live?.window,
+      strangers: [],
+    });
+    tmux('kill-window', '-t', opened.live?.window ?? '');
+    const gone = sessionLocateShape.parse(
+      JSON.parse(ward(['session', 'locate', opened.id, '--json']).stdout),
+    );
+    expect(gone.host).toMatchObject({ state: 'gone', floor: 0 });
+  });
+
+  test('doctor names strays, duplicates, leftover views, and gone sessions — and ends nothing', async () => {
+    const opened = session(ward(['session', 'open', '--detach', '--json']));
+    const closed = session(ward(['session', 'open', '--detach', '--json']));
+    const f0 = `ward-${name}-f0`;
+    const id = await workspaceId(ws);
+    // A stray: a window still tagged for a session whose record is closed (a
+    // close whose teardown never ran — fabricated by re-tagging a live window).
+    const stray = tmux(
+      'new-window',
+      '-d',
+      '-P',
+      '-F',
+      '#{window_id}\t#{pane_id}',
+      '-t',
+      `=${f0}:`,
+      'sleep 600',
+    )
+      .trim()
+      .split('\t');
+    ward(['session', 'close', closed.id]);
+    tmux('set-option', '-w', '-t', stray[0] ?? '', '@ward_session', closed.id);
+    tmux('set-option', '-w', '-t', stray[0] ?? '', '@ward_epoch', closed.openedAt);
+    tmux('set-option', '-w', '-t', stray[0] ?? '', '@ward_pane', stray[1] ?? '');
+    // A duplicate floor-0 host, and a view nobody is looking through.
+    tmux('new-session', '-d', '-s', `${f0}-dup`, 'sleep 600');
+    tmux('set-option', '-t', `=${f0}-dup:`, '@ward_workspace', id);
+    tmux('set-option', '-t', `=${f0}-dup:`, '@ward_floor', '0');
+    tmux('new-session', '-d', '-s', `${f0}-v9`, 'sleep 600');
+    tmux('set-option', '-t', `=${f0}-v9:`, '@ward_view', id);
+    // A gone session: its window killed by hand.
+    tmux('kill-window', '-t', opened.live?.window ?? '');
+    const before = tmux('list-windows', '-a', '-F', '#{window_id}');
+
+    const findings = doctor();
+    const message = (severity: string, ...parts: string[]) =>
+      expect.objectContaining({
+        severity,
+        message: expect.stringMatching(new RegExp(parts.map(escapeRe).join('.*'))),
+      });
+    expect(findings).toContainEqual(
+      message(
+        'warn',
+        `stray window ${stray[0]}`,
+        'its session is closed',
+        `tmux -L ${SOCKET} kill-window -t ${stray[0]}`,
+      ),
+    );
+    expect(findings).toContainEqual(
+      message('warn', 'floor 0 has 2 hosts', `kill-session -t =${f0}-dup`),
+    );
+    expect(findings).toContainEqual(message('info', `${f0}-v9 is a leftover view`));
+    expect(findings).toContainEqual(
+      message('info', `session ${opened.id} is not running`, 'ward session attach'),
+    );
+    expect(findings.some((finding) => finding.severity === 'error')).toBe(false);
+    // Hygiene reported; nothing was ended.
+    expect(tmux('list-windows', '-a', '-F', '#{window_id}')).toBe(before);
+  });
+
+  test('a tmux that errors is could-not-determine in doctor, never a clean bill', () => {
+    const broken = join(scratch, `broken-tmux-${caseId}.sh`);
+    writeFileSync(
+      broken,
+      '#!/bin/sh\ncase " $* " in *" -V "*) echo "tmux 3.7"; exit 0 ;; esac\necho "server exploded" >&2\nexit 1\n',
+    );
+    chmodSync(broken, 0o755);
+    const findings = doctor({ WARD_TMUX_BIN: broken });
+    expect(findings).toContainEqual(
+      expect.objectContaining({
+        check: 'host windows',
+        severity: 'warn',
+        message: expect.stringContaining(
+          'could not determine what the host holds (server exploded)',
+        ),
+      }),
+    );
+    expect(findings.some((f) => f.check === 'host windows' && f.severity === 'ok')).toBe(false);
+  });
+
+  test('a server left with no session at all is an empty answer, never could-not-determine', async () => {
+    // A server of its own, so "no session at all" is literally true.
+    const fresh = `${SOCKET}-empty`;
+    const env = { WARD_TMUX_SOCKET: fresh };
+    const own = (...args: string[]) =>
+      Bun.spawnSync([TMUX ?? 'tmux', '-L', fresh, ...args]).stdout.toString();
+    try {
+      const opened = session(ward(['session', 'open', '--detach', '--json'], { env }));
+      // Its only window gone by hand: the floor host ends, the server (exit-empty off) stays.
+      own('kill-window', '-t', opened.live?.window ?? '');
+      expect(own('list-sessions', '-F', '#{session_name}')).toBe('');
+      expect(session(ward(['session', 'show', opened.id, '--json'], { env })).live?.state).toBe(
+        'gone',
+      );
+      expect(doctor(env)).toContainEqual(
+        expect.objectContaining({
+          check: 'host windows',
+          severity: 'info',
+          message: expect.stringContaining(`session ${opened.id} is not running`),
+        }),
+      );
+      fabricateTranscript(opened.handle?.replace('claude:', '') ?? '');
+      const resumed = session(
+        ward(['session', 'resume', opened.id, '--detach', '--json'], { env }),
+      );
+      expect(resumed.live?.state).toBe('live');
+    } finally {
+      killServer(fresh);
+    }
+  });
+
+  test("a server started by a Claude-run ward does not hand that run's identity to hosted runs", async () => {
+    // A fresh private server, started by Ward itself from an environment that
+    // looks like the inside of a Claude Code run.
+    const fresh = `${SOCKET}-fresh`;
+    const env = {
+      WARD_TMUX_SOCKET: fresh,
+      CLAUDECODE: '1',
+      CLAUDE_CODE_SESSION_ID: 'parent-run',
+      CLAUDE_CODE_MESSAGING_SOCKET: '/tmp/parent.sock',
+    };
+    try {
+      session(ward(['session', 'open', '--detach', '--json'], { env }));
+      const inherited = Bun.spawnSync([
+        TMUX ?? 'tmux',
+        '-L',
+        fresh,
+        'show-environment',
+        '-g',
+      ]).stdout.toString();
+      expect(inherited).not.toContain('CLAUDECODE');
+      expect(inherited).not.toContain('parent-run');
+      expect(inherited).not.toContain('parent.sock');
+    } finally {
+      killServer(fresh);
+    }
+  });
 });
 
 // -- scaffolding ------------------------------------------------------------------
@@ -215,6 +496,97 @@ let exitingZero: string;
 let caseId = 0;
 
 const cliPath = new URL('../../src/cli/index.ts', import.meta.url).pathname;
+
+const TERM_ENV = { TERM: 'xterm-256color' };
+
+interface Client {
+  readonly proc: ReturnType<typeof Bun.spawn>;
+  output(): string;
+}
+
+/** Run a ward verb on a real pseudo-terminal, as a human at a terminal would. */
+function attach(
+  argv: string[],
+  size: { cols: number; rows: number } = { cols: 100, rows: 30 },
+): Client {
+  let out = '';
+  const decoder = new TextDecoder();
+  const proc = Bun.spawn(['bun', cliPath, ...argv], {
+    cwd: ws,
+    env: { ...wardEnv(staying), ...TERM_ENV },
+    terminal: {
+      ...size,
+      data(_terminal, bytes) {
+        out += decoder.decode(bytes);
+      },
+    },
+  });
+  return { proc, output: () => out };
+}
+
+async function exited(client: Client): Promise<number | null> {
+  const timeout = Bun.sleep(10_000).then(() => 'timeout' as const);
+  const result = await Promise.race([client.proc.exited, timeout]);
+  if (result === 'timeout') {
+    client.proc.kill();
+    throw new Error(`the client did not exit: ${client.output()}`);
+  }
+  return result;
+}
+
+/** Wait until a client is attached to the named tmux session; returns its name. */
+async function clientOn(view: string): Promise<string> {
+  for (let i = 0; i < 100; i++) {
+    const clients = Bun.spawnSync([
+      TMUX ?? 'tmux',
+      '-L',
+      SOCKET,
+      'list-clients',
+      '-F',
+      '#{client_session}',
+    ])
+      .stdout.toString()
+      .split('\n');
+    if (clients.includes(view)) return view;
+    await Bun.sleep(100);
+  }
+  throw new Error(`no client attached to ${view}`);
+}
+
+async function groupsSoon(done: (names: string[]) => boolean): Promise<string[]> {
+  let names: string[] = [];
+  for (let i = 0; i < 50; i++) {
+    names = tmux('list-sessions', '-F', '#{session_name}')
+      .split('\n')
+      .filter((line) => line !== '' && line.includes(`ward-${name}-`));
+    if (done(names)) return names;
+    await Bun.sleep(100);
+  }
+  return names;
+}
+
+function activeWindow(group: string): string {
+  return tmux('display-message', '-p', '-t', `=${group}:`, '#{window_id}').trim();
+}
+
+function sessionOption(group: string, option: string): string {
+  return tmux('show-options', '-v', '-t', `=${group}:`, option).trim();
+}
+
+function windowSize(window: string): string {
+  return tmux('display-message', '-p', '-t', window, '#{window_width}x#{window_height}').trim();
+}
+
+function doctor(
+  env: Record<string, string> = {},
+): { check: string; severity: string; message: string }[] {
+  const result = ward(['doctor', '--json'], { env });
+  return doctorShape.parse(JSON.parse(result.stdout)).workspace;
+}
+
+function escapeRe(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 function wardEnv(
   stub: string,
@@ -376,20 +748,22 @@ beforeEach(async () => {
 });
 
 afterAll(() => {
-  if (TMUX !== null) {
-    // tmux leaves its socket file behind when the server is killed: remove it too.
-    const socketPath = Bun.spawnSync([
-      TMUX,
-      '-L',
-      SOCKET,
-      'display-message',
-      '-p',
-      '#{socket_path}',
-    ])
-      .stdout.toString()
-      .trim();
-    Bun.spawnSync([TMUX, '-L', SOCKET, 'kill-server']);
-    if (socketPath !== '') rmSync(socketPath, { force: true });
-  }
+  if (TMUX !== null) killServer(SOCKET);
   if (scratch !== undefined) removeDir(scratch);
 });
+
+/** End a private server — and remove its socket file, which tmux leaves behind. */
+function killServer(socket: string): void {
+  const path = Bun.spawnSync([
+    TMUX ?? 'tmux',
+    '-L',
+    socket,
+    'display-message',
+    '-p',
+    '#{socket_path}',
+  ])
+    .stdout.toString()
+    .trim();
+  Bun.spawnSync([TMUX ?? 'tmux', '-L', socket, 'kill-server']);
+  if (path !== '') rmSync(path, { force: true });
+}

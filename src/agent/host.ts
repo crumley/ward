@@ -14,6 +14,7 @@ import { resolve } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
 import { harnessCommand } from '../harness/adapter.ts';
+import { withoutRunIdentity } from '../harness/index.ts';
 import type { CloseResult, FoundWindow, SessionHost, WindowTags } from '../host/host.ts';
 import { hostFor } from '../host/index.ts';
 import { readDocument } from '../store/document.ts';
@@ -25,6 +26,18 @@ import { floats, placementFloor } from './placement.ts';
 import type { AgentHost, Resolved } from './settings.ts';
 
 type Env = Record<string, string | undefined>;
+
+/**
+ * The host a kind names, talked to from an environment that carries no run's
+ * identity. A tmux server inherits the environment of the client that starts
+ * it, and every window it ever creates inherits the server's: a `ward` run
+ * from inside an agent's run would otherwise stamp that run's id, pid, and
+ * private sockets onto every hosted run that follows (found by the premise
+ * check, design/0031-detached-session-hosting/ build log).
+ */
+export function hostOf(kind: HostedKind, env: Env = process.env): SessionHost {
+  return hostFor(kind, withoutRunIdentity(env));
+}
 
 /** The two ways a caller states where a run goes, beside the configuration. */
 export type HostFlag = 'detach' | 'foreground';
@@ -55,7 +68,7 @@ export async function chooseHost(
   const wanted = configured.provenance === 'absent' ? 'foreground' : configured.value;
   if (flag === undefined && wanted === 'foreground') return { kind: 'foreground' };
   const kind: HostedKind = wanted === 'foreground' ? 'tmux' : wanted;
-  const host = hostFor(kind, env);
+  const host = hostOf(kind, env);
   const problem = await unready(root, host);
   if (problem === undefined) return { kind, host, workspace: await workspaceId(root) };
   if (flag === 'detach') {
@@ -160,7 +173,7 @@ export async function placeLaunch(
 }
 
 /** The tags of every open floating session whose latest launch this host holds. */
-function floatingTags(all: readonly OpenSessionListing[], kind: HostedKind): WindowTags[] {
+export function floatingTags(all: readonly OpenSessionListing[], kind: HostedKind): WindowTags[] {
   return all
     .filter(({ record }) => record.state === 'open' && floats(record) && hostedBy(record) === kind)
     .flatMap(({ record }) => {
@@ -261,7 +274,7 @@ export async function liveStateOf(
     const reason = error instanceof Error ? error.message : String(error);
     return { kind, state: 'unknown', floor, reason, strangers: [] };
   }
-  const using = host ?? hostFor(kind, env);
+  const using = host ?? hostOf(kind, env);
   return classify(listing.record, using.find(listing.record.id), workspace, floor, kind).live;
 }
 
@@ -291,7 +304,7 @@ export async function guardResume(
 ): Promise<string | undefined> {
   const kind = hostedBy(open.record);
   if (kind === undefined) return undefined;
-  const using = host ?? hostFor(kind, env);
+  const using = host ?? hostOf(kind, env);
   // No usable host here means no server Ward could have placed into is
   // reachable from this machine: there is nothing live to collide with.
   if (!using.check().usable) return undefined;
@@ -344,7 +357,7 @@ export async function teardownSession(
 ): Promise<Teardown | undefined> {
   const kind = hostedBy(closed.record);
   if (kind === undefined) return undefined;
-  const using = host ?? hostFor(kind, env);
+  const using = host ?? hostOf(kind, env);
   const check = using.check();
   if (!check.usable) {
     return {

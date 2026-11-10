@@ -63,6 +63,7 @@ import type {
   RepoPathShape,
   RepoRefreshShape,
   RepoRemoveShape,
+  SessionLiveShape,
   SessionLocateShape,
   SessionMutationShape,
   ShellAdoptShape,
@@ -723,7 +724,7 @@ export function sessionMutationJson(
   };
 }
 
-function liveJson(live: NonNullable<SessionOverlay['live']>): SessionMutationShape['live'] {
+function liveJson(live: NonNullable<SessionOverlay['live']>): SessionLiveShape {
   return {
     kind: live.kind,
     state: live.state,
@@ -777,6 +778,7 @@ export function sessionLocateJson(location: SessionLocation): SessionLocateShape
     ...(location.record.machine === undefined ? {} : { machine: location.record.machine }),
     outcome: location.outcome,
     path: location.path,
+    host: location.live === undefined ? null : liveJson(location.live),
   };
 }
 

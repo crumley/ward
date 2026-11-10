@@ -23,6 +23,7 @@
 // the real-tmux tests stand on, and how a human tries hosting on a throwaway
 // server. Unset, Ward uses the default server, where a human's own `tmux ls`
 // already looks.
+import { realpathSync } from 'node:fs';
 import { WardError } from '../errors.ts';
 import type {
   CloseResult,
@@ -31,9 +32,16 @@ import type {
   FoundWindow,
   GroupStamp,
   HostCheck,
+  InheritedEnv,
+  Inventory,
+  InventoryGroup,
+  InventoryWindow,
   Placement,
   PlaceRequest,
   SessionHost,
+  View,
+  ViewMode,
+  ViewRequest,
 } from './host.ts';
 
 type Env = Record<string, string | undefined>;
@@ -50,8 +58,12 @@ export const DETACHED_SIZE = { columns: 120, rows: 40 } as const;
 /** Per-call ceiling: past it the answer is "could not determine". */
 const CALL_TIMEOUT_MS = 5000;
 
-/** Per-window user options and `-e` on respawn arrived by tmux 3.0. */
-const MINIMUM_MAJOR = 3;
+/**
+ * The version floor: per-window user options and `-e` on respawn arrived by
+ * tmux 3.0, and the client flags observe attaches with (`-f
+ * read-only,ignore-size`) in 3.2.
+ */
+export const MINIMUM_VERSION = { major: 3, minor: 2 } as const;
 
 /**
  * What holds a freshly created window or host until it is filled: a process
@@ -194,8 +206,85 @@ export function listGroupsArgv(): string[] {
       '#{@ward_floor}',
       '#{@ward_view}',
       '#{session_created}',
+      '#{session_attached}',
+      '#{@ward_version}',
+      '#{session_windows}',
     ].join(FIELD),
   ];
+}
+
+/**
+ * The name of a view: the group's name and `-v<n>` for an attach view, or
+ * `-o<n>` for an observe view, with the smallest `n` no tmux session wears.
+ */
+export function viewName(group: string, mode: ViewMode, taken: ReadonlySet<string>): string {
+  const letter = mode === 'attach' ? 'v' : 'o';
+  for (let n = 1; ; n++) {
+    const name = `${group}-${letter}${n}`;
+    if (!taken.has(name)) return name;
+  }
+}
+
+/**
+ * An attach view: a tmux session GROUPED with the floor host, so it shares
+ * the host's windows but holds a current window of its own — selecting the
+ * session's window in it moves no other client. Stamped `@ward_view` with the
+ * workspace id it was made for.
+ */
+export function attachViewArgv(group: string, name: string, workspace: string, window: string) {
+  return [
+    'new-session',
+    '-d',
+    '-t',
+    sessionTarget(group),
+    '-s',
+    name,
+    ...setOption(['-t', windowTarget(name)], '@ward_view', workspace),
+    ';',
+    'select-window',
+    '-t',
+    windowTarget(name, window),
+  ];
+}
+
+/** An observe view: a tmux session of its own, holding a placeholder the link will replace. */
+export function observeViewArgv(name: string, workspace: string): string[] {
+  return [
+    'new-session',
+    '-d',
+    '-s',
+    name,
+    '-x',
+    String(DETACHED_SIZE.columns),
+    '-y',
+    String(DETACHED_SIZE.rows),
+    '-P',
+    '-F',
+    '#{window_index}',
+    ...HOLD,
+    ...setOption(['-t', windowTarget(name)], '@ward_view', workspace),
+  ];
+}
+
+/**
+ * Join a view. A caller already a client of this server is SWITCHED to it
+ * (an attach run inside tmux would otherwise nest); anyone else attaches,
+ * observe read-only and without resizing the window. Either way the view is
+ * set to end when its client leaves — set only once the client is in it,
+ * because tmux ends an unattached session the moment the option is set.
+ */
+export function enterArgv(view: View, inside: boolean): string[] {
+  const target = sessionTarget(view.name);
+  const join =
+    view.mode === 'attach' && inside
+      ? ['switch-client', '-t', target]
+      : [
+          'attach-session',
+          ...(view.mode === 'observe' ? ['-f', 'read-only,ignore-size'] : []),
+          '-t',
+          target,
+        ];
+  return [...join, ...setOption(['-t', windowTarget(view.name)], 'destroy-unattached', 'on')];
 }
 
 /**
@@ -256,19 +345,75 @@ export interface GroupRow {
   readonly name: string;
   readonly stamp?: GroupStamp;
   readonly view: boolean;
+  /** The workspace id a view was stamped with — empty on anything that is not a view. */
+  readonly viewOf: string;
   readonly created: number;
+  readonly clients: number;
+  readonly version: string;
+  readonly windows: number;
 }
 
 export function parseGroups(stdout: string): GroupRow[] {
   return lines(stdout).map((line) => {
-    const [name = '', workspace = '', floor = '', view = '', created = ''] = line.split(FIELD);
+    const [
+      name = '',
+      workspace = '',
+      floor = '',
+      view = '',
+      created = '',
+      clients = '',
+      version = '',
+      windows = '',
+    ] = line.split(FIELD);
     return {
       name,
       ...stampOf(workspace, floor),
       view: view !== '',
+      viewOf: view,
       created: Number.parseInt(created, 10) || 0,
+      clients: Number.parseInt(clients, 10) || 0,
+      version,
+      windows: Number.parseInt(windows, 10) || 0,
     };
   });
+}
+
+/** Every tagged window, with every group (views included) that shows it. */
+export function parseInventoryWindows(stdout: string): InventoryWindow[] {
+  const byWindow = new Map<string, InventoryWindow & { groups: string[] }>();
+  for (const line of lines(stdout)) {
+    const [
+      group = '',
+      window = '',
+      pane = '',
+      dead = '',
+      status = '',
+      signal = '',
+      tag = '',
+      epoch = '',
+      tagPane = '',
+    ] = line.split(FIELD);
+    if (tag === '' || pane !== tagPane) continue;
+    const found = byWindow.get(window) ?? {
+      window,
+      tags: { session: tag, epoch },
+      groups: [],
+      dead: dead === '1',
+      ...(status === '' ? {} : { exitStatus: Number.parseInt(status, 10) }),
+      ...(signal === '' ? {} : { exitSignal: signal }),
+    };
+    if (!found.groups.includes(group)) found.groups.push(group);
+    byWindow.set(window, found);
+  }
+  return [...byWindow.values()];
+}
+
+/** The names `show-environment -g` sets — a `-NAME` line marks a removal, not a value. */
+export function parseEnvironmentNames(stdout: string): string[] {
+  return lines(stdout)
+    .filter((line) => !line.startsWith('-'))
+    .map((line) => line.split('=')[0] ?? '')
+    .filter((name) => name !== '');
 }
 
 /** The windows tagged for `session`, one per window however many hosts show it. */
@@ -318,10 +463,39 @@ function lines(stdout: string): string[] {
   return stdout.split('\n').filter((line) => line !== '');
 }
 
-/** The tmux version line, as a number we can compare — null when unreadable. */
-export function majorVersion(versionLine: string): number | null {
-  const match = /(\d+)\.\d+/.exec(versionLine);
-  return match?.[1] === undefined ? null : Number.parseInt(match[1], 10);
+/** The tmux version line, as numbers we can compare — null when unreadable. */
+export function parseVersion(versionLine: string): { major: number; minor: number } | null {
+  const match = /(\d+)\.(\d+)/.exec(versionLine);
+  if (match?.[1] === undefined || match[2] === undefined) return null;
+  return { major: Number.parseInt(match[1], 10), minor: Number.parseInt(match[2], 10) };
+}
+
+/** Whether a version line is below the floor. An unreadable one (a build from master) is not. */
+export function belowFloor(versionLine: string): boolean {
+  const version = parseVersion(versionLine);
+  if (version === null) return false;
+  return (
+    version.major < MINIMUM_VERSION.major ||
+    (version.major === MINIMUM_VERSION.major && version.minor < MINIMUM_VERSION.minor)
+  );
+}
+
+/**
+ * Whether a caller is already a client of THIS server: its `$TMUX` (socket
+ * path, pid, session index) names the server's own socket.
+ */
+export function insideServer(tmuxVar: string | undefined, socketPath: string): boolean {
+  if (tmuxVar === undefined || tmuxVar === '' || socketPath === '') return false;
+  const callerSocket = tmuxVar.split(',')[0] ?? '';
+  return realOrSame(callerSocket) === realOrSame(socketPath);
+}
+
+function realOrSame(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
 }
 
 // -- the host ----------------------------------------------------------------
@@ -388,11 +562,23 @@ export function tmuxHost(env: Env = process.env): SessionHost {
     throw new WardError(`tmux could not list its sessions: ${result.stderr}`);
   };
 
-  const find = (session: string): FindResult => {
+  /**
+   * Every pane, as `list-panes -a` lists them — or null when tmux could not
+   * say. A server holding no session at all (it outlives its last host, by
+   * the hygiene preamble) answers `list-panes -a` with "no current target":
+   * that is an empty answer, not a failed one.
+   */
+  const panes = (): { ok: true; stdout: string } | { ok: false; reason: string } => {
     const result = call(listPanesArgv());
+    if (result.ok) return { ok: true, stdout: result.stdout };
+    if (result.noServer || /no current target/.test(result.stderr)) return { ok: true, stdout: '' };
+    return { ok: false, reason: result.stderr || 'tmux failed without a reason' };
+  };
+
+  const find = (session: string): FindResult => {
+    const result = panes();
     if (result.ok) return { outcome: 'answered', windows: parseWindows(result.stdout, session) };
-    if (result.noServer) return { outcome: 'answered', windows: [] };
-    return { outcome: 'unknown', reason: result.stderr || 'tmux failed without a reason' };
+    return { outcome: 'unknown', reason: result.reason };
   };
 
   const ours = (rows: readonly GroupRow[], workspace: string): GroupRow[] =>
@@ -406,9 +592,9 @@ export function tmuxHost(env: Env = process.env): SessionHost {
         return { usable: false, reason: result.stderr || `${program} -V failed` };
       }
       const line = result.stdout.trim();
-      const major = majorVersion(line);
-      if (major !== null && major < MINIMUM_MAJOR) {
-        return { usable: false, reason: `${line} is older than tmux ${MINIMUM_MAJOR}.0` };
+      if (belowFloor(line)) {
+        const floor = `${MINIMUM_VERSION.major}.${MINIMUM_VERSION.minor}`;
+        return { usable: false, reason: `${line} is older than tmux ${floor}` };
       }
       return { usable: true, version: line };
     },
@@ -494,10 +680,108 @@ export function tmuxHost(env: Env = process.env): SessionHost {
       if (/can't find window|no such window/.test(killed.stderr)) return { outcome: 'absent' };
       return { outcome: 'unknown', reason: killed.stderr };
     },
+    link(window: string, group: string): void {
+      const shown = must(['list-windows', '-t', windowTarget(group), '-F', '#{window_id}'], 'list');
+      if (lines(shown).includes(window)) return;
+      must(linkWindowArgv(window, group), `link ${window} into ${group}`);
+    },
+    view(request: ViewRequest): View {
+      // A name another view just took fails the create; the next free one is tried.
+      let last = '';
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const name = viewName(request.group, request.mode, new Set(groups().map((g) => g.name)));
+        if (request.mode === 'attach') {
+          const made = call(attachViewArgv(request.group, name, request.workspace, request.window));
+          if (made.ok) return { name, mode: 'attach' };
+          last = made.stderr;
+          if (!/duplicate session/.test(made.stderr)) break;
+          continue;
+        }
+        const made = call(observeViewArgv(name, request.workspace));
+        if (!made.ok) {
+          last = made.stderr;
+          if (/duplicate session/.test(made.stderr)) continue;
+          break;
+        }
+        const index = made.stdout.trim().split('\n')[0] ?? '';
+        const linked = call([
+          'link-window',
+          '-k',
+          '-s',
+          request.window,
+          '-t',
+          windowTarget(name, index),
+        ]);
+        if (linked.ok) return { name, mode: 'observe' };
+        call(['kill-session', '-t', sessionTarget(name)]);
+        last = linked.stderr;
+        break;
+      }
+      throw new WardError(
+        `tmux could not make a view of ${request.window}: ${last || 'no reason given'}`,
+      );
+    },
+    async enter(view: View): Promise<number> {
+      const socket = call([
+        'display-message',
+        '-p',
+        '-t',
+        windowTarget(view.name),
+        '#{socket_path}',
+      ]);
+      const inside = insideServer(env.TMUX, socket.ok ? socket.stdout.trim() : '');
+      const child = Bun.spawn([program, ...prefix, ...enterArgv(view, inside)], {
+        // Switching needs the caller's own client named by $TMUX; a fresh
+        // attach must not see it, or tmux refuses to nest.
+        env: inside ? { ...clientEnv, TMUX: env.TMUX } : clientEnv,
+        stdio: ['inherit', 'inherit', 'inherit'],
+      });
+      return await child.exited;
+    },
+    inventory(): Inventory {
+      const sessions = call(listGroupsArgv());
+      if (!sessions.ok) {
+        if (sessions.noServer) return { outcome: 'answered', groups: [], windows: [] };
+        return { outcome: 'unknown', reason: sessions.stderr || 'tmux failed without a reason' };
+      }
+      const listed = panes();
+      if (!listed.ok) return { outcome: 'unknown', reason: listed.reason };
+      const rows = parseGroups(sessions.stdout).map(
+        (row): InventoryGroup => ({
+          name: row.name,
+          ...(row.stamp === undefined ? {} : { stamp: row.stamp }),
+          ...(row.view ? { viewOf: row.viewOf } : {}),
+          clients: row.clients,
+          windows: row.windows,
+          created: row.created,
+          ...(row.version === '' ? {} : { version: row.version }),
+        }),
+      );
+      return { outcome: 'answered', groups: rows, windows: parseInventoryWindows(listed.stdout) };
+    },
+    inheritedEnv(): InheritedEnv {
+      const result = call(['show-environment', '-g']);
+      if (result.ok) return { outcome: 'answered', names: parseEnvironmentNames(result.stdout) };
+      if (result.noServer) return { outcome: 'answered', names: [] };
+      return { outcome: 'unknown', reason: result.stderr || 'tmux failed without a reason' };
+    },
     joinCommand(group: string): string {
-      return [program, ...prefix, 'attach', '-t', sessionTarget(group)].map(shellQuote).join(' ');
+      return command(['attach', '-t', sessionTarget(group)]);
+    },
+    closeCommand(window: string): string {
+      return command(['kill-window', '-t', window]);
+    },
+    endGroupCommand(group: string): string {
+      return command(['kill-session', '-t', sessionTarget(group)]);
+    },
+    forgetEnvCommand(name: string): string {
+      return command(['set-environment', '-gu', name]);
     },
   };
+
+  function command(args: readonly string[]): string {
+    return [program, ...prefix, ...args].map(shellQuote).join(' ');
+  }
 }
 
 /** The windows a find returned that stand in this workspace's hosts. */

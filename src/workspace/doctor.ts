@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
+import { hostFindings } from '../agent/host-findings.ts';
 import {
   type AgentProvenance,
   type Resolved,
@@ -655,6 +656,9 @@ async function workspaceChecks(
   const agent = resolveAgentConfig({ workspace: record?.agent, global: config.agent });
   findings.push(agentConfigFinding(agent));
   findings.push(agentCommandFinding(root, agent));
+  // The detached host joined against every session record
+  // (design/0031-detached-session-hosting/): reported, never repaired.
+  findings.push(...(await hostFindings(root, record?.id, agent.host)));
 
   const ignoreFile = join(root, '.gitignore');
   const ignoreLines = existsSync(ignoreFile)

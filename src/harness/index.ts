@@ -57,3 +57,19 @@ export function ambientHandle(env: Env = process.env): string | null {
   }
   return null;
 }
+
+/**
+ * Every variable any harness sets to name the run a process stands in
+ * (`runEnvVars`), and Ward's own `WARD_AGENT` — what a detached host must
+ * never inherit from whoever first started it.
+ */
+export function runIdentityVars(): string[] {
+  return ['WARD_AGENT', ...HARNESS_ADAPTERS.flatMap((adapter) => adapter.runEnvVars ?? [])];
+}
+
+/** An environment with every run-identity variable removed. */
+export function withoutRunIdentity(env: Env): Env {
+  const clean: Env = { ...env };
+  for (const name of runIdentityVars()) delete clean[name];
+  return clean;
+}

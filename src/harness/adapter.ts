@@ -95,6 +95,14 @@ export interface HarnessAdapter {
    * without the agent spelling one out (design/0045-agent-record-reads/).
    */
   readonly ambientEnvVar?: string;
+  /**
+   * Every variable this harness sets in the environment of everything its run
+   * starts that names THAT run or its process (its id, its pid, its private
+   * sockets and tokens) — never configuration a human exports. A detached host
+   * a run starts must not inherit them, or every later hosted run would wear
+   * the first one's identity (design/0031-detached-session-hosting/).
+   */
+  readonly runEnvVars?: readonly string[];
   /** The handle recorded for a run: the name, then its native id. */
   handle(nativeId: string): string;
   /** The native id inside one of THIS adapter's handles — null for any other. */

@@ -52,6 +52,11 @@ export const WARD_GLOBAL_ENV = ((): Readonly<Record<string, string>> => {
     // so a suite run from inside Claude Code does not stamp the developer's
     // own session handle onto every record-only session it opens.
     CLAUDE_CODE_SESSION_ID: '',
+    // The detached host (design/0031-detached-session-hosting/): a private
+    // tmux server nothing ever starts, so doctor's read of the host — and any
+    // test that reaches tmux without choosing a server of its own — sees an
+    // empty server, never the developer's real tmux sessions.
+    WARD_TMUX_SOCKET: `ward-test-unstarted-${process.pid}`,
   };
 })();
 

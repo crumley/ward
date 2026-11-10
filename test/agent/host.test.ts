@@ -19,15 +19,7 @@ import {
 } from '../../src/agent/host.ts';
 import { floats, placementFloor } from '../../src/agent/placement.ts';
 import { claudeAdapter } from '../../src/harness/claude.ts';
-import type {
-  CloseResult,
-  FindResult,
-  FoundWindow,
-  HostCheck,
-  Placement,
-  PlaceRequest,
-  SessionHost,
-} from '../../src/host/host.ts';
+import type { FindResult, FoundWindow } from '../../src/host/host.ts';
 import type { SessionRecord } from '../../src/store/types.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { workspaceId } from '../../src/workspace/identity.ts';
@@ -39,6 +31,7 @@ import {
   readAllSessions,
 } from '../../src/workspace/sessions.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { fakeHost } from './fake-host.ts';
 
 const EPOCH = '2026-11-08T10:00:00.000Z';
 const WS = 'ws-0123456789abcdef';
@@ -304,57 +297,6 @@ test('a window whose tag changed under the close is left standing and reported',
 });
 
 // -- scaffolding ------------------------------------------------------------------
-
-interface FakeHost extends SessionHost {
-  readonly placed: PlaceRequest[];
-  readonly closed: string[];
-  readonly finds: number;
-}
-
-/** An in-memory host: windows it was given, every request it got. */
-function fakeHost(
-  options: { windows?: FoundWindow[]; unknown?: string; refuseClose?: string } = {},
-): FakeHost {
-  const windows = [...(options.windows ?? [])];
-  const placed: PlaceRequest[] = [];
-  const closed: string[] = [];
-  let finds = 0;
-  let next = 100;
-  return {
-    kind: 'tmux',
-    placed,
-    closed,
-    get finds() {
-      return finds;
-    },
-    check: (): HostCheck => ({ usable: true, version: 'fake 1.0' }),
-    prepare: () => {},
-    place(request: PlaceRequest): Placement {
-      placed.push(request);
-      const group = `ward-fake-f${request.group.floor}`;
-      const window = `@${next++}`;
-      windows.push({
-        window,
-        groups: [{ name: group, stamp: request.group }],
-        tags: request.tags,
-        dead: false,
-      });
-      return { group, window, createdGroup: true, linkedInto: [] };
-    },
-    find(session: string): FindResult {
-      finds += 1;
-      if (options.unknown !== undefined) return { outcome: 'unknown', reason: options.unknown };
-      return { outcome: 'answered', windows: windows.filter((w) => w.tags.session === session) };
-    },
-    close(window: string): CloseResult {
-      if (options.refuseClose !== undefined)
-        return { outcome: 'refused', reason: options.refuseClose };
-      closed.push(window);
-      return { outcome: 'closed' };
-    },
-    joinCommand: (group: string) => `fake join ${group}`,
-  };
-}
 
 function win(
   window: string,

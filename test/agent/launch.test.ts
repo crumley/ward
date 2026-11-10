@@ -327,6 +327,7 @@ test('locate --json: the handle, the address, and the outcome as data', () => {
     machine: 'test',
     outcome: 'found',
     path: join(claudeHome, 'projects', mungeCwd(ws), `${nativeId}.jsonl`),
+    host: null, // it ran in the foreground: there is no live half to read
   });
 });
 

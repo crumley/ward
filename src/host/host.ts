@@ -108,6 +108,72 @@ export type HostCheck =
   | { readonly usable: true; readonly version: string }
   | { readonly usable: false; readonly reason: string };
 
+/**
+ * How a human joins a session through a view: `attach` takes part (input
+ * goes to the run), `observe` watches (the host refuses its input, and its
+ * terminal never resizes the run's window).
+ */
+export type ViewMode = 'attach' | 'observe';
+
+export interface ViewRequest {
+  /** The group the window stands in — what an attach view is grouped with. */
+  readonly group: string;
+  readonly window: string;
+  readonly mode: ViewMode;
+  /** The workspace id the view is stamped with, so doctor can attribute a leftover one. */
+  readonly workspace: string;
+}
+
+/** A per-client view: a host-side object that exists while one client looks through it. */
+export interface View {
+  readonly name: string;
+  readonly mode: ViewMode;
+}
+
+/** One group, as an inventory sees it. */
+export interface InventoryGroup {
+  readonly name: string;
+  /** The floor stamps — absent on a group that is not a floor host (a view, a human's own). */
+  readonly stamp?: GroupStamp;
+  /** The workspace a VIEW was made for — present exactly on views. */
+  readonly viewOf?: string;
+  /** How many clients are looking at it right now. */
+  readonly clients: number;
+  /** How many windows it shows, Ward's or not (a human's own shell counts). */
+  readonly windows: number;
+  readonly created: number;
+  /** The Ward version that created a floor host. */
+  readonly version?: string;
+}
+
+/** One tagged window, as an inventory sees it: every group it appears in. */
+export interface InventoryWindow {
+  readonly window: string;
+  readonly tags: WindowTags;
+  /** The names of every group showing the window, views included. */
+  readonly groups: readonly string[];
+  readonly dead: boolean;
+  readonly exitStatus?: number;
+  readonly exitSignal?: string;
+}
+
+/**
+ * Everything the host holds that hygiene needs to read, in one answer — or
+ * that it could not say. Could-not-determine is never an empty inventory.
+ */
+export type Inventory =
+  | {
+      readonly outcome: 'answered';
+      readonly groups: readonly InventoryGroup[];
+      readonly windows: readonly InventoryWindow[];
+    }
+  | { readonly outcome: 'unknown'; readonly reason: string };
+
+/** The variable names every new window inherits from the host itself. */
+export type InheritedEnv =
+  | { readonly outcome: 'answered'; readonly names: readonly string[] }
+  | { readonly outcome: 'unknown'; readonly reason: string };
+
 /** A detached host, in host terms. */
 export interface SessionHost {
   readonly kind: HostedKind;
@@ -127,6 +193,34 @@ export interface SessionHost {
    * group: a group lives exactly as long as the host's own rule keeps it.
    */
   close(window: string, session: string): CloseResult;
+  /**
+   * Show a window in a further group as well — additive, never destructive.
+   * A window already in the group is left as it is.
+   */
+  link(window: string, group: string): void;
+  /**
+   * Make a view for one client: for `attach`, a view of the whole group with
+   * `window` current in it, so attaching never moves another client's current
+   * window; for `observe`, a view holding that one window alone. The view
+   * ends by itself when its client leaves. Throws on failure.
+   */
+  view(request: ViewRequest): View;
+  /**
+   * Join the caller's terminal to a view, and return when the client leaves
+   * (or at once, when the caller is already a client of this host and is
+   * switched to the view). The exit code of the client.
+   */
+  enter(view: View): Promise<number>;
+  /** Every group and every tagged window, for hygiene's whole-record join. */
+  inventory(): Inventory;
+  /** What every new window inherits from the host — read, never changed. */
+  inheritedEnv(): InheritedEnv;
   /** The command a human runs to join a group, as one shell-ready line. */
   joinCommand(group: string): string;
+  /** The command that ends one window, for a finding's remedy. */
+  closeCommand(window: string): string;
+  /** The command that ends one group (only unlinking what other groups also show). */
+  endGroupCommand(group: string): string;
+  /** The command that stops new windows inheriting one variable from the host. */
+  forgetEnvCommand(name: string): string;
 }

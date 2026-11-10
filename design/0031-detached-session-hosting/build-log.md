@@ -234,3 +234,158 @@ thing to run by hand before relying on `--detach` for real work.
    of the floating coordinator.
 7. `detach-on-destroy` behaviour for attached clients beyond what close needs, and completion and
    telemetry for the new flags if the tree does not already pick them up.
+
+## 2026-11-10 — Build, phase 2: the premise check, attach, observe, locate, and doctor
+
+**Goal.** Run the premise check against real Claude Code (Acceptance 2), then build the rest of the
+human-facing half: `ward session attach` and `ward session observe` through views, `locate`'s `host`
+block, doctor's host findings, and the manifest's teaching of all of it.
+
+**The premise check, against real Claude Code.** Run by hand on macOS (tmux 3.7c, Claude Code
+2.1.319), in a throwaway workspace created with `ward workspace create` under a scratch directory,
+with its own floor (`ward project open realcheck`), its own `WARD_CONFIG_DIR` and `WARD_STATE_DIR`
+(the global config set `agent.model: haiku`, the cheapest model the adapter passes through), and a
+private server (`WARD_TMUX_SOCKET=ward-realcheck`). The terminal side was driven through a real
+pseudo-terminal (a small Python `pty` driver). What was observed:
+
+- **Detached init is healthy.** `ward session open --floor 1 --detach` returned once the window held
+  the run; the window read back `live` a beat later. `capture-pane` with no client attached showed
+  Claude Code fully drawn at 120×40: its folder-trust prompt, then (once accepted) its welcome
+  screen and input box. No crash, no garbled frame, no need for the attach-then-launch pivot. The
+  premise holds; the pivot is not taken.
+- **It takes input through an attach.** A pty client (150×45) on `tmux attach` saw the same screen,
+  moved the trust prompt's selection and confirmed it; the window resized to the client (150×44,
+  less the status line) and kept that size after the client left. A trivial prompt typed through a
+  second attach ("Reply with exactly the word pong…") was answered `pong`. Later, through
+  `ward session attach` itself (110×32), "…ping…" was answered `ping`, the trail gained `attached`,
+  and the view was gone once the client detached.
+- **`WARD_AGENT` is set in its pane.** `ps -wwE` on the pane's process showed
+  `WARD_AGENT=f1-1@dstar`, the session's id, and `TERM=tmux-256color`.
+- **And so was a stranger's identity — the one defect the check found.** The same environment held
+  `CLAUDECODE=1`, `CLAUDE_CODE_SESSION_ID`, `CLAUDE_CODE_MESSAGING_SOCKET`, `CLAUDE_PID`, and their
+  siblings — all the _invoking_ Claude Code run's, because `ward` had been run from inside one and
+  its hygiene preamble had started the tmux server. A tmux server keeps the environment of the
+  client that started it as its global environment, and every window it ever creates inherits that.
+  Fixed below.
+- **Resume and close behave.** `ward session resume` over the live window was refused, naming the
+  host and the join command, and recorded nothing. `/exit` typed through an attach left the window
+  dead with `remain-on-exit`, and `session show` said `exited 0, window kept`.
+  `ward session resume --detach` then recorded `resumed — previous run exited 0`, cleared the dead
+  window, and started `claude --resume <id>`, which redrew the earlier conversation. Because the
+  dead window was the host's only window, clearing it ended the host, and the resumed run landed in
+  a freshly minted one (`created` in the report) — tmux's own lifetime rule, harmless here, and
+  noted under Next. `ward session close` ended the window; the `claude` process was gone within half
+  a second of the `kill-window` (it exits on the pane's SIGHUP), and the empty server stayed up
+  (`exit-empty off`).
+- **The reboot path.** With the session open and running, the private server was killed outright
+  (`kill-server`, the reboot stand-in): doctor reported the session as information — "not running
+  (no tmux window) — attach re-creates it" — and `ward session attach` re-created it from the record
+  (`resumed`, then `attached`), with `claude --resume` showing the earlier exchange.
+- **Observe.** `ward session observe` (70×20) joined one window read-only: text typed and entered
+  through it never reached Claude's input (`capture-pane` showed none of it), and the trail gained
+  `observed`.
+
+Cleaned up afterwards: the private server killed and its socket removed, the scratch workspace and
+its configuration deleted, and the two transcripts Claude wrote for the scratch path removed from
+`~/.claude/projects/`. The check is manual and stays out of the gate; the steps above are the
+recipe.
+
+**What building changed in the design.**
+
+- **A detached host is talked to from an environment carrying no run's identity.** The fix for the
+  defect above: Ward's tmux client — and so any server it starts — drops `WARD_AGENT` and every
+  variable a harness sets to name the run a process stands in. Each harness adapter now lists those
+  (`runEnvVars`; Claude's by name, not by a `CLAUDE_CODE_` prefix, because that prefix is also where
+  a human's own configuration lives, such as `CLAUDE_CODE_USE_BEDROCK`). A server already started
+  dirty (by an older ward, or by a human from inside an agent's shell) cannot be cleaned without
+  killing it, so doctor reports it (`host environment`, a warning) with the `set-environment -gu`
+  commands that stop new windows inheriting it. A real-tmux case starts a fresh server from a
+  Claude-like environment and asserts none of it reaches the server.
+- **A view ends itself only once its client is in it.** The design set `destroy-unattached on` when
+  the view is created. Against a real tmux that ends the view at once: tmux checks the option as it
+  is set, and a view just created has no client yet. So the option rides the join itself —
+  `attach-session -t =VIEW ';' set-option -t =VIEW: destroy-unattached on` (or `switch-client …`) —
+  and is set the moment the client is in. A view left by a join that never happened is what doctor's
+  leftover-view finding names.
+- **`ignore-size` is conditional, and the sizing caveat grows a clause.** The design said an
+  observer's terminal never resizes the agent's window. tmux honours `ignore-size` only while at
+  least one client _without_ the flag is attached: an observer watching alone sizes the window to
+  its own terminal (the real-tmux suite saw 60×14), and the next participant sizes it back. With a
+  participant attached, the observer leaves the size alone, which the suite now proves. The harness
+  reflows either way, so the cost is visual; the manifest says it.
+- **An empty server is an empty answer.** `list-panes -a` on a running server holding no session —
+  the state `exit-empty off` leaves after the last host ends — fails with "no current target", which
+  phase 1 read as could-not-determine. Resume would then refuse to run over a host that holds
+  nothing. Both `find` and the inventory now read it as empty; a real-tmux case proves it on a
+  server of its own.
+- **Attach refuses two cases the design did not name.** A session whose latest launch ran in the
+  foreground: Ward cannot see into that terminal, so it cannot tell a running run from a finished
+  one, and re-creating could put two processes on one conversation — the refusal names
+  `ward session resume ID --detach` for a run the human knows has ended. And a caller with no
+  terminal (stdin or stdout not a TTY — an agent's tool call, a pipe): attach hands a terminal over,
+  so there must be one; the refusal names `session show` and `resume --detach`. Neither verb has
+  `--json` for the same reason, so neither is in `ward schema`.
+- **Observe always attaches, even from inside tmux.** Attach inside the same server switches the
+  caller's client to the view (`switch-client`), because an attach there would nest. Observe cannot
+  switch: `switch-client -r` toggles read-only on the human's own client, which would then stay
+  read-only after they leave. So observe attaches a nested client (its `$TMUX` dropped), read-only
+  by the server's enforcement; leaving it takes the prefix twice. The same-server test reads the
+  caller's `$TMUX` socket against the server's `#{socket_path}`.
+- **Attach repairs links into where the human stands.** The missing-link repair adds every live
+  floating window to the host being attached, and, when the session attached is the coordinator,
+  links it into every floor host of the workspace it is missing from. A failed link is reported on
+  stderr and never blocks the attach. Observe repairs nothing: watching changes nothing.
+- **The version floor is 3.2**, not 3.0: observe's client flags (`-f read-only,ignore-size`) arrived
+  then. One floor for the whole host keeps the capability finding to one sentence.
+- **The host interface grew in host terms**: `link`, `view`, `enter`, `inventory`, `inheritedEnv`,
+  and the remedy builders (`closeCommand`, `endGroupCommand`, `forgetEnvCommand`) — so every
+  finding's remedy names the configured server (`tmux -L NAME …`) and nothing outside `src/host/`
+  spells a tmux command. Doctor's findings live in `src/agent/host-findings.ts`, one call from
+  doctor's workspace checks.
+
+**Doctor's host findings**, each derived from one inventory (`list-sessions` and `list-panes -a`)
+joined against every session record; none ever ends anything, and none is an error:
+
+- `session host` — tmux and its version against the 3.2 floor: ok, or information when unusable (a
+  warning when `agent.host: tmux` is configured, since every launch then degrades).
+- `host environment` — a run's identity in the server's global environment (warning).
+- `host windows` — a stray window: tagged, in this workspace's host, explained by no open record (no
+  record, a closed session, an earlier run's epoch), flagged when a client is viewing its host
+  (warning, with `kill-window`); two windows of one run (warning); a gone or exited session
+  (information: attach re-creates it); a misplaced window (information: attach follows it); a
+  coordinator missing from a floor host (information: attach repairs it); could-not-determine
+  (warning, worded as "not a clean bill"); and one ok line when there is nothing to say.
+- `floor hosts` — two hosts stamped for one floor (warning, the oldest used, `kill-session` named
+  for the others); an idle host showing only the coordinator's link (information, `kill-session`
+  named as the human's option — it only unlinks); a leftover view with no client (information);
+  `ward-` hosts that are another workspace's or unstamped (information, left alone); and version
+  skew against `@ward_version` (information).
+
+**The manifest** gained a `Detached sessions — floor hosts` section of its own, after `Sessions`:
+`--detach` and `--foreground`, the floor host, the floating coordinator, attach and its view,
+observe, the `window-size latest` sizing caveat with the observer clause above, and what close,
+show, locate, and doctor say. The outgoing default's hash joined the AGENTS.md lineage (design 0056)
+and the current one is repinned.
+
+**What works now — with the exact command that proves it:**
+
+- `bun install --frozen-lockfile && env -u WARD_AGENT mise run check` → exit 0 on this branch, and
+  again with `CI=true`.
+- `env -u WARD_AGENT bun test test/host test/agent/host.test.ts test/agent/attach.test.ts
+  test/agent/host-findings.test.ts`
+  → the host suites alone. The real-tmux cases now cover attach through a view (a second client
+  keeps its own window; leaving ends only the view), attach re-creating an ended run, the
+  coordinator's link repaired, observe's single read-only window, the no-terminal refusal, locate's
+  `host` block, doctor naming fabricated strays, duplicates, leftover views, and gone sessions while
+  ending nothing, an erroring tmux as could-not-determine, an empty server, and the scrubbed server
+  environment. Terminals in the suite are real pseudo-terminals (Bun's `terminal` spawn option).
+
+**Next** (phase 3, against Scope and Acceptance):
+
+1. Clear a dead window only after its replacement is placed, so a host whose only window was the
+   dead one survives the resume (and a human sitting in it is not moved).
+2. Acceptance 6's concurrent-resume race and Acceptance 9's "a floor host killed by hand leaves the
+   coordinator alive in the others", each as a real-tmux case.
+3. `detach-on-destroy` behaviour for attached clients beyond what close needs, and the same-server
+   `switch-client` path exercised against a real attached client.
+4. Status to built — awaiting review once those land.

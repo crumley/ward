@@ -829,6 +829,30 @@ export const workspaceRegistryShape = z.strictObject({
 export type WorkspaceRegistryShape = z.infer<typeof workspaceRegistryShape>;
 
 /**
+ * Where a hosted run stands now (design/0031-detached-session-hosting/) —
+ * DERIVED at read time from the host, never stored: `live` running, `exited`
+ * with its window kept to show how, `gone`, or `unknown` when the host could
+ * not answer (never read as gone).
+ */
+export const sessionLiveShape = z.strictObject({
+  kind: z.enum(['tmux']),
+  state: z.enum(['live', 'exited', 'gone', 'unknown']),
+  /** The floor whose host the window belongs in, derived from the records. */
+  floor: z.number().int().nonnegative(),
+  /** The host the window stands in — what a human attaches to. */
+  host: z.string().optional(),
+  window: z.string().optional(),
+  exitStatus: z.number().int().optional(),
+  exitSignal: z.string().optional(),
+  reason: z.string().optional(),
+  /** Windows wearing this session's tag that are not its own — reported, never touched. */
+  strangers: z.array(z.string()),
+  /** The command that joins the host, when there is one to join. */
+  join: z.string().optional(),
+});
+export type SessionLiveShape = z.infer<typeof sessionLiveShape>;
+
+/**
  * The session record as written — shared by `session open`, `session resume`,
  * and `session close`, and read back by `session show`
  * (design/0045-agent-record-reads/). `scope` names the level the session works at
@@ -859,7 +883,7 @@ export const sessionMutationShape = z.strictObject({
   events: z
     .array(
       z.strictObject({
-        event: z.enum(['opened', 'resumed', 'resume-failed', 'closed']),
+        event: z.enum(['opened', 'resumed', 'resume-failed', 'attached', 'observed', 'closed']),
         at: z.string(),
         /** Why it failed on `resume-failed`; on `resumed`, how the previous hosted run ended. */
         cause: z.string().optional(),
@@ -877,24 +901,7 @@ export const sessionMutationShape = z.strictObject({
    * `exited` with its window kept to show how, `gone`, or `unknown` when the
    * host could not answer (never read as gone).
    */
-  live: z
-    .strictObject({
-      kind: z.enum(['tmux']),
-      state: z.enum(['live', 'exited', 'gone', 'unknown']),
-      /** The floor whose host the window belongs in, derived from the records. */
-      floor: z.number().int().nonnegative(),
-      /** The host the window stands in — what a human attaches to. */
-      host: z.string().optional(),
-      window: z.string().optional(),
-      exitStatus: z.number().int().optional(),
-      exitSignal: z.string().optional(),
-      reason: z.string().optional(),
-      /** Windows wearing this session's tag that are not its own — reported, never touched. */
-      strangers: z.array(z.string()),
-      /** The command that joins the host, when there is one to join. */
-      join: z.string().optional(),
-    })
-    .optional(),
+  live: sessionLiveShape.optional(),
   /** What `session close` did to the live half (0031): present when the latest launch was hosted. */
   teardown: z
     .strictObject({
@@ -964,6 +971,12 @@ export const sessionLocateShape = z.strictObject({
   machine: z.string().optional(),
   outcome: z.enum(['found', 'gone']),
   path: z.string(),
+  /**
+   * The live half (design/0031-detached-session-hosting/): where the run
+   * stands in its detached host, derived at read time — null for a session
+   * whose latest run was in the foreground, or that is closed.
+   */
+  host: sessionLiveShape.omit({ join: true }).nullable(),
 });
 export type SessionLocateShape = z.infer<typeof sessionLocateShape>;
 
