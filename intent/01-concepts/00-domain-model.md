@@ -275,21 +275,22 @@ work). The mapping of personas to scopes is the role model in `01-scopes-and-per
 
 ## Working directory: the second axis of a session
 
-A session has a **scope** (what it is responsible for) _and_ a **working directory** (where it runs
-and from which it loads context). A session's scope is one of **workspace / project / task / room**
-— the levels at which someone is _responsible_. An **anchor is not a scope**: it is a resource a
-room occupies (Anchor, above); responsibility for what happens on an anchor lies with the room (or
-elided session) occupying it.
+A session has a **scope** (what it is responsible for) _and_ a **working directory** (where it
+works, and so the path along which it loads context). A session's scope is one of **workspace /
+project / task / room** — the levels at which someone is _responsible_. An **anchor is not a
+scope**: it is a resource a room occupies (Anchor, above); responsibility for what happens on an
+anchor lies with the room (or elided session) occupying it.
 
-- Broad scopes often start at or near the **workspace root**, to load workspace-wide context and
-  skills.
-- Narrow scopes start in the **specific directory** of the thing they work on — a repository or an
-  anchor — to load _that_ directory's context and skills and stay specialized.
+- Every session **starts at the workspace root**, whatever its scope, so it loads workspace-wide
+  context and skills first and reads its scope from its own record.
+- Narrow scopes then **work in** the specific directory of the thing they work on — a repository or
+  an anchor — loading the context and skills on the path down to it, and stay specialized.
 
-The mechanism (e.g. `AGENTS.md` files through the hierarchy) is a _how_ — `05-context-loading.md`.
-The _what_ is that scope and working directory are independently chosen when a session starts. **Why
-two axes:** what an agent is responsible for and where it stands are genuinely different choices;
-separating them is what lets a project-scope agent read broadly while a room stays narrow.
+The mechanism (e.g. `AGENTS.md` files read downward through the hierarchy) is a _how_ —
+`05-context-loading.md`. The _what_ is that scope and working directory are independent: the scope
+is fixed when a session starts, and the directory it works in follows the work. **Why two axes:**
+what an agent is responsible for and where it works are genuinely different choices; separating them
+is what lets a project-scope agent read broadly while a room stays narrow.
 
 **Reaching beyond the working directory.** A narrow, worktree-scoped session is not walled off from
 the rest of its task or project. Its **brief** may reference artifacts that live _outside_ the
