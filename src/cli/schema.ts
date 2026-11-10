@@ -367,6 +367,8 @@ function resolvedAgentKey<T extends z.ZodType>(value: T) {
 /** The agent configuration as it resolves where doctor is standing. */
 export const doctorAgentShape = z.strictObject({
   harness: resolvedAgentKey(z.string()),
+  /** Where a launched run is hosted (design/0031-detached-session-hosting/). */
+  host: resolvedAgentKey(z.string()),
   model: resolvedAgentKey(z.string()),
   effort: resolvedAgentKey(z.string()),
   args: resolvedAgentKey(z.array(z.string())),
@@ -834,13 +836,49 @@ export const sessionMutationShape = z.strictObject({
       z.strictObject({
         event: z.enum(['opened', 'resumed', 'resume-failed', 'closed']),
         at: z.string(),
-        /** Why it failed — present exactly on `resume-failed`. */
+        /** Why it failed on `resume-failed`; on `resumed`, how the previous hosted run ended. */
         cause: z.string().optional(),
+        /** The detached host a launch was placed in (0031); absent for a foreground run. */
+        host: z.enum(['tmux']).optional(),
       }),
     )
     .optional(),
   openedAt: z.string(),
   closedAt: z.string().optional(),
+  /**
+   * Where the run stands now (design/0031-detached-session-hosting/) — present
+   * when the latest launch was placed in a detached host and the session is
+   * open. DERIVED at read time from the host, never stored: `live` running,
+   * `exited` with its window kept to show how, `gone`, or `unknown` when the
+   * host could not answer (never read as gone).
+   */
+  live: z
+    .strictObject({
+      kind: z.enum(['tmux']),
+      state: z.enum(['live', 'exited', 'gone', 'unknown']),
+      /** The floor whose host the window belongs in, derived from the records. */
+      floor: z.number().int().nonnegative(),
+      /** The host the window stands in — what a human attaches to. */
+      host: z.string().optional(),
+      window: z.string().optional(),
+      exitStatus: z.number().int().optional(),
+      exitSignal: z.string().optional(),
+      reason: z.string().optional(),
+      /** Windows wearing this session's tag that are not its own — reported, never touched. */
+      strangers: z.array(z.string()),
+      /** The command that joins the host, when there is one to join. */
+      join: z.string().optional(),
+    })
+    .optional(),
+  /** What `session close` did to the live half (0031): present when the latest launch was hosted. */
+  teardown: z
+    .strictObject({
+      kind: z.enum(['tmux']),
+      outcome: z.enum(['closed', 'absent', 'refused', 'unknown']),
+      window: z.string().optional(),
+      detail: z.string(),
+    })
+    .optional(),
 });
 export type SessionMutationShape = z.infer<typeof sessionMutationShape>;
 

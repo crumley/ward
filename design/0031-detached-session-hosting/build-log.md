@@ -134,3 +134,103 @@ branch. **Next.**
 1. Merge #116, then flip the five Status lines to adjudicated.
 2. Build the workspace-id mint.
 3. Start this entry's build with the premise validation.
+
+## 2026-11-08 — Build, phase 1: the host interface, placement, close, and a live read
+
+**Goal.** Ship a reviewable vertical slice of the build: a hosted open and resume that land in their
+floor's host, a close that ends the session's own window, and `session show` saying where a run is
+live. The rest of Scope follows in later phases (listed under **Next**).
+
+**What was built.**
+
+- **The host interface**, `src/host/host.ts`, in host terms: `check`, `prepare`, `place` (find or
+  create the floor's group by its stamps, then create the tagged window), `find` (every window
+  carrying a session's tag), `close` (one window, only while it still carries that tag), and
+  `joinCommand`. `src/host/tmux.ts` is the one implementation and the only file that runs tmux;
+  `src/host/index.ts` selects by kind. The Ward-shaped half is `src/agent/host.ts` (host choice,
+  ownership, the resume gate, teardown) and `src/agent/placement.ts` (the pure placement and
+  floating rules).
+- **Configuration and flags.** `agent.host: foreground | tmux`, default `foreground`, resolved per
+  key like `harness`. `--detach` and `--foreground` on `session open` and `session resume`. The flag
+  refuses when no detached host is usable. The configured default degrades to the foreground and
+  says so on stderr.
+- **Placement** happens inside the store write that records the launch, after its commit. Two
+  concurrent opens on an empty floor make one host (tested).
+- **Close** (and the task-close cascade) ends the session's own verified window and never runs
+  `kill-session`.
+- **The live read**: `session show` (and its `--json` `live` block) reports `live`, `exited` (with
+  the retained status), `gone`, or `unknown`, plus the host, the window, and any strangers. The
+  hosted open and resume report the same block, read back a beat (300 ms) after placing, so an
+  instant exit shows at once.
+
+**What building changed in the design.**
+
+- **`host` is recorded on the launch event, not on the record.** The design gave the record one
+  optional `host` field. A session can be opened hosted and resumed in the foreground, or the other
+  way round, and the epoch the window is verified against is the latest launch event's `at`. So the
+  provenance belongs on that event: `opened` and `resumed` carry `host: tmux` when hosted. That
+  keeps the trail append-only and leaves no field to rewrite on each resume. The read is one line:
+  the latest launch's `host`.
+- **A window is created holding, then started by a respawn.** The design set `remain-on-exit` with
+  `set-option` right after `new-window` started the agent. Against a real tmux, a run that exits at
+  once beats that `set-option`, and the window and its exit status are both lost. So the window is
+  created running `cat`, tagged and set `remain-on-exit on` while it holds, and only then started
+  with `respawn-pane -k -c DIR -e WARD_AGENT=ID -- COMMAND`. `-e` on the respawn puts `WARD_AGENT`
+  on that pane's process alone, which is the property the design wanted from `new-window -e`. The
+  floor host's own placeholder holds `cat` the same way.
+- **Targets inside a tmux session need the colon.** `set-option -t '=name'` fails ("no such
+  session"), because `set-option`'s target is a pane. Every option on a host is set with
+  `-t '=name:'`.
+- **Strangers are counted only in this workspace's hosts.** Session ids repeat across workspaces:
+  every workspace on a machine has a `workspace-1@<machine>`. The real-tmux suite found exactly
+  that, with each case's workspace beside the last on one server. A window tagged with this id that
+  stands only in another workspace's hosts belongs to that workspace and is not reported. A window
+  tagged with this id in an unstamped tmux session (one a human moved it into) still is.
+- **Resume checks for a live window before it locates the transcript.** A run that is still going
+  may not have flushed its transcript yet. Locating first would record `resume-failed` for a run
+  that is fine. Resume now refuses over a live window first, read-only. The binding gate, which may
+  clear a dead window, runs again under the lock.
+- **A `resumed` event may carry a `cause`**: how the previous hosted run ended ("previous run exited
+  3", "previous run killed by SIGKILL"), read from its dead pane before the new window replaces it.
+  The schema already allowed the field; its comment now says so.
+- **`WARD_TMUX_SOCKET` sits beside `WARD_TMUX_BIN`.** It names a private server (`tmux -L NAME`).
+  The real-tmux suite runs on one, and a human can try hosting on a throwaway server. Unset, Ward
+  uses the default server, as the server decision says. The client environment Ward talks to tmux
+  from drops `TMUX`, `TMUX_PANE`, and `WARD_AGENT`. That way a run inside tmux still reaches the
+  default server, and a server Ward starts never carries the caller's session id into its global
+  environment.
+- **Tests run against a real tmux instead of a stub.** The design planned a stub tmux for the
+  end-to-end suites. Two suites replace it: unit tables over a fake host (`test/agent/host.test.ts`)
+  and over the adapter's argv builders and parsers (`test/host/tmux.test.ts`), and an end-to-end
+  suite through the spawned CLI against tmux on a private socket (`test/host/tmux-live.test.ts`).
+  The real server caught three of the changes above; a stub would have caught none. The suite starts
+  its own server with `-f /dev/null`, kills it and removes its socket in `afterAll`, and skips
+  itself, saying why, when tmux is absent. CI installs tmux on both runners.
+
+**What works now — with the exact command that proves it:**
+
+- `bun install --frozen-lockfile && env -u WARD_AGENT mise run check` → exit 0 on this branch.
+- `env -u WARD_AGENT bun test test/host test/agent/host.test.ts` → the host suites alone, real tmux
+  included.
+- On a throwaway server: `WARD_TMUX_SOCKET=try ward session open --detach`, then
+  `tmux -L try attach -t '=ward-<workspace>-f0'`, then `ward session close ID`, then
+  `tmux -L try kill-server`.
+
+**Not yet proven: the premise smoke** (Acceptance 2). This phase's real-tmux runs use a stand-in
+harness; Claude Code itself initializing in a detached window has not been checked. It is the first
+thing to run by hand before relying on `--detach` for real work.
+
+**Next** (phases 2 and 3, against Scope and Acceptance):
+
+1. The premise smoke with real Claude Code at `-x 120 -y 40`, or the attach-then-launch pivot.
+2. `ward session attach ID`: the grouped per-client view, re-create when gone, and floating-link
+   repair. Resume's refusal points at the raw `tmux attach` until then.
+3. `ward session observe ID`: the read-only single-window view.
+4. `locate`'s `host` block, and `attached`/`observed` events.
+5. Doctor: tmux capability and version floor, stray windows and hosts, duplicate floor hosts, views,
+   misplaced windows, missing floating links, idle hosts, foreign hosts, gone-as-information,
+   could-not-determine, and `@ward_version` skew.
+6. The manifest's Sessions section: detach, attach, observe, the floor host, and the sizing caveat
+   of the floating coordinator.
+7. `detach-on-destroy` behaviour for attached clients beyond what close needs, and completion and
+   telemetry for the new flags if the tree does not already pick them up.

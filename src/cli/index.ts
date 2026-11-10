@@ -11,7 +11,14 @@ import { choice, integer, string } from '@optique/core/valueparser';
 import { run } from '@optique/run';
 import picocolors from 'picocolors';
 import pkg from '../../package.json' with { type: 'json' };
-import { launchSession, locateSession, resumeSession } from '../agent/run.ts';
+import {
+  closeHostedSession,
+  describeExit,
+  type HostFlag,
+  type LiveState,
+  liveStateOf,
+} from '../agent/host.ts';
+import { type HostedRun, launchSession, locateSession, resumeSession } from '../agent/run.ts';
 import { WardError } from '../errors.ts';
 import { type PrForgeState, probeForge } from '../forge/gh.ts';
 import { readConfig } from '../global/config.ts';
@@ -230,6 +237,24 @@ function allFlag() {
  * declared agent, a `--json` invocation, a caller with no terminal — so every
  * non-interactive invocation keeps the behavior it has always had.
  */
+/**
+ * `--detach` / `--foreground` (design/0031-detached-session-hosting/): where
+ * this one launch is hosted, over the configured `agent.host`. `--detach`
+ * refuses when no detached host can be had; `--foreground` forces the
+ * baseline. Neither names a tool: the detached host is the configured one.
+ */
+function detachFlag() {
+  return option('--detach', {
+    description: message`Host the run detached (agent.host, else tmux), so it outlives this terminal. Refused when no detached host is usable.`,
+  });
+}
+
+function foregroundFlag() {
+  return option('--foreground', {
+    description: message`Run in this terminal, whatever agent.host says.`,
+  });
+}
+
 function onExitFlag() {
   return withDefault(
     option('--on-exit', choice(['ask', 'keep', 'close']), {
@@ -792,6 +817,8 @@ const session = command(
         ),
         handle: optional(option('--handle', string({ metavar: 'TEXT' }))),
         dir: optional(option('--dir', string({ metavar: 'PATH' }))),
+        detach: detachFlag(),
+        foreground: foregroundFlag(),
         onExit: onExitFlag(),
         json: jsonFlag(),
       }),
@@ -804,6 +831,8 @@ const session = command(
       object({
         action: constant('session-resume'),
         id: argument(sessionId()),
+        detach: detachFlag(),
+        foreground: foregroundFlag(),
         onExit: onExitFlag(),
         json: jsonFlag(),
       }),
@@ -1216,12 +1245,18 @@ try {
           result.purpose,
           result.handle,
           result.dir,
+          hostFlagOf(result.detach, result.foreground),
           result.onExit,
           result.json,
         );
         break;
       case 'session-resume':
-        await cmdSessionResume(result.id, result.onExit, result.json);
+        await cmdSessionResume(
+          result.id,
+          hostFlagOf(result.detach, result.foreground),
+          result.onExit,
+          result.json,
+        );
         break;
       case 'session-show':
         await cmdSessionShow(result.id, result.json);
@@ -1230,12 +1265,16 @@ try {
         await cmdSessionLocate(result.id, result.json);
         break;
       case 'session-close': {
-        const closed = await closeSession(await requireMutableWorkspace(), result.id);
+        const { record: closed, teardown } = await closeHostedSession(
+          await requireMutableWorkspace(),
+          result.id,
+        );
         if (result.json) {
-          printJson(sessionMutationJson(closed));
+          printJson(sessionMutationJson(closed, { teardown }));
           break;
         }
         console.log(`${pc.dim('closed')} session ${pc.bold(closed.id)}`);
+        if (teardown !== undefined) console.log(pc.dim(`  ${teardown.kind}: ${teardown.detail}`));
         break;
       }
       case 'status':
@@ -2423,10 +2462,18 @@ async function cmdSessionOpen(
   purpose: string | undefined,
   handle: string | undefined,
   dir: string | undefined,
+  hostFlag: HostFlag | undefined,
   onExit: OnExit,
   json: boolean,
 ): Promise<void> {
   const root = await requireMutableWorkspace();
+  // Only a launch is hosted: a record-only open starts nothing to place.
+  if (hostFlag !== undefined && (task !== undefined || handle !== undefined)) {
+    throw new WardError(
+      `--${hostFlag} chooses where a launched run is hosted — a session opened with ` +
+        `${task === undefined ? '--handle' : 'a TASK'} records a run Ward does not start`,
+    );
+  }
   // The session this one is opened from, when the caller declares one
   // (design/0052-session-parent-link/) — read on every path, because who
   // started a session is a fact about the open, not about its scope or
@@ -2476,16 +2523,31 @@ async function cmdSessionOpen(
   // any process existed — the ordering the whole design rests on, made
   // visible rather than merely promised.
   const scope = floor === undefined ? {} : { floor };
-  const { record, run } = await launchSession(root, scope, purpose, dir, startedBy, (opened) => {
-    if (json) printJson(sessionMutationJson(opened));
-    else {
-      console.log(
-        `${pc.green('opened')} session ${pc.bold(opened.id)} ` +
-          pc.dim(`(${describeScope(opened)}, handle ${opened.handle ?? '?'})`),
-      );
-      console.log(pc.dim(`launching the agent in ${opened.workingDirectory} — WARD_AGENT is set`));
-    }
-  });
+  const launched = await launchSession(
+    root,
+    scope,
+    purpose,
+    dir,
+    startedBy,
+    (opened) => {
+      if (json) printJson(sessionMutationJson(opened));
+      else {
+        console.log(
+          `${pc.green('opened')} session ${pc.bold(opened.id)} ` +
+            pc.dim(`(${describeScope(opened)}, handle ${opened.handle ?? '?'})`),
+        );
+        console.log(
+          pc.dim(`launching the agent in ${opened.workingDirectory} — WARD_AGENT is set`),
+        );
+      }
+    },
+    { hostFlag, onNotice: warnNotice },
+  );
+  if ('hosted' in launched) {
+    renderHosted('opened', launched.record, launched.hosted, json);
+    return;
+  }
+  const { record, run } = launched;
   if (run.outcome === 'failed') {
     throw new WardError(
       `the agent did not start — ${run.cause}. Session ${record.id} is recorded and open: ` +
@@ -2508,17 +2570,32 @@ async function cmdSessionOpen(
  * ground has already appended `resume-failed` with its cause by the time this
  * refuses, so the trail says what happened either way.
  */
-async function cmdSessionResume(id: string, onExit: OnExit, json: boolean): Promise<void> {
+async function cmdSessionResume(
+  id: string,
+  hostFlag: HostFlag | undefined,
+  onExit: OnExit,
+  json: boolean,
+): Promise<void> {
   const root = await requireMutableWorkspace();
-  const { record, run } = await resumeSession(root, id, (resumed) => {
-    if (json) printJson(sessionMutationJson(resumed));
-    else {
-      console.log(
-        `${pc.green('resuming')} session ${pc.bold(resumed.id)} ` +
-          pc.dim(`(${resumed.handle ?? '?'}, in ${resumed.workingDirectory})`),
-      );
-    }
-  });
+  const launched = await resumeSession(
+    root,
+    id,
+    (resumed) => {
+      if (json) printJson(sessionMutationJson(resumed));
+      else {
+        console.log(
+          `${pc.green('resuming')} session ${pc.bold(resumed.id)} ` +
+            pc.dim(`(${resumed.handle ?? '?'}, in ${resumed.workingDirectory})`),
+        );
+      }
+    },
+    { hostFlag, onNotice: warnNotice },
+  );
+  if ('hosted' in launched) {
+    renderHosted('resumed', launched.record, launched.hosted, json);
+    return;
+  }
+  const { record, run } = launched;
   if (run.outcome === 'failed') {
     throw new WardError(
       `the agent did not start — ${run.cause}. Session ${record.id} is still open and the ` +
@@ -2539,9 +2616,14 @@ async function cmdSessionResume(id: string, onExit: OnExit, json: boolean): Prom
  * shape.
  */
 async function cmdSessionShow(id: string, json: boolean): Promise<void> {
-  const { record } = await findSession(await requireWorkspace(), id);
+  const root = await requireWorkspace();
+  const listing = await findSession(root, id);
+  const { record } = listing;
+  // The live half, when the latest launch was hosted: derived here, per read,
+  // from the host itself (design/0031-detached-session-hosting/).
+  const live = await liveStateOf(root, listing);
   if (json) {
-    printJson(sessionMutationJson(record));
+    printJson(sessionMutationJson(record, { live }));
     return;
   }
   const state = record.state === 'open' ? pc.green('open') : pc.dim('closed');
@@ -2554,11 +2636,13 @@ async function cmdSessionShow(id: string, json: boolean): Promise<void> {
   if (record.parent !== undefined) row('parent', record.parent);
   row('opened', record.openedAt);
   if (record.closedAt !== undefined) row('closed', record.closedAt);
+  if (live !== undefined) row('live', describeLive(live));
   if (record.events !== undefined && record.events.length > 0) {
     console.log(`\n${pc.bold('events')}`);
     for (const event of record.events) {
       const cause = event.cause === undefined ? '' : pc.dim(` — ${event.cause}`);
-      console.log(`  ${event.at} ${event.event}${cause}`);
+      const host = event.host === undefined ? '' : pc.dim(` (in ${event.host})`);
+      console.log(`  ${event.at} ${event.event}${host}${cause}`);
     }
   }
 }
@@ -2594,6 +2678,77 @@ async function cmdSessionLocate(id: string, json: boolean): Promise<void> {
   // tells the truth about the harness this run was born under.
   const note = adapterForHandle(location.handle)?.retentionNote;
   if (note !== undefined) console.log(pc.dim(note));
+}
+
+/** `--detach` and `--foreground` as the one choice they are; both together is refused. */
+function hostFlagOf(detach: boolean, foreground: boolean): HostFlag | undefined {
+  if (detach && foreground) {
+    throw new WardError('--detach and --foreground choose opposite hosts — pass one of them');
+  }
+  if (detach) return 'detach';
+  return foreground ? 'foreground' : undefined;
+}
+
+/** A configured host that degraded to the foreground — said on stderr, never hidden. */
+function warnNotice(notice: string): void {
+  console.error(pc.yellow(notice));
+}
+
+/**
+ * A run placed in a detached host (design/0031-detached-session-hosting/):
+ * Ward is no longer its parent, so the verb reports where it stands and how to
+ * join it, then returns. Under --json the one document carries the record and
+ * the window as read back a beat after placing it.
+ */
+function renderHosted(
+  verb: 'opened' | 'resumed',
+  record: SessionRecord,
+  hosted: HostedRun,
+  json: boolean,
+): void {
+  const live = hosted.live === undefined ? undefined : { ...hosted.live, join: hosted.join };
+  if (json) {
+    printJson(sessionMutationJson(record, { live }));
+    return;
+  }
+  console.log(
+    `${pc.green(verb)} session ${pc.bold(record.id)} ` +
+      pc.dim(`(${describeScope(record)}, handle ${record.handle ?? '?'})`),
+  );
+  const created = hosted.createdGroup ? ', created' : '';
+  console.log(
+    pc.dim(
+      `hosted in host ${hosted.group}${created} (floor ${hosted.floor}), window ${hosted.window}` +
+        ' — WARD_AGENT is set in its pane',
+    ),
+  );
+  if (hosted.linkedInto.length > 0) {
+    console.log(pc.dim(`linked into every floor host: ${hosted.linkedInto.join(', ')}`));
+  }
+  if (hosted.live !== undefined && hosted.live.state !== 'live') {
+    console.error(
+      pc.yellow(`the run is ${describeLive(hosted.live)} — see: ward session show ${record.id}`),
+    );
+  }
+  console.log(`join it: ${hosted.join}`);
+  console.log(pc.dim(`end it: ward session close ${record.id}`));
+}
+
+/** One line for a hosted session's live half. */
+function describeLive(live: LiveState): string {
+  const where = `${live.kind} host ${live.group ?? '?'}, window ${live.window ?? '?'}`;
+  const strangers =
+    live.strangers.length === 0 ? '' : ` — not its own: ${live.strangers.join(', ')}`;
+  switch (live.state) {
+    case 'live':
+      return `running in ${where}${strangers}`;
+    case 'exited':
+      return `${describeExit(live)}, window kept in ${where}${strangers}`;
+    case 'gone':
+      return `not running (no ${live.kind} window, floor ${live.floor})${strangers}`;
+    case 'unknown':
+      return `could not determine (${live.reason ?? 'no reason'})`;
+  }
 }
 
 function renderSessionOpened(record: SessionRecord, json: boolean): void {

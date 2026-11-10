@@ -5,6 +5,7 @@
 // (intent/01-concepts/03-work-lifecycle.md).
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { teardownSession } from '../agent/host.ts';
 import { WardError } from '../errors.ts';
 import { type PrForgeState, prBelongsToRemote, probeForge } from '../forge/gh.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
@@ -247,6 +248,7 @@ export async function closeTask(
 
     const sessions = await readSessions(root, task.dir);
     const open = sessions.filter((session) => session.state === 'open');
+    const swept: SessionRecord[] = [];
     for (const session of open) {
       const closedAt = new Date().toISOString();
       // The cascade closes like `session close` does, event and all: a session
@@ -260,6 +262,7 @@ export async function closeTask(
         data: closed,
         body: `Session \`${session.id}\` of task \`${task.record.code}\`.`,
       });
+      swept.push(closed);
     }
     steps.push({
       step: 'sessions',
@@ -280,6 +283,15 @@ export async function closeTask(
     await writeTask(root, task.dir, closedRecord);
     commitRecords(root, `Close task ${taskAddress(task)} (${outcome})`, task.dir);
     steps.push({ step: 'record', detail: `closed with outcome ${outcome}` });
+    // A swept session whose latest run was placed in a detached host has its
+    // own window ended, as `session close` would — record first, window second
+    // (design/0031-detached-session-hosting/).
+    for (const closed of swept) {
+      const teardown = await teardownSession(root, { scopeDir: task.dir, record: closed });
+      if (teardown !== undefined) {
+        steps.push({ step: 'live windows', detail: `${closed.id}: ${teardown.detail}` });
+      }
+    }
     return closedRecord;
   });
 

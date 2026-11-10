@@ -11,6 +11,7 @@
 // truth, and a builder drifting from it is a compile error before it is a
 // failing test. The builders stay hand-written because they are what pin key
 // order — the byte-determinism (§6) a schema alone cannot promise.
+import type { LiveState, Teardown } from '../agent/host.ts';
 import type { SessionLocation } from '../agent/run.ts';
 import type { AgentProvenance, Resolved } from '../agent/settings.ts';
 import type { PrForgeState } from '../forge/gh.ts';
@@ -637,7 +638,16 @@ export function workspaceUpgradeJson(report: UpgradeReport): WorkspaceUpgradeSha
   };
 }
 
-export function sessionMutationJson(record: SessionRecord): SessionMutationShape {
+/** The derived live half and the close's teardown, when a hosted session has them. */
+export interface SessionOverlay {
+  readonly live?: (LiveState & { readonly join?: string }) | undefined;
+  readonly teardown?: Teardown | undefined;
+}
+
+export function sessionMutationJson(
+  record: SessionRecord,
+  overlay: SessionOverlay = {},
+): SessionMutationShape {
   return {
     id: record.id,
     // Always present, including for a record written before 0029: the scope a
@@ -661,10 +671,37 @@ export function sessionMutationJson(record: SessionRecord): SessionMutationShape
             event: event.event,
             at: event.at,
             ...(event.cause === undefined ? {} : { cause: event.cause }),
+            ...(event.host === undefined ? {} : { host: event.host }),
           })),
         }),
     openedAt: record.openedAt,
     ...(record.closedAt === undefined ? {} : { closedAt: record.closedAt }),
+    ...(overlay.live === undefined ? {} : { live: liveJson(overlay.live) }),
+    ...(overlay.teardown === undefined
+      ? {}
+      : {
+          teardown: {
+            kind: overlay.teardown.kind,
+            outcome: overlay.teardown.outcome,
+            ...(overlay.teardown.window === undefined ? {} : { window: overlay.teardown.window }),
+            detail: overlay.teardown.detail,
+          },
+        }),
+  };
+}
+
+function liveJson(live: NonNullable<SessionOverlay['live']>): SessionMutationShape['live'] {
+  return {
+    kind: live.kind,
+    state: live.state,
+    floor: live.floor,
+    ...(live.group === undefined ? {} : { host: live.group }),
+    ...(live.window === undefined ? {} : { window: live.window }),
+    ...(live.exitStatus === undefined ? {} : { exitStatus: live.exitStatus }),
+    ...(live.exitSignal === undefined ? {} : { exitSignal: live.exitSignal }),
+    ...(live.reason === undefined ? {} : { reason: live.reason }),
+    strangers: [...live.strangers],
+    ...(live.join === undefined ? {} : { join: live.join }),
   };
 }
 
@@ -737,6 +774,7 @@ export function doctorJson(report: DoctorReport): DoctorShape {
 function agentConfigJson(agent: NonNullable<DoctorReport['agent']>): DoctorShape['agent'] {
   return {
     harness: resolvedKeyJson(agent.harness),
+    host: resolvedKeyJson(agent.host),
     model: resolvedKeyJson(agent.model),
     effort: resolvedKeyJson(agent.effort),
     // Copied, not aliased: the report's array is readonly, and the JSON
