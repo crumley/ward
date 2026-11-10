@@ -28,6 +28,7 @@ import {
 } from '../store/types.ts';
 import { taskAddress } from '../workspace/address.ts';
 import type { ClaimReport, ReleaseReport } from '../workspace/affinity.ts';
+import type { BriefReport } from '../workspace/briefs.ts';
 import type { CreateReport } from '../workspace/create.ts';
 import type { DoctorReport } from '../workspace/doctor.ts';
 import type { FloorNoteReport } from '../workspace/projects.ts';
@@ -65,6 +66,7 @@ import type {
   StatusShape,
   StatusTaskShape,
   StatusWorktreeShape,
+  TaskBriefShape,
   TaskCloseShape,
   TaskListShape,
   TaskMutationShape,
@@ -295,6 +297,7 @@ export function taskShowJson(detail: TaskDetail): TaskShowShape {
     ...(status.worktrees === undefined
       ? {}
       : { worktrees: status.worktrees.map(statusWorktreeJson) }),
+    brief: { path: detail.brief.path, standing: detail.brief.standing },
     machine: detail.machine,
     sessions: detail.sessions.map(statusSessionJson),
     next: {
@@ -507,6 +510,19 @@ export function worktreeCreateJson(
     disposition: record.disposition,
     path: record.path,
     createdAt: record.createdAt,
+  };
+}
+
+/** `task brief` — the brief as recorded. */
+export function taskBriefJson(report: BriefReport): TaskBriefShape {
+  return {
+    task: report.task.record.code,
+    address: report.address,
+    path: report.path,
+    for: report.record.for,
+    createdAt: report.record.createdAt,
+    ...(report.record.session === undefined ? {} : { session: report.record.session }),
+    replaced: report.replaced,
   };
 }
 

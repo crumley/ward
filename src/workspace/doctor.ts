@@ -54,12 +54,13 @@ import {
 import { taskAddress } from './address.ts';
 import { claimsOf } from './affinity.ts';
 import { sha256OfFile } from './baselines.ts';
+import { readBrief } from './briefs.ts';
 import { carriesManifest, floorManifestPaths } from './floor-manifest.ts';
 import { git, gitAvailable, gitIdentityConfigured, hasCommits } from './git.ts';
 import { discoverWorkspace, IGNORE_LINES, inspectClaudeGuidance } from './layout.ts';
 import { findStandingProject, GROUND_FLOOR, readProjects } from './projects.ts';
 import { checkoutPath, listRepositoryNames } from './repos.ts';
-import { readTasks } from './scan.ts';
+import { type FoundTask, readTasks } from './scan.ts';
 import { readTaskWorktrees } from './worktrees.ts';
 
 export type Severity = 'ok' | 'info' | 'warn' | 'error';
@@ -634,6 +635,7 @@ async function workspaceChecks(
   findings.push(...(await legacyBareTaskFinding(root)));
   findings.push(...(await claimFindings(root)));
   findings.push(...(await floorManifestFindings(root)));
+  findings.push(...(await briefFindings(root)));
 
   // The agent configuration, resolved from the record just validated above
   // and the global config already read — never from a second read of either.
@@ -1327,6 +1329,44 @@ async function worktreeChecks(root: string): Promise<Finding[]> {
       findings.push({ check: 'worktrees', severity: 'error', message: error.message });
     } else {
       throw error;
+    }
+  }
+  return findings;
+}
+
+/**
+ * Each open task's brief, read the lenient way
+ * (design/0056-worktree-context-bridge/): a typed brief is what the verb
+ * writes, and says nothing; an untyped one — hand-written, from before the
+ * type — still serves as the brief, and is named `info` with the verb that
+ * re-records it in place; front matter that is not a valid brief is a
+ * `warn`, since the file claims a type it does not satisfy.
+ */
+async function briefFindings(root: string): Promise<Finding[]> {
+  const findings: Finding[] = [];
+  let tasks: FoundTask[];
+  try {
+    tasks = (await readTasks(root)).filter((task) => task.record.state !== 'closed');
+  } catch {
+    return []; // an unreadable task record is reported by the worktree checks
+  }
+  for (const task of tasks) {
+    const brief = await readBrief(root, task.dir);
+    const path = `${task.dir}/brief.md`;
+    if (brief.standing === 'untyped') {
+      findings.push({
+        check: `brief ${taskAddress(task)}`,
+        severity: 'info',
+        message:
+          `${path} carries no front matter — it still serves as the brief; type it in place: ` +
+          `ward task brief ${taskAddress(task)} ${path}`,
+      });
+    } else if (brief.standing === 'invalid') {
+      findings.push({
+        check: `brief ${taskAddress(task)}`,
+        severity: 'warn',
+        message: brief.reason,
+      });
     }
   }
   return findings;

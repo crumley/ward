@@ -171,9 +171,12 @@ You may be reading this from the workspace root or from inside a task worktree u
   \`scope\` (workspace, a floor's project, or a task), its \`floor\` or \`task\`, and its \`parent\`, the
   session that started it. A session recorded with \`WARD_AGENT=1\` has no record yet; record it
   first. A floor session, or a task on floor N, reads \`projects/<N>-<slug>/AGENTS.md\` and the
-  \`notes.md\` beside it before it starts. When you learned something the next session on that
-  floor needs, leave it with \`ward project note FLOOR TEXT\` — the notes sit in the record tree,
-  so they are written through \`ward\` like everything else there.
+  \`notes.md\` beside it before it starts. A task's brief is named by
+  \`ward task show ADDRESS --json\` (\`brief.path\`); read it before you start. When you learned
+  something the next session on that floor needs, leave it with \`ward project note FLOOR TEXT\` —
+  the notes sit in the record tree, so they are written through \`ward\` like everything else
+  there. Write a task's brief with \`ward task brief ADDRESS FILE\` (\`-\` reads stdin), never by
+  hand — it is a record, typed and committed like the rest.
 - **Name the task explicitly.** Deriving the task from the working directory is a human
   affordance; a declared agent is refused it and passes the **full address** (\`f3t22\`) on every
   task-addressed verb, read from \`address\` in \`--json\` (\`ward task list --json\` says what
@@ -223,7 +226,9 @@ view, so what follows names each by this directory's name, \`<N>-<slug>\`.
   - \`project.md\` — the floor's record: its number, slug, state, and the repositories it claims (a
     routing default for new tasks, never a limit on what they touch). Read the floor's facts there:
     this file is the same on every floor and says nothing about any one of them.
-  - \`tasks/\` — the floor's tasks, each addressed \`f<floor>t<room>\`, each with its own sessions.
+  - \`tasks/\` — the floor's tasks, each addressed \`f<floor>t<room>\`, each with its own sessions
+    and, when it has one, its brief: \`brief.md\` beside its \`task.md\`, which \`ward task show\`
+    also reports.
   - \`sessions/\` — the floor's own sessions (\`ward session open --floor N\`), when it has any.
 - The floor's task worktrees stand under \`floors/<N>-<slug>/\` in a workspace laid out that way,
   and under \`worktrees/\` at the root before it; \`ward task show ADDRESS\` names each one's path.

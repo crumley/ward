@@ -51,6 +51,7 @@ import {
   releaseRepository,
   requireRegistered,
 } from '../workspace/affinity.ts';
+import { recordBrief } from '../workspace/briefs.ts';
 import type { StepReport } from '../workspace/converge.ts';
 import { createWorkspace } from '../workspace/create.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
@@ -97,6 +98,7 @@ import {
   settledProject,
   settledTask,
   statusReport,
+  type TaskDetail,
   type TaskFilter,
   type TaskStatus,
   taskDetail,
@@ -129,6 +131,7 @@ import {
   sessionMutationJson,
   shellAdoptJson,
   statusJson,
+  taskBriefJson,
   taskCloseJson,
   taskListJson,
   taskMutationJson,
@@ -682,6 +685,29 @@ const task = command(
       },
     ),
     command(
+      'brief',
+      // Two arities, as `task pr` has: `brief FILE` inside a task's worktree,
+      // `brief ADDRESS FILE` anywhere. The body comes from a file, never an
+      // inline string (intent/02-subsystems/07-human-shell.md, long free text
+      // accepts a file); `-` reads it from stdin.
+      or(
+        object({
+          action: constant('task-brief'),
+          file: argument(string({ metavar: 'FILE' })),
+          json: jsonFlag(),
+        }),
+        object({
+          action: constant('task-brief'),
+          code: argument(taskIdentity('ADDRESS')),
+          file: argument(string({ metavar: 'FILE' })),
+          json: jsonFlag(),
+        }),
+      ),
+      {
+        brief: message`Record a task's brief from FILE (- for stdin), replacing any brief it had.`,
+      },
+    ),
+    command(
       'close',
       object({
         action: constant('task-close'),
@@ -1109,6 +1135,22 @@ try {
             ? `${pc.green('unlinked')} ${result.url} from ${pc.bold(taskAddress(linked))} `
             : `${pc.green('linked')} ${result.url} to ${pc.bold(taskAddress(linked))} `) +
             pc.dim(`(${linked.record.prs.length} in the set)`),
+        );
+        break;
+      }
+      case 'task-brief': {
+        const code = 'code' in result ? result.code : undefined;
+        const target = await resolveTaskTarget(code, 'ward task brief ADDRESS FILE', result.json);
+        const text =
+          result.file === '-' ? await Bun.stdin.text() : await readBriefFile(result.file);
+        const report = await recordBrief(target.root, target.code, text, declaredSession());
+        if (result.json) {
+          printJson(taskBriefJson(report));
+          break;
+        }
+        console.log(
+          `${pc.green(report.replaced ? 'replaced' : 'recorded')} the brief for ` +
+            `${pc.bold(report.address)} ${pc.dim(`(${report.path})`)}`,
         );
         break;
       }
@@ -1805,6 +1847,15 @@ interface TaskTarget {
  * stewardship-copy guard, a read does not — reading against a stewardship
  * copy is exactly what that copy is for (design/0019-stewardship-worktrees/).
  */
+/** A brief file, read relative to where the caller stands, refused legibly when absent. */
+async function readBriefFile(path: string): Promise<string> {
+  const file = Bun.file(path);
+  if (!(await file.exists())) {
+    throw new WardError(`no file at '${path}' — pass the brief as a file, or - for stdin`);
+  }
+  return file.text();
+}
+
 async function resolveTaskTarget(
   explicit: string | undefined,
   usage: string,
@@ -2219,6 +2270,7 @@ async function cmdTaskShow(root: string, code: string, all: boolean, json: boole
   if (record.repositories !== undefined) renderField('repos', record.repositories.join(', '));
   renderField('opened', record.openedAt);
   if (record.closedAt !== undefined) renderField('closed', record.closedAt);
+  renderField('brief', renderBrief(detail.brief, status.address));
 
   if (record.prs.length > 0) {
     console.log(`\n${pc.bold('pull requests')}`);
@@ -2241,6 +2293,23 @@ async function cmdTaskShow(root: string, code: string, all: boolean, json: boole
   }
   console.log(`\n${pc.bold('next')}\n    ${detail.next.text}`);
   renderForgeUnavailable(status.forge === undefined, [record]);
+}
+
+/**
+ * The brief line (design/0056, design 0057): the path, and how it reads. A
+ * typed brief is the path alone; the other standings say what to do.
+ */
+function renderBrief(brief: TaskDetail['brief'], address: string): string {
+  switch (brief.standing) {
+    case 'typed':
+      return brief.path;
+    case 'untyped':
+      return `${brief.path} ${pc.dim(`(untyped — it still serves; type it: ward task brief ${address} ${brief.path})`)}`;
+    case 'invalid':
+      return `${brief.path} ${pc.yellow('(invalid front matter — see ward doctor)')}`;
+    case 'absent':
+      return pc.dim(`none — record one with: ward task brief ${address} FILE`);
+  }
 }
 
 /** A header field: an aligned dim label, the value plain. */

@@ -40,7 +40,7 @@ const TODAY = new Date().toISOString().slice(0, 10);
 
 test('the floor default is pinned; changing it must move its old hash into the history', () => {
   expect(sha256OfText(FLOOR_AGENTS_MD)).toBe(
-    '79cbe2e51bfc211f3bb465eb3885c02e5b83c5645fb8bef15d5aa8119c4dacbc', // since design 0055
+    'b86cab9ade1cfa0528d144fe03f5a02a79ba1fdb2fd10b5c4d0f6bfb792b4e59', // since design 0056
   );
   const hashes = [...FLOOR_AGENTS_MD_HISTORY.map((v) => v.sha256), sha256OfText(FLOOR_AGENTS_MD)];
   expect(new Set(hashes).size).toBe(hashes.length);
