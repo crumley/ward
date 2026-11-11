@@ -227,14 +227,14 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     const hostCurrent = activeWindow(f1);
 
     const one = attach(['session', 'attach', second.id]);
-    const view = await clientOn(`${f1}-v1`);
+    const view = await clientOn(`${f1}-v1`, one);
     expect(sessionOption(view, '@ward_view')).toBe(await workspaceId(ws));
     expect(activeWindow(view)).toBe(second.live?.window ?? '?'); // the human lands on the session
     expect(activeWindow(f1)).toBe(hostCurrent); // and the floor host's own current window is unmoved
 
     // A second human attaching to another session keeps the first one where they are.
     const two = attach(['session', 'attach', first.id]);
-    await clientOn(`${f1}-v2`);
+    await clientOn(`${f1}-v2`, two);
     expect(activeWindow(view)).toBe(second.live?.window ?? '?');
     expect(activeWindow(`${f1}-v2`)).toBe(first.live?.window ?? '?');
 
@@ -255,7 +255,7 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     fabricateTranscript(opened.handle?.replace('claude:', '') ?? '');
 
     const client = attach(['session', 'attach', opened.id]);
-    await clientOn(`ward-${name}-f0-v1`);
+    await clientOn(`ward-${name}-f0-v1`, client);
     const after = session(ward(['session', 'show', opened.id, '--json']));
     expect(after.live).toMatchObject({ state: 'live', strangers: [] });
     expect(after.events?.map((e) => [e.event, e.cause])).toEqual([
@@ -283,7 +283,7 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     );
 
     const client = attach(['session', 'attach', floor.id]);
-    await clientOn(`${f1}-v1`);
+    await clientOn(`${f1}-v1`, client);
     expect(windowsIn(f1).sort()).toEqual([coordinator.id, floor.id].sort());
     tmux('detach-client', '-s', `=${f1}-v1`);
     expect(await exited(client)).toBe(0);
@@ -296,12 +296,12 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     // (tmux honours ignore-size only while an unflagged client is attached: an
     // observer watching alone sizes the window until a participant returns.)
     const human = attach(['session', 'attach', helper.id], { cols: 100, rows: 30 });
-    await clientOn(`ward-${name}-f0-v1`);
+    await clientOn(`ward-${name}-f0-v1`, human);
     const size = windowSize(helper.live?.window ?? '');
     expect(size).toBe('100x29');
 
     const client = attach(['session', 'observe', helper.id], { cols: 60, rows: 15 });
-    const view = await clientOn(`ward-${name}-f0-o1`);
+    const view = await clientOn(`ward-${name}-f0-o1`, client);
     expect(windowsIn(view)).toEqual([helper.id]); // no neighbor — not even the coordinator
     const flags = tmux('list-clients', '-F', '#{client_session}\t#{client_flags}')
       .split('\n')
@@ -547,8 +547,9 @@ async function exited(client: Client): Promise<number | null> {
 }
 
 /** Wait until a client is attached to the named tmux session; returns its name. */
-async function clientOn(view: string): Promise<string> {
-  for (let i = 0; i < 100; i++) {
+async function clientOn(view: string, client?: Client): Promise<string> {
+  // Up to 30s: a re-create-then-join round trip is slow on a loaded CI runner.
+  for (let i = 0; i < 300; i++) {
     const clients = Bun.spawnSync([
       TMUX ?? 'tmux',
       '-L',
@@ -560,9 +561,16 @@ async function clientOn(view: string): Promise<string> {
       .stdout.toString()
       .split('\n');
     if (clients.includes(view)) return view;
+    // A client that already exited will never attach: say what it printed.
+    if (client !== undefined && client.proc.exitCode !== null) {
+      throw new Error(
+        `no client attached to ${view}: the attach exited ${client.proc.exitCode}: ${client.output()}`,
+      );
+    }
     await Bun.sleep(100);
   }
-  throw new Error(`no client attached to ${view}`);
+  const seen = client === undefined ? '' : `; the attach printed: ${client.output()}`;
+  throw new Error(`no client attached to ${view}${seen}`);
 }
 
 async function groupsSoon(done: (names: string[]) => boolean): Promise<string[]> {
