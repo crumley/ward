@@ -4,19 +4,27 @@
 // real server is test/host/tmux-live.test.ts's.
 import { expect, test } from 'bun:test';
 import {
+  attachViewArgv,
+  belowFloor,
   commandArgs,
   createGroupArgv,
   createWindowArgv,
+  enterArgv,
+  insideServer,
   linkWindowArgv,
-  majorVersion,
   mintGroupName,
+  observeViewArgv,
+  parseEnvironmentNames,
   parseGroups,
+  parseInventoryWindows,
+  parseVersion,
   parseWindows,
   prepareArgv,
   sessionTarget,
   shellQuote,
   startRunArgv,
   tmuxHost,
+  viewName,
   windowTarget,
 } from '../../src/host/tmux.ts';
 
@@ -146,23 +154,31 @@ test('shell quoting survives a quote', () => {
 test('hosts are read with their stamps; a view or an unstamped session carries none', () => {
   expect(
     parseGroups(
-      'ward-main-f0\tws-id-0123456789ab\t0\t\t100\n' +
-        'scratch\t\t\t\t50\n' +
-        'ward-main-f0-v1\tws-id-0123456789ab\t0\t1\t120\n',
+      'ward-main-f0\tws-id-0123456789ab\t0\t\t100\t1\t0.1.0\t3\n' +
+        'scratch\t\t\t\t50\t0\t\t1\n' +
+        'ward-main-f0-v1\tws-id-0123456789ab\t0\tws-id-0123456789ab\t120\t0\t\t3\n',
     ),
   ).toEqual([
     {
       name: 'ward-main-f0',
       stamp: { workspace: 'ws-id-0123456789ab', floor: 0 },
       view: false,
+      viewOf: '',
       created: 100,
+      clients: 1,
+      version: '0.1.0',
+      windows: 3,
     },
-    { name: 'scratch', view: false, created: 50 },
+    { name: 'scratch', view: false, viewOf: '', created: 50, clients: 0, version: '', windows: 1 },
     {
       name: 'ward-main-f0-v1',
       stamp: { workspace: 'ws-id-0123456789ab', floor: 0 },
       view: true,
+      viewOf: 'ws-id-0123456789ab',
       created: 120,
+      clients: 0,
+      version: '',
+      windows: 3,
     },
   ]);
 });
@@ -208,12 +224,131 @@ test("a window is found by its tag on the agent's own pane, once however many ho
 });
 
 test.each([
-  ['tmux 3.7c', 3],
-  ['tmux 2.9a', 2],
-  ['tmux next-3.6', 3],
-  ['tmux master', null],
-])('%p reads as major version %p', (line, major) => {
-  expect(majorVersion(line)).toBe(major);
+  ['tmux 3.7c', { major: 3, minor: 7 }, false],
+  ['tmux 3.2', { major: 3, minor: 2 }, false],
+  ['tmux 3.1c', { major: 3, minor: 1 }, true], // observe's client flags arrived in 3.2
+  ['tmux 2.9a', { major: 2, minor: 9 }, true],
+  ['tmux next-3.6', { major: 3, minor: 6 }, false],
+  ['tmux master', null, false], // unreadable is a build from source, not an old one
+])('%p reads as %p; below the 3.2 floor: %p', (line, version, below) => {
+  expect(parseVersion(line)).toEqual(version);
+  expect(belowFloor(line)).toBe(below);
+});
+
+// -- views: attach and observe (design/0031-detached-session-hosting/) ---------
+
+test('a view takes the smallest free number, v for attach and o for observe', () => {
+  expect(viewName('ward-a-f3', 'attach', new Set())).toBe('ward-a-f3-v1');
+  expect(viewName('ward-a-f3', 'attach', new Set(['ward-a-f3-v1', 'ward-a-f3-v3']))).toBe(
+    'ward-a-f3-v2',
+  );
+  expect(viewName('ward-a-f3', 'observe', new Set(['ward-a-f3-v1']))).toBe('ward-a-f3-o1');
+});
+
+test("an attach view is grouped with the floor host, stamped, and selects the session's window", () => {
+  expect(attachViewArgv('ward-a-f3', 'ward-a-f3-v1', 'ws-id', '@7')).toEqual([
+    'new-session',
+    '-d',
+    '-t',
+    '=ward-a-f3',
+    '-s',
+    'ward-a-f3-v1',
+    ';',
+    'set-option',
+    '-t',
+    '=ward-a-f3-v1:',
+    '@ward_view',
+    'ws-id',
+    ';',
+    'select-window',
+    '-t',
+    '=ward-a-f3-v1:@7',
+  ]);
+});
+
+test('an observe view is a session of its own, sized like a host, holding a placeholder', () => {
+  const argv = observeViewArgv('ward-a-f3-o1', 'ws-id');
+  expect(argv.slice(0, 4)).toEqual(['new-session', '-d', '-s', 'ward-a-f3-o1']);
+  expect(argv.slice(0, argv.indexOf(';'))).not.toContain('-t'); // not grouped: no neighbor in it
+  expect(argv.join(' ')).toContain('-x 120 -y 40');
+  expect(options(argv)).toEqual([['=ward-a-f3-o1:', '@ward_view', 'ws-id']]);
+});
+
+test.each([
+  ['attach, from outside tmux', 'attach', false, ['attach-session', '-t', '=v']],
+  ['attach, already a client of this server', 'attach', true, ['switch-client', '-t', '=v']],
+  [
+    'observe, anywhere: read-only, never resizing the window',
+    'observe',
+    false,
+    ['attach-session', '-f', 'read-only,ignore-size', '-t', '=v'],
+  ],
+  [
+    'observe, even inside tmux (switching cannot be read-only)',
+    'observe',
+    true,
+    ['attach-session', '-f', 'read-only,ignore-size', '-t', '=v'],
+  ],
+] as const)('entering a view: %s', (_, mode, inside, join) => {
+  const argv = enterArgv({ name: 'v', mode }, inside);
+  expect(argv.slice(0, join.length)).toEqual([...join]);
+  // Set only once the client is in it: tmux ends an unattached session the moment it is set.
+  expect(argv.slice(join.length)).toEqual([
+    ';',
+    'set-option',
+    '-t',
+    '=v:',
+    'destroy-unattached',
+    'on',
+  ]);
+});
+
+test.each([
+  ['/tmp/tmux-501/default,123,0', '/tmp/tmux-501/default', true],
+  ['/tmp/tmux-501/default,123,0', '/tmp/tmux-501/ward-test', false],
+  [undefined, '/tmp/tmux-501/default', false],
+  ['', '/tmp/tmux-501/default', false],
+  ['/tmp/tmux-501/default,123,0', '', false],
+])('$TMUX %p against server %p: inside it is %p', (tmuxVar, socket, inside) => {
+  expect(insideServer(tmuxVar, socket)).toBe(inside);
+});
+
+// -- the inventory doctor joins against the records -----------------------------
+
+test('the inventory keeps every tagged window once, with every tmux session showing it', () => {
+  // group, window, pane, dead, status, signal, @ward_session, @ward_epoch, @ward_pane, …
+  const pane = (group: string, window: string, id: string, tag = 'workspace-1@mbp') =>
+    [group, window, id, '0', '', '', tag, 'E', tag === '' ? '' : '%5', '', ''].join('\t');
+  const rows = [
+    pane('ward-main-f0', '@1', '%5'),
+    pane('ward-main-f3', '@1', '%5'), // the same window, linked
+    pane('ward-main-f3-v1', '@1', '%5'), // and in a view
+    pane('ward-main-f0', '@2', '%9', ''), // a human's own window: not Ward's
+    pane('ward-main-f0', '@1', '%6'), // a pane split off beside the agent's
+  ].join('\n');
+  expect(parseInventoryWindows(rows)).toEqual([
+    {
+      window: '@1',
+      tags: { session: 'workspace-1@mbp', epoch: 'E' },
+      groups: ['ward-main-f0', 'ward-main-f3', 'ward-main-f3-v1'],
+      dead: false,
+    },
+  ]);
+});
+
+test("the host's inherited names are read; a removal marker is not a value", () => {
+  expect(parseEnvironmentNames('HOME=/h\nCLAUDECODE=1\n-DISPLAY\nEMPTY=\n')).toEqual([
+    'HOME',
+    'CLAUDECODE',
+    'EMPTY',
+  ]);
+});
+
+test('remedies are whole commands, on the configured server', () => {
+  const host = tmuxHost({ WARD_TMUX_SOCKET: 'try' });
+  expect(host.closeCommand('@4')).toBe('tmux -L try kill-window -t @4');
+  expect(host.endGroupCommand('ward-a-f2')).toBe('tmux -L try kill-session -t =ward-a-f2');
+  expect(host.forgetEnvCommand('CLAUDECODE')).toBe('tmux -L try set-environment -gu CLAUDECODE');
 });
 
 test('the join command names the private server when one is configured', () => {

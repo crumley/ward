@@ -11,6 +11,7 @@ import { choice, integer, string } from '@optique/core/valueparser';
 import { run } from '@optique/run';
 import picocolors from 'picocolors';
 import pkg from '../../package.json' with { type: 'json' };
+import { attachSession, observeSession } from '../agent/attach.ts';
 import {
   closeHostedSession,
   describeExit,
@@ -844,6 +845,12 @@ const session = command(
       }),
       { brief: message`Re-attach to a session's agent run, in the directory it ran in.` },
     ),
+    command('attach', object({ action: constant('session-attach'), id: argument(sessionId()) }), {
+      brief: message`Join a detached session's live window, taking part — re-created from the record when it is gone.`,
+    }),
+    command('observe', object({ action: constant('session-observe'), id: argument(sessionId()) }), {
+      brief: message`Watch a detached session's live window, read-only — its one window alone.`,
+    }),
     command(
       'show',
       object({
@@ -872,7 +879,7 @@ const session = command(
       { brief: message`Close a session record; closed stays closed.` },
     ),
   ),
-  { brief: message`Open, resume, show, locate, and close agent sessions.` },
+  { brief: message`Open, resume, attach, observe, show, locate, and close agent sessions.` },
 );
 const status = command(
   'status',
@@ -1278,6 +1285,12 @@ try {
           result.onExit,
           result.json,
         );
+        break;
+      case 'session-attach':
+        await cmdSessionJoin('attach', result.id);
+        break;
+      case 'session-observe':
+        await cmdSessionJoin('observe', result.id);
         break;
       case 'session-show':
         await cmdSessionShow(result.id, result.json);
@@ -2734,16 +2747,51 @@ async function cmdSessionLocate(id: string, json: boolean): Promise<void> {
     `(${location.handle}, ran ${machine === undefined ? '' : `on ${machine} `}` +
       `in ${location.record.workingDirectory})`,
   );
+  const live =
+    location.live === undefined ? '' : `\n${pc.dim(`live: ${describeLive(location.live)}`)}`;
   if (location.outcome === 'found') {
-    console.log(`${pc.green('found')} ${location.path} ${where}`);
+    console.log(`${pc.green('found')} ${location.path} ${where}${live}`);
     return;
   }
-  console.log(`${pc.yellow('gone')} — ${pc.dim(`no transcript at ${location.path}`)} ${where}`);
+  console.log(
+    `${pc.yellow('gone')} — ${pc.dim(`no transcript at ${location.path}`)} ${where}${live}`,
+  );
   // The retention clause is the resolving adapter's own — claude discards old
   // transcripts, pi keeps a session until a human deletes it — so the line
   // tells the truth about the harness this run was born under.
   const note = adapterForHandle(location.handle)?.retentionNote;
   if (note !== undefined) console.log(pc.dim(note));
+}
+
+/**
+ * `session attach` / `session observe` (design/0031-detached-session-hosting/):
+ * hand this terminal to a view of the session's live window, and exit with
+ * the host client's code once it leaves. Interactive by nature — there is no
+ * `--json`, and a caller without a terminal is refused, naming what it can do
+ * instead. What was prepared is said on stderr first, so it is on screen once
+ * the client detaches.
+ */
+async function cmdSessionJoin(verb: 'attach' | 'observe', id: string): Promise<void> {
+  const root = await requireMutableWorkspace();
+  const terminal = process.stdin.isTTY === true && process.stdout.isTTY === true;
+  const joined = await (verb === 'attach' ? attachSession : observeSession)(root, id, {
+    terminal,
+    onReady: (prepared) => {
+      if (prepared.recreated) {
+        console.error(pc.dim(`re-created session ${id} from its record (it was not running)`));
+      }
+      for (const link of prepared.repaired) console.error(pc.dim(`relinked ${link}`));
+      for (const link of prepared.unrepaired) console.error(pc.yellow(`could not relink ${link}`));
+      const how = verb === 'observe' ? 'watching read-only' : 'attaching';
+      console.error(
+        pc.dim(
+          `${how}: session ${id}, ${describeLive(prepared.live)} — leave with the tmux ` +
+            'prefix, then d',
+        ),
+      );
+    },
+  });
+  if (joined.exitCode !== 0) await exitWhenFlushed(joined.exitCode);
 }
 
 /** `--detach` and `--foreground` as the one choice they are; both together is refused. */

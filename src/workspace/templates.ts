@@ -127,6 +127,37 @@ open is what starts the agent** — there is no id to copy by hand:
 - \`ward session show ID\` reads one session's record, open or closed — its scope, state, and
   trail of events (\`--json\` for the document).
 
+## Detached sessions — floor hosts
+
+A launched session can outlive the terminal that started it: \`--detach\` hosts it in tmux
+instead of in the foreground.
+
+- \`ward session open --detach\` (and \`ward session resume ID --detach\`) records the session,
+  then starts the agent as one window of its floor's **floor host** — a tmux session named
+  \`ward-<workspace>-f<N>\`, one per floor — and returns. \`--foreground\` forces this terminal;
+  \`agent.host: tmux\` makes detaching the default, falling back to the foreground (and saying so)
+  where tmux 3.2 or later is not usable. Floor hosts live on your default tmux server, so
+  \`tmux ls\` shows them.
+- **The coordinator floats**: a workspace-scope session no other session started is linked into
+  every floor host, so it is a keystroke away wherever you stand.
+- \`ward session attach ID\` joins the session's window to take part — its input is yours. It
+  goes through a view of its own (\`<host>-v<n>\`, gone when you leave), so your attach never
+  moves the window another terminal is looking at. It re-creates a run that has ended or gone,
+  from its record, and relinks a missing coordinator. Leave with the tmux prefix, then \`d\`. Two
+  attaches to one session share its one keyboard.
+- \`ward session observe ID\` watches instead: a read-only view of that one window alone
+  (\`<host>-o<n>\`) — your keys go nowhere, and observe never starts or re-creates anything.
+- **Sizing.** A window has one size, set by the most recently active client
+  (\`window-size latest\`). Two terminals of different sizes on one window — the coordinator seen
+  from two floor hosts, say — take turns resizing it, and the agent reflows, looking padded or
+  clipped to the other until it acts. An observer never resizes a window someone is attached to;
+  watching alone, it does, until a participant returns.
+- \`ward session close ID\` ends the session's window and nothing else: Ward never ends a floor
+  host — tmux does, when its last window goes. \`ward session show ID\` and
+  \`ward session locate ID\` say where a hosted run stands (live, exited, gone, or could not
+  determine), and \`ward doctor\` reports stray windows, duplicate hosts, leftover views, and gone
+  sessions, each with the command that would end it — ending none itself.
+
 ## Driving \`ward\` as an agent
 
 You are reading this at the workspace root, where every session starts; the workspace is the

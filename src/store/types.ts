@@ -314,10 +314,12 @@ export type HostedKind = z.infer<typeof hostedKindSchema>;
  * closed. Events are not states — the stored state stays `open | closed` — but
  * they make FAILURE a recorded fact: without a resume-failed event a session
  * whose re-attach keeps failing is indistinguishable from one that is open and
- * healthy.
+ * healthy. `attached` and `observed` (design/0031-detached-session-hosting/)
+ * record a human joining a hosted run — taking part, or watching read-only —
+ * so the trail says who looked, not only who started it.
  */
 export const sessionEventSchema = z.object({
-  event: z.enum(['opened', 'resumed', 'resume-failed', 'closed']),
+  event: z.enum(['opened', 'resumed', 'resume-failed', 'attached', 'observed', 'closed']),
   at: z.string().min(1),
   /**
    * Why it failed — on `resume-failed`, per the intent's "with its cause". A

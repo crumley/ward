@@ -280,9 +280,17 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '5f3ce047d99d5cb5d49d2a2fe5c65e5b788d721cde47ed1ef2c2559fc603f0b8',
         era: 'design 0056 (typed brief)',
       },
-      // Current since design 0057: every session reads each AGENTS.md from
-      // the root down to where it works (`ward context PATH`), and task
-      // worktrees stand under their floor's view in `floors/`.
+      // design 0057 — every session reads each AGENTS.md from the root down
+      // to where it works (`ward context PATH`), and task worktrees stand
+      // under their floor's view in `floors/`; detached sessions were not
+      // yet taught.
+      {
+        sha256: 'b942afc03d90c477197b96630f25a8d9ddcfa0984549f3f7bf75b57324bf3242',
+        era: 'design 0057 (context from the root)',
+      },
+      // Current since design 0031 (phase 2): the Detached sessions section —
+      // `--detach`, floor hosts, the floating coordinator, attach, observe,
+      // and the `window-size latest` sizing caveat.
     ],
   },
 ];

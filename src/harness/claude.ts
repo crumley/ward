@@ -39,6 +39,26 @@ export const DEFAULT_CLAUDE_COMMAND: readonly string[] = ['claude'];
  */
 export const CLAUDE_AMBIENT_ENV = 'CLAUDE_CODE_SESSION_ID';
 
+/**
+ * What Claude Code sets for everything a run of it starts, naming that run:
+ * found in the pane of a detached run whose tmux server a Claude-run `ward`
+ * had started (design/0031-detached-session-hosting/, the premise check).
+ * Listed by name rather than by a `CLAUDE_CODE_` prefix, because that prefix
+ * is also where a human's own configuration lives (`CLAUDE_CODE_USE_BEDROCK`).
+ */
+export const CLAUDE_RUN_ENV: readonly string[] = [
+  'CLAUDECODE',
+  'CLAUDE_CODE_ENTRYPOINT',
+  CLAUDE_AMBIENT_ENV,
+  'CLAUDE_CODE_CHILD_SESSION',
+  'CLAUDE_CODE_SESSION_ATTENDED',
+  'CLAUDE_CODE_EXECPATH',
+  'CLAUDE_CODE_MESSAGING_SOCKET',
+  'CLAUDE_CODE_MESSAGING_TOKEN',
+  'CLAUDE_PID',
+  'CLAUDE_EFFORT',
+];
+
 /** The env override that names the program for one invocation (the test seam). */
 export const CLAUDE_BIN_ENV = 'WARD_CLAUDE_BIN';
 
@@ -165,6 +185,7 @@ export const claudeAdapter: HarnessAdapter = {
     'the harness owns retention (claude discards transcripts after cleanupPeriodDays, 30 by ' +
     "default) — the session's own record is what survives",
   ambientEnvVar: CLAUDE_AMBIENT_ENV,
+  runEnvVars: CLAUDE_RUN_ENV,
   handle: claudeHandle,
   nativeId: claudeNativeId,
   startArgv,

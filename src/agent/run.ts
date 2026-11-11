@@ -305,6 +305,12 @@ export interface SessionLocation extends LocateResult {
   /** The harness that minted the handle — reported so `--json` names it. */
   readonly harness: string;
   readonly nativeId: string;
+  /**
+   * Where the run stands in its detached host, derived now — undefined for a
+   * session whose latest run was in the foreground, or that is closed
+   * (design/0031-detached-session-hosting/).
+   */
+  readonly live: LiveState | undefined;
 }
 
 /**
@@ -327,6 +333,7 @@ export async function locateSession(root: string, id: string): Promise<SessionLo
     harness: adapter.name,
     nativeId,
     ...adapter.locate(nativeId, resolve(root, found.record.workingDirectory)),
+    live: await liveStateOf(root, found),
   };
 }
 
