@@ -117,6 +117,9 @@ test('the CLI reads the brief from stdin with -, and refuses a missing file', ()
     cwd: ws,
     stdin: new TextEncoder().encode('# From a pipe\n'),
     env: cliEnv(),
+    // spawnSync blocks the test runner, so its own timeout can't fire: bound
+    // the child itself, so a stalled run fails instead of hanging the suite.
+    timeout: 30_000,
   });
   expect(piped.exitCode).toBe(0);
   expect(piped.stdout.toString()).toContain('recorded the brief for f1t1');
@@ -125,7 +128,7 @@ test('the CLI reads the brief from stdin with -, and refuses a missing file', ()
   const missing = runWard(['task', 'brief', 'f1t1', 'nowhere.md'], ws);
   expect(missing.exitCode).toBe(1);
   expect(missing.stderr).toContain("no file at 'nowhere.md'");
-});
+}, 60_000);
 
 // -- task show: where the brief is, and how it reads (design 0057) -----------
 
