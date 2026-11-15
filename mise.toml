@@ -73,14 +73,19 @@ depends = ["deps"]
 run = "bun x tsc --noEmit"
 
 [tasks.test]
-description = "Run the test suite (bun test, files spread across isolated parallel workers)"
+description = "Run the test suite (bun test): files across isolated parallel workers, then the real-tmux suite alone"
 depends = ["deps"]
 # --parallel runs test files in separate worker processes (one per core by
 # default; --isolate is implied), so no file can see another's leftovers:
-# roughly 3x faster than one process running all 83 files in turn. Workers
-# share the cores, so a case that spawns the CLI several times runs slower
-# than it would alone: --timeout gives each case 30s instead of Bun's 5s.
-run = "bun test --parallel --timeout=30000"
+# roughly 3x faster than one process running all files in turn. Workers share
+# the cores, so a case that spawns the CLI several times runs slower than it
+# would alone: --timeout gives each case 30s instead of Bun's 5s. The real-tmux
+# suite (design/0031) drives live tmux servers and ptys, which misbehave under
+# that contention, so it runs afterwards on its own.
+run = [
+  "bun test --parallel --timeout=30000 --path-ignore-patterns='test/host/tmux-live.test.ts'",
+  "bun test --timeout=30000 test/host/tmux-live.test.ts",
+]
 
 [tasks.links]
 description = "Check Markdown links offline (lychee)"
