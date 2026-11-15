@@ -251,7 +251,9 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
 
   test('attach re-creates a run that ended, from its record, then joins it', async () => {
     const opened = session(ward(['session', 'open', '--detach', '--json'], { stub: exiting }));
-    expect(opened.live?.state).toBe('exited');
+    // Waited for, not read off the open's own report: on a loaded runner the
+    // stub can still be starting a beat after it was placed.
+    await exitedSoon(opened.id);
     fabricateTranscript(opened.handle?.replace('claude:', '') ?? '');
 
     const client = attach(['session', 'attach', opened.id]);
@@ -324,6 +326,172 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     const refused = attach(['session', 'observe', ended.id]);
     expect(await exited(refused)).toBe(1);
     expect(refused.output()).toContain('is not running (exited 3)');
+  });
+
+  // -- hosts that outlive what happens in them (phase 3) ---------------------------
+
+  test('resume over a dead window places its replacement first: the host, and the humans in it, stay', async () => {
+    const opened = session(ward(['session', 'open', '--detach', '--json']));
+    const host = `${name}-f0-workspace`;
+    const dead = opened.live?.window ?? '';
+    // Two humans: one through a view of Ward's, one sitting in the host itself.
+    const viewer = attach(['session', 'attach', opened.id]);
+    const view = await clientOn(`${host}-v1`, viewer);
+    const sitter = human(host);
+    await clientOn(host, sitter);
+    const before = [tmuxId(host), tmuxId(view)];
+
+    // The run ends under them: the host's only window is now a dead one.
+    process.kill(Number(tmux('display-message', '-p', '-t', dead, '#{pane_pid}').trim()));
+    await exitedSoon(opened.id);
+    fabricateTranscript(opened.handle?.replace('claude:', '') ?? '');
+    const resumed = session(ward(['session', 'resume', opened.id, '--detach', '--json']));
+
+    expect(resumed.live).toMatchObject({ state: 'live', host, strangers: [] });
+    expect(resumed.live?.window).not.toBe(dead);
+    expect(resumed.events?.at(-1)?.cause).toMatch(/^previous run /);
+    // The same tmux sessions, never ended and minted again: the host was not
+    // left empty between the dead window's going and its replacement's coming.
+    expect([tmuxId(host), tmuxId(view)]).toEqual(before);
+    expect(windowIds(host)).toEqual([resumed.live?.window ?? '?']); // the dead one is cleared
+    // Neither human was moved out, and both now look at the new run.
+    expect(clientSessions().sort()).toEqual([host, view].sort());
+    expect(activeWindow(view)).toBe(resumed.live?.window ?? '?');
+    expect(viewer.proc.exitCode).toBeNull();
+    expect(sitter.proc.exitCode).toBeNull();
+
+    tmux('detach-client', '-s', `=${view}`);
+    tmux('detach-client', '-s', `=${host}`);
+    expect(await exited(viewer)).toBe(0);
+    expect(await exited(sitter)).toBe(0);
+  });
+
+  test('two resumes of one session racing make one window; the loser is refused toward joining it', async () => {
+    const opened = session(ward(['session', 'open', '--detach', '--json'], { stub: exiting }));
+    await exitedSoon(opened.id);
+    fabricateTranscript(opened.handle?.replace('claude:', '') ?? '');
+    const racers = [0, 1].map(() =>
+      Bun.spawn(['bun', cliPath, 'session', 'resume', opened.id, '--detach', '--json'], {
+        cwd: ws,
+        env: wardEnv(staying),
+        stdout: 'pipe',
+        stderr: 'pipe',
+      }),
+    );
+    const results = await Promise.all(
+      racers.map(async (racer) => ({
+        exitCode: await racer.exited,
+        stderr: await new Response(racer.stderr).text(),
+      })),
+    );
+    expect(results.map((result) => result.exitCode).sort()).toEqual([0, 1]);
+    const loser = results.find((result) => result.exitCode === 1);
+    expect(loser?.stderr).toContain(`session ${opened.id} is still running in tmux host`);
+    expect(loser?.stderr).toContain(`tmux -L ${SOCKET} attach -t =${name}-f0-workspace`);
+
+    // One run, one window, one `resumed` on the trail: the loser wrote nothing.
+    const after = session(ward(['session', 'show', opened.id, '--json']));
+    expect(after.live).toMatchObject({ state: 'live', strangers: [] });
+    expect(after.events?.map((event) => event.event)).toEqual(['opened', 'resumed']);
+    expect(windowsIn(`${name}-f0-workspace`)).toEqual([opened.id]);
+    expect(await runsSoon(2)).toHaveLength(2); // the run that exited, and the one resume
+  });
+
+  test('a floor host killed by hand only unlinks the coordinator: it runs on in every other host', async () => {
+    const coordinator = session(ward(['session', 'open', '--detach', '--json']));
+    await openProject(ws, 'alpha');
+    await openProject(ws, 'beta');
+    const one = session(ward(['session', 'open', '--floor', '1', '--detach', '--json']));
+    const two = session(ward(['session', 'open', '--floor', '2', '--detach', '--json']));
+    const [f0, f1, f2] = [`${name}-f0-workspace`, `${name}-f1-alpha`, `${name}-f2-beta`];
+    const window = coordinator.live?.window ?? '';
+    const run = tmux('display-message', '-p', '-t', window, '#{pane_id} #{pane_pid}');
+    expect(windowsIn(f1)).toEqual([coordinator.id, one.id]);
+
+    tmux('kill-session', '-t', `=${f1}`); // a human's own act; Ward never does this
+
+    expect(hostsOf(await workspaceId(ws)).map((host) => host.name)).toEqual([f0, f2]);
+    // The same window, pane, and process, still shown by every host left standing.
+    expect(windowIds(f0)).toEqual([window]);
+    expect(windowsIn(f2)).toEqual([coordinator.id, two.id]);
+    expect(tmux('display-message', '-p', '-t', window, '#{pane_id} #{pane_pid}')).toBe(run);
+    const live = (id: string) => session(ward(['session', 'show', id, '--json'])).live;
+    expect(live(coordinator.id)).toMatchObject({ state: 'live', window, host: f0 });
+    expect(live(two.id)?.state).toBe('live');
+    // Only what the killed host alone held went with it — and the record says so honestly.
+    expect(live(one.id)?.state).toBe('gone');
+
+    // The floor's next session mints its host again, the coordinator linked in at its left edge.
+    const again = session(ward(['session', 'open', '--floor', '1', '--detach', '--json']));
+    expect(windowsIn(f1)).toEqual([coordinator.id, again.id]);
+  });
+
+  test("attach from inside tmux switches the human's own client, and hands it back when the view ends", async () => {
+    await openProject(ws, 'alpha');
+    const opened = session(ward(['session', 'open', '--floor', '1', '--detach', '--json']));
+    const f1 = `${name}-f1-alpha`;
+    // A human's own tmux session on the same server, whose pane runs the verb
+    // once they are attached to it — so `$TMUX` is tmux's own, and the pane a
+    // real terminal.
+    const inside = insideTmux(['session', 'attach', opened.id]);
+    tmux('new-session', '-d', '-s', 'mine', 'sh', inside.script);
+    const own = human('mine');
+    await clientOn('mine', own);
+    writeFileSync(inside.go, '');
+
+    // Their one client is moved into the view: switched, not nested in a second.
+    const view = await clientOn(`${f1}-v1`, own);
+    expect(clientSessions()).toEqual([view]);
+    expect(activeWindow(view)).toBe(opened.live?.window ?? '?');
+    // The verb returns at once — the client is theirs, and stays where it was put.
+    expect(await fileSoon(inside.exit)).toBe('0\n');
+    expect(clientSessions()).toEqual([view]);
+    expect(sessionOption(view, 'destroy-unattached')).toBe('on');
+    expect(sessionOption(view, 'detach-on-destroy')).toBe('off');
+    expect(
+      session(ward(['session', 'show', opened.id, '--json'])).events?.map((e) => e.event),
+    ).toEqual(['opened', 'attached']);
+
+    // The floor's last window closes: host and view end, and the human is
+    // back in a tmux session of their own — not thrown out of tmux.
+    session(ward(['session', 'close', opened.id, '--json']));
+    await clientOn('mine', own);
+    expect(await groupsSoon((names) => names.length === 0)).toEqual([]);
+    expect(own.proc.exitCode).toBeNull();
+    tmux('detach-client', '-s', '=mine');
+    expect(await exited(own)).toBe(0);
+  });
+
+  test('when a host ends under them, everyone in it moves to a host still standing — nobody to the shell', async () => {
+    await openProject(ws, 'alpha');
+    await openProject(ws, 'beta');
+    const closing = session(ward(['session', 'open', '--floor', '1', '--detach', '--json']));
+    const standing = session(ward(['session', 'open', '--floor', '2', '--detach', '--json']));
+    const [f1, f2] = [`${name}-f1-alpha`, `${name}-f2-beta`];
+    // Three ways to be looking at floor 1: sitting in the host itself, and
+    // through each kind of view. The view clients join last, so a view is the
+    // session tmux would move the sitter into first.
+    const sitter = human(f1);
+    await clientOn(f1, sitter);
+    const viewer = attach(['session', 'attach', closing.id]);
+    await clientOn(`${f1}-v1`, viewer);
+    const watcher = attach(['session', 'observe', closing.id]);
+    await clientOn(`${f1}-o1`, watcher);
+    for (const group of [f1, `${f1}-v1`, `${f1}-o1`]) {
+      expect(sessionOption(group, 'detach-on-destroy')).toBe('off');
+    }
+
+    // Floor 1's only window closes, and tmux ends the host and both views.
+    expect(session(ward(['session', 'close', closing.id, '--json'])).teardown?.outcome).toBe(
+      'closed',
+    );
+    expect(await groupsSoon((names) => names.length === 1)).toEqual([f2]);
+    expect(await clientsSoon(3)).toEqual([f2, f2, f2]);
+    for (const client of [sitter, viewer, watcher]) expect(client.proc.exitCode).toBeNull();
+    expect(session(ward(['session', 'show', standing.id, '--json'])).live?.state).toBe('live');
+
+    tmux('detach-client', '-s', `=${f2}`);
+    for (const client of [sitter, viewer, watcher]) expect(await exited(client)).toBe(0);
   });
 
   // -- names and titles (design/0061-host-names-and-titles/) ---------------------
@@ -684,9 +852,17 @@ function attach(
   argv: string[],
   size: { cols: number; rows: number } = { cols: 100, rows: 30 },
 ): Client {
+  return pty(['bun', cliPath, ...argv], size);
+}
+
+/** Run a command on a real pseudo-terminal, kept so no client outlives its case. */
+function pty(
+  command: string[],
+  size: { cols: number; rows: number } = { cols: 100, rows: 30 },
+): Client {
   let out = '';
   const decoder = new TextDecoder();
-  const proc = Bun.spawn(['bun', cliPath, ...argv], {
+  const proc = Bun.spawn(command, {
     cwd: ws,
     env: { ...wardEnv(staying), ...TERM_ENV },
     terminal: {
@@ -699,6 +875,87 @@ function attach(
   const client = { proc, output: () => out };
   clients.push(client);
   return client;
+}
+
+/** A human's own client: a raw `tmux attach` to one tmux session, on a real pseudo-terminal. */
+function human(group: string): Client {
+  return pty([TMUX ?? 'tmux', '-L', SOCKET, 'attach-session', '-t', `=${group}`]);
+}
+
+/**
+ * A script that runs a ward verb from INSIDE a tmux pane — where tmux itself
+ * sets `$TMUX` and the pane is the terminal — once `go` exists, and writes the
+ * verb's exit code to `exit`. It then stays, so its tmux session does.
+ */
+function insideTmux(argv: string[]): { script: string; go: string; exit: string } {
+  const [script, go, exit] = ['sh', 'go', 'exit'].map((kind) =>
+    join(scratch, `inside-${caseId}.${kind}`),
+  ) as [string, string, string];
+  const env = wardEnv(staying);
+  const exported = [
+    'NO_COLOR',
+    'WARD_CLAUDE_BIN',
+    'WARD_TMUX_SOCKET',
+    'CLAUDE_CONFIG_DIR',
+    'WARD_CONFIG_DIR',
+  ].map((key) => `export ${key}='${env[key] ?? ''}'`);
+  writeFileSync(
+    script,
+    [
+      '#!/bin/sh',
+      ...exported,
+      'unset WARD_AGENT',
+      `cd '${ws}'`,
+      `while [ ! -e '${go}' ]; do sleep 0.1; done`,
+      `bun '${cliPath}' ${argv.join(' ')}`,
+      `echo $? > '${exit}'`,
+      'exec sleep 600',
+      '',
+    ].join('\n'),
+  );
+  return { script, go, exit };
+}
+
+/** Wait until a hosted run has ended, its window kept — however long its start took. */
+async function exitedSoon(id: string): Promise<SessionMutationShape> {
+  let shown = session(ward(['session', 'show', id, '--json']));
+  for (let i = 0; i < 100 && shown.live?.state !== 'exited'; i++) {
+    await Bun.sleep(100);
+    shown = session(ward(['session', 'show', id, '--json']));
+  }
+  if (shown.live?.state !== 'exited') {
+    throw new Error(`session ${id} never read as exited: ${JSON.stringify(shown.live)}`);
+  }
+  return shown;
+}
+
+/** The tmux session every attached client is in, one entry per client. */
+function clientSessions(): string[] {
+  return tmux('list-clients', '-F', '#{client_session}')
+    .split('\n')
+    .filter((line) => line !== '');
+}
+
+/** Wait until `count` clients are attached and settled; the tmux session each is in. */
+async function clientsSoon(count: number): Promise<string[]> {
+  let seen = clientSessions();
+  for (let i = 0; i < 100 && seen.length !== count; i++) {
+    await Bun.sleep(100);
+    seen = clientSessions();
+  }
+  return seen;
+}
+
+/** tmux's own id for a tmux session: a host ended and minted again answers with another. */
+function tmuxId(group: string): string {
+  return tmux('display-message', '-p', '-t', `=${group}:`, '#{session_id}').trim();
+}
+
+/** The ids of a host's windows, in window order. */
+function windowIds(host: string): string[] {
+  return tmux('list-windows', '-t', `=${host}:`, '-F', '#{window_id}')
+    .split('\n')
+    .filter((line) => line !== '');
 }
 
 async function exited(client: Client): Promise<number | null> {

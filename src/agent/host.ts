@@ -291,27 +291,44 @@ export function describeExit(live: Pick<LiveState, 'exitStatus' | 'exitSignal'>)
 
 // -- resume's gate -------------------------------------------------------------
 
+/** What resume's gate found, for a resume it let through. */
+export interface ResumeGate {
+  /** How the previous hosted run ended — the `resumed` event's cause. */
+  readonly cause?: string;
+  /**
+   * End the previous run's dead window, when the gate found one. Called by
+   * the resume AFTER the replacement is placed (or, for a foreground resume,
+   * after the event is recorded), still under the store lock: a host whose
+   * only window was the dead one never stands empty, so it is never ended and
+   * minted again under whoever is sitting in it. Does nothing when there was
+   * no dead window.
+   */
+  readonly clearDead: () => void;
+}
+
 /**
  * The gate a resume passes under the store lock when the latest launch was
  * hosted: refuse over a LIVE window (two processes on one conversation), and
- * over a host that cannot answer; clear a dead window of this session's own
- * and hand its ending back as the `resumed` event's cause; proceed when there
- * is nothing. A stranger is never touched.
+ * over a host that cannot answer; over a dead window of this session's own,
+ * hand back how it ended and the means to clear it; proceed when there is
+ * nothing. The gate itself ends nothing — the dead window was verified here,
+ * against the launch it belongs to, and is cleared by the id it had then,
+ * because the `resumed` event about to be written makes it another life's.
+ * A stranger is never touched.
  */
 export async function guardResume(
   root: string,
   open: OpenSessionListing,
   env: Env = process.env,
   host?: SessionHost,
-  /** False for the early, read-only look before any lock: refuse, but clear nothing. */
-  clear = true,
-): Promise<string | undefined> {
+): Promise<ResumeGate> {
+  const nothing: ResumeGate = { clearDead: () => {} };
   const kind = hostedBy(open.record);
-  if (kind === undefined) return undefined;
+  if (kind === undefined) return nothing;
   const using = host ?? hostOf(kind, env);
   // No usable host here means no server Ward could have placed into is
   // reachable from this machine: there is nothing live to collide with.
-  if (!using.check().usable) return undefined;
+  if (!using.check().usable) return nothing;
   const floor = placementFloor(open, await readAllSessions(root));
   const workspace = await workspaceId(root);
   const { live, own } = classify(open.record, using.find(open.record.id), workspace, floor, kind);
@@ -328,13 +345,15 @@ export async function guardResume(
           `(window ${live.window ?? '?'}) — join it instead of resuming: ` +
           using.joinCommand(live.group ?? ''),
       );
-    case 'exited': {
-      if (!clear) return undefined;
-      if (own !== undefined) using.close(own.window, id);
-      return `previous run ${describeExit(live)}`;
-    }
+    case 'exited':
+      return {
+        cause: `previous run ${describeExit(live)}`,
+        clearDead: () => {
+          if (own !== undefined) using.close(own.window, id);
+        },
+      };
     case 'gone':
-      return undefined;
+      return nothing;
   }
 }
 

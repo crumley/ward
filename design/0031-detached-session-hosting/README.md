@@ -7,8 +7,9 @@
 > `attach` re-joins or re-creates, `observe` watches read-only, `close` tears down, and
 > `locate`/`doctor` report honestly.
 >
-> **Status:** in-progress · **Started:** 2026-08-24 · **Regrouped:** 2026-10-16 (floor hosts) ·
-> **Reviewed:** 2026-11-06 · **Partly superseded:** the minted host name and the window's label, by
+> **Status:** built — awaiting review · **Started:** 2026-08-24 · **Regrouped:** 2026-10-16 (floor
+> hosts) · **Reviewed:** 2026-11-06 · **Built:** 2026-11-15 · **Partly superseded:** the minted host
+> name and the window's label, by
 > [`0061-host-names-and-titles/`](../0061-host-names-and-titles/README.md)
 
 [0029](../0029-launched-sessions/README.md) made Ward launch agents — foreground, in the caller's

@@ -47,6 +47,7 @@ import {
   liveStateOf,
   type PlacedRun,
   placeLaunch,
+  type ResumeGate,
 } from './host.ts';
 import { readNaming } from './naming.ts';
 import type { Resolved } from './settings.ts';
@@ -263,7 +264,7 @@ export async function resumeSession(
   // transcript says — refused first, with the way to join it, before a
   // missing history is recorded as a failure it is not. (Read-only: the
   // binding check, and any clearing, happen again under the lock.)
-  await guardResume(root, open, process.env, undefined, false);
+  await guardResume(root, open);
   const history = adapter.locate(nativeId, resolve(root, open.record.workingDirectory));
   if (history.outcome === 'gone') await refuseUnresumable(root, open.record, history.path);
   const agent = await readAgentConfig(root);
@@ -271,7 +272,15 @@ export async function resumeSession(
   const choice = await chooseHost(root, launch.hostFlag, agent.host);
   // The gate runs whatever this resume's host: a window still running from a
   // hosted launch refuses a foreground resume exactly as a hosted one.
-  const guard = (listing: OpenSessionListing) => guardResume(root, listing);
+  // A dead window the gate finds is cleared only once its replacement stands
+  // (or, in the foreground, once the event is recorded): its host is never
+  // left empty in between, so tmux never ends it under a human sitting in it.
+  let gate: ResumeGate | undefined;
+  const guard = async (listing: OpenSessionListing) => {
+    gate = await guardResume(root, listing);
+    return gate.cause;
+  };
+  const clearDead = () => gate?.clearDead();
   if (choice.kind !== 'foreground') {
     let placed: { listing: OpenSessionListing; run: PlacedRun } | undefined;
     let wrote = false;
@@ -281,12 +290,19 @@ export async function resumeSession(
         guard,
         withinLock: async (listing) => {
           wrote = true;
-          const run = await placeLaunch(root, choice, listing, {
-            harness: adapter,
-            configuredCommand: commandOf(agent.command),
-            argv,
-          });
-          placed = { listing, run };
+          try {
+            const run = await placeLaunch(root, choice, listing, {
+              harness: adapter,
+              configuredCommand: commandOf(agent.command),
+              argv,
+            });
+            placed = { listing, run };
+          } finally {
+            // Cleared even when the placement failed: left standing, the dead
+            // window would wear this session's tag under an epoch the record
+            // has moved past, and attach would refuse it as a stranger.
+            clearDead();
+          }
         },
       });
       return { record, hosted: await verified(root, choice, placed) };
@@ -301,7 +317,7 @@ export async function resumeSession(
     }
   }
   if (choice.notice !== undefined) launch.onNotice?.(choice.notice);
-  const record = await recordResume(root, id, { guard });
+  const record = await recordResume(root, id, { guard, withinLock: async () => clearDead() });
   onRecorded(record);
   await titleForeground(root, { record, scopeDir: open.scopeDir });
   const run = await runHarness(adapter, {
