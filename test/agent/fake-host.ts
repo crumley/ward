@@ -124,11 +124,26 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
           };
         }
       }
-      // Every group asked to wear an identity is dressed, by the name it has now.
-      const themed = request.groups
-        .filter(({ naming }) => naming.identity !== undefined)
-        .map(({ naming }) => ({ group: naming.name, views: [] }));
-      return { groups: moved, failed: [], themed };
+      // Each view follows its group: named after it, in the order given.
+      const followed = request.groups.map(({ naming, views = [] }) =>
+        views.map((view, index) => ({
+          from: view.name,
+          to: `${naming.name}-${view.mode === 'attach' ? 'v' : 'o'}${index + 1}`,
+        })),
+      );
+      // Every group asked to wear an identity is dressed, by the name it has
+      // now, and its views with it.
+      const themed = request.groups.flatMap(({ naming }, index) =>
+        naming.identity === undefined
+          ? []
+          : [{ group: naming.name, views: (followed[index] ?? []).map(({ to }) => to) }],
+      );
+      return {
+        groups: moved,
+        views: followed.flat().filter(({ from, to }) => from !== to),
+        failed: [],
+        themed,
+      };
     },
     view(request: ViewRequest): View {
       views.push(request);

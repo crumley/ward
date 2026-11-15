@@ -169,13 +169,30 @@ export interface ViewRequest {
  * each window by its host-assigned id. Nothing is created, moved, or ended.
  */
 export interface RenameRequest {
-  readonly groups: readonly { readonly name: string; readonly naming: GroupNaming }[];
+  readonly groups: readonly {
+    readonly name: string;
+    readonly naming: GroupNaming;
+    /**
+     * The views standing over this group (design/0063-views-follow-their-host/),
+     * each by the name it wears now: renamed after the group, titled as it is,
+     * and dressed as it is — with whoever is looking through one left looking.
+     */
+    readonly views?: readonly StandingView[];
+  }[];
   readonly windows: readonly { readonly window: string; readonly label: string }[];
+}
+
+/** A view that already stands: the name it wears, and how its client joined. */
+export interface StandingView {
+  readonly name: string;
+  readonly mode: ViewMode;
 }
 
 export interface Renamed {
   /** The groups whose name changed: what each was called, and is called now. */
   readonly groups: readonly { readonly from: string; readonly to: string }[];
+  /** The views whose name changed, the same way. */
+  readonly views: readonly { readonly from: string; readonly to: string }[];
   /** What could not be renamed, and why — reported, never a reason to stop. */
   readonly failed: readonly string[];
   /**
@@ -198,6 +215,12 @@ export interface InventoryGroup {
   readonly stamp?: GroupStamp;
   /** The workspace a VIEW was made for — present exactly on views. */
   readonly viewOf?: string;
+  /**
+   * The group an ATTACH view looks at, by the name it wears now — what the
+   * host itself says the view shares windows with, never read from a name.
+   * Absent on an observe view, which holds one window and shares no group.
+   */
+  readonly viewHost?: string;
   /** How many clients are looking at it right now. */
   readonly clients: number;
   /** How many windows it shows, Ward's or not (a human's own shell counts). */
@@ -262,9 +285,10 @@ export interface SessionHost {
   /**
    * Bring names and titles up to date in place: rename each group to the name
    * wanted (left as it is when another group already wears that name), title
-   * it, dress it and every attach view of it in the identity given, and
-   * relabel each window. Touches those groups only, never the host's own
-   * defaults. Never throws: what it could not do is in the answer.
+   * it, dress it in the identity given, bring each view named with it after
+   * it — renamed, titled, dressed — and relabel each window. Touches those
+   * groups and views only, never the host's own defaults, and moves no
+   * client. Never throws: what it could not do is in the answer.
    */
   rename(request: RenameRequest): Renamed;
   /**

@@ -3,7 +3,8 @@
 // a workspace is called now — derived per call, never stored.
 import { afterAll, beforeEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { readNaming, refreshNames } from '../../src/agent/naming.ts';
+import { readNaming, refreshNames, standingViews } from '../../src/agent/naming.ts';
+import type { InventoryGroup, StandingView } from '../../src/host/host.ts';
 import type { SessionRecord } from '../../src/store/types.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { workspaceId } from '../../src/workspace/identity.ts';
@@ -86,15 +87,22 @@ test('a refresh renames only what is verifiably this workspace’s own, and neve
       ]),
     ],
     groups: [
-      { name: 'ward-old-f0-v1', viewOf: id, clients: 1, windows: 1, created: 0 },
-      { name: 'mine', clients: 1, windows: 1, created: 0 },
+      // A view a client is still looking through, from before the host was renamed (0063).
+      { name: 'ward-old-f0-v1', viewOf: id, viewHost: 'ward-old-f0', ...standing() },
+      // Another workspace's view of its own host, and a human's own session.
+      { name: 'ward-else-f0-v1', viewOf: 'ws-elsewhere', viewHost: 'ward-else-f0', ...standing() },
+      { name: 'mine', ...standing() },
     ],
   });
   expect(await refreshNames(ws, host, id, 'tmux')).toEqual({
-    renamed: [`ward-old-f0 is now ${name}-f0-workspace`],
+    renamed: [
+      `ward-old-f0 is now ${name}-f0-workspace`,
+      `ward-old-f0-v1 is now ${name}-f0-workspace-v1`,
+    ],
     failed: [],
-    // The host is dressed as its floor in the same pass, by its new name (0060).
-    themed: [{ floor: 0, names: [`${name}-f0-workspace`] }],
+    // The host is dressed as its floor in the same pass, by its new name
+    // (0060), and the view with it, by its own.
+    themed: [{ floor: 0, names: [`${name}-f0-workspace`, `${name}-f0-workspace-v1`] }],
   });
   expect(host.renames).toEqual([
     {
@@ -106,6 +114,7 @@ test('a refresh renames only what is verifiably this workspace’s own, and neve
             title: `🌊 ${name} f0`,
             identity: { color: 'blue', emoji: '🌊', label: 'f0 workspace' },
           },
+          views: [{ name: 'ward-old-f0-v1', mode: 'attach' }],
         },
       ],
       windows: [{ window: '@1', label: 'coord' }],
@@ -121,7 +130,74 @@ test('a refresh renames only what is verifiably this workspace’s own, and neve
   expect(silent.renames).toEqual([]);
 });
 
+test.each<[string, InventoryGroup[], string[][], Record<string, StandingView[]>]>([
+  [
+    'an attach view stands over the host it is grouped with, whatever either is called',
+    [
+      { name: 'main-f7-x', stamp: stamp(7), ...standing() },
+      { name: 'ward-main-f7-v1', viewOf: 'WS', viewHost: 'main-f7-x', ...standing() },
+      { name: 'anything', viewOf: 'WS', viewHost: 'main-f7-x', ...standing() },
+    ],
+    [],
+    {
+      'main-f7-x': [
+        { name: 'ward-main-f7-v1', mode: 'attach' },
+        { name: 'anything', mode: 'attach' },
+      ],
+    },
+  ],
+  [
+    'an observe view stands over the host its one window is in',
+    [
+      { name: 'main-f7-x', stamp: stamp(7), ...standing() },
+      { name: 'ward-main-f7-o1', viewOf: 'WS', ...standing() },
+    ],
+    [['main-f7-x', 'ward-main-f7-o1']],
+    { 'main-f7-x': [{ name: 'ward-main-f7-o1', mode: 'observe' }] },
+  ],
+  [
+    'a floating window: the host on the floor its session is placed on, not the first that shows it',
+    [
+      { name: 'main-f7-x', stamp: stamp(7), ...standing() },
+      { name: 'main-f0-w', stamp: stamp(0), ...standing() },
+      { name: 'ward-main-f0-o1', viewOf: 'WS', ...standing() },
+    ],
+    [['main-f7-x', 'main-f0-w', 'ward-main-f0-o1']],
+    { 'main-f0-w': [{ name: 'ward-main-f0-o1', mode: 'observe' }] },
+  ],
+  [
+    "another workspace's views, a view of a host that is not ours, and one showing nothing are left alone",
+    [
+      { name: 'main-f7-x', stamp: stamp(7), ...standing() },
+      { name: 'main-f7-x-v1', viewOf: 'ELSE', viewHost: 'main-f7-x', ...standing() },
+      { name: 'main-f7-x-v2', viewOf: 'WS', viewHost: 'theirs', ...standing() },
+      { name: 'main-f7-x-o1', viewOf: 'WS', ...standing() },
+      { name: 'main-f7-x-v3', ...standing() }, // named like a view, stamped as none
+    ],
+    [],
+    {},
+  ],
+])('the views standing over a host — %s', (_, groups, shown, expected) => {
+  const windows = shown.map((names, index) => ({
+    window: `@${index}`,
+    tags: { session: 'workspace-1@mac', epoch: 'e' },
+    groups: names,
+    dead: false,
+  }));
+  const placed = (session: string) => (session === 'workspace-1@mac' ? 0 : undefined);
+  const found = standingViews({ outcome: 'answered', groups, windows }, 'WS', placed);
+  expect(Object.fromEntries(found)).toEqual(expected);
+});
+
 // -- scaffolding ------------------------------------------------------------------
+
+// Hoisted: the tables above are built when the file loads.
+function standing() {
+  return { clients: 1, windows: 1, created: 0 } as const;
+}
+function stamp(floor: number) {
+  return { workspace: 'WS', floor };
+}
 
 const HOSTED = { handle: 'claude:h', host: 'tmux' } as const;
 const hosted = (handle: string) => ({ handle: `claude:${handle}`, host: 'tmux' }) as const;

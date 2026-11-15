@@ -9,7 +9,14 @@
 // naming, a floor whose slug the record now spells differently, a second
 // coordinator opened beside the first — each is brought up to date the next
 // time anything is placed in, or attached through, the workspace's hosts.
-import type { GroupIdentity, GroupNaming, RenameRequest, SessionHost } from '../host/host.ts';
+import type {
+  GroupIdentity,
+  GroupNaming,
+  Inventory,
+  RenameRequest,
+  SessionHost,
+  StandingView,
+} from '../host/host.ts';
 import { readDocument } from '../store/document.ts';
 import {
   type HostedKind,
@@ -167,22 +174,26 @@ export async function readNaming(
 
 /** What a refresh changed, in words — and what it could not. */
 export interface Refreshed {
-  /** "ward-main-f7 is now main-f7-ward-development" */
+  /**
+   * "ward-main-f7 is now main-f7-ward-development" — each host, then each view
+   * renamed after one (design/0063-views-follow-their-host/).
+   */
   readonly renamed: readonly string[];
   readonly failed: readonly string[];
   /**
    * The floors whose hosts were dressed in their identity
    * (design/0060-floor-identity/), each with the names dressed: the host,
-   * then the attach views of it.
+   * then the views of it.
    */
   readonly themed: readonly { readonly floor: number; readonly names: readonly string[] }[];
 }
 
 /**
- * Bring every host and window this workspace has in `host` up to its current
- * name and title, in place. A host is taken by its stamps and a window by its
- * verified tags, so only what is this workspace's own is ever renamed; a
- * window that fails verification is a stranger and keeps the name it has.
+ * Bring every host, view, and window this workspace has in `host` up to its
+ * current name and title, in place. A host is taken by its stamps, a view by
+ * its stamp and the host it looks at, and a window by its verified tags, so
+ * only what is this workspace's own is ever renamed; a window that fails
+ * verification is a stranger and keeps the name it has.
  * Best-effort by contract: a name is never the reason a launch or an attach
  * does not happen, so this answers with what failed rather than throwing.
  */
@@ -198,12 +209,18 @@ export async function refreshNames(
     const naming = given ?? (await readNaming(root, all));
     const inventory = host.inventory();
     if (inventory.outcome !== 'answered') return { renamed: [], failed: [], themed: [] };
+    const placed = (session: string): number | undefined => {
+      const listing = all.find(({ record }) => record.id === session);
+      return listing === undefined ? undefined : placementFloor(listing, all);
+    };
+    const standing = standingViews(inventory, workspace, placed);
     const groups = inventory.groups
       .filter((group) => group.viewOf === undefined && group.stamp?.workspace === workspace)
       .map((group) => ({
         name: group.name,
         floor: group.stamp?.floor ?? 0,
         naming: naming.group(group.stamp?.floor ?? 0),
+        views: standing.get(group.name) ?? [],
       }));
     const ours = new Set(
       inventory.groups.filter((g) => g.stamp?.workspace === workspace).map((g) => g.name),
@@ -226,14 +243,18 @@ export async function refreshNames(
       return { renamed: [], failed: [], themed: [] };
     }
     const result = host.rename({
-      groups: groups.map(({ name, naming }) => ({ name, naming })),
+      groups: groups.map(({ name, naming, views }) => ({
+        name,
+        naming,
+        ...(views.length === 0 ? {} : { views }),
+      })),
       windows,
     });
     // A dressed group answers by the name it wears NOW: the one it was asked
     // by, or the one that rename gave it.
     const now = new Map(result.groups.map(({ from, to }) => [to, from]));
     return {
-      renamed: result.groups.map(({ from, to }) => `${from} is now ${to}`),
+      renamed: [...result.groups, ...result.views].map(({ from, to }) => `${from} is now ${to}`),
       failed: result.failed,
       themed: result.themed.flatMap((dressed) => {
         const asked = now.get(dressed.group) ?? dressed.group;
@@ -250,9 +271,47 @@ export async function refreshNames(
   }
 }
 
+/**
+ * The views standing over each of this workspace's hosts, by the host's name
+ * (design/0063-views-follow-their-host/). A view is this workspace's by its
+ * stamp. An ATTACH view names its host itself — the group the host says it
+ * shares windows with. An OBSERVE view shares no group: it holds one window,
+ * so its host is a host that window stands in — the one on the floor its
+ * session is placed on when the window stands in several (the coordinator
+ * floats into every host), which is the host observe was pointed at. A view
+ * whose host cannot be told is left exactly as it is. No name is read.
+ */
+export function standingViews(
+  inventory: Extract<Inventory, { outcome: 'answered' }>,
+  workspace: string,
+  placed: (session: string) => number | undefined,
+): Map<string, StandingView[]> {
+  const hosts = new Map(
+    inventory.groups
+      .filter((group) => group.viewOf === undefined && group.stamp?.workspace === workspace)
+      .map((group) => [group.name, group.stamp?.floor ?? 0]),
+  );
+  const observed = (view: string): string | undefined => {
+    const window = inventory.windows.find((candidate) => candidate.groups.includes(view));
+    if (window === undefined) return undefined;
+    const shown = window.groups.filter((name) => hosts.has(name));
+    const floor = placed(window.tags.session);
+    return shown.find((name) => hosts.get(name) === floor) ?? shown[0];
+  };
+  const views = new Map<string, StandingView[]>();
+  for (const group of inventory.groups) {
+    if (group.viewOf !== workspace) continue;
+    const mode = group.viewHost === undefined ? 'observe' : 'attach';
+    const host = group.viewHost ?? observed(group.name);
+    if (host === undefined || !hosts.has(host)) continue;
+    views.set(host, [...(views.get(host) ?? []), { name: group.name, mode }]);
+  }
+  return views;
+}
+
 /** What dressing one floor's host in its identity came to. */
 export type Dressed =
-  /** The names dressed: the floor's host, then each attach view of it. */
+  /** The names dressed: the floor's host, then each view of it. */
   | { readonly outcome: 'themed'; readonly groups: readonly string[] }
   /** No host stands for the floor here — nothing to dress, and never an error. */
   | { readonly outcome: 'absent' }

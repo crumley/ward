@@ -369,7 +369,7 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     tmux('set-option', '-t', `=${old}:`, 'set-titles', 'off');
     const human = attach(['session', 'attach', first.id]);
     await clientOn(`${name}-f0-workspace-v1`, human);
-    expect(human.output()).toContain(`renamed host: ${old} is now ${name}-f0-workspace`);
+    expect(human.output()).toContain(`renamed: ${old} is now ${name}-f0-workspace`);
     expect(windowNames(`${name}-f0-workspace`)).toEqual(['coord']);
     expect(sessionOption(`${name}-f0-workspace`, 'set-titles')).toBe('on');
     // The same window, the same pane, the same process: nothing was re-created.
@@ -382,6 +382,82 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     expect(windowNames(`${name}-f0-workspace`).sort()).toEqual(['coord 1', 'coord 2']);
     tmux('detach-client', '-s', `=${name}-f0-workspace-v1`);
     expect(await exited(human)).toBe(0);
+  });
+
+  // -- views follow their host (design/0063-views-follow-their-host/) -------------
+
+  test('the views clients are looking through are renamed and titled with their host, in place', async () => {
+    const coordinator = session(ward(['session', 'open', '--detach', '--json']));
+    await openProject(ws, 'alpha');
+    const floor = session(ward(['session', 'open', '--floor', '1', '--detach', '--json']));
+    const [f0, f1] = [`${name}-f0-workspace`, `${name}-f1-alpha`];
+    const human = attach(['session', 'attach', floor.id]);
+    await clientOn(`${f1}-v1`, human);
+    const watcher = attach(['session', 'observe', coordinator.id]);
+    await clientOn(`${f0}-o1`, watcher);
+
+    // As an older ward left them: hosts named for their numbers, views named
+    // after those hosts, and no view titled at all.
+    const stale = [`ward-${name}-f1-v1`, `ward-${name}-f0-o1`];
+    tmux('rename-session', '-t', `=${f1}`, `ward-${name}-f1`);
+    tmux('rename-session', '-t', `=${f0}`, `ward-${name}-f0`);
+    tmux('rename-session', '-t', `=${f1}-v1`, stale[0] ?? '');
+    tmux('rename-session', '-t', `=${f0}-o1`, stale[1] ?? '');
+    for (const view of stale) {
+      tmux('set-option', '-u', '-t', `=${view}:`, 'set-titles');
+      tmux('set-option', '-u', '-t', `=${view}:`, 'set-titles-string');
+    }
+    const [humanPid, watcherPid] = [clientOf(stale[0] ?? ''), clientOf(stale[1] ?? '')];
+    expect(humanPid).not.toBe('');
+    expect(watcherPid).not.toBe('');
+
+    // One refresh — here the one a change of identity runs — and every view
+    // answers to its host's name again, wearing the title its host wears.
+    const changed = ward([
+      'project',
+      'identity',
+      '1',
+      '--color',
+      'pink',
+      '--emoji',
+      '🚀',
+      '--json',
+    ]);
+    expect(JSON.parse(changed.stdout)).toMatchObject({
+      host: { outcome: 'themed', groups: [f1, `${f1}-v1`] },
+    });
+    expect((await groupsSoon((names) => names.length === 4)).sort()).toEqual(
+      [f0, `${f0}-o1`, f1, `${f1}-v1`].sort(),
+    );
+    for (const view of [`${f1}-v1`, `${f0}-o1`])
+      expect(sessionOption(view, 'set-titles')).toBe('on');
+    expect(sessionOption(`${f1}-v1`, 'set-titles-string')).toBe(
+      sessionOption(f1, 'set-titles-string'),
+    );
+    expect(await titleSoon(human, `alpha · 🚀 ${name} f1`)).toBe(true);
+    // An observe view shares no group with its host: found by the window it shows.
+    ward(['project', 'identity', '0', '--color', 'teal', '--emoji', '🐬']);
+    expect(await titleSoon(watcher, `coord · 🐬 ${name} f0 (observing)`)).toBe(true);
+    expect(theme(`${f0}-o1`)).toEqual(theme(f0));
+
+    // The same clients, each still on the view it was on: nothing was
+    // re-created, and nobody was moved or dropped.
+    expect(clientOf(`${f1}-v1`)).toBe(humanPid);
+    expect(clientOf(`${f0}-o1`)).toBe(watcherPid);
+    expect(windowOption(floor.live?.window ?? '', '@ward_epoch')).toBe(floor.openedAt);
+    // Still session options on Ward's own: the server's are as they were.
+    expect(tmux('show-options', '-gv', 'set-titles').trim()).toBe('off');
+
+    // A view whose derived name another session already wears takes the next free one.
+    tmux('rename-session', '-t', `=${f1}-v1`, 'out-of-date');
+    tmux('new-session', '-d', '-s', `${f1}-v1`, 'cat');
+    ward(['project', 'identity', '1']);
+    expect(clientOf(`${f1}-v2`)).toBe(humanPid);
+
+    tmux('detach-client', '-s', `=${f1}-v2`);
+    tmux('detach-client', '-s', `=${f0}-o1`);
+    expect(await exited(human)).toBe(0);
+    expect(await exited(watcher)).toBe(0);
   });
 
   test('attach and observe refuse a caller with no terminal, changing nothing', () => {
@@ -748,6 +824,12 @@ async function groupsSoon(done: (names: string[]) => boolean): Promise<string[]>
     await Bun.sleep(100);
   }
   return names;
+}
+
+/** The pid of the one client looking at a tmux session — empty when none is. */
+function clientOf(view: string): string {
+  const rows = tmux('list-clients', '-F', '#{client_session}\t#{client_pid}').split('\n');
+  return rows.find((row) => row.startsWith(`${view}\t`))?.split('\t')[1] ?? '';
 }
 
 function activeWindow(group: string): string {
