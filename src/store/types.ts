@@ -3,6 +3,7 @@
 // and DocumentType here; the document layer does the rest.
 import { z } from 'zod';
 import { agentSettingsSchema } from '../agent/settings.ts';
+import { FLOOR_COLORS, isSingleEmoji } from '../theme/palette.ts';
 import type { DocumentType } from './document.ts';
 
 /**
@@ -148,6 +149,24 @@ export const projectSchema = z
     state: workStateSchema,
     openedAt: z.string().min(1),
     closedAt: z.string().min(1).optional(),
+    /**
+     * The floor's visual identity (design/0060-floor-identity/;
+     * intent/02-subsystems/05-visual-theming.md): a color, by its name in the
+     * floor palette (src/theme/palette.ts), and one emoji. Assigned by Ward
+     * when the floor opens — distinct from the other open floors where the
+     * palette allows — changed only through `ward project identity`, and worn
+     * by the floor's host. Recorded rather than derived from the floor number
+     * so the same floor looks the same on every machine and after every
+     * restart, and so a human may change it. Optional so every record written
+     * before this entry stays valid; `ward workspace upgrade` backfills an
+     * open floor that lacks one. Last in the shape, so the lines land where
+     * that backfill appends them.
+     */
+    color: z.enum(FLOOR_COLORS).optional(),
+    emoji: z
+      .string()
+      .refine(isSingleEmoji, { message: "a floor's emoji is exactly one emoji" })
+      .optional(),
   })
   /**
    * The reserved number belongs to the standing workspace project and to

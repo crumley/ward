@@ -10,7 +10,7 @@
 // act, and it never starts, re-creates, or repairs anything — watching must
 // not disturb. Both verify the window is the record's own before showing it.
 import { WardError } from '../errors.ts';
-import type { FoundWindow, SessionHost, View } from '../host/host.ts';
+import type { FoundWindow, SessionHost, View, ViewRequest } from '../host/host.ts';
 import type { HostedKind, SessionRecord } from '../store/types.ts';
 import { workspaceId } from '../workspace/identity.ts';
 import {
@@ -106,7 +106,7 @@ export async function attachSession(root: string, id: string, options: JoinOptio
     window: live.window,
     mode: 'attach',
     workspace,
-    title: await titleOf(root, own, live.group, live.floor),
+    ...(await viewNaming(root, own, live.group, live.floor)),
   });
   return join(root, id, 'attached', view, host, options, {
     live,
@@ -145,7 +145,9 @@ export async function observeSession(root: string, id: string, options: JoinOpti
     window: live.window,
     mode: 'observe',
     workspace,
-    title: await titleOf(root, own, live.group, live.floor),
+    // The view observe makes wears the floor it watches; the host itself is
+    // left exactly as it is — watching changes nothing.
+    ...(await viewNaming(root, own, live.group, live.floor)),
   });
   return join(root, id, 'observed', view, host, options, {
     live,
@@ -157,18 +159,19 @@ export async function observeSession(root: string, id: string, options: JoinOpti
 }
 
 /**
- * Where a view of `group` says its terminal stands: the floor the group is
- * stamped for — which is not the session's own when its window was moved, or
- * floats.
+ * Where a view of `group` says its terminal stands, and what it wears
+ * (design/0060-floor-identity/): those of the floor the group is stamped for —
+ * which is not the session's own when its window was moved, or floats.
  */
-async function titleOf(
+async function viewNaming(
   root: string,
   own: FoundWindow,
   group: string | undefined,
   placed: number,
-): Promise<string> {
+): Promise<Pick<ViewRequest, 'title' | 'identity'>> {
   const floor = own.groups.find((g) => g.name === group)?.stamp?.floor ?? placed;
-  return (await readNaming(root)).group(floor).title;
+  const { title, identity } = (await readNaming(root)).group(floor);
+  return { title, ...(identity === undefined ? {} : { identity }) };
 }
 
 async function join(

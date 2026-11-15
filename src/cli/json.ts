@@ -12,6 +12,7 @@
 // failing test. The builders stay hand-written because they are what pin key
 // order — the byte-determinism (§6) a schema alone cannot promise.
 import type { LiveState, Teardown } from '../agent/host.ts';
+import type { Dressed } from '../agent/naming.ts';
 import type { SessionLocation } from '../agent/run.ts';
 import type { AgentProvenance, Resolved } from '../agent/settings.ts';
 import type { PrForgeState } from '../forge/gh.ts';
@@ -27,6 +28,7 @@ import {
   type WorkState,
   type WorktreeRecord,
 } from '../store/types.ts';
+import type { FloorColor } from '../theme/palette.ts';
 import { taskAddress } from '../workspace/address.ts';
 import type { ClaimReport, ReleaseReport } from '../workspace/affinity.ts';
 import type { BriefReport } from '../workspace/briefs.ts';
@@ -34,6 +36,7 @@ import type { ContextChain } from '../workspace/context.ts';
 import type { StepReport } from '../workspace/converge.ts';
 import type { CreateReport } from '../workspace/create.ts';
 import type { DoctorReport } from '../workspace/doctor.ts';
+import { type IdentityReport, identityOf } from '../workspace/floor-identity.ts';
 import type { FloorNoteReport } from '../workspace/projects.ts';
 import type { AddReport, RefreshReport, RemoveReport } from '../workspace/repos.ts';
 import type { RestoreReport } from '../workspace/restore.ts';
@@ -55,6 +58,7 @@ import type {
   DoctorShape,
   PrForgeShape,
   ProjectClaimShape,
+  ProjectIdentityShape,
   ProjectListShape,
   ProjectNoteShape,
   ProjectOpenShape,
@@ -199,6 +203,7 @@ export function statusJson(report: StatusReport): StatusShape {
       slug: project.project.slug,
       state: project.project.state,
       derived: project.derived,
+      ...identityJson(project.project),
       ...(project.project.repositories === undefined
         ? {}
         : { repositories: project.project.repositories }),
@@ -248,6 +253,7 @@ export function projectListJson(
       ...(entry.record.repositories === undefined
         ? {}
         : { repositories: entry.record.repositories }),
+      ...identityJson(entry.record),
       openedAt: entry.record.openedAt,
       ...(entry.record.closedAt === undefined ? {} : { closedAt: entry.record.closedAt }),
     })),
@@ -459,6 +465,29 @@ export function projectOpenJson(record: ProjectRecord): ProjectOpenShape {
     state: record.state,
     ...(record.repositories === undefined ? {} : { repositories: record.repositories }),
     openedAt: record.openedAt,
+    ...identityJson(record),
+  };
+}
+
+/** A floor's identity as a listing carries it — both halves, or neither (0060). */
+function identityJson(record: ProjectRecord): { color?: FloorColor; emoji?: string } {
+  return identityOf(record) ?? {};
+}
+
+/** `project identity` — the record's identity now, and what the host made of it. */
+export function projectIdentityJson(report: IdentityReport, host: Dressed): ProjectIdentityShape {
+  return {
+    floor: report.project.floor,
+    slug: report.project.slug,
+    color: report.identity.color,
+    emoji: report.identity.emoji,
+    outcome: report.outcome,
+    sharedColorWith: [...report.sharedColorWith],
+    host: {
+      outcome: host.outcome,
+      groups: host.outcome === 'themed' ? [...host.groups] : [],
+      ...(host.outcome === 'unknown' ? { reason: host.reason } : {}),
+    },
   };
 }
 

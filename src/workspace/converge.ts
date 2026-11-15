@@ -31,6 +31,7 @@ import {
 } from '../store/types.ts';
 import { taskAddress, taskFloor } from './address.ts';
 import { sha256OfFile } from './baselines.ts';
+import { backfillIdentities } from './floor-identity.ts';
 import { carriesManifest, establishFloorManifest } from './floor-manifest.ts';
 import { establishFloorViews } from './floor-views.ts';
 import { git, gitAvailable, gitOrThrow, hasCommits } from './git.ts';
@@ -137,6 +138,7 @@ export async function convergeWorkspace(root: string): Promise<ConvergeReport> {
     steps.push(await establishIgnorePolicy(ctx));
     steps.push(await establishScopeDirs(ctx));
     steps.push(await establishStandingProject(ctx));
+    steps.push(await establishFloorIdentities(ctx));
     steps.push(await establishFloorManifests(ctx));
     steps.push(await establishFloorViewsStep(ctx));
     steps.push(await establishBaselines(ctx));
@@ -435,6 +437,33 @@ function moveTracked(root: string, from: string, to: string): void {
     return;
   }
   renameSync(join(root, from), join(root, to));
+}
+
+/**
+ * Every open floor's visual identity (design/0060-floor-identity/): a floor
+ * whose record carries no color or no emoji — one opened before identities
+ * existed, or the ground floor the step above has just established — is
+ * given what it lacks, in floor order, each pick clear of what the other
+ * open floors wear. Check-then-do: a floor that has both is never touched,
+ * so an identity a human chose survives every later run. The writes ride the
+ * run's one journal commit, under the store lock already held.
+ */
+async function establishFloorIdentities(ctx: ConvergeContext): Promise<StepReport> {
+  const step = 'floor identities';
+  const written = await backfillIdentities(ctx.root);
+  if (written.length === 0) return { step, outcome: 'satisfied', detail: 'every open floor' };
+  ctx.establishedPaths.push(
+    ...written
+      .map((project) => projectRecordType(project.dir).relPath)
+      .filter((path) => !ctx.establishedPaths.includes(path)),
+  );
+  return {
+    step,
+    outcome: 'established',
+    detail: written
+      .map(({ record }) => `floor ${record.floor} ${record.emoji} ${record.color}`)
+      .join(', '),
+  };
 }
 
 /**

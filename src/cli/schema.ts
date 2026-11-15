@@ -18,6 +18,10 @@
 import { z } from 'zod';
 import { WardError } from '../errors.ts';
 import { workStateSchema } from '../store/types.ts';
+import { FLOOR_COLORS } from '../theme/palette.ts';
+
+/** A floor color, by its name in the palette (design/0060-floor-identity/). */
+const floorColorShape = z.enum(FLOOR_COLORS);
 
 /**
  * Live forge state of one linked PR (0009) — read from the forge at answer
@@ -159,6 +163,12 @@ export const statusShape = z.strictObject({
       slug: z.string(),
       state: workStateSchema,
       derived: workStateSchema,
+      /**
+       * The floor's visual identity (0060): its color, by palette name, and its
+       * emoji — what its host wears. Absent on a floor not yet given one.
+       */
+      color: floorColorShape.optional(),
+      emoji: z.string().optional(),
       /** The repositories this floor claims — a routing default (0037). */
       repositories: z.array(z.string()).optional(),
       /** The floor's OWN open sessions (0051) — project scope, not its tasks'. */
@@ -190,6 +200,12 @@ export const projectListShape = z.strictObject({
       taskCount: z.number().int().nonnegative(),
       /** The repositories this floor claims — a routing default (0037). */
       repositories: z.array(z.string()).optional(),
+      /**
+       * The floor's visual identity (0060): its color, by palette name, and its
+       * emoji — what its host wears. Absent on a floor not yet given one.
+       */
+      color: floorColorShape.optional(),
+      emoji: z.string().optional(),
       openedAt: z.string(),
       closedAt: z.string().optional(),
     }),
@@ -490,6 +506,9 @@ export const projectOpenShape = z.strictObject({
   /** Repositories claimed at open — a routing default, absent when none (0037). */
   repositories: z.array(z.string()).optional(),
   openedAt: z.string(),
+  /** The identity the floor was assigned at open (0060). */
+  color: floorColorShape.optional(),
+  emoji: z.string().optional(),
 });
 export type ProjectOpenShape = z.infer<typeof projectOpenShape>;
 
@@ -521,6 +540,32 @@ export const projectClaimShape = z.strictObject({
   ),
 });
 export type ProjectClaimShape = z.infer<typeof projectClaimShape>;
+
+/**
+ * `project identity` (design/0060-floor-identity/): the identity the floor's
+ * record now carries, and what became of dressing its host in it. A color
+ * shared with another open floor is allowed and named, never silent. `host`
+ * is the live half: `themed` names every host and view dressed, `absent`
+ * says no host stands for the floor (the next one opens wearing it), and
+ * `unknown` that the host could not say.
+ */
+export const projectIdentityShape = z.strictObject({
+  floor: z.number().int().nonnegative(),
+  slug: z.string(),
+  color: floorColorShape,
+  emoji: z.string(),
+  outcome: z.enum(['changed', 'satisfied']),
+  /** The other open floors wearing the same color. */
+  sharedColorWith: z.array(z.number().int().nonnegative()),
+  host: z.strictObject({
+    outcome: z.enum(['themed', 'absent', 'unknown']),
+    /** The hosts and views dressed, by the names a human attaches to. */
+    groups: z.array(z.string()),
+    /** Why the host could not say — present exactly on `unknown`. */
+    reason: z.string().optional(),
+  }),
+});
+export type ProjectIdentityShape = z.infer<typeof projectIdentityShape>;
 
 /**
  * `project note` (design/0055-floor-manifests/): the one bullet appended to a
@@ -1064,6 +1109,7 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'project open': projectOpenShape,
   'project claim': projectClaimShape,
   'project release': projectClaimShape,
+  'project identity': projectIdentityShape,
   'project note': projectNoteShape,
   'task open': taskMutationShape,
   'task pause': taskMutationShape,

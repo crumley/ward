@@ -344,14 +344,14 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     // A pane that never set a title carries the hostname, which the title leaves out.
     const client = attach(['session', 'attach', floor.id]);
     await clientOn(`${f1}-v1`, client);
-    expect(await titleSoon(client, `alpha · ${name} f1`)).toBe(true);
+    expect(await titleSoon(client, `alpha · 🌲 ${name} f1`)).toBe(true);
     // What the run says about itself joins the title, as the harness's own line does.
     tmux('select-pane', '-t', floor.live?.window ?? '', '-T', 'working on it');
-    expect(await titleSoon(client, `alpha · ${name} f1 · working on it`)).toBe(true);
+    expect(await titleSoon(client, `alpha · 🌲 ${name} f1 · working on it`)).toBe(true);
 
     const watcher = attach(['session', 'observe', coordinator.id]);
     await clientOn(`${name}-f0-workspace-o1`, watcher);
-    expect(await titleSoon(watcher, `coord · ${name} f0 (observing)`)).toBe(true);
+    expect(await titleSoon(watcher, `coord · 🌊 ${name} f0 (observing)`)).toBe(true);
     tmux('detach-client', '-s', `=${f1}-v1`);
     tmux('detach-client', '-s', `=${name}-f0-workspace-o1`);
     expect(await exited(client)).toBe(0);
@@ -471,6 +471,111 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     expect(findings.some((finding) => finding.severity === 'error')).toBe(false);
     // Hygiene reported; nothing was ended.
     expect(tmux('list-windows', '-a', '-F', '#{window_id}')).toBe(before);
+  });
+
+  test('a floor host wears its floor: its color and emoji on its own status line, and nowhere else', async () => {
+    tmux('new-session', '-d', '-s', 'mine'); // a human's own session, on the same server
+    // The server's defaults differ between tmux builds (`bg=green,fg=black`
+    // on one, `bg=themegreen,fg=themeblack` on CI's macOS runner), so they are
+    // read here and compared, never spelled.
+    const defaults = ['status-style', 'status-left'].map((option) =>
+      tmux('show-options', '-gv', option),
+    );
+    const coordinator = session(ward(['session', 'open', '--detach', '--json']));
+    await openProject(ws, 'alpha');
+    session(ward(['session', 'open', '--floor', '1', '--detach', '--json']));
+    const [f0, f1] = [`${name}-f0-workspace`, `${name}-f1-alpha`];
+
+    expect(theme(f0)).toEqual(['bg=colour26,fg=colour231', '#[bold] 🌊 f0 workspace #[nobold]']);
+    expect(theme(f1)).toEqual(['bg=colour28,fg=colour231', '#[bold] 🌲 f1 alpha #[nobold]']);
+    expect(sessionOption(f1, '@ward_color')).toBe('green');
+    expect(sessionOption(f1, '@ward_emoji')).toBe('🌲');
+    // The coordinator's one window stands in both hosts; each shows it under its own theme.
+    expect(windowsIn(f0)).toContain(coordinator.id);
+    expect(windowsIn(f1)).toContain(coordinator.id);
+
+    // Session options only: the server's defaults and the human's session are as they were.
+    expect(
+      ['status-style', 'status-left'].map((option) => tmux('show-options', '-gv', option)),
+    ).toEqual(defaults);
+    expect(tmux('show-options', '-t', '=mine:').trim()).toBe('');
+  });
+
+  test('a standing host and the view a client is looking through are re-dressed live, never re-created', async () => {
+    await openProject(ws, 'alpha');
+    const opened = session(ward(['session', 'open', '--floor', '1', '--detach', '--json']));
+    const f1 = `${name}-f1-alpha`;
+    const client = attach(['session', 'attach', opened.id]);
+    await clientOn(`${f1}-v1`, client);
+    expect(theme(`${f1}-v1`)).toEqual(theme(f1)); // the view wears the floor too
+    await shown(client, '🌲 f1 alpha');
+
+    const changed = ward([
+      'project',
+      'identity',
+      '1',
+      '--color',
+      'pink',
+      '--emoji',
+      '🚀',
+      '--json',
+    ]);
+    expect(JSON.parse(changed.stdout)).toMatchObject({
+      outcome: 'changed',
+      host: { outcome: 'themed', groups: [f1, `${f1}-v1`] },
+    });
+    const pink = ['bg=colour205,fg=colour16', '#[bold] 🚀 f1 alpha #[nobold]'];
+    expect(theme(f1)).toEqual(pink);
+    expect(theme(`${f1}-v1`)).toEqual(pink);
+    // What the human sees changes under them: the new color and emoji, drawn.
+    await shown(client, '🚀 f1 alpha');
+    await shown(client, '48;5;205');
+    // The same window, the same run: nothing was re-created to do it.
+    expect(windowOption(opened.live?.window ?? '', '@ward_epoch')).toBe(opened.openedAt);
+    expect(await runsSoon(1)).toHaveLength(1);
+
+    tmux('detach-client', '-s', `=${f1}-v1`);
+    expect(await exited(client)).toBe(0);
+  });
+
+  test('a host from before identities picks one up at the next open into it, or attach to it', async () => {
+    const first = session(ward(['session', 'open', '--detach', '--json']));
+    const f0 = `${name}-f0-workspace`;
+    const undress = () => {
+      for (const option of ['status-style', 'status-left', 'status-left-length']) {
+        tmux('set-option', '-u', '-t', `=${f0}:`, option);
+      }
+      expect(theme(f0)).toEqual(['', '']);
+    };
+
+    undress(); // as an older ward left it
+    session(ward(['session', 'open', '--detach', '--json']));
+    expect(theme(f0)).toEqual(['bg=colour26,fg=colour231', '#[bold] 🌊 f0 workspace #[nobold]']);
+
+    undress();
+    const client = attach(['session', 'attach', first.id]);
+    await clientOn(`${f0}-v1`, client);
+    expect(theme(f0)).toEqual(['bg=colour26,fg=colour231', '#[bold] 🌊 f0 workspace #[nobold]']);
+    expect(theme(`${f0}-v1`)).toEqual(theme(f0));
+    tmux('detach-client', '-s', `=${f0}-v1`);
+    expect(await exited(client)).toBe(0);
+  });
+
+  test('an observe view wears the floor; observing dresses nothing else', async () => {
+    const opened = session(ward(['session', 'open', '--detach', '--json']));
+    const f0 = `${name}-f0-workspace`;
+    for (const option of ['status-style', 'status-left']) {
+      tmux('set-option', '-u', '-t', `=${f0}:`, option);
+    }
+    const client = attach(['session', 'observe', opened.id]);
+    await clientOn(`${f0}-o1`, client);
+    expect(theme(`${f0}-o1`)).toEqual([
+      'bg=colour26,fg=colour231',
+      '#[bold] 🌊 f0 workspace #[nobold]',
+    ]);
+    expect(theme(f0)).toEqual(['', '']); // watching never changes what it watches
+    tmux('detach-client', '-s', `=${f0}-o1`);
+    expect(await exited(client)).toBe(0);
   });
 
   test('a tmux that errors is could-not-determine in doctor, never a clean bill', () => {
@@ -647,6 +752,20 @@ async function groupsSoon(done: (names: string[]) => boolean): Promise<string[]>
 
 function activeWindow(group: string): string {
   return tmux('display-message', '-p', '-t', `=${group}:`, '#{window_id}').trim();
+}
+
+/** What a tmux session's status line wears: its style, and its left edge (trimmed). */
+function theme(group: string): string[] {
+  return [sessionOption(group, 'status-style'), sessionOption(group, 'status-left')];
+}
+
+/** Wait until a client's terminal has been sent `text`. */
+async function shown(client: Client, text: string): Promise<void> {
+  for (let i = 0; i < 100; i++) {
+    if (client.output().includes(text)) return;
+    await Bun.sleep(100);
+  }
+  throw new Error(`the client was never shown ${JSON.stringify(text)}`);
 }
 
 function sessionOption(group: string, option: string): string {

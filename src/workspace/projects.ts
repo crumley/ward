@@ -8,6 +8,7 @@ import { WardError } from '../errors.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
 import { withStoreLock } from '../store/lock.ts';
 import { type ProjectRecord, projectRecordType } from '../store/types.ts';
+import { assignIdentity, worn } from './floor-identity.ts';
 import {
   carriesManifest,
   establishFloorManifest,
@@ -51,6 +52,9 @@ export async function openProject(
       ...(claims.length === 0 ? {} : { repositories: claims }),
       state: 'active',
       openedAt: new Date().toISOString(),
+      // Its identity is picked with its number, under the same lock
+      // (design/0060-floor-identity/): clear of what the open floors wear.
+      ...assignIdentity(worn(await readProjects(root))),
     };
     await writeDocument(root, projectRecordType(dir), {
       data: record,

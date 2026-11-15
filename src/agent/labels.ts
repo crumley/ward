@@ -9,17 +9,21 @@
 // tags (design/0031-detached-session-hosting/); nothing reads a name back, so
 // changing what this module returns renames live hosts and windows in place
 // and breaks no binding.
+import type { FloorColor } from '../theme/palette.ts';
 
 /**
  * What names a floor. `emoji` is the floor's own mark where its record
  * carries one: every label that names a floor takes it from here, so a floor's
- * identity is added to the names in this one place.
+ * identity is added to the names in this one place. `color` is the other half
+ * of that identity (design/0060-floor-identity/): no name spells it, and the
+ * floor's host wears it.
  */
 export interface FloorIdentity {
   readonly number: number;
   /** The floor's slug — empty when no project record names the floor. */
   readonly slug: string;
   readonly emoji?: string;
+  readonly color?: FloorColor;
 }
 
 /** What a session is, as far as its name is concerned. */

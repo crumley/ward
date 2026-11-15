@@ -25,10 +25,13 @@ import {
   sessionTarget,
   shellQuote,
   startRunArgv,
+  statusText,
+  themeArgv,
   titleGroupArgv,
   titleString,
   tmuxHost,
   viewName,
+  viewsOf,
   windowTarget,
 } from '../../src/host/tmux.ts';
 
@@ -417,6 +420,69 @@ test('a missing tmux is unusable, with the reason, and never throws', () => {
   const check = tmuxHost({ WARD_TMUX_BIN: '/nonexistent/tmux' }).check();
   expect(check.usable).toBe(false);
   expect(check.usable === false && check.reason).toContain('/nonexistent/tmux');
+});
+
+// -- the theme (design/0060-floor-identity/) ----------------------------------
+
+test.each<[string, string, string]>([
+  ['blue', 'bg=colour26,fg=colour231', 'light ink on a dark swatch'],
+  ['yellow', 'bg=colour220,fg=colour16', 'dark ink on a light swatch'],
+])('a %s floor is a %s status line (%s)', (color, style) => {
+  const argv = themeArgv('main-f7-ward-development', {
+    color: color as 'blue',
+    emoji: '🌊',
+    label: 'f7 ward-development',
+  });
+  const host = '=main-f7-ward-development:';
+  expect(options(argv)).toEqual([
+    [host, 'status-style', style],
+    [host, 'status-left', '#[bold] 🌊 f7 ward-development #[nobold] '],
+    [host, 'status-left-length', '26'], // the whole name: tmux's default 10 cuts it mid-word
+    [host, '@ward_color', color],
+    [host, '@ward_emoji', '🌊'],
+  ]);
+});
+
+test('a theme is set on one session, by exact name — never globally, never on the server', () => {
+  const argv = themeArgv('main-f7-x', { color: 'teal', emoji: '🐬', label: 'f7 x' });
+  expect(argv[0]).toBe('set-option');
+  for (const flag of ['-g', '-s', '-w', '-p', '-a']) expect(argv).not.toContain(flag);
+  expect(argv.filter((word) => word === 'set-option')).toHaveLength(5);
+  expect(argv.filter((word) => word === '=main-f7-x:')).toHaveLength(5);
+});
+
+test("the floor's name is shown literally, and a long one cannot crowd out the window list", () => {
+  expect(statusText('50% #done')).toBe('50%% ##done');
+  const long = themeArgv('h', { color: 'red', emoji: '🍎', label: `f3 ${'x'.repeat(80)}` });
+  expect(options(long)[2]).toEqual(['=h:', 'status-left-length', '48']);
+});
+
+test.each<[string, string[], string[]]>([
+  ['a host nothing is grouped with has none', ['main-f7-a\t\t', 'mine\t\t'], []],
+  [
+    'the stamped members of its session group — and of no other',
+    [
+      'main-f7-a\t\tG7',
+      'main-f7-a-v1\tWS\tG7',
+      'main-f7-a-v2\tWS\tG7',
+      'main-f0-w\t\tG0',
+      'main-f0-w-v1\tWS\tG0',
+    ],
+    ['main-f7-a-v1', 'main-f7-a-v2'],
+  ],
+  [
+    "found by group and stamp, never by name: a renamed view, and a human's own grouped session",
+    ['main-f7-a\t\tG7', 'whatever\tWS\tG7', 'main-f7-a-v9\t\tG7'],
+    ['whatever'],
+  ],
+  [
+    'an observe view is no member of the group: dressed when made, not here',
+    ['main-f7-a\t\tG7', 'main-f7-a-v1\tWS\tG7', 'main-f7-a-o1\tWS\t'],
+    ['main-f7-a-v1'],
+  ],
+  ['a host that is not there has none', ['main-f0-w\t\tG0', 'main-f0-w-v1\tWS\tG0'], []],
+])('the attach views of main-f7-a — %s', (_, rows, expected) => {
+  expect(viewsOf(`${rows.join('\n')}\n`, 'main-f7-a')).toEqual(expected);
 });
 
 // -- helpers ------------------------------------------------------------------

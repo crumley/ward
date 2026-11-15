@@ -9,9 +9,16 @@
 // naming, a floor whose slug the record now spells differently, a second
 // coordinator opened beside the first — each is brought up to date the next
 // time anything is placed in, or attached through, the workspace's hosts.
-import type { GroupNaming, RenameRequest, SessionHost } from '../host/host.ts';
+import type { GroupIdentity, GroupNaming, RenameRequest, SessionHost } from '../host/host.ts';
 import { readDocument } from '../store/document.ts';
-import { type HostedKind, sessionScopeOf, workspaceRecordType } from '../store/types.ts';
+import {
+  type HostedKind,
+  projectRecordType,
+  sessionScopeOf,
+  workspaceRecordType,
+} from '../store/types.ts';
+import { identityOf } from '../workspace/floor-identity.ts';
+import { workspaceId } from '../workspace/identity.ts';
 import { projectDirs } from '../workspace/scan.ts';
 import {
   defaultWorkspaceSessionPurpose,
@@ -51,19 +58,42 @@ export interface Naming {
 }
 
 /**
- * Every floor's identity, from where its record stands: the directory
- * `projects/<N>-<slug>/` already carries both, so no record is opened to name
- * a host. A floor's emoji, where its record holds one, is added here.
+ * Every floor's identity. Its number and slug come from where its record
+ * stands — the directory `projects/<N>-<slug>/` carries both, so a floor is
+ * named even when its record will not read. Its emoji and color
+ * (design/0060-floor-identity/) come from the record, where it holds them: a
+ * record that will not read, or carries none, leaves the floor with its
+ * number and slug alone — a name is never the reason a launch stops, and
+ * neither is a color.
  */
-export function floorIdentities(root: string): Map<number, FloorIdentity> {
+export async function floorIdentities(root: string): Promise<Map<number, FloorIdentity>> {
   const floors = new Map<number, FloorIdentity>();
   for (const dir of projectDirs(root)) {
     const match = PROJECT_DIR.exec(dir);
     if (match?.[1] === undefined) continue;
     const number = Number.parseInt(match[1], 10);
-    floors.set(number, { number, slug: match[2] ?? '' });
+    floors.set(number, { number, slug: match[2] ?? '', ...(await lookOf(root, dir)) });
   }
   return floors;
+}
+
+async function lookOf(root: string, dir: string): Promise<Pick<FloorIdentity, 'emoji' | 'color'>> {
+  try {
+    return identityOf((await readDocument(root, projectRecordType(dir))).data) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * What a floor's host wears: its color and emoji, and the floor named in full
+ * beside them — `f<N> <slug>`, the whole slug, since the status line has the
+ * room a host's name does not. Undefined for a floor with no identity.
+ */
+export function groupIdentity(floor: FloorIdentity): GroupIdentity | undefined {
+  if (floor.color === undefined || floor.emoji === undefined) return undefined;
+  const label = floor.slug === '' ? `f${floor.number}` : `f${floor.number} ${floor.slug}`;
+  return { color: floor.color, emoji: floor.emoji, label };
 }
 
 /** What a session is, read from its record and from where the record stands. */
@@ -99,7 +129,7 @@ export async function readNaming(
   all?: readonly OpenSessionListing[],
 ): Promise<Naming> {
   const workspace = (await readDocument(root, workspaceRecordType)).data.name;
-  const floors = floorIdentities(root);
+  const floors = await floorIdentities(root);
   const sessions = all ?? (await readAllSessions(root));
   const floor = (number: number): FloorIdentity => floors.get(number) ?? { number, slug: '' };
   // Told apart among the sessions a host can be showing: open, and hosted.
@@ -120,10 +150,14 @@ export async function readNaming(
   return {
     workspace,
     floor,
-    group: (number) => ({
-      name: hostName(workspace, floor(number)),
-      title: hostTitle(workspace, floor(number)),
-    }),
+    group: (number) => {
+      const identity = groupIdentity(floor(number));
+      return {
+        name: hostName(workspace, floor(number)),
+        title: hostTitle(workspace, floor(number)),
+        ...(identity === undefined ? {} : { identity }),
+      };
+    },
     label: (listing) =>
       labels.get(listing.record.id) ??
       windowLabel(subjectOf(listing, floor), placementFloor(listing, sessions)),
@@ -136,6 +170,12 @@ export interface Refreshed {
   /** "ward-main-f7 is now main-f7-ward-development" */
   readonly renamed: readonly string[];
   readonly failed: readonly string[];
+  /**
+   * The floors whose hosts were dressed in their identity
+   * (design/0060-floor-identity/), each with the names dressed: the host,
+   * then the attach views of it.
+   */
+  readonly themed: readonly { readonly floor: number; readonly names: readonly string[] }[];
 }
 
 /**
@@ -157,10 +197,14 @@ export async function refreshNames(
     const all = await readAllSessions(root);
     const naming = given ?? (await readNaming(root, all));
     const inventory = host.inventory();
-    if (inventory.outcome !== 'answered') return { renamed: [], failed: [] };
+    if (inventory.outcome !== 'answered') return { renamed: [], failed: [], themed: [] };
     const groups = inventory.groups
       .filter((group) => group.viewOf === undefined && group.stamp?.workspace === workspace)
-      .map((group) => ({ name: group.name, naming: naming.group(group.stamp?.floor ?? 0) }));
+      .map((group) => ({
+        name: group.name,
+        floor: group.stamp?.floor ?? 0,
+        naming: naming.group(group.stamp?.floor ?? 0),
+      }));
     const ours = new Set(
       inventory.groups.filter((g) => g.stamp?.workspace === workspace).map((g) => g.name),
     );
@@ -178,13 +222,76 @@ export async function refreshNames(
       if (!window.groups.some((name) => ours.has(name))) continue;
       windows.push({ window: window.window, label: naming.label(listing) });
     }
-    if (groups.length === 0 && windows.length === 0) return { renamed: [], failed: [] };
-    const result = host.rename({ groups, windows });
+    if (groups.length === 0 && windows.length === 0) {
+      return { renamed: [], failed: [], themed: [] };
+    }
+    const result = host.rename({
+      groups: groups.map(({ name, naming }) => ({ name, naming })),
+      windows,
+    });
+    // A dressed group answers by the name it wears NOW: the one it was asked
+    // by, or the one that rename gave it.
+    const now = new Map(result.groups.map(({ from, to }) => [to, from]));
     return {
       renamed: result.groups.map(({ from, to }) => `${from} is now ${to}`),
       failed: result.failed,
+      themed: result.themed.flatMap((dressed) => {
+        const asked = now.get(dressed.group) ?? dressed.group;
+        const floor = groups.find((group) => group.name === asked)?.floor;
+        return floor === undefined ? [] : [{ floor, names: [dressed.group, ...dressed.views] }];
+      }),
     };
   } catch (error) {
-    return { renamed: [], failed: [error instanceof Error ? error.message : String(error)] };
+    return {
+      renamed: [],
+      failed: [error instanceof Error ? error.message : String(error)],
+      themed: [],
+    };
   }
+}
+
+/** What dressing one floor's host in its identity came to. */
+export type Dressed =
+  /** The names dressed: the floor's host, then each attach view of it. */
+  | { readonly outcome: 'themed'; readonly groups: readonly string[] }
+  /** No host stands for the floor here — nothing to dress, and never an error. */
+  | { readonly outcome: 'absent' }
+  | { readonly outcome: 'unknown'; readonly reason: string };
+
+/**
+ * Bring this workspace's standing hosts up to what the records say now, and
+ * answer for one floor's (design/0060-floor-identity/): what `ward project
+ * identity` runs after it writes. The whole workspace is refreshed, not the
+ * one host, because a floor's emoji is also in every title and in the window
+ * labels other floors' hosts show for its sessions. Nothing is re-created.
+ */
+export async function dressFloor(
+  root: string,
+  floor: number,
+  host: SessionHost,
+  kind: HostedKind,
+): Promise<Dressed> {
+  if (!host.check().usable) return { outcome: 'absent' };
+  let workspace: string;
+  try {
+    workspace = await workspaceId(root);
+  } catch {
+    // A workspace with no id has never placed a host.
+    return { outcome: 'absent' };
+  }
+  const inventory = host.inventory();
+  if (inventory.outcome !== 'answered') return { outcome: 'unknown', reason: inventory.reason };
+  const refreshed = await refreshNames(root, host, workspace, kind);
+  const dressed = refreshed.themed.filter((entry) => entry.floor === floor);
+  if (dressed.length > 0) {
+    return { outcome: 'themed', groups: dressed.flatMap((entry) => entry.names) };
+  }
+  const stands = inventory.groups.some(
+    (group) =>
+      group.viewOf === undefined &&
+      group.stamp?.workspace === workspace &&
+      group.stamp.floor === floor,
+  );
+  if (!stands) return { outcome: 'absent' };
+  return { outcome: 'unknown', reason: refreshed.failed.join('; ') || 'the host was not dressed' };
 }

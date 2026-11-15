@@ -311,10 +311,15 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '6426b5b942ac41946390ea812824fb55e692057c57dcebb49febed5638f47937',
         era: 'design 0058 (room collisions)',
       },
-      // Current since design 0061: a floor host is named
-      // `<workspace>-f<N>-<floor-slug>`, a window for what its session is,
-      // and a terminal is titled — names say what a thing is, and are never
-      // how it is found.
+      // design 0061 — a floor host is named `<workspace>-f<N>-<floor-slug>`, a
+      // window for what its session is, and a terminal is titled. A floor had
+      // no color or emoji yet.
+      {
+        sha256: '06774a17014352c84e68a11fbaca099c03b68504c80badf7ce364d5562d6dcdc',
+        era: 'design 0061 (host names and titles)',
+      },
+      // Current since design 0060: every floor has a color and an emoji, worn
+      // by its host, and `ward project identity` changes them.
     ],
   },
 ];

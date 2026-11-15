@@ -67,6 +67,11 @@ operated with the \`ward\` CLI and tracked in git.
   the task touches and, with no \`--project\`, opens it on the claiming floor. \`--project\`
   always wins. Moving a claim changes where new work lands and leaves open tasks where they are —
   Ward says so when it moves one.
+- **Every floor has a color and an emoji** — its identity, recorded on the floor (\`color\` and
+  \`emoji\` in \`ward status --json\` and \`ward project list --json\`) and worn by its floor
+  host's status line, so "the blue one" names a floor. Ward assigns them when a floor opens;
+  \`ward project identity FLOOR [--color NAME] [--emoji EMOJI]\` changes them, and dresses a host
+  that is already standing where it stands.
 - Work is never committed to a repository's main line directly; changes travel through a worktree
   and a pull request.
 - When a main line moves under work in progress, \`ward worktree rebase\` replays the task's
