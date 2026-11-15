@@ -9,8 +9,12 @@ import { join } from 'node:path';
 import { writeDocument } from '../../src/store/document.ts';
 import { type TaskRecord, taskRecordType } from '../../src/store/types.ts';
 import {
+  addressMatches,
+  collidingRooms,
+  distinctAddress,
   nextRoom,
   parseTaskAddress,
+  qualifiedAddress,
   ROOMS_PER_FLOOR,
   type TaskAddress,
   taskAddress,
@@ -76,6 +80,16 @@ const parses: ReadonlyArray<{ input: string; parsed: TaskAddress | null }> = [
   { input: 'legacy-t100', parsed: null },
   { input: 'json-output', parsed: null },
   { input: '', parsed: null },
+  // The slug qualifier (0058): the floor plus the record's directory name
+  // names one task in a room two machines both handed out.
+  { input: 'f5t45-distill-2026-10-18', parsed: { floor: 5, room: 45, slug: 'distill-2026-10-18' } },
+  { input: 'F5T45-Week-Start-Job', parsed: { floor: 5, room: 45, slug: 'week-start-job' } },
+  { input: 't45-distill', parsed: { room: 45, slug: 'distill' } },
+  { input: 'legacy-t2-seam', parsed: { legacy: true, room: 2, slug: 'seam' } },
+  { input: 'f5t45-', parsed: null }, // a qualifier is a slug, never empty
+  { input: 'f5t45--x', parsed: null }, // and starts with a letter or digit
+  { input: 'f5t45:distill', parsed: null }, // no colon: addresses travel into refs
+  { input: 'f5t100-x', parsed: null }, // the room ceiling holds under a qualifier
 ];
 
 for (const { input, parsed } of parses) {
@@ -83,6 +97,100 @@ for (const { input, parsed } of parses) {
     expect(parseTaskAddress(input)).toEqual(parsed);
   });
 }
+
+// -- naming a task among its neighbours (0058) -----------------------------
+
+const MAC = { dir: 'projects/5-b/tasks/t45-week-start-job', code: 't45', slug: 'week-start-job' };
+const VM = { dir: 'projects/5-b/tasks/t45-distill', code: 't45', slug: 'distill' };
+const OTHER = { dir: 'projects/6-c/tasks/t45-elsewhere', code: 't45', slug: 'elsewhere' };
+const LONE = { dir: 'projects/5-b/tasks/t9-lone', code: 't9', slug: 'lone' };
+
+const naming: ReadonlyArray<{
+  name: string;
+  task: { dir: string; code: string; slug: string; state: string };
+  among: ReadonlyArray<{ dir: string; code: string; slug: string; state: string }>;
+  address: string;
+}> = [
+  {
+    name: 'a room only one task holds keeps its short address',
+    task: { ...LONE, state: 'active' },
+    among: [{ ...MAC, state: 'active' }],
+    address: 'f5t9',
+  },
+  {
+    name: 'two open tasks in one room are each qualified by slug',
+    task: { ...MAC, state: 'active' },
+    among: [{ ...VM, state: 'active' }],
+    address: 'f5t45-week-start-job',
+  },
+  {
+    name: 'a paused rival contests the room too — only closed is out of it',
+    task: { ...MAC, state: 'active' },
+    among: [{ ...VM, state: 'paused' }],
+    address: 'f5t45-week-start-job',
+  },
+  {
+    name: 'an open task beside a closed one owns the room address',
+    task: { ...MAC, state: 'active' },
+    among: [{ ...VM, state: 'closed' }],
+    address: 'f5t45',
+  },
+  {
+    name: 'a closed task beside an open one is reached only by its qualified address',
+    task: { ...VM, state: 'closed' },
+    among: [{ ...MAC, state: 'active' }],
+    address: 'f5t45-distill',
+  },
+  {
+    name: 'two closed tasks in one room are each qualified',
+    task: { ...VM, state: 'closed' },
+    among: [{ ...MAC, state: 'closed' }],
+    address: 'f5t45-distill',
+  },
+  {
+    name: 'the same room on another floor is no rival',
+    task: { ...MAC, state: 'active' },
+    among: [{ ...OTHER, state: 'active' }],
+    address: 'f5t45',
+  },
+];
+
+for (const { name, task, among, address } of naming) {
+  test(`naming: ${name}`, () => {
+    const shape = (row: typeof task) => ({ dir: row.dir, record: row });
+    const everyone = [shape(task), ...among.map(shape)];
+    expect(distinctAddress(shape(task), everyone)).toBe(address);
+    // Whatever Ward speaks resolves to this task and no other.
+    const parsed = parseTaskAddress(address);
+    expect(parsed).not.toBeNull();
+    const live = everyone.filter((row) => row.record.state !== 'closed');
+    const pool = task.state === 'closed' ? everyone.filter((row) => !live.includes(row)) : live;
+    expect(pool.filter((row) => addressMatches(row, parsed as TaskAddress))).toEqual([shape(task)]);
+  });
+}
+
+test('qualified: the floor plus the record directory, for every task', () => {
+  expect(qualifiedAddress({ dir: MAC.dir, record: MAC })).toBe('f5t45-week-start-job');
+  expect(qualifiedAddress({ dir: 'tasks/t2-seam', record: { code: 't2', slug: 'seam' } })).toBe(
+    'legacy-t2-seam',
+  );
+});
+
+test('colliding rooms: open holders only, per floor, in address order', () => {
+  const rows = [
+    { ...MAC, state: 'active' },
+    { ...VM, state: 'paused' },
+    { ...OTHER, state: 'active' },
+    { ...LONE, state: 'active' },
+    { dir: 'projects/5-b/tasks/t9-gone', code: 't9', slug: 'gone', state: 'closed' },
+  ].map((row) => ({ dir: row.dir, record: row }));
+  expect(
+    collidingRooms(rows).map(({ address, holders }) => [
+      address,
+      holders.map((task) => task.record.slug),
+    ]),
+  ).toEqual([['f5t45', ['week-start-job', 'distill']]]);
+});
 
 // -- the room sequence: opening order, round the floor ---------------------
 

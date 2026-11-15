@@ -27,7 +27,7 @@ import type { Suggestion } from '@optique/core/parser';
 import { integer, string, type ValueParser } from '@optique/core/valueparser';
 import { listWorkspaces } from '../global/registry.ts';
 import { repoCandidates } from '../shell/candidates.ts';
-import { taskAddress } from '../workspace/address.ts';
+import { distinctAddress } from '../workspace/address.ts';
 import { git } from '../workspace/git.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
 import { readProjects } from '../workspace/projects.ts';
@@ -106,11 +106,17 @@ function inWorkspace(
 export function taskIdentity(metavar: 'ADDRESS' | 'TASK'): ValueParser<'async', string> {
   return suggesting(
     metavar,
-    inWorkspace(async (root) =>
-      (await readTasks(root))
+    inWorkspace(async (root) => {
+      const everyone = await readTasks(root);
+      // A room two tasks hold is offered as each one's slug-qualified address
+      // (design/0058-room-collisions/), never as the room both answer to.
+      return everyone
         .filter((task) => task.record.state !== 'closed')
-        .map((task) => ({ text: taskAddress(task), description: task.record.slug })),
-    ),
+        .map((task) => ({
+          text: distinctAddress(task, everyone),
+          description: task.record.slug,
+        }));
+    }),
   );
 }
 

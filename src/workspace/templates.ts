@@ -51,7 +51,10 @@ operated with the \`ward\` CLI and tracked in git.
   the ground floor. Every task lives on a floor; only legacy bare tasks, opened before the ground
   floor existed, are addressed \`legacy-t<room>\` (\`legacy-t2\`). Spelling is case-insensitive. A
   bare \`t1\` is also a shorthand that works while exactly one open task holds that room; when
-  several do, Ward names each by its full address and asks for one.
+  several do, Ward names each by its full address and asks for one. Two machines that each open a
+  task before their records sync can hand out the same room: Ward then names each task by its
+  room and slug (\`f5t45-distill-2026-10-18\`, its record's directory on the floor), every verb
+  accepts that spelling, and \`ward doctor\` reports the room until all but one close.
 - Standing inside a task's worktree, task-addressed verbs need no address — Ward derives the task
   from the working directory (\`ward task pr URL\`, \`ward worktree rebase\`) and echoes what it
   derived. An explicit address always works, and \`ward task close\` always takes one.

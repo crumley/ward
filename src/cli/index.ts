@@ -49,7 +49,7 @@ import { CANDIDATE_KINDS, candidates, renderCandidates } from '../shell/candidat
 import { emitShellLayer } from '../shell/layer.ts';
 import { FISH_SHORTHAND_NAMES, findShorthand } from '../shell/shorthands.ts';
 import type { SessionRecord, TaskRecord, WorkState } from '../store/types.ts';
-import { taskAddress } from '../workspace/address.ts';
+import { distinctAddress, taskAddress } from '../workspace/address.ts';
 import {
   type ClaimReport,
   claimRepository,
@@ -81,7 +81,7 @@ import {
   removeRepository,
 } from '../workspace/repos.ts';
 import { restoreConverged, restoreWorkspace } from '../workspace/restore.ts';
-import { readTasks, resolveOpenTask } from '../workspace/scan.ts';
+import { readTasks, resolvableAddress, resolveOpenTask } from '../workspace/scan.ts';
 import { scopeFromCwd } from '../workspace/scope.ts';
 import {
   closeSession,
@@ -1153,11 +1153,11 @@ try {
         const target = await resolveTaskTarget(result.code, 'ward task pause ADDRESS', result.json);
         const paused = await setTaskState(target.root, target.code, 'paused');
         if (result.json) {
-          printJson(taskMutationJson(paused.record, taskAddress(paused)));
+          printJson(taskMutationJson(paused.record, await resolvableAddress(target.root, paused)));
           break;
         }
         console.log(
-          `${pc.yellow('paused')} ${pc.bold(taskAddress(paused))} — ${paused.record.slug}`,
+          `${pc.yellow('paused')} ${pc.bold(await resolvableAddress(target.root, paused))} — ${paused.record.slug}`,
         );
         break;
       }
@@ -1169,11 +1169,13 @@ try {
         );
         const resumed = await setTaskState(target.root, target.code, 'active');
         if (result.json) {
-          printJson(taskMutationJson(resumed.record, taskAddress(resumed)));
+          printJson(
+            taskMutationJson(resumed.record, await resolvableAddress(target.root, resumed)),
+          );
           break;
         }
         console.log(
-          `${pc.green('resumed')} ${pc.bold(taskAddress(resumed))} — ${resumed.record.slug}`,
+          `${pc.green('resumed')} ${pc.bold(await resolvableAddress(target.root, resumed))} — ${resumed.record.slug}`,
         );
         break;
       }
@@ -1184,13 +1186,13 @@ try {
           ? await removeTaskPr(target.root, target.code, result.url)
           : await addTaskPr(target.root, target.code, result.url);
         if (result.json) {
-          printJson(taskMutationJson(linked.record, taskAddress(linked)));
+          printJson(taskMutationJson(linked.record, await resolvableAddress(target.root, linked)));
           break;
         }
         console.log(
           (result.unlink
-            ? `${pc.green('unlinked')} ${result.url} from ${pc.bold(taskAddress(linked))} `
-            : `${pc.green('linked')} ${result.url} to ${pc.bold(taskAddress(linked))} `) +
+            ? `${pc.green('unlinked')} ${result.url} from ${pc.bold(await resolvableAddress(target.root, linked))} `
+            : `${pc.green('linked')} ${result.url} to ${pc.bold(await resolvableAddress(target.root, linked))} `) +
             pc.dim(`(${linked.record.prs.length} in the set)`),
         );
         break;
@@ -1241,7 +1243,11 @@ try {
             : await createWorktree(target.root, target.code, repo, result.branch);
         if (result.json) {
           printJson(
-            worktreeCreateJson(created.task.record.code, taskAddress(created.task), created.record),
+            worktreeCreateJson(
+              created.task.record.code,
+              await resolvableAddress(target.root, created.task),
+              created.record,
+            ),
           );
           break;
         }
@@ -1557,8 +1563,9 @@ async function impliedUpgradeTask(
   }
   const scope = await scopeFromCwd(root, process.cwd());
   if (scope === null) return undefined;
-  echo(pc.dim(`task ${taskAddress(scope.task)} — from the working directory`));
-  return taskAddress(scope.task);
+  const address = await resolvableAddress(root, scope.task);
+  echo(pc.dim(`task ${address} — from the working directory`));
+  return address;
 }
 
 /**
@@ -1998,8 +2005,9 @@ async function resolveTaskTarget(
   // Under --json the derivation echo moves to stderr: stdout carries one JSON
   // document, alone (0005), and the echo is a human affordance, not data.
   const echo = json ? console.error : console.log;
-  echo(pc.dim(`task ${taskAddress(scope.task)} — from the working directory`));
-  return { root, code: taskAddress(scope.task), worktreePath: scope.worktree.path };
+  const address = await resolvableAddress(root, scope.task);
+  echo(pc.dim(`task ${address} — from the working directory`));
+  return { root, code: address, worktreePath: scope.worktree.path };
 }
 
 async function cmdRepoAdd(source: string, name: string | undefined, json: boolean): Promise<void> {
@@ -2295,7 +2303,8 @@ async function cmdTaskList(filter: TaskFilter, all: boolean, json: boolean): Pro
   // filter and were cut by the window — what the caller asked for and did
   // not get. A task the filter excluded was excluded on request, not hidden
   // (design/0049-task-list-filters/).
-  const tasks = (await readTasks(root)).filter((task) => matchesTaskFilter(task.record, filter));
+  const everyone = await readTasks(root);
+  const tasks = everyone.filter((task) => matchesTaskFilter(task.record, filter));
   const now = Date.now();
   const windowed = all || filterLiftsWindow(filter);
   const shown = glanceOrder(
@@ -2312,7 +2321,10 @@ async function cmdTaskList(filter: TaskFilter, all: boolean, json: boolean): Pro
     const forge = forgeStates(task.record, probe);
     return {
       record: task.record,
-      address: taskAddress(task),
+      // Among the whole workspace, not the filtered rows: a filter that left
+      // out one of two tasks sharing a room must not make the other's room
+      // address look unique (design/0058-room-collisions/).
+      address: distinctAddress(task, everyone),
       inReview: inReview(task.record, forge),
       ...(forge === undefined ? {} : { forge }),
     };
@@ -2455,7 +2467,7 @@ async function cmdTaskClose(
 
 async function cmdWorktreeRebase(root: string, code: string, json: boolean): Promise<void> {
   const { task, reports } = await rebaseTaskWorktrees(root, code);
-  const address = taskAddress(task);
+  const address = await resolvableAddress(root, task);
   // A dirty refusal is the fail-safe honored, not a failure — the same exit
   // posture as repo refresh; conflict and failed broke the verb's promise.
   const broken = reports.some((r) => r.outcome === 'conflict' || r.outcome === 'failed');
