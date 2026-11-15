@@ -91,6 +91,7 @@ const fileSets: ReadonlyArray<{ name: string; files: readonly string[] }> = [
   { name: 'wso', files: ['functions/wso.fish', 'completions/wso.fish'] },
   { name: 'wsr', files: ['functions/wsr.fish', 'completions/wsr.fish'] },
   { name: 'wsc', files: ['functions/wsc.fish', 'completions/wsc.fish'] },
+  { name: 'ws', files: ['functions/ws.fish', 'completions/ws.fish'] },
 ];
 
 for (const row of fileSets) {
@@ -340,7 +341,9 @@ const findings: ReadonlyArray<{
       {
         check: 'fish shorthands',
         severity: 'info',
-        message: expect.stringContaining('wrr, wrcd, wwcd, wws, wsa, wso, wsr, wsc not adopted'),
+        message: expect.stringContaining(
+          'wrr, wrcd, wwcd, wws, wsa, wso, wsr, wsc, ws not adopted',
+        ),
       },
     ],
   },
