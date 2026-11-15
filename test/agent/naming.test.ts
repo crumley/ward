@@ -44,10 +44,15 @@ test('every scope reads as what it is: coordinator, helper, floor, task', async 
   expect(await label(sweep)).toBe('Sweep the worktrees');
   expect(await label(floor)).toBe('alpha'); // a purpose never displaces what the session is
   expect(await label(task)).toBe('t1 fix-the-thing');
-  expect(await label(lineage)).toBe('f0 workspace');
-  expect(naming.group(1)).toEqual({ name: `${name}-f1-alpha`, title: `${name} f1` });
+  expect(await label(lineage)).toBe('🌊f0 workspace'); // another floor's, marked with its emoji
+  // A floor's emoji leads its title, and its host wears its identity (0060).
+  expect(naming.group(1)).toEqual({
+    name: `${name}-f1-alpha`,
+    title: `🌲 ${name} f1`,
+    identity: { color: 'green', emoji: '🌲', label: 'f1 alpha' },
+  });
   expect(naming.group(6)).toEqual({ name: `${name}-f6`, title: `${name} f6` });
-  expect(naming.foreground(await findSession(ws, floor.id))).toBe(`f1 alpha · ${name}`);
+  expect(naming.foreground(await findSession(ws, floor.id))).toBe(`🌲f1 alpha · ${name}`);
 });
 
 test('two sessions that would read the same are told apart; a foreground one never counts', async () => {
@@ -88,18 +93,31 @@ test('a refresh renames only what is verifiably this workspace’s own, and neve
   expect(await refreshNames(ws, host, id, 'tmux')).toEqual({
     renamed: [`ward-old-f0 is now ${name}-f0-workspace`],
     failed: [],
+    // The host is dressed as its floor in the same pass, by its new name (0060).
+    themed: [{ floor: 0, names: [`${name}-f0-workspace`] }],
   });
   expect(host.renames).toEqual([
     {
       groups: [
-        { name: 'ward-old-f0', naming: { name: `${name}-f0-workspace`, title: `${name} f0` } },
+        {
+          name: 'ward-old-f0',
+          naming: {
+            name: `${name}-f0-workspace`,
+            title: `🌊 ${name} f0`,
+            identity: { color: 'blue', emoji: '🌊', label: 'f0 workspace' },
+          },
+        },
       ],
       windows: [{ window: '@1', label: 'coord' }],
     },
   ]);
   // A host that cannot answer is passed over: a name is never why a launch stops.
   const silent = fakeHost({ unknown: 'timed out' });
-  expect(await refreshNames(ws, silent, id, 'tmux')).toEqual({ renamed: [], failed: [] });
+  expect(await refreshNames(ws, silent, id, 'tmux')).toEqual({
+    renamed: [],
+    failed: [],
+    themed: [],
+  });
   expect(silent.renames).toEqual([]);
 });
 

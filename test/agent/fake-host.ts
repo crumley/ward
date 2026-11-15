@@ -124,7 +124,11 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
           };
         }
       }
-      return { groups: moved, failed: [] };
+      // Every group asked to wear an identity is dressed, by the name it has now.
+      const themed = request.groups
+        .filter(({ naming }) => naming.identity !== undefined)
+        .map(({ naming }) => ({ group: naming.name, views: [] }));
+      return { groups: moved, failed: [], themed };
     },
     view(request: ViewRequest): View {
       views.push(request);

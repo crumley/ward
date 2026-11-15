@@ -28,10 +28,10 @@ test('status and project list lead with the ground floor, named as one', () => {
   const ws = workspace('listings');
   runWard(['project', 'open', 'toolchain'], ws);
   const status = runWard(['status'], ws).stdout;
-  expect(status).toContain('floor 0 — workspace (ground floor) [active]');
+  expect(status).toContain('floor 0 — 🌊 workspace (ground floor) [active]');
   expect(status.indexOf('floor 0')).toBeLessThan(status.indexOf('floor 1'));
   expect(runWard(['project', 'list'], ws).stdout).toContain(
-    'floor 0 — workspace (ground floor) [active]',
+    'floor 0 — 🌊 workspace (ground floor) [active]',
   );
   const projects = JSON.parse(runWard(['project', 'list', '--json'], ws).stdout).projects;
   expect(projects.map((project: { floor: number }) => project.floor)).toEqual([0, 1]);

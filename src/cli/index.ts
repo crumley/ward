@@ -16,9 +16,11 @@ import {
   closeHostedSession,
   describeExit,
   type HostFlag,
+  hostOf,
   type LiveState,
   liveStateOf,
 } from '../agent/host.ts';
+import { type Dressed, dressFloor } from '../agent/naming.ts';
 import { type HostedRun, launchSession, locateSession, resumeSession } from '../agent/run.ts';
 import { WardError } from '../errors.ts';
 import { type PrForgeState, probeForge } from '../forge/gh.ts';
@@ -49,6 +51,7 @@ import { CANDIDATE_KINDS, candidates, renderCandidates } from '../shell/candidat
 import { emitShellLayer } from '../shell/layer.ts';
 import { FISH_SHORTHAND_NAMES, findShorthand } from '../shell/shorthands.ts';
 import type { SessionRecord, TaskRecord, WorkState } from '../store/types.ts';
+import { FLOOR_COLORS, type FloorColor, INK, PALETTE } from '../theme/palette.ts';
 import { distinctAddress, taskAddress } from '../workspace/address.ts';
 import {
   type ClaimReport,
@@ -64,6 +67,7 @@ import { contextChain } from '../workspace/context.ts';
 import type { StepReport } from '../workspace/converge.ts';
 import { createWorkspace } from '../workspace/create.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
+import { type IdentityReport, setFloorIdentity } from '../workspace/floor-identity.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
 import { closeCommand, rebaseCommand } from '../workspace/next.ts';
 import {
@@ -133,6 +137,7 @@ import {
   doctorJson,
   printJson,
   projectClaimJson,
+  projectIdentityJson,
   projectListJson,
   projectNoteJson,
   projectOpenJson,
@@ -593,6 +598,27 @@ const project = command(
       'list',
       object({ action: constant('project-list'), all: allFlag(), json: jsonFlag() }),
       { brief: message`List projects with their derived status.` },
+    ),
+    command(
+      'identity',
+      object({
+        action: constant('project-identity'),
+        floor: argument(floorNumber()),
+        color: optional(
+          option('--color', choice([...FLOOR_COLORS], { metavar: 'COLOR' }), {
+            description: message`The floor's color, by name: blue, green, orange, purple, yellow, teal, red, pink, brown, gray.`,
+          }),
+        ),
+        emoji: optional(
+          option('--emoji', string({ metavar: 'EMOJI' }), {
+            description: message`The floor's emoji — exactly one.`,
+          }),
+        ),
+        json: jsonFlag(),
+      }),
+      {
+        brief: message`Set a floor's color or emoji, and dress its host in them. With neither, re-dress the host.`,
+      },
     ),
     command(
       'note',
@@ -1063,7 +1089,8 @@ try {
           break;
         }
         console.log(
-          `${pc.green('opened')} floor ${pc.bold(String(record.floor))} — ${record.slug}` +
+          `${pc.green('opened')} floor ${pc.bold(String(record.floor))} — ` +
+            `${floorGlyph(record)}${record.slug}${floorColorCue(record)}` +
             (record.repositories === undefined
               ? ''
               : pc.dim(` (claims ${record.repositories.join(', ')})`)),
@@ -1098,6 +1125,22 @@ try {
       case 'project-list':
         await cmdProjectList(result.all, result.json);
         break;
+      case 'project-identity': {
+        const root = await requireMutableWorkspace();
+        const report = await setFloorIdentity(root, result.floor, {
+          ...(result.color === undefined ? {} : { color: result.color }),
+          ...(result.emoji === undefined ? {} : { emoji: result.emoji }),
+        });
+        // The record first, then the live half: a host already standing is
+        // dressed where it stands, never re-created.
+        const hosts = await dressFloor(root, result.floor, hostOf('tmux'), 'tmux');
+        if (result.json) {
+          printJson(projectIdentityJson(report, hosts));
+          break;
+        }
+        renderIdentity(report, hosts);
+        break;
+      }
       case 'project-note': {
         const root = await requireMutableWorkspace();
         const report = await appendFloorNote(root, result.floor, result.text);
@@ -2230,6 +2273,55 @@ function renderClaim(report: ClaimReport): void {
 }
 
 /**
+ * A floor's emoji, leading its name wherever a floor is listed
+ * (design/0060-floor-identity/) — the same glyph its host shows, so it is
+ * learned once. Nothing for a floor that has no identity yet.
+ */
+function floorGlyph(project: { readonly emoji?: string | undefined }): string {
+  return project.emoji === undefined ? '' : `${project.emoji} `;
+}
+
+/**
+ * A floor's color, by name — the word a human says and an agent resolves —
+ * painted as its host paints it (the swatch behind its own ink) where the
+ * terminal takes color.
+ */
+function floorColorCue(project: { readonly color?: FloorColor | undefined }): string {
+  if (project.color === undefined) return '';
+  return ` ${pc.dim('·')} ${paintSwatch(project.color)}`;
+}
+
+function paintSwatch(color: FloorColor): string {
+  if (!pc.isColorSupported) return color;
+  const swatch = PALETTE[color];
+  return `\x1b[48;5;${swatch.xterm};38;5;${INK[swatch.ink]}m ${color} \x1b[0m`;
+}
+
+function renderIdentity(report: IdentityReport, hosts: Dressed): void {
+  const floor = pc.bold(String(report.project.floor));
+  const wears = `${report.identity.emoji} ${paintSwatch(report.identity.color)}`;
+  console.log(
+    report.outcome === 'changed'
+      ? `${pc.green('identified')} floor ${floor} — ${report.project.slug} as ${wears}`
+      : pc.dim(`floor ${report.project.floor} — ${report.project.slug} is `) + wears,
+  );
+  if (report.sharedColorWith.length > 0) {
+    const others = report.sharedColorWith.map((other) => `floor ${other}`).join(', ');
+    console.log(pc.dim(`${report.identity.color} is also worn by ${others}`));
+  }
+  if (hosts.outcome === 'themed') {
+    console.log(pc.dim(`dressed ${hosts.groups.join(', ')}`));
+  } else if (hosts.outcome === 'unknown') {
+    console.log(
+      pc.yellow(`could not dress the floor's host (${hosts.reason}) — it will pick this up `) +
+        pc.yellow('at the next attach, or run this again'),
+    );
+  } else {
+    console.log(pc.dim('no host is standing for this floor — the next one opens wearing it'));
+  }
+}
+
+/**
  * The ground floor says what it is on the line that names it
  * (design/0041-ground-floor/): floor 0 is not just the first row, it is the
  * floor every workspace has and the home of work on the workspace itself, and
@@ -2292,9 +2384,11 @@ async function cmdProjectList(all: boolean, json: boolean): Promise<void> {
         ? ''
         : ` · repos: ${entry.record.repositories.join(', ')}`;
     console.log(
-      `  floor ${pc.bold(String(entry.record.floor))} — ${entry.record.slug}` +
+      `  floor ${pc.bold(String(entry.record.floor))} — ` +
+        `${floorGlyph(entry.record)}${entry.record.slug}` +
         `${groundFloorNote(entry.record)} [${renderState(entry.derived)}] ` +
-        pc.dim(`(${entry.taskCount} tasks${claims})`),
+        pc.dim(`(${entry.taskCount} tasks${claims})`) +
+        floorColorCue(entry.record),
     );
   }
   renderHidden(hidden, 'ward project list --all');
@@ -2992,8 +3086,10 @@ async function cmdStatus(all: boolean, json: boolean): Promise<void> {
   }
   for (const project of report.projects) {
     console.log(
-      `${pc.bold(`floor ${project.project.floor}`)} — ${project.project.slug}` +
-        `${groundFloorNote(project.project)} [${renderState(project.derived)}]`,
+      `${pc.bold(`floor ${project.project.floor}`)} — ` +
+        `${floorGlyph(project.project)}${project.project.slug}` +
+        `${groundFloorNote(project.project)} [${renderState(project.derived)}]` +
+        floorColorCue(project.project),
     );
     // The floor's own sessions lead its row (design/0051-floor-scope-sessions/):
     // whoever is responsible for the floor reads before the work on it.

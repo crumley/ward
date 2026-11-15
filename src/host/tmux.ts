@@ -7,6 +7,12 @@
 // Names are therefore presentation, handed in by the Ward side
 // (design/0061-host-names-and-titles/) and renamed in place when they change.
 //
+// A floor host also WEARS its floor's identity (design/0060-floor-identity/):
+// its status line takes the floor's color and names the floor beside its
+// emoji. That is set as SESSION options on the floor host and on its views —
+// never with `-g`, never on the server: the hosts stand on the human's
+// default server beside their own sessions, whose look is theirs.
+//
 // Three disciplines run through every call here:
 //
 // - **Exact targets.** tmux prefix-matches a bare `-t` name, so every name
@@ -27,11 +33,13 @@
 // already looks.
 import { realpathSync } from 'node:fs';
 import { WardError } from '../errors.ts';
+import { INK, PALETTE } from '../theme/palette.ts';
 import type {
   CloseResult,
   FindResult,
   FoundGroup,
   FoundWindow,
+  GroupIdentity,
   GroupStamp,
   HostCheck,
   InheritedEnv,
@@ -365,6 +373,66 @@ export function listPanesArgv(): string[] {
       '#{@ward_floor}',
     ].join(FIELD),
   ];
+}
+
+/**
+ * Dress one tmux session — a floor host, or a view of one — in a floor's
+ * identity: the status line in the floor's color with the ink that reads on
+ * it, and the floor named in full at its left edge, emoji first. SESSION
+ * options only, so a window linked into several hosts (the coordinator) shows
+ * under each host's own theme, and nothing outside this one session changes.
+ * The `@ward_color` and `@ward_emoji` stamps say what it wears to anything
+ * that asks; nothing finds a host by them.
+ */
+export function themeArgv(session: string, identity: GroupIdentity): string[] {
+  const target = ['-t', windowTarget(session)];
+  const swatch = PALETTE[identity.color];
+  const name = `${identity.emoji} ${identity.label}`;
+  const style = `bg=colour${swatch.xterm},fg=colour${INK[swatch.ink]}`;
+  return [
+    ...setOption(target, 'status-style', style).slice(1),
+    ...setOption(target, 'status-left', `#[bold] ${statusText(name)} #[nobold] `),
+    // tmux's default (10 cells) cuts a host's name off mid-word; the cap
+    // keeps a very long slug from pushing the window list off a narrow terminal.
+    ...setOption(target, 'status-left-length', String(Math.min(name.length + 4, STATUS_LEFT_MAX))),
+    ...setOption(target, '@ward_color', identity.color),
+    ...setOption(target, '@ward_emoji', identity.emoji),
+  ];
+}
+
+/** The widest the floor's name may make the status line's left edge. */
+export const STATUS_LEFT_MAX = 48;
+
+/** Text as a status line shows it literally: `#` opens a format, `%` a strftime field. */
+export function statusText(text: string): string {
+  return text.replace(/#/g, '##').replace(/%/g, '%%');
+}
+
+/** Every tmux session, with the view stamp and the session group that say what it views. */
+export function listViewsArgv(): string[] {
+  return [
+    'list-sessions',
+    '-F',
+    ['#{session_name}', '#{@ward_view}', '#{session_group}'].join(FIELD),
+  ];
+}
+
+/**
+ * The ATTACH views of one tmux session: tmux holds a view in its host's
+ * session group, so they are the other members of that group that carry a
+ * view stamp — found by group and stamp, never by name. An observe view is
+ * no member of the group: it is dressed once, when it is made.
+ */
+export function viewsOf(stdout: string, host: string): string[] {
+  const rows = lines(stdout).map((line) => {
+    const [name = '', view = '', group = ''] = line.split(FIELD);
+    return { name, view, group };
+  });
+  const group = rows.find((row) => row.name === host)?.group ?? '';
+  if (group === '') return [];
+  return rows
+    .filter((row) => row.name !== host && row.view !== '' && row.group === group)
+    .map((row) => row.name);
 }
 
 /** Read one window's tag, then end it — two calls, the read first. */
@@ -703,6 +771,11 @@ export function tmuxHost(env: Env = process.env): SessionHost {
       must(startRunArgv(window, pane, request), `start the run in ${window}`);
       if (placeholder !== undefined)
         must(killWindowArgv(placeholder.window), 'clear the placeholder');
+      // A host this placement made is born wearing its floor's identity; one
+      // already standing was dressed by the refresh that ran before it. Best
+      // effort: a run never fails to start over a status line.
+      if (existing === undefined && request.naming.identity !== undefined)
+        call(themeArgv(group, request.naming.identity));
       const linkedInto: string[] = [];
       if (request.floats) {
         for (const other of ours(groups(), workspace)) {
@@ -742,11 +815,16 @@ export function tmuxHost(env: Env = process.env): SessionHost {
     rename(request: RenameRequest): Renamed {
       const renamed: { from: string; to: string }[] = [];
       const failed: string[] = [];
+      const themed: { group: string; views: string[] }[] = [];
       let taken: Set<string>;
       try {
         taken = new Set(groups().map((row) => row.name));
       } catch (error) {
-        return { groups: [], failed: [error instanceof Error ? error.message : String(error)] };
+        return {
+          groups: [],
+          failed: [error instanceof Error ? error.message : String(error)],
+          themed: [],
+        };
       }
       for (const { name, naming } of request.groups) {
         if (!taken.has(name)) continue;
@@ -767,12 +845,25 @@ export function tmuxHost(env: Env = process.env): SessionHost {
         }
         const titled = call(titleGroupArgv(current, naming.title));
         if (!titled.ok) failed.push(`${current}: ${titled.stderr || 'tmux gave no reason'}`);
+        if (naming.identity === undefined) continue;
+        // The host, then every attach view a client is looking at it through:
+        // a view shares the host's windows, not its options.
+        const dressed = call(themeArgv(current, naming.identity));
+        if (!dressed.ok) {
+          failed.push(`${current}: ${dressed.stderr || 'tmux gave no reason'}`);
+          continue;
+        }
+        const listed = call(listViewsArgv());
+        const views = (listed.ok ? viewsOf(listed.stdout, current) : []).filter(
+          (view) => call(themeArgv(view, naming.identity as GroupIdentity)).ok,
+        );
+        themed.push({ group: current, views });
       }
       for (const { window, label } of request.windows) {
         const relabelled = call(renameWindowArgv(window, label));
         if (!relabelled.ok) failed.push(`${window}: ${relabelled.stderr || 'tmux gave no reason'}`);
       }
-      return { groups: renamed, failed };
+      return { groups: renamed, failed, themed };
     },
     view(request: ViewRequest): View {
       // A name another view just took fails the create; the next free one is tried.
@@ -783,7 +874,7 @@ export function tmuxHost(env: Env = process.env): SessionHost {
           const made = call(
             attachViewArgv(request.group, name, request.workspace, request.window, request.title),
           );
-          if (made.ok) return { name, mode: 'attach' };
+          if (made.ok) return worn({ name, mode: 'attach' }, request);
           last = made.stderr;
           if (!/duplicate session/.test(made.stderr)) break;
           continue;
@@ -803,7 +894,7 @@ export function tmuxHost(env: Env = process.env): SessionHost {
           '-t',
           windowTarget(name, index),
         ]);
-        if (linked.ok) return { name, mode: 'observe' };
+        if (linked.ok) return worn({ name, mode: 'observe' }, request);
         call(['kill-session', '-t', sessionTarget(name)]);
         last = linked.stderr;
         break;
@@ -869,6 +960,12 @@ export function tmuxHost(env: Env = process.env): SessionHost {
       return command(['set-environment', '-gu', name]);
     },
   };
+
+  /** A view just made, dressed as the floor it looks at — best effort, like every theme. */
+  function worn(view: View, request: ViewRequest): View {
+    if (request.identity !== undefined) call(themeArgv(view.name, request.identity));
+    return view;
+  }
 
   function command(args: readonly string[]): string {
     return [program, ...prefix, ...args].map(shellQuote).join(' ');

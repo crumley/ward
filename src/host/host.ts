@@ -14,6 +14,7 @@
 // beside src/host/tmux.ts, selected by `agent.host`, and the Ward side does
 // not change.
 import type { HostedKind } from '../store/types.ts';
+import type { FloorColor } from '../theme/palette.ts';
 
 /** The stamps that identify a floor's group: whose workspace, which floor. */
 export interface GroupStamp {
@@ -71,6 +72,25 @@ export interface GroupNaming {
   readonly name: string;
   /** What a terminal's title says after the window's own name. */
   readonly title: string;
+  /**
+   * What the group wears (design/0060-floor-identity/) — absent when the
+   * floor's record carries no identity, and then the group is left as it looks.
+   */
+  readonly identity?: GroupIdentity;
+}
+
+/**
+ * What a floor's group looks like (design/0060-floor-identity/): the floor's
+ * recorded color and emoji, and the words that name it beside them. Stated in
+ * the record's terms — a palette name, an emoji, a label — and never in any
+ * one host's styling language: how a color becomes a status line is the
+ * host's own business. Presentation only; nothing finds a group by it.
+ */
+export interface GroupIdentity {
+  readonly color: FloorColor;
+  readonly emoji: string;
+  /** The floor in words, as a human reads it beside the emoji (`f7 ward-development`). */
+  readonly label: string;
 }
 
 export interface Placement {
@@ -139,6 +159,8 @@ export interface ViewRequest {
   readonly workspace: string;
   /** What a terminal looking through the view is titled with, after the window's name. */
   readonly title: string;
+  /** The identity of the floor the view looks at, which the view wears too. */
+  readonly identity?: GroupIdentity;
 }
 
 /**
@@ -156,6 +178,11 @@ export interface Renamed {
   readonly groups: readonly { readonly from: string; readonly to: string }[];
   /** What could not be renamed, and why — reported, never a reason to stop. */
   readonly failed: readonly string[];
+  /**
+   * The groups dressed in their identity (design/0060-floor-identity/): each by
+   * the name it wears now, with the views of it that were dressed beside it.
+   */
+  readonly themed: readonly { readonly group: string; readonly views: readonly string[] }[];
 }
 
 /** A per-client view: a host-side object that exists while one client looks through it. */
@@ -235,8 +262,9 @@ export interface SessionHost {
   /**
    * Bring names and titles up to date in place: rename each group to the name
    * wanted (left as it is when another group already wears that name), title
-   * it, and relabel each window. Never throws: what it could not do is in the
-   * answer.
+   * it, dress it and every attach view of it in the identity given, and
+   * relabel each window. Touches those groups only, never the host's own
+   * defaults. Never throws: what it could not do is in the answer.
    */
   rename(request: RenameRequest): Renamed;
   /**

@@ -26,7 +26,7 @@ test('attach: a live window of its own is joined through an attach view, and rec
   const host = fakeHost({ windows: [own(session, ['f0'])], exitCode: 7 });
   const joined = await attachSession(ws, session.id, { terminal: true, host });
   expect(host.views).toEqual([
-    { group: group('f0'), window: '@1', mode: 'attach', workspace: id, title: `${name()} f0` },
+    { group: group('f0'), window: '@1', mode: 'attach', workspace: id, ...GROUND() },
   ]);
   expect(joined.renamed).toEqual([]); // a host already wearing its name is left alone
   expect(host.entered).toEqual([{ name: `${group('f0')}-v1`, mode: 'attach' }]);
@@ -120,8 +120,17 @@ test('attach renames a host and its windows in place, then joins through the new
   expect(host.renames).toEqual([
     {
       groups: [
-        { name: old.f0, naming: { name: group('f0'), title: `${name()} f0` } },
-        { name: old.f1, naming: { name: group('f1'), title: `${name()} f1` } },
+        // Each with the identity it wears: the same pass dresses a host from
+        // before floors had one (design/0060-floor-identity/).
+        { name: old.f0, naming: { name: group('f0'), ...GROUND() } },
+        {
+          name: old.f1,
+          naming: {
+            name: group('f1'),
+            title: `🌲 ${name()} f1`,
+            identity: { color: 'green', emoji: '🌲', label: 'f1 alpha' },
+          },
+        },
       ],
       windows: [
         { window: '@1', label: 'coord' },
@@ -130,7 +139,7 @@ test('attach renames a host and its windows in place, then joins through the new
     },
   ]);
   expect(host.views.map((view) => [view.group, view.title])).toEqual([
-    [group('f1'), `${name()} f1`],
+    [group('f1'), `🌲 ${name()} f1`],
   ]);
   expect(host.placed).toEqual([]); // renamed, never re-created
   expect(host.closed).toEqual([]);
@@ -141,7 +150,8 @@ test('observe: a live window is watched through a one-window view, and recorded'
   const host = fakeHost({ windows: [own(session, ['f0'])] });
   await observeSession(ws, session.id, { terminal: true, host });
   expect(host.views).toEqual([
-    { group: group('f0'), window: '@1', mode: 'observe', workspace: id, title: `${name()} f0` },
+    // The view wears the floor it watches (0060); the host is not touched.
+    { group: group('f0'), window: '@1', mode: 'observe', workspace: id, ...GROUND() },
   ]);
   expect(host.renames).toEqual([]); // watching changes nothing, names included
   expect(host.entered.map((view) => view.mode)).toEqual(['observe']);
@@ -175,6 +185,14 @@ let scratch: string;
 let ws: string;
 let id: string;
 let caseId = 0;
+
+/** The title and identity of a fresh workspace's ground floor (design/0060-floor-identity/). */
+function GROUND() {
+  return {
+    title: `🌊 ${name()} f0`,
+    identity: { color: 'blue', emoji: '🌊', label: 'f0 workspace' },
+  } as const;
+}
 
 function name(): string {
   return `ws-${caseId}`;

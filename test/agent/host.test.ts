@@ -159,7 +159,12 @@ test('placement runs inside the open, after the record is on disk, and asks for 
   const [request] = host.placed;
   expect(request).toMatchObject({
     group: { workspace: await workspaceId(ws), floor: 0 },
-    naming: { name: `ws-${caseId}-f0-workspace`, title: `ws-${caseId} f0` },
+    naming: {
+      name: `ws-${caseId}-f0-workspace`,
+      title: `🌊 ws-${caseId} f0`,
+      // The floor's recorded identity, in the record's terms (0060).
+      identity: { color: 'blue', emoji: '🌊', label: 'f0 workspace' },
+    },
     tags: { session: record.id, epoch: record.openedAt },
     label: 'coord', // what the session is, never its id
     cwd: ws,
