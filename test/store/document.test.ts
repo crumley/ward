@@ -6,7 +6,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { WardError } from '../../src/errors.ts';
-import { readDocument, writeDocument } from '../../src/store/document.ts';
+import { readDocument, stableYaml, writeDocument } from '../../src/store/document.ts';
 import { workspaceRecordType } from '../../src/store/types.ts';
 import { makeTempDir, removeDir } from '../helpers.ts';
 
@@ -72,4 +72,19 @@ beforeAll(() => {
 
 afterAll(() => {
   removeDir(root);
+});
+
+// A record's bytes must not depend on which Bun wrote it: releases before
+// 1.4.4 and 1.4.4 itself spell nested keys and empty collections differently,
+// and both fold to one spelling.
+test('stableYaml: both Bun spellings fold to the same bytes, and the result still parses', () => {
+  const older =
+    'prs: \n  []\nmeta: \n  {}\nnested: \n  k: \n    - x\n  e: \n    []\nnote: "ends with a colon: "';
+  const newer = 'prs: []\nmeta: {}\nnested:\n  k:\n    - x\n  e: []\nnote: "ends with a colon: "';
+  expect(stableYaml(older)).toBe(newer);
+  expect(stableYaml(newer)).toBe(newer);
+  const data = { prs: [], meta: {}, nested: { k: ['x'], e: [] }, note: 'ends with a colon: ' };
+  const written = stableYaml(Bun.YAML.stringify(data, null, 2));
+  expect(written).toBe(newer);
+  expect(Bun.YAML.parse(written)).toEqual(data);
 });
