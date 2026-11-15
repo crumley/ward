@@ -151,16 +151,22 @@ beforeAll(() => {
 afterAll(() => removeDir(scratch));
 
 beforeEach(async () => {
+  const t0 = Date.now();
+  const mark = (what: string) => console.error(`DEBUG ${counter} ${what} +${Date.now() - t0}ms`);
   counter += 1;
   ws = join(scratch, `case-${counter}`);
   const vm = join(scratch, `case-${counter}-vm`);
   await createWorkspace(ws);
+  mark('await createWorkspace(ws);');
   await openProject(ws, 'ledger'); // floor 1
+  mark("await openProject(ws, 'ledger'");
   await openTask(ws, 'ledger-setup', { floor: 1 }); // f1t1, before the machines diverge
   git(scratch, 'clone', '--quiet', ws, vm);
+  mark("git(scratch, 'clone', '--quiet");
   await openTask(vm, 'distill-2026-10-25', { floor: 1 }); // the VM's f1t2
   await openTask(ws, 'weekly-rituals-design', { floor: 1 }); // the Mac's f1t2
   git(ws, 'pull', '--quiet', '--rebase', vm, 'HEAD');
+  mark("git(ws, 'pull', '--quiet', '--");
 });
 
 /** The CLI, bounded: spawnSync blocks the runner, so a stalled child must time out itself. */
@@ -170,6 +176,11 @@ function ward(argv: string[]): CliResult {
     env: { ...process.env, NO_COLOR: '1', WARD_GH: NO_GH, ...GIT_ENV, ...WARD_GLOBAL_ENV },
     timeout: 30_000,
   });
+  if (result.exitedDueToTimeout) {
+    throw new Error(
+      `DEBUG ward ${argv.join(' ')} timed out; stdout=${result.stdout.toString()} stderr=${result.stderr.toString()}`,
+    );
+  }
   return {
     exitCode: result.exitCode,
     stdout: result.stdout.toString(),
