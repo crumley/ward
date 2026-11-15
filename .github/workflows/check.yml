@@ -21,6 +21,9 @@ jobs:
   check:
     name: check (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # A hung test worker must fail the run, not hold it: the gate takes a few
+    # minutes, so anything near this bound is stuck, not slow.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:

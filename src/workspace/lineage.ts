@@ -89,8 +89,15 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
     path: 'catalog.md',
     current: currentCatalogText,
     history: [
-      // One default ever: the seeded catalog has been byte-stable since
-      // a71b091 (design 0002).
+      // a71b091 (design 0002) — the seeded catalog as Bun before 1.4.4 wrote
+      // it, with a trailing space after `artifactTypes:`. The content never
+      // changed; the serializer's output is now the same on every Bun
+      // (`stableYaml`, src/store/document.ts), and this is the older spelling.
+      {
+        sha256: '0487e4b2d1136c28c1138e45bca3ff4411d7ebfa70ab959751b3cfa0a9b135dd',
+        era: 'a71b091 (design 0002)',
+      },
+      // Current: the same catalog, written without the trailing space.
     ],
   },
   {

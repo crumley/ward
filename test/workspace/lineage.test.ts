@@ -128,7 +128,7 @@ test('the current defaults are pinned; changing one must move its old hash into 
     '6f10845611635508f006727f83bdc2222d840a9da972393781662c9f6ff04ac4', // since 65f1e8b (0013)
   );
   expect(sha256OfText(lineageOf('catalog.md').current())).toBe(
-    '0487e4b2d1136c28c1138e45bca3ff4411d7ebfa70ab959751b3cfa0a9b135dd', // since a71b091 (0002)
+    '8feb635436c6e911b37761bd564ee0eb758bca721850f02da9167280bd5f4dd6', // the 0002 catalog, in the serializer's stable spelling
   );
 });
 
