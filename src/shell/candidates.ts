@@ -15,6 +15,7 @@ import { floats } from '../agent/placement.ts';
 import { searchOrder } from '../global/locate.ts';
 import { readMachine } from '../global/machine.ts';
 import { listWorkspaces, resolutionOrder } from '../global/registry.ts';
+import { sessionScopeOf } from '../store/types.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
 import { listRepositoryNames } from '../workspace/repos.ts';
 import { readOpenSessions } from '../workspace/sessions.ts';
@@ -39,7 +40,11 @@ export type CandidateKind = (typeof CANDIDATE_KINDS)[number];
  * ("nothing to pick from") — and `ward doctor` is where a broken registry is
  * explained, not here.
  */
-export async function candidates(kind: CandidateKind, from: string): Promise<readonly Candidate[]> {
+export async function candidates(
+  kind: CandidateKind,
+  from: string,
+  floor?: number,
+): Promise<readonly Candidate[]> {
   try {
     switch (kind) {
       case 'repos':
@@ -47,7 +52,7 @@ export async function candidates(kind: CandidateKind, from: string): Promise<rea
       case 'workspaces':
         return await workspaceCandidates();
       case 'coordinators':
-        return await coordinatorCandidates(from);
+        return await coordinatorCandidates(from, floor);
     }
   } catch {
     return [];
@@ -93,8 +98,14 @@ export async function workspaceCandidates(): Promise<readonly Candidate[]> {
 
 /**
  * The open coordinators a human could join from this machine — the sessions
- * `wsa` attaches to when it is given no id
+ * `wsa` attaches to when it is given no id, or a floor number
  * (design/0059-session-shorthands/), cued by their purpose.
+ *
+ * With no floor, the workspace's coordinator. With one, that floor's own
+ * sessions — floor scope, responsible for the floor's outcome — whoever
+ * started them: a floor session is most often opened by the workspace's
+ * coordinator, so a parent does not make it a helper the way it does at
+ * workspace scope.
  *
  * The workspace is the one a human-run session verb would act on: the one
  * underfoot, else the registry's best answer — `requireWorkspace`'s ladder
@@ -109,14 +120,21 @@ export async function workspaceCandidates(): Promise<readonly Candidate[]> {
  * and offering it would make `wsa` after a reboot pick something it then
  * refuses (§17). Oldest first, the order they were opened in.
  */
-export async function coordinatorCandidates(from: string): Promise<readonly Candidate[]> {
+export async function coordinatorCandidates(
+  from: string,
+  floor?: number,
+): Promise<readonly Candidate[]> {
   const root =
     discoverWorkspace(resolve(from)) ?? resolutionOrder(await listWorkspaces())[0]?.path ?? null;
   if (root === null) return [];
   const here = (await readMachine()).name;
   return (await readOpenSessions(root))
     .map((listing) => listing.record)
-    .filter((record) => floats(record))
+    .filter((record) =>
+      floor === undefined
+        ? floats(record)
+        : sessionScopeOf(record) === 'project' && record.floor === floor,
+    )
     .filter((record) => record.machine === undefined || record.machine === here)
     .sort((a, b) => a.openedAt.localeCompare(b.openedAt))
     .map((record) => ({ name: record.id, cue: record.purpose.replace(/[\t\r\n]+/g, ' ') }));

@@ -490,6 +490,9 @@ const shellCandidates = command(
   object({
     action: constant('shell-candidates'),
     kind: argument(choice([...CANDIDATE_KINDS], { metavar: 'KIND' })),
+    // Narrows `coordinators` to one floor's own sessions, for `wsa N`
+    // (design/0059-session-shorthands/); the other kinds ignore it.
+    floor: optional(option('--floor', floorNumber())),
   }),
   {
     brief: message`Machinery: one NAME<TAB>CUE line per candidate, for the emitted shell layer to pick from.`,
@@ -1022,7 +1025,7 @@ try {
         // no color, no header, and NOTHING on an empty set — a picker with no
         // candidates is an empty picker, never an error in the human's shell
         // mid-keystroke (§20).
-        const found = await candidates(result.kind, process.cwd());
+        const found = await candidates(result.kind, process.cwd(), result.floor);
         if (found.length > 0) console.log(renderCandidates(found));
         break;
       }

@@ -178,6 +178,12 @@ test('`shell candidates coordinators` offers the floating sessions this machine 
     ['workspace-1@test', 'first'],
     ['workspace-2@test', 'second'],
   ]);
+  // With a floor: that floor's own sessions instead, and nothing for a floor
+  // that has none.
+  expect(rows(ward(['shell', 'candidates', 'coordinators', '--floor', '0'], alpha))).toEqual([
+    ['f0-1@test', 'f0'],
+  ]);
+  expect(ward(['shell', 'candidates', 'coordinators', '--floor', '3'], alpha).stdout).toBe('');
   // From nowhere: the workspace a human-run `ward session attach` would act
   // on, which is the registry's default.
   expect(rows(ward(['shell', 'candidates', 'coordinators'], scratch))).toEqual([
@@ -423,6 +429,8 @@ test('wsa joins the coordinator — opening it detached first when none is open 
       // Builtins only: this PATH holds the fixture dirs alone, so no `cat`.
       `  "shell candidates coordinators") [ -f ${feed} ] && while IFS= read -r l; do printf '%s\\n' "$l"; done < ${feed}; exit 0 ;;`,
       `  "session open --detach") printf 'workspace-9@test\\tCoordinating work\\n' > ${feed} ;;`,
+      `  "shell candidates coordinators --floor 7") [ -f ${feed}-7 ] && while IFS= read -r l; do printf '%s\\n' "$l"; done < ${feed}-7; exit 0 ;;`,
+      `  "session open --floor 7 --detach") printf 'f7-1@test\\tCoordinating floor 7\\n' > ${feed}-7 ;;`,
       'esac',
       'exit 0',
       '',
@@ -476,11 +484,33 @@ test('wsa joins the coordinator — opening it detached first when none is open 
   Bun.spawnSync(['chmod', '+x', join(pickBin, 'fzf')]);
   const picked = fish(`source ${script}; wsa`, `${pickBin}:${stub}:${tmuxBin}:${toolBin}`);
   expect(picked.exitCode).toBe(0);
+  // One read: the picker is fed the list already in hand, never a second
+  // query that could disagree with it.
+  expect(calls()).toEqual(['shell candidates coordinators', 'session attach workspace-9@test']);
+
+  // Several open and no picker: named, exit 127, nothing attached.
+  const unpicked = fish(
+    `source ${script}; wsa; echo "exit=$status"`,
+    `${stub}:${tmuxBin}:${toolBin}`,
+  );
+  expect(unpicked.stderr).toContain('no picker installed');
+  expect(unpicked.stderr).toContain('workspace-12@test');
+  expect(unpicked.stdout).toContain('exit=127');
+  expect(calls()).toEqual(['shell candidates coordinators']);
+
+  // A floor number means that floor's session: opened detached at floor
+  // scope when the floor has none, then joined — and joined directly after.
+  const floor = fish(`source ${script}; wsa 7`, `${stub}:${tmuxBin}:${toolBin}`);
+  expect(floor.stderr).toBe('');
+  expect(floor.exitCode).toBe(0);
   expect(calls()).toEqual([
-    'shell candidates coordinators',
-    'shell candidates coordinators',
-    'session attach workspace-9@test',
+    'shell candidates coordinators --floor 7',
+    'session open --floor 7 --detach',
+    'shell candidates coordinators --floor 7',
+    'session attach f7-1@test',
   ]);
+  expect(fish(`source ${script}; wsa 7`, `${stub}:${tmuxBin}:${toolBin}`).exitCode).toBe(0);
+  expect(calls()).toEqual(['shell candidates coordinators --floor 7', 'session attach f7-1@test']);
 });
 
 test('wso, wsr, and wsc forward everything to their session verb', () => {
