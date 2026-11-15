@@ -1,6 +1,6 @@
 // The fish shell layer (design/0025-fish-shell-layer/): `ward shell init
 // fish` emits the shorthands — `wrr`, `wrcd`, `wwcd`, `wws`, and the session
-// set `wsa`, `wso`, `wsr`, `wsc` — that work from any directory, `ward shell candidates KIND` is the feed they pick from, and
+// set `wsa`, `wso`, `wsr`, `wsc`, and `ws` — that work from any directory, `ward shell candidates KIND` is the feed they pick from, and
 // `ward repo path` grew the shorthand ladder they lean on. The layer runs
 // inside the human's shell, so the bar is the same as completion's: never
 // hang, never prompt, never fail cryptically, and never be counted as usage.
@@ -22,7 +22,7 @@ test('`ward shell init fish` emits the shorthands, the picker seam, and their co
   const script = result.stdout;
 
   // The set, as functions — all but wrr must run logic, not expand.
-  for (const name of ['wrr', 'wrcd', 'wwcd', 'wws', 'wsa', 'wso', 'wsr', 'wsc']) {
+  for (const name of ['wrr', 'wrcd', 'wwcd', 'wws', 'wsa', 'wso', 'wsr', 'wsc', 'ws']) {
     expect(script).toContain(`function ${name} `);
   }
   // Thin plumbing: every shorthand ends in a real `ward` invocation.
@@ -68,6 +68,9 @@ test('`ward shell init fish` emits the shorthands, the picker seam, and their co
   ]) {
     expect(script).toContain(`complete -c ${name} -w 'ward session ${verb}'`);
   }
+  // And `ws` wraps the one verb it forwards to.
+  expect(script).toContain('command ward status $argv');
+  expect(script).toContain("complete -c ws -w 'ward status'");
 });
 
 test('the emitted script is valid fish — checked by fish itself', () => {
@@ -513,7 +516,7 @@ test('wsa joins the coordinator — opening it detached first when none is open 
   expect(calls()).toEqual(['shell candidates coordinators --floor 7', 'session attach f7-1@test']);
 });
 
-test('wso, wsr, and wsc forward everything to their session verb', () => {
+test('wso, wsr, wsc, and ws forward everything to their verb', () => {
   if (!existsSync(FISH)) return;
   const script = join(scratch, 'layer.fish');
   writeFileSync(script, ward(['shell', 'init', 'fish'], alpha).stdout);
@@ -523,7 +526,7 @@ test('wso, wsr, and wsc forward everything to their session verb', () => {
   writeFileSync(join(stub, 'ward'), `#!/bin/sh\necho "$*" >> ${log}\n`);
   Bun.spawnSync(['chmod', '+x', join(stub, 'ward')]);
   const run = fish(
-    `source ${script}; wso a@test; wsr b@test --detach; wsc c@test --json`,
+    `source ${script}; wso a@test; wsr b@test --detach; wsc c@test --json; ws; ws --json`,
     `${stub}:${toolBin}`,
   );
   expect(run.exitCode).toBe(0);
@@ -531,6 +534,8 @@ test('wso, wsr, and wsc forward everything to their session verb', () => {
     'session observe a@test',
     'session resume b@test --detach',
     'session close c@test --json',
+    'status',
+    'status --json',
   ]);
 });
 

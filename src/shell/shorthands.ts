@@ -308,8 +308,19 @@ end`,
   completion: `complete -c wsc -w 'ward session close'`,
 };
 
+const ws: Shorthand = {
+  name: 'ws',
+  summary: 'ward status, arguments and all',
+  needs: [],
+  body: `function ws --description 'ward status: where everything stands'
+    command ward status $argv
+end`,
+  // Wrapping, as wrr does: `ws` takes exactly `ward status`'s flags.
+  completion: `complete -c ws -w 'ward status'`,
+};
+
 /** The shorthand set, in the order both assemblies present them. */
-export const FISH_SHORTHANDS: readonly Shorthand[] = [wrr, wrcd, wwcd, wws, wsa, wso, wsr, wsc];
+export const FISH_SHORTHANDS: readonly Shorthand[] = [wrr, wrcd, wwcd, wws, wsa, wso, wsr, wsc, ws];
 
 /** The adoptable names, for the parser's `choice` and for every refusal that lists them. */
 export const FISH_SHORTHAND_NAMES: readonly string[] = FISH_SHORTHANDS.map(

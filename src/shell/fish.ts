@@ -41,7 +41,7 @@ const PICKER_SEAM_NOTE = `# The only two functions that know a picker exists, an
 # named. To swap in fzy, sk, or a future in-process \`ward\` picker, rewrite
 # these two; nothing else in this file changes.`;
 
-const COMPLETION_NOTE = `# wrr and the session shorthands (wsa, wso, wsr, wsc) inherit ward's own
+const COMPLETION_NOTE = `# wrr, ws, and the session shorthands (wsa, wso, wsr, wsc) inherit ward's own
 # generated completions by wrapping the command they forward to, so the tree
 # is never described twice (install them with \`ward completion fish\`). wrcd,
 # wwcd, and wws are new names, so they carry their own — fed by the same
