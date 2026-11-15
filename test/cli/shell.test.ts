@@ -1,6 +1,6 @@
 // The fish shell layer (design/0025-fish-shell-layer/): `ward shell init
-// fish` emits the shorthands — `wrr`, `wrcd`, `wwcd`, `wws` — that work from
-// any directory, `ward shell candidates KIND` is the feed they pick from, and
+// fish` emits the shorthands — `wrr`, `wrcd`, `wwcd`, `wws`, and the session
+// set `wsa`, `wso`, `wsr`, `wsc` — that work from any directory, `ward shell candidates KIND` is the feed they pick from, and
 // `ward repo path` grew the shorthand ladder they lean on. The layer runs
 // inside the human's shell, so the bar is the same as completion's: never
 // hang, never prompt, never fail cryptically, and never be counted as usage.
@@ -16,20 +16,24 @@ import { applyGitTestEnv, makeTempDir, NO_GH, removeDir } from '../helpers.ts';
 
 // -- the emitted script ----------------------------------------------------
 
-test('`ward shell init fish` emits the four shorthands, the picker seam, and their completions', () => {
+test('`ward shell init fish` emits the shorthands, the picker seam, and their completions', () => {
   const result = ward(['shell', 'init', 'fish'], alpha);
   expect(result.exitCode).toBe(0);
   const script = result.stdout;
 
   // The set, as functions — all but wrr must run logic, not expand.
-  for (const fn of ['function wrr', 'function wrcd', 'function wwcd', 'function wws']) {
-    expect(script).toContain(fn);
+  for (const name of ['wrr', 'wrcd', 'wwcd', 'wws', 'wsa', 'wso', 'wsr', 'wsc']) {
+    expect(script).toContain(`function ${name} `);
   }
   // Thin plumbing: every shorthand ends in a real `ward` invocation.
   expect(script).toContain('command ward repo refresh $argv');
   expect(script).toContain('command ward repo path $name');
   expect(script).toContain('command ward workspace path $name');
   expect(script).toContain('command ward session open $argv');
+  expect(script).toContain('command ward session attach $id');
+  expect(script).toContain('command ward session observe $argv');
+  expect(script).toContain('command ward session resume $argv');
+  expect(script).toContain('command ward session close $argv');
   // One answer to "which workspace?": wwcd and wws both ask the shared helper,
   // and the helper sits above them (design/0034-workspace-session-shorthand/).
   expect(script.split('__ward_workspace_root').length - 1).toBe(3); // defined once, called twice
@@ -55,6 +59,15 @@ test('`ward shell init fish` emits the four shorthands, the picker seam, and the
   expect(script).toContain("complete -c wrcd -f -a '(ward shell candidates repos)'");
   expect(script).toContain("complete -c wwcd -f -a '(ward shell candidates workspaces)'");
   expect(script).toContain("complete -c wws -f -a '(ward shell candidates workspaces)'");
+  // The session set takes an id that is exactly its verb's, so each wraps.
+  for (const [name, verb] of [
+    ['wsa', 'attach'],
+    ['wso', 'observe'],
+    ['wsr', 'resume'],
+    ['wsc', 'close'],
+  ]) {
+    expect(script).toContain(`complete -c ${name} -w 'ward session ${verb}'`);
+  }
 });
 
 test('the emitted script is valid fish — checked by fish itself', () => {
@@ -114,7 +127,7 @@ test('a stale entry is never offered as somewhere to cd', () => {
 });
 
 test('nothing to offer is exit 0 and silence — never an error in the shell', () => {
-  for (const kind of ['repos', 'workspaces']) {
+  for (const kind of ['repos', 'workspaces', 'coordinators']) {
     const result = ward(['shell', 'candidates', kind], scratch);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe('');
@@ -125,12 +138,51 @@ test('nothing to offer is exit 0 and silence — never an error in the shell', (
 test('a registry that will not parse degrades to no candidates, never to shell noise', () => {
   register(alpha);
   writeFileSync(join(state, 'workspaces.md'), 'not a document at all\n');
-  for (const kind of ['repos', 'workspaces']) {
+  for (const kind of ['repos', 'workspaces', 'coordinators']) {
     const result = ward(['shell', 'candidates', kind], scratch);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe('');
     expect(result.stderr).toBe('');
   }
+});
+
+test('`shell candidates coordinators` offers the floating sessions this machine can join', () => {
+  register(beta); // beta first, so it is the default
+  register(alpha);
+  const open = (cwd: string, purpose: string, env: Record<string, string> = {}) => {
+    const result = ward(
+      ['session', 'open', '--purpose', purpose, '--handle', `test:${purpose}`],
+      cwd,
+      env,
+    );
+    expect(result.exitCode).toBe(0);
+  };
+  // Two coordinators here, one helper one of them started, one coordinator
+  // whose history is on another computer, a floor session, and a closed one.
+  open(alpha, 'first');
+  open(alpha, 'second');
+  open(alpha, 'helper', { WARD_AGENT: 'workspace-1@test' });
+  open(alpha, 'elsewhere', { WARD_MACHINE: 'other' });
+  expect(
+    ward(['session', 'open', '--floor', '0', '--purpose', 'f0', '--handle', 'test:f0'], alpha)
+      .exitCode,
+  ).toBe(0);
+  open(alpha, 'done');
+  expect(ward(['session', 'close', 'workspace-4@test'], alpha).exitCode).toBe(0);
+  open(beta, 'beta coordinator');
+
+  // From inside alpha: its two coordinators, oldest first, cued by purpose —
+  // not the helper (it has a parent), not the floor's, not the closed one,
+  // and not the one another machine would have to re-create.
+  expect(rows(ward(['shell', 'candidates', 'coordinators'], alpha))).toEqual([
+    ['workspace-1@test', 'first'],
+    ['workspace-2@test', 'second'],
+  ]);
+  // From nowhere: the workspace a human-run `ward session attach` would act
+  // on, which is the registry's default.
+  expect(rows(ward(['shell', 'candidates', 'coordinators'], scratch))).toEqual([
+    ['workspace-1@test', 'beta coordinator'],
+  ]);
 });
 
 test('an unknown candidate kind is refused by the parser, naming both', () => {
@@ -347,6 +399,109 @@ test('wws lands in a workspace and opens a session there; the rest of argv reach
   expect(unknown.stdout).toContain('exit=127');
   expect(unknown.stdout.trim().split('\n').at(-1)).toBe('/');
   expect((await readSessions(alpha, '')).length).toBe(2);
+});
+
+test('wsa joins the coordinator — opening it detached first when none is open — or a named session', () => {
+  if (!existsSync(FISH)) return;
+  const script = join(scratch, 'layer.fish');
+  writeFileSync(script, ward(['shell', 'init', 'fish'], alpha).stdout);
+
+  // A stub `ward` that records every call and answers the coordinator feed
+  // from a file — so what wsa DECIDES is observable without a tmux server
+  // (design/0059-session-shorthands/). Opening a session is what puts a
+  // coordinator in the feed, exactly as the real record would.
+  const stub = join(scratch, `stub-ward-${caseId}`);
+  const log = join(stub, 'calls.log');
+  const feed = join(stub, 'coordinators');
+  mkdirSync(stub, { recursive: true });
+  writeFileSync(
+    join(stub, 'ward'),
+    [
+      '#!/bin/sh',
+      `echo "$*" >> ${log}`,
+      'case "$*" in',
+      // Builtins only: this PATH holds the fixture dirs alone, so no `cat`.
+      `  "shell candidates coordinators") [ -f ${feed} ] && while IFS= read -r l; do printf '%s\\n' "$l"; done < ${feed}; exit 0 ;;`,
+      `  "session open --detach") printf 'workspace-9@test\\tCoordinating work\\n' > ${feed} ;;`,
+      'esac',
+      'exit 0',
+      '',
+    ].join('\n'),
+  );
+  const tmuxBin = join(stub, 'tmux-bin');
+  mkdirSync(tmuxBin, { recursive: true });
+  writeFileSync(join(tmuxBin, 'tmux'), '#!/bin/sh\nexit 0\n');
+  Bun.spawnSync(['chmod', '+x', join(stub, 'ward'), join(tmuxBin, 'tmux')]);
+  const calls = (): string[] => {
+    if (!existsSync(log)) return [];
+    const lines = readFileSync(log, 'utf8').trim().split('\n');
+    writeFileSync(log, '');
+    return lines.filter((line) => line !== '');
+  };
+
+  // A named session goes straight to attach: nothing is looked up.
+  const named = fish(`source ${script}; wsa workspace-3@test`, `${stub}:${toolBin}`);
+  expect(named.exitCode).toBe(0);
+  expect(calls()).toEqual(['session attach workspace-3@test']);
+
+  // Nothing open and no tmux: refused out loud, and nothing opened — a
+  // foreground fallback followed by an attach would start the run twice.
+  const bare = fish(`source ${script}; wsa; echo "exit=$status"`, `${stub}:${toolBin}`);
+  expect(bare.stderr).toContain('not installed');
+  expect(bare.stdout).toContain('exit=127');
+  expect(calls()).toEqual(['shell candidates coordinators']);
+
+  // Nothing open, tmux present: open detached, then join what was opened.
+  const fresh = fish(`source ${script}; wsa`, `${stub}:${tmuxBin}:${toolBin}`);
+  expect(fresh.stderr).toBe('');
+  expect(fresh.exitCode).toBe(0);
+  expect(calls()).toEqual([
+    'shell candidates coordinators',
+    'session open --detach',
+    'shell candidates coordinators',
+    'session attach workspace-9@test',
+  ]);
+
+  // One open — the same command after a reboot or mid-day: straight to attach
+  // (which re-creates a gone run itself), never a second open.
+  const again = fish(`source ${script}; wsa`, `${stub}:${tmuxBin}:${toolBin}`);
+  expect(again.exitCode).toBe(0);
+  expect(calls()).toEqual(['shell candidates coordinators', 'session attach workspace-9@test']);
+
+  // Several open: a pick, and the picked NAME alone reaches attach.
+  writeFileSync(feed, 'workspace-9@test\tCoordinating work\nworkspace-12@test\tother\n');
+  const pickBin = join(stub, 'picking-fzf');
+  mkdirSync(pickBin, { recursive: true });
+  writeFileSync(join(pickBin, 'fzf'), '#!/bin/sh\nIFS= read -r line\nprintf \'%s\\n\' "$line"\n');
+  Bun.spawnSync(['chmod', '+x', join(pickBin, 'fzf')]);
+  const picked = fish(`source ${script}; wsa`, `${pickBin}:${stub}:${tmuxBin}:${toolBin}`);
+  expect(picked.exitCode).toBe(0);
+  expect(calls()).toEqual([
+    'shell candidates coordinators',
+    'shell candidates coordinators',
+    'session attach workspace-9@test',
+  ]);
+});
+
+test('wso, wsr, and wsc forward everything to their session verb', () => {
+  if (!existsSync(FISH)) return;
+  const script = join(scratch, 'layer.fish');
+  writeFileSync(script, ward(['shell', 'init', 'fish'], alpha).stdout);
+  const stub = join(scratch, `stub-ward-${caseId}`);
+  const log = join(stub, 'calls.log');
+  mkdirSync(stub, { recursive: true });
+  writeFileSync(join(stub, 'ward'), `#!/bin/sh\necho "$*" >> ${log}\n`);
+  Bun.spawnSync(['chmod', '+x', join(stub, 'ward')]);
+  const run = fish(
+    `source ${script}; wso a@test; wsr b@test --detach; wsc c@test --json`,
+    `${stub}:${toolBin}`,
+  );
+  expect(run.exitCode).toBe(0);
+  expect(readFileSync(log, 'utf8').trim().split('\n')).toEqual([
+    'session observe a@test',
+    'session resume b@test --detach',
+    'session close c@test --json',
+  ]);
 });
 
 test('wrr forwards its arguments to `ward repo refresh`, from outside any workspace', () => {

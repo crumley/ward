@@ -10,9 +10,14 @@
 // callback, and inherits that path's contracts — it never throws, it never
 // writes telemetry, and it never churns the registry's recency
 // (intent/02-subsystems/07-human-shell.md, and 0022's IF-002).
+import { resolve } from 'node:path';
+import { floats } from '../agent/placement.ts';
 import { searchOrder } from '../global/locate.ts';
-import { listWorkspaces } from '../global/registry.ts';
+import { readMachine } from '../global/machine.ts';
+import { listWorkspaces, resolutionOrder } from '../global/registry.ts';
+import { discoverWorkspace } from '../workspace/layout.ts';
 import { listRepositoryNames } from '../workspace/repos.ts';
+import { readOpenSessions } from '../workspace/sessions.ts';
 
 /** One thing a human might mean, plus what makes it recognizable as that thing. */
 export interface Candidate {
@@ -22,7 +27,7 @@ export interface Candidate {
 }
 
 /** The candidate sets the shell layer knows how to ask for. */
-export const CANDIDATE_KINDS = ['repos', 'workspaces'] as const;
+export const CANDIDATE_KINDS = ['repos', 'workspaces', 'coordinators'] as const;
 export type CandidateKind = (typeof CANDIDATE_KINDS)[number];
 
 /**
@@ -36,7 +41,14 @@ export type CandidateKind = (typeof CANDIDATE_KINDS)[number];
  */
 export async function candidates(kind: CandidateKind, from: string): Promise<readonly Candidate[]> {
   try {
-    return kind === 'repos' ? await repoCandidates(from) : await workspaceCandidates();
+    switch (kind) {
+      case 'repos':
+        return await repoCandidates(from);
+      case 'workspaces':
+        return await workspaceCandidates();
+      case 'coordinators':
+        return await coordinatorCandidates(from);
+    }
   } catch {
     return [];
   }
@@ -77,6 +89,37 @@ export async function workspaceCandidates(): Promise<readonly Candidate[]> {
   return (await listWorkspaces())
     .filter((entry) => !entry.stale)
     .map((entry) => ({ name: entry.name, cue: entry.path }));
+}
+
+/**
+ * The open coordinators a human could join from this machine — the sessions
+ * `wsa` attaches to when it is given no id
+ * (design/0059-session-shorthands/), cued by their purpose.
+ *
+ * The workspace is the one a human-run session verb would act on: the one
+ * underfoot, else the registry's best answer — `requireWorkspace`'s ladder
+ * for a human caller, so what is offered here is what `ward session attach`
+ * will then find. A coordinator is the one session that floats
+ * (`floats`, design/0031-detached-session-hosting/): workspace scope, started
+ * by no other session. Its helpers are not offered — joining the workspace is
+ * joining the session responsible for it, not the last thing it delegated.
+ *
+ * This machine only, plus records that predate the machine field: a session
+ * whose history is on another computer is one `attach` cannot re-create here,
+ * and offering it would make `wsa` after a reboot pick something it then
+ * refuses (§17). Oldest first, the order they were opened in.
+ */
+export async function coordinatorCandidates(from: string): Promise<readonly Candidate[]> {
+  const root =
+    discoverWorkspace(resolve(from)) ?? resolutionOrder(await listWorkspaces())[0]?.path ?? null;
+  if (root === null) return [];
+  const here = (await readMachine()).name;
+  return (await readOpenSessions(root))
+    .map((listing) => listing.record)
+    .filter((record) => floats(record))
+    .filter((record) => record.machine === undefined || record.machine === here)
+    .sort((a, b) => a.openedAt.localeCompare(b.openedAt))
+    .map((record) => ({ name: record.id, cue: record.purpose.replace(/[\t\r\n]+/g, ' ') }));
 }
 
 /**

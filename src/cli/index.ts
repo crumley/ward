@@ -481,7 +481,7 @@ const shellInit = command(
   'init',
   object({ action: constant('shell-init'), shell: argument(string({ metavar: 'SHELL' })) }),
   {
-    brief: message`Emit the shell layer of shorthands (wrr, wrcd, wwcd, wws) — redirect it into your shell config.`,
+    brief: message`Emit the shell layer of shorthands (wrr, wrcd, wwcd, wws, wsa, wso, wsr, wsc) — redirect it into your shell config.`,
   },
 );
 

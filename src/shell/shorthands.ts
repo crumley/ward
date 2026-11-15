@@ -210,8 +210,89 @@ end`,
   completion: `complete -c wws -f -a '(ward shell candidates workspaces)'`,
 };
 
+// -- the session shorthands (design/0059-session-shorthands/) -----------------
+// `w` + `s` (session) + the verb's initial: the set's own pattern, the noun
+// being the session record every one of them addresses by id.
+
+const wsa: Shorthand = {
+  name: 'wsa',
+  summary: 'attach to a session — with no id, the coordinator, opened first if none is',
+  needs: [choose.name],
+  // One path in, whatever the machine has been through: `ward session attach`
+  // joins a live window and re-creates one that ended or went with a reboot,
+  // so the only state this function must tell apart is "is there a
+  // coordinator to join at all?".
+  body: `function wsa --description 'Attach to a session: with no id, the coordinator, opened first if none is'
+    # An id goes straight through: attach joins a live window, and re-creates
+    # one that has ended or gone, from its record.
+    if test (count $argv) -gt 0
+        command ward session attach $argv
+        return $status
+    end
+    set -l open (command ward shell candidates coordinators)
+    if test (count $open) -eq 0
+        # Nothing to join: open the coordinator detached, then join it. tmux
+        # is checked first because without it --detach falls back to the
+        # foreground, and attaching after that run exits would start it again.
+        if not command -q tmux
+            echo "ward: wsa hosts the coordinator in tmux, which is not installed — install it, or run: ward session open" >&2
+            return 127
+        end
+        command ward session open --detach
+        or return $status
+        set open (command ward shell candidates coordinators)
+    end
+    set -l id
+    if test (count $open) -eq 1
+        set id (string split -m1 -f1 -- \\t $open[1])
+    else if test (count $open) -gt 1
+        # Several coordinators open: which one is a choice, so ask for it.
+        set id (__ward_choose coordinators coordinator '')
+        or return $status
+    end
+    if test -z "$id"
+        echo "ward: no coordinator answers here — see: ward status" >&2
+        return 1
+    end
+    command ward session attach $id
+end`,
+  // Wrapping, as wrr does: the id is exactly `ward session attach`'s argument,
+  // so ward's own completion of open session ids serves it unchanged.
+  completion: `complete -c wsa -w 'ward session attach'`,
+};
+
+const wso: Shorthand = {
+  name: 'wso',
+  summary: 'ward session observe — watch a session read-only',
+  needs: [],
+  body: `function wso --description 'ward session observe: watch a session read-only'
+    command ward session observe $argv
+end`,
+  completion: `complete -c wso -w 'ward session observe'`,
+};
+
+const wsr: Shorthand = {
+  name: 'wsr',
+  summary: 'ward session resume, arguments and all',
+  needs: [],
+  body: `function wsr --description 'ward session resume, arguments and all'
+    command ward session resume $argv
+end`,
+  completion: `complete -c wsr -w 'ward session resume'`,
+};
+
+const wsc: Shorthand = {
+  name: 'wsc',
+  summary: 'ward session close',
+  needs: [],
+  body: `function wsc --description 'ward session close'
+    command ward session close $argv
+end`,
+  completion: `complete -c wsc -w 'ward session close'`,
+};
+
 /** The shorthand set, in the order both assemblies present them. */
-export const FISH_SHORTHANDS: readonly Shorthand[] = [wrr, wrcd, wwcd, wws];
+export const FISH_SHORTHANDS: readonly Shorthand[] = [wrr, wrcd, wwcd, wws, wsa, wso, wsr, wsc];
 
 /** The adoptable names, for the parser's `choice` and for every refusal that lists them. */
 export const FISH_SHORTHAND_NAMES: readonly string[] = FISH_SHORTHANDS.map(
