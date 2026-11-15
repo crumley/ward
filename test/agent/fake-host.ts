@@ -12,6 +12,8 @@ import type {
   InventoryGroup,
   Placement,
   PlaceRequest,
+  Renamed,
+  RenameRequest,
   SessionHost,
   View,
   ViewRequest,
@@ -23,6 +25,7 @@ export interface FakeHost extends SessionHost {
   readonly links: string[];
   readonly views: ViewRequest[];
   readonly entered: View[];
+  readonly renames: RenameRequest[];
   readonly finds: number;
 }
 
@@ -45,6 +48,7 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
   const links: string[] = [];
   const views: ViewRequest[] = [];
   const entered: View[] = [];
+  const renames: RenameRequest[] = [];
   let finds = 0;
   let next = 100;
   const groups = (): InventoryGroup[] => {
@@ -71,6 +75,7 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
     links,
     views,
     entered,
+    renames,
     get finds() {
       return finds;
     },
@@ -81,7 +86,7 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
     prepare: () => {},
     place(request: PlaceRequest): Placement {
       placed.push(request);
-      const group = `ward-fake-f${request.group.floor}`;
+      const group = request.naming.name;
       const window = `@${next++}`;
       windows.push({
         window,
@@ -104,6 +109,22 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
     },
     link(window: string, group: string): void {
       links.push(`${window} into ${group}`);
+    },
+    rename(request: RenameRequest): Renamed {
+      renames.push(request);
+      // Renamed in place, as a real host would: the windows follow the group.
+      const moved = request.groups
+        .filter(({ name, naming }) => name !== naming.name)
+        .map(({ name, naming }) => ({ from: name, to: naming.name }));
+      for (const { from, to } of moved) {
+        for (const [index, window] of windows.entries()) {
+          windows[index] = {
+            ...window,
+            groups: window.groups.map((g) => (g.name === from ? { ...g, name: to } : g)),
+          };
+        }
+      }
+      return { groups: moved, failed: [] };
     },
     view(request: ViewRequest): View {
       views.push(request);

@@ -159,8 +159,9 @@ test('placement runs inside the open, after the record is on disk, and asks for 
   const [request] = host.placed;
   expect(request).toMatchObject({
     group: { workspace: await workspaceId(ws), floor: 0 },
+    naming: { name: `ws-${caseId}-f0-workspace`, title: `ws-${caseId} f0` },
     tags: { session: record.id, epoch: record.openedAt },
-    label: record.id,
+    label: 'coord', // what the session is, never its id
     cwd: ws,
     env: { WARD_AGENT: record.id }, // and nothing else of the caller's
     command: ['/bin/stub', '--session-id', 'abc'],
@@ -188,6 +189,8 @@ test("a floor session's placement links the live coordinator into its floor's ne
   });
   const floorRequest = host.placed[1];
   expect(floorRequest?.group.floor).toBe(1); // the coordinator is a floor-0 parent: no pull
+  expect(floorRequest?.naming.name).toBe(`ws-${caseId}-f1-alpha`);
+  expect(floorRequest?.label).toBe('alpha');
   expect(floorRequest?.floats).toBe(false);
   expect(floorRequest?.floating).toEqual([
     { session: coordinatorRecord.id, epoch: coordinatorRecord.openedAt },

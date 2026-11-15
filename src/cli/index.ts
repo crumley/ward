@@ -2795,6 +2795,7 @@ async function cmdSessionJoin(verb: 'attach' | 'observe', id: string): Promise<v
       if (prepared.recreated) {
         console.error(pc.dim(`re-created session ${id} from its record (it was not running)`));
       }
+      for (const host of prepared.renamed) console.error(pc.dim(`renamed host: ${host}`));
       for (const link of prepared.repaired) console.error(pc.dim(`relinked ${link}`));
       for (const link of prepared.unrepaired) console.error(pc.yellow(`could not relink ${link}`));
       const how = verb === 'observe' ? 'watching read-only' : 'attaching';

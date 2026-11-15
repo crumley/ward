@@ -48,7 +48,9 @@ import {
   type PlacedRun,
   placeLaunch,
 } from './host.ts';
+import { readNaming } from './naming.ts';
 import type { Resolved } from './settings.ts';
+import { setTerminalTitle } from './title.ts';
 
 /**
  * A launch's outcome: a foreground run that has exited (the caller waited on
@@ -154,6 +156,7 @@ export async function launchSession(
     if (choice.notice !== undefined) launch.onNotice?.(choice.notice);
     const record = await open({});
     onRecorded(record);
+    await titleForeground(root, { record, scopeDir: '' });
     const run = await runHarness(adapter, {
       argv,
       command: commandOf(agent.command),
@@ -186,6 +189,19 @@ export async function launchSession(
       `the agent did not start in ${choice.kind} — ${messageOf(error)}. Session ${recorded} is ` +
         `recorded and open: resume it with ward session resume ${recorded}`,
     );
+  }
+}
+
+/**
+ * Name the terminal a foreground run is about to take
+ * (design/0061-host-names-and-titles/). A title is never the reason a run
+ * does not start, so a failure to work one out is passed over in silence.
+ */
+async function titleForeground(root: string, listing: OpenSessionListing): Promise<void> {
+  try {
+    setTerminalTitle((await readNaming(root)).foreground(listing));
+  } catch {
+    // The run starts untitled.
   }
 }
 
@@ -287,6 +303,7 @@ export async function resumeSession(
   if (choice.notice !== undefined) launch.onNotice?.(choice.notice);
   const record = await recordResume(root, id, { guard });
   onRecorded(record);
+  await titleForeground(root, { record, scopeDir: open.scopeDir });
   const run = await runHarness(adapter, {
     argv,
     command: commandOf(agent.command),
