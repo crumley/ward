@@ -146,6 +146,18 @@ export function deriveStatus(children: readonly WorkState[]): WorkState {
 }
 
 /**
+ * A floor's shown state: a non-active record speaks for itself; an active one
+ * derives from its tasks. The standing floor (floor 0) never closes, so when
+ * every task on it has closed it reads `active`, an empty standing container,
+ * never `closed`.
+ */
+export function projectState(record: ProjectRecord, taskStates: readonly WorkState[]): WorkState {
+  if (record.state !== 'active') return record.state;
+  const derived = deriveStatus(taskStates);
+  return record.standing === true && derived === 'closed' ? 'active' : derived;
+}
+
+/**
  * In-review is derived, never stored: ≥1 open PR on a non-closed task. With
  * live forge state the rule is applied exactly — cleared only when every
  * linked PR is known resolved, so an unreadable PR degrades toward the
@@ -382,10 +394,10 @@ export async function statusReport(
   for (const project of projects) {
     const own = tasks.filter((task) => task.dir.startsWith(`${project.dir}/`));
     const sessions = openSessionStatuses(root, await readSessions(root, project.dir));
-    const derived =
-      project.record.state === 'active'
-        ? deriveStatus(own.map((task) => task.record.state))
-        : project.record.state;
+    const derived = projectState(
+      project.record,
+      own.map((task) => task.record.state),
+    );
     // A floor whose session is still open is in flight whatever its tasks
     // say: the window hides settled work, and a floor someone is still
     // responsible for is not settled.
@@ -418,13 +430,12 @@ export async function statusReport(
   const bare = tasks.filter((task) => task.dir.startsWith('tasks/'));
   const workspace = deriveStatus([
     ...projects.map((project) =>
-      project.record.state === 'active'
-        ? deriveStatus(
-            tasks
-              .filter((task) => task.dir.startsWith(`${project.dir}/`))
-              .map((task) => task.record.state),
-          )
-        : project.record.state,
+      projectState(
+        project.record,
+        tasks
+          .filter((task) => task.dir.startsWith(`${project.dir}/`))
+          .map((task) => task.record.state),
+      ),
     ),
     ...bare.map((task) => task.record.state),
   ]);

@@ -92,7 +92,6 @@ import {
   openWorkspaceSession,
 } from '../workspace/sessions.ts';
 import {
-  deriveStatus,
   filterLiftsWindow,
   forgeStates,
   glanceOrder,
@@ -101,6 +100,7 @@ import {
   matchesTaskFilter,
   type NeedsYouEntry,
   openPrUrls,
+  projectState,
   SETTLED_AFTER_DAYS,
   type SessionStatus,
   type StatusReport,
@@ -2252,10 +2252,10 @@ async function cmdProjectList(all: boolean, json: boolean): Promise<void> {
   let hiddenTasks = 0;
   const entries = projects.flatMap((project) => {
     const own = tasks.filter((task) => task.dir.startsWith(`${project.dir}/`));
-    const derived =
-      project.record.state === 'active'
-        ? deriveStatus(own.map((task) => task.record.state))
-        : project.record.state;
+    const derived = projectState(
+      project.record,
+      own.map((task) => task.record.state),
+    );
     if (
       !all &&
       settledProject(
