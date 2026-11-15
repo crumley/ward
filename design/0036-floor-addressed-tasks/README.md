@@ -17,6 +17,11 @@
 > **Partially superseded by [0053](../0053-legacy-task-address/README.md):** a legacy bare task's
 > full address is `legacy-t<room>`, no longer the bare `t<room>`, which stays a shorthand for it
 > while unique. The floor address, the shorthand, and the refusal are otherwise unchanged.
+>
+> **Partially superseded by [0058](../0058-room-collisions/README.md):** `f<floor>t<room>` names at
+> most one open task only per allocator. Where two machines handed out the same room, each holder's
+> full address is qualified by its slug (`f5t45-distill-2026-10-18`), and the refusal names it so.
+> Room allocation is unchanged.
 
 A task code is allocated as the smallest room no open task holds, workspace-wide, and every
 task-addressed verb resolves a bare code against the open set. Two failures follow from that, and

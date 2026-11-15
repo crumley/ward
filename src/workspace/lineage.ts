@@ -288,9 +288,17 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: 'b942afc03d90c477197b96630f25a8d9ddcfa0984549f3f7bf75b57324bf3242',
         era: 'design 0057 (context from the root)',
       },
-      // Current since design 0031 (phase 2): the Detached sessions section —
-      // `--detach`, floor hosts, the floating coordinator, attach, observe,
-      // and the `window-size latest` sizing caveat.
+      // design 0031 (phase 2) — the Detached sessions section: `--detach`,
+      // floor hosts, the floating coordinator, attach, observe, and the
+      // `window-size latest` sizing caveat. A task sharing its room with
+      // another had no spelling of its own yet.
+      {
+        sha256: '068603e7e5d88f2e1118c9f466cf99b56ca60877078b8e5ce7b8b584c9d5f6fa',
+        era: 'design 0031 phase 2 (detached sessions)',
+      },
+      // Current since design 0058: two tasks holding one room (two machines
+      // that opened before their records synced) are each named by room and
+      // slug (`f5t45-distill-2026-10-18`), and doctor reports the room.
     ],
   },
 ];

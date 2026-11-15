@@ -56,7 +56,13 @@ import { inspectClaudeGuidance } from './layout.ts';
 import { classifyArtifact, INSTALLED_ARTIFACT_LINEAGE, sha256OfText } from './lineage.ts';
 import { readProjects, requireGroundFloor } from './projects.ts';
 import { type Publication, publishStewardshipBranch } from './publish.ts';
-import { commitRecords, type FoundTask, readTasks, resolveOpenTask } from './scan.ts';
+import {
+  commitRecords,
+  type FoundTask,
+  readTasks,
+  resolvableAddress,
+  resolveOpenTask,
+} from './scan.ts';
 import { refuseStewardshipCopy, resolveWorkspaceMainLine } from './steward.ts';
 import { addTaskPr, openTask } from './tasks.ts';
 import { createWorkspaceWorktree, readTaskWorktrees } from './worktrees.ts';
@@ -544,17 +550,20 @@ export async function selfServiceUpgrade(
     options.echo?.(step);
   };
   const task = existing?.task ?? (await deriveUpgradeTask(root));
+  // The address that names this task even when another holds its room
+  // (design/0058-room-collisions/): it is spoken and handed back to resolvers.
+  const address = await resolvableAddress(root, task);
   echo({
     step: 'task',
     outcome: existing === undefined ? 'derived' : 'reused',
     detail:
       existing === undefined
-        ? `${taskAddress(task)} — opened for this upgrade (${task.record.slug})`
-        : `${taskAddress(task)} — the upgrade task already open here (${task.record.slug})`,
+        ? `${address} — opened for this upgrade (${task.record.slug})`
+        : `${address} — the upgrade task already open here (${task.record.slug})`,
   });
   const { record: worktree } = await createWorkspaceWorktree(
     root,
-    taskAddress(task),
+    address,
     // Unnamed for a fresh vehicle: the worktree verb derives a branch no
     // earlier upgrade holds (design/0047-stewardship-fresh-branch/).
     existing?.worktree?.branch,
@@ -567,17 +576,17 @@ export async function selfServiceUpgrade(
       `(off ${mainLine})`,
   });
 
-  const report = await reconcileArtifacts(root, taskAddress(task));
+  const report = await reconcileArtifacts(root, address);
   const branch = report.branch ?? worktree.branch;
   const publication = await publishStewardshipBranch(root, {
     branch,
     mainLine: report.mainLine.name,
     title: `Upgrade the workspace to ward ${pkg.version}'s defaults`,
-    body: pullRequestBody(report, branch, taskAddress(task)),
+    body: pullRequestBody(report, branch, address),
   });
   // The same linkage `ward task pr` writes — the task's PR set is where a
   // close reads review state from, and the URL is the only thing stored (0009).
-  if (publication.url !== undefined) await addTaskPr(root, taskAddress(task), publication.url);
+  if (publication.url !== undefined) await addTaskPr(root, address, publication.url);
 
   return {
     ...report,
@@ -585,7 +594,7 @@ export async function selfServiceUpgrade(
     converged: converged.steps,
     derived,
     pullRequest: publication,
-    remaining: remainingActs(report, branch, taskAddress(task), publication),
+    remaining: remainingActs(report, branch, address, publication),
   };
 }
 

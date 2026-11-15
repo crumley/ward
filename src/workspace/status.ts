@@ -22,9 +22,9 @@ import type {
 } from '../store/types.ts';
 import {
   addressMatches,
+  distinctAddress,
   requireTaskAddress,
   spellAddress,
-  taskAddress,
   taskFloor,
 } from './address.ts';
 import { type BriefStanding, briefPath, readBrief } from './briefs.ts';
@@ -32,7 +32,7 @@ import { recordedWorkspaceId } from './identity.ts';
 import { type NextStep, nextStep, prAttention } from './next.ts';
 import { type FoundProject, readProjects } from './projects.ts';
 import { listRepositories } from './repos.ts';
-import { type FoundTask, readTasks } from './scan.ts';
+import { ambiguous, type FoundTask, readTasks } from './scan.ts';
 import { readSessions } from './sessions.ts';
 import { type WorktreeStatus, worktreeStatuses } from './worktrees.ts';
 
@@ -408,7 +408,10 @@ export async function statusReport(
       project: project.record,
       derived,
       sessions,
-      tasks: glanceOrder(await taskStatuses(root, shown, probe), (status) => status.task.state),
+      tasks: glanceOrder(
+        await taskStatuses(root, shown, probe, tasks),
+        (status) => status.task.state,
+      ),
     });
   }
 
@@ -430,7 +433,7 @@ export async function statusReport(
     options.all === true ? bare : bare.filter((task) => !settledTask(task.record, now));
   hiddenTasks += bare.length - shownBare.length;
   const bareStatuses = glanceOrder(
-    await taskStatuses(root, shownBare, probe),
+    await taskStatuses(root, shownBare, probe, tasks),
     (status) => status.task.state,
   );
   const all = [...projectStatuses.flatMap((project) => project.tasks), ...bareStatuses];
@@ -483,10 +486,17 @@ function sessionHistory(root: string, record: SessionRecord): SessionHistory {
   return adapter.locate(nativeId, resolve(root, record.workingDirectory)).outcome;
 }
 
+/**
+ * Status rows for `tasks`. `everyone` is the whole workspace's task set, so
+ * each row's `address` is the one that names its task among all of them — the
+ * slug-qualified address where two tasks hold one room
+ * (design/0058-room-collisions/) — however narrow the listing.
+ */
 async function taskStatuses(
   root: string,
   tasks: readonly FoundTask[],
   probe: ForgeProbe,
+  everyone: readonly FoundTask[],
 ): Promise<TaskStatus[]> {
   const statuses: TaskStatus[] = [];
   for (const task of tasks) {
@@ -496,7 +506,7 @@ async function taskStatuses(
       task.record.state === 'closed' ? undefined : await worktreeStatuses(root, task.dir);
     statuses.push({
       task: task.record,
-      address: taskAddress(task),
+      address: distinctAddress(task, everyone),
       inReview: inReview(task.record, forge),
       ...(forge === undefined ? {} : { forge }),
       openSessions: sessions
@@ -546,7 +556,7 @@ export async function taskDetail(
 ): Promise<TaskDetail> {
   const task = await resolveTaskForRead(root, input, options);
   const probe = await probeForge(openPrUrls([task.record]));
-  const [status] = await taskStatuses(root, [task], probe);
+  const [status] = await taskStatuses(root, [task], probe, await readTasks(root));
   if (status === undefined) throw new WardError(`could not read task ${input}`);
   const floor = taskFloor(task);
   const project =
@@ -588,15 +598,16 @@ export async function resolveTaskForRead(
   now: number = Date.now(),
 ): Promise<FoundTask> {
   const wanted = requireTaskAddress(input);
-  const matches = (await readTasks(root)).filter((task) => addressMatches(task, wanted));
+  const everyone = await readTasks(root);
+  const matches = everyone.filter((task) => addressMatches(task, wanted));
   const open = matches.filter((task) => task.record.state !== 'closed');
-  const resolved = pickOne(open, input);
+  const resolved = pickOne(open, input, everyone);
   if (resolved !== undefined) return resolved;
 
   const closed = matches.filter((task) => task.record.state === 'closed');
   const shown =
     options.all === true ? closed : closed.filter((task) => !settledTask(task.record, now));
-  const settledMatch = pickOne(shown, input);
+  const settledMatch = pickOne(shown, input, everyone);
   if (settledMatch !== undefined) return settledMatch;
   if (closed.length > 0) {
     throw new WardError(
@@ -616,12 +627,12 @@ export async function resolveTaskForRead(
 }
 
 /** Exactly one candidate, or none; several is a refusal that names every one. */
-function pickOne(matches: readonly FoundTask[], input: string): FoundTask | undefined {
+function pickOne(
+  matches: readonly FoundTask[],
+  input: string,
+  everyone: readonly FoundTask[],
+): FoundTask | undefined {
   if (matches.length === 0) return undefined;
   if (matches.length === 1) return matches[0];
-  const named = matches
-    .map((task) => `${taskAddress(task)} (${task.record.slug})`)
-    .sort()
-    .join(', ');
-  throw new WardError(`${input.toLowerCase()} is ambiguous — ${named}; name one`);
+  throw ambiguous(input, matches, everyone);
 }
