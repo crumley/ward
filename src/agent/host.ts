@@ -17,11 +17,10 @@ import { harnessCommand } from '../harness/adapter.ts';
 import { withoutRunIdentity } from '../harness/index.ts';
 import type { CloseResult, FoundWindow, SessionHost, WindowTags } from '../host/host.ts';
 import { hostFor } from '../host/index.ts';
-import { readDocument } from '../store/document.ts';
 import type { HostedKind, SessionEvent, SessionRecord } from '../store/types.ts';
-import { workspaceRecordType } from '../store/types.ts';
 import { workspaceId } from '../workspace/identity.ts';
 import { closeSession, type OpenSessionListing, readAllSessions } from '../workspace/sessions.ts';
+import { readNaming, refreshNames } from './naming.ts';
 import { floats, placementFloor } from './placement.ts';
 import type { AgentHost, Resolved } from './settings.ts';
 
@@ -147,11 +146,16 @@ export async function placeLaunch(
   const epoch = latestLaunch(launched.record)?.at;
   if (epoch === undefined) throw new WardError(`session ${launched.record.id} has no launch event`);
   const floor = placementFloor(launched, all);
+  // Names first (design/0061-host-names-and-titles/): a host standing under
+  // an older name is renamed before the window lands in it, so the join
+  // command reported below names the host as it is now called.
+  const naming = await readNaming(root, all);
+  await refreshNames(root, choice.host, choice.workspace, choice.kind, naming);
   const placement = choice.host.place({
     group: { workspace: choice.workspace, floor },
-    workspaceName: (await readDocument(root, workspaceRecordType)).data.name,
+    naming: naming.group(floor),
     tags: { session: launched.record.id, epoch },
-    label: launched.record.id,
+    label: naming.label(launched),
     cwd: resolve(root, launched.record.workingDirectory),
     env: { WARD_AGENT: launched.record.id },
     command: [...harnessCommand(run.harness, run.configuredCommand, env).command, ...run.argv],

@@ -4,6 +4,8 @@
 // stamped on it, never by its name; a Ward session's window is a tmux WINDOW
 // tagged with `@ward_session`, `@ward_epoch`, and `@ward_pane` window options,
 // which no rename, `automatic-rename`, or terminal title escape can touch.
+// Names are therefore presentation, handed in by the Ward side
+// (design/0061-host-names-and-titles/) and renamed in place when they change.
 //
 // Three disciplines run through every call here:
 //
@@ -38,6 +40,8 @@ import type {
   InventoryWindow,
   Placement,
   PlaceRequest,
+  Renamed,
+  RenameRequest,
   SessionHost,
   View,
   ViewMode,
@@ -45,9 +49,6 @@ import type {
 } from './host.ts';
 
 type Env = Record<string, string | undefined>;
-
-/** The prefix every host Ward creates wears — the namespace a human reads. */
-export const GROUP_PREFIX = 'ward-';
 
 /**
  * The size a host is created at while no client is attached — the field's
@@ -78,12 +79,49 @@ const FIELD = '\t';
 // -- names and targets -------------------------------------------------------
 
 /**
- * The name a new floor host is given: `ward-<workspace>-f<floor>`, munged to
- * the characters tmux takes without quoting. Minted only when no host is
- * stamped for the floor, and recorded nowhere — the stamps are the binding.
+ * The name a floor host is given: the name wanted
+ * (design/0061-host-names-and-titles/), munged to the characters tmux takes
+ * without quoting. Recorded nowhere — the stamps are the binding.
  */
-export function mintGroupName(workspaceName: string, floor: number): string {
-  return munge(`${GROUP_PREFIX}${workspaceName}-f${floor}`);
+export function mintGroupName(wanted: string): string {
+  return munge(wanted);
+}
+
+/**
+ * The title tmux hands a terminal looking at a host or a view: the current
+ * window's name, where it stands, and — when the run has set one — the
+ * pane's own title (the harness's line about what it is doing). A pane that
+ * never set a title carries the machine's hostname, which says nothing and
+ * is left out. `standing` is literal text, so its `#` is escaped.
+ */
+export function titleString(standing: string, mode: ViewMode = 'attach'): string {
+  const unset = (name: string) => `#{==:#{pane_title},#{${name}}}`;
+  const untitled = `#{||:#{==:#{pane_title},},#{||:${unset('host')},${unset('host_short')}}}`;
+  const watching = mode === 'observe' ? ' (observing)' : '';
+  return `#{window_name} · ${standing.replace(/#/g, '##')}${watching}#{?${untitled},, · #{pane_title}}`;
+}
+
+/** Turn terminal titles on for one tmux session, and say what they read. */
+function titleOptions(name: string, standing: string, mode: ViewMode = 'attach'): string[] {
+  const target = ['-t', windowTarget(name)];
+  return [
+    ...setOption(target, 'set-titles', 'on'),
+    ...setOption(target, 'set-titles-string', titleString(standing, mode)),
+  ];
+}
+
+/** Rename a tmux session in place — every window, client, and stamp stays. */
+export function renameGroupArgv(from: string, to: string): string[] {
+  return ['rename-session', '-t', sessionTarget(from), to];
+}
+
+/** Title a tmux session that already exists. */
+export function titleGroupArgv(name: string, standing: string): string[] {
+  return titleOptions(name, standing).slice(1);
+}
+
+export function renameWindowArgv(window: string, label: string): string[] {
+  return ['rename-window', '-t', window, label];
 }
 
 /** Every character outside `[A-Za-z0-9_-]` becomes `-`. */
@@ -109,7 +147,12 @@ export function prepareArgv(): string[] {
 }
 
 /** Create a floor host, holding a placeholder window, with its stamps. */
-export function createGroupArgv(name: string, stamp: GroupStamp, version: string): string[] {
+export function createGroupArgv(
+  name: string,
+  stamp: GroupStamp,
+  version: string,
+  title: string,
+): string[] {
   const target = windowTarget(name);
   return [
     'new-session',
@@ -130,6 +173,7 @@ export function createGroupArgv(name: string, stamp: GroupStamp, version: string
     // A human attached to a host tmux destroys moves to another session
     // rather than dropping to the shell.
     ...setOption(['-t', target], 'detach-on-destroy', 'off'),
+    ...titleOptions(name, title),
   ];
 }
 
@@ -231,7 +275,13 @@ export function viewName(group: string, mode: ViewMode, taken: ReadonlySet<strin
  * session's window in it moves no other client. Stamped `@ward_view` with the
  * workspace id it was made for.
  */
-export function attachViewArgv(group: string, name: string, workspace: string, window: string) {
+export function attachViewArgv(
+  group: string,
+  name: string,
+  workspace: string,
+  window: string,
+  title: string,
+) {
   return [
     'new-session',
     '-d',
@@ -240,6 +290,9 @@ export function attachViewArgv(group: string, name: string, workspace: string, w
     '-s',
     name,
     ...setOption(['-t', windowTarget(name)], '@ward_view', workspace),
+    // A grouped session shares its host's windows, not its options: the view
+    // is titled for itself.
+    ...titleOptions(name, title),
     ';',
     'select-window',
     '-t',
@@ -248,7 +301,7 @@ export function attachViewArgv(group: string, name: string, workspace: string, w
 }
 
 /** An observe view: a tmux session of its own, holding a placeholder the link will replace. */
-export function observeViewArgv(name: string, workspace: string): string[] {
+export function observeViewArgv(name: string, workspace: string, title: string): string[] {
   return [
     'new-session',
     '-d',
@@ -263,6 +316,7 @@ export function observeViewArgv(name: string, workspace: string): string[] {
     '#{window_index}',
     ...HOLD,
     ...setOption(['-t', windowTarget(name)], '@ward_view', workspace),
+    ...titleOptions(name, title, 'observe'),
   ];
 }
 
@@ -610,7 +664,7 @@ export function tmuxHost(env: Env = process.env): SessionHost {
       let group = existing?.name;
       let placeholder: { window: string; index: string } | undefined;
       if (group === undefined) {
-        group = mintGroupName(request.workspaceName, floor);
+        group = mintGroupName(request.naming.name);
         const minted = group;
         if (rows.some((row) => row.name === minted)) {
           // Found by name but not by stamp: someone else's — another
@@ -622,7 +676,7 @@ export function tmuxHost(env: Env = process.env): SessionHost {
           );
         }
         const [window = '', index = ''] = must(
-          createGroupArgv(minted, request.group, request.version),
+          createGroupArgv(minted, request.group, request.version, request.naming.title),
           `create host ${minted}`,
         )
           .trim()
@@ -685,19 +739,56 @@ export function tmuxHost(env: Env = process.env): SessionHost {
       if (lines(shown).includes(window)) return;
       must(linkWindowArgv(window, group), `link ${window} into ${group}`);
     },
+    rename(request: RenameRequest): Renamed {
+      const renamed: { from: string; to: string }[] = [];
+      const failed: string[] = [];
+      let taken: Set<string>;
+      try {
+        taken = new Set(groups().map((row) => row.name));
+      } catch (error) {
+        return { groups: [], failed: [error instanceof Error ? error.message : String(error)] };
+      }
+      for (const { name, naming } of request.groups) {
+        if (!taken.has(name)) continue;
+        const wanted = mintGroupName(naming.name);
+        let current = name;
+        // A name another tmux session wears is left to it: this host keeps
+        // the name it has, which nothing depends on.
+        if (wanted !== name && !taken.has(wanted)) {
+          const moved = call(renameGroupArgv(name, wanted));
+          if (moved.ok) {
+            current = wanted;
+            taken.delete(name);
+            taken.add(wanted);
+            renamed.push({ from: name, to: wanted });
+          } else {
+            failed.push(`${name}: ${moved.stderr || 'tmux gave no reason'}`);
+          }
+        }
+        const titled = call(titleGroupArgv(current, naming.title));
+        if (!titled.ok) failed.push(`${current}: ${titled.stderr || 'tmux gave no reason'}`);
+      }
+      for (const { window, label } of request.windows) {
+        const relabelled = call(renameWindowArgv(window, label));
+        if (!relabelled.ok) failed.push(`${window}: ${relabelled.stderr || 'tmux gave no reason'}`);
+      }
+      return { groups: renamed, failed };
+    },
     view(request: ViewRequest): View {
       // A name another view just took fails the create; the next free one is tried.
       let last = '';
       for (let attempt = 0; attempt < 5; attempt++) {
         const name = viewName(request.group, request.mode, new Set(groups().map((g) => g.name)));
         if (request.mode === 'attach') {
-          const made = call(attachViewArgv(request.group, name, request.workspace, request.window));
+          const made = call(
+            attachViewArgv(request.group, name, request.workspace, request.window, request.title),
+          );
           if (made.ok) return { name, mode: 'attach' };
           last = made.stderr;
           if (!/duplicate session/.test(made.stderr)) break;
           continue;
         }
-        const made = call(observeViewArgv(name, request.workspace));
+        const made = call(observeViewArgv(name, request.workspace, request.title));
         if (!made.ok) {
           last = made.stderr;
           if (/duplicate session/.test(made.stderr)) continue;

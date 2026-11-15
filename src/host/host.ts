@@ -32,8 +32,12 @@ export interface WindowTags {
 
 export interface PlaceRequest {
   readonly group: GroupStamp;
-  /** Used only to mint a group's name when the floor has none; never a lookup key. */
-  readonly workspaceName: string;
+  /**
+   * What the floor's group is called and titled
+   * (design/0061-host-names-and-titles/) — used to name a group this
+   * placement creates; never a lookup key.
+   */
+  readonly naming: GroupNaming;
   readonly tags: WindowTags;
   /** What the window is called — presentation only; nothing reads it back. */
   readonly label: string;
@@ -56,6 +60,17 @@ export interface PlaceRequest {
   readonly floating: readonly WindowTags[];
   /** The Ward version, stamped on a group this placement creates. */
   readonly version: string;
+}
+
+/**
+ * What a human reads on a group: its name, and where a terminal looking at
+ * it is said to stand. Presentation only — a group is found by its stamps.
+ */
+export interface GroupNaming {
+  /** The name wanted; the host may adapt it to the characters it takes. */
+  readonly name: string;
+  /** What a terminal's title says after the window's own name. */
+  readonly title: string;
 }
 
 export interface Placement {
@@ -122,6 +137,25 @@ export interface ViewRequest {
   readonly mode: ViewMode;
   /** The workspace id the view is stamped with, so doctor can attribute a leftover one. */
   readonly workspace: string;
+  /** What a terminal looking through the view is titled with, after the window's name. */
+  readonly title: string;
+}
+
+/**
+ * Names to bring up to date on what the host already holds
+ * (design/0061-host-names-and-titles/): each group by the name it wears now,
+ * each window by its host-assigned id. Nothing is created, moved, or ended.
+ */
+export interface RenameRequest {
+  readonly groups: readonly { readonly name: string; readonly naming: GroupNaming }[];
+  readonly windows: readonly { readonly window: string; readonly label: string }[];
+}
+
+export interface Renamed {
+  /** The groups whose name changed: what each was called, and is called now. */
+  readonly groups: readonly { readonly from: string; readonly to: string }[];
+  /** What could not be renamed, and why — reported, never a reason to stop. */
+  readonly failed: readonly string[];
 }
 
 /** A per-client view: a host-side object that exists while one client looks through it. */
@@ -198,6 +232,13 @@ export interface SessionHost {
    * A window already in the group is left as it is.
    */
   link(window: string, group: string): void;
+  /**
+   * Bring names and titles up to date in place: rename each group to the name
+   * wanted (left as it is when another group already wears that name), title
+   * it, and relabel each window. Never throws: what it could not do is in the
+   * answer.
+   */
+  rename(request: RenameRequest): Renamed;
   /**
    * Make a view for one client: for `attach`, a view of the whole group with
    * `window` current in it, so attaching never moves another client's current

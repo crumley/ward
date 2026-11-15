@@ -20,23 +20,59 @@ import {
   parseVersion,
   parseWindows,
   prepareArgv,
+  renameGroupArgv,
+  renameWindowArgv,
   sessionTarget,
   shellQuote,
   startRunArgv,
+  titleGroupArgv,
+  titleString,
   tmuxHost,
   viewName,
   windowTarget,
 } from '../../src/host/tmux.ts';
 
 test.each([
-  ['main', 0, 'ward-main-f0'],
-  ['main', 12, 'ward-main-f12'],
-  ['my work', 3, 'ward-my-work-f3'],
-  ['a.b:c', 1, 'ward-a-b-c-f1'], // `.` and `:` are tmux target syntax
-  ['ünï', 2, 'ward--n--f2'],
-  ['under_score-ok', 4, 'ward-under_score-ok-f4'],
-])('the host minted for %p floor %p is %p', (name, floor, expected) => {
-  expect(mintGroupName(name, floor)).toBe(expected);
+  ['main-f0-workspace', 'main-f0-workspace'],
+  ['my work-f3-alpha', 'my-work-f3-alpha'],
+  ['a.b:c-f1-x', 'a-b-c-f1-x'], // `.` and `:` are tmux target syntax
+  ['ünï-f2', '-n--f2'],
+  ['under_score-ok-f4', 'under_score-ok-f4'],
+])('the host wanted as %p is named %p', (wanted, expected) => {
+  expect(mintGroupName(wanted)).toBe(expected);
+});
+
+// -- names and titles in place (design/0061-host-names-and-titles/) ------------
+
+test('a title leads with the window, says where it stands, and adds a pane title only when one was set', () => {
+  const unset =
+    '#{||:#{==:#{pane_title},},#{||:#{==:#{pane_title},#{host}},#{==:#{pane_title},#{host_short}}}}';
+  expect(titleString('main f7')).toBe(`#{window_name} · main f7#{?${unset},, · #{pane_title}}`);
+  expect(titleString('main f7', 'observe')).toContain('· main f7 (observing)#{?');
+  // Where it stands is literal text: a `#` in it is never read as a format.
+  expect(titleString('c# f1')).toContain('· c## f1#{?');
+});
+
+test('renaming is in place: a host by exact name, a window by its id, titles per tmux session', () => {
+  expect(renameGroupArgv('ward-main-f7', 'main-f7-ward-development')).toEqual([
+    'rename-session',
+    '-t',
+    '=ward-main-f7',
+    'main-f7-ward-development',
+  ]);
+  expect(renameWindowArgv('@3', 't33 host names')).toEqual([
+    'rename-window',
+    '-t',
+    '@3',
+    't33 host names',
+  ]);
+  const argv = titleGroupArgv('main-f7-x', 'main f7');
+  expect(argv[0]).toBe('set-option');
+  expect(options([';', ...argv])).toEqual([
+    ['=main-f7-x:', 'set-titles', 'on'],
+    ['=main-f7-x:', 'set-titles-string', titleString('main f7')],
+  ]);
+  expect(argv).not.toContain('-g'); // never the server's, never another session's
 });
 
 test('every name target is exact-match; windows and panes are addressed by id', () => {
@@ -71,6 +107,7 @@ test("a host is created at the detached size, stamped, and holding nothing of a 
     'ward-main-f3',
     { workspace: 'ws-id-0123456789ab', floor: 3 },
     '0.1.0',
+    'main f3',
   );
   expect(argv.slice(0, 8)).toEqual([
     'new-session',
@@ -88,6 +125,8 @@ test("a host is created at the detached size, stamped, and holding nothing of a 
     ['=ward-main-f3:', '@ward_floor', '3'],
     ['=ward-main-f3:', '@ward_version', '0.1.0'],
     ['=ward-main-f3:', 'detach-on-destroy', 'off'],
+    ['=ward-main-f3:', 'set-titles', 'on'],
+    ['=ward-main-f3:', 'set-titles-string', titleString('main f3')],
   ]);
 });
 
@@ -246,7 +285,7 @@ test('a view takes the smallest free number, v for attach and o for observe', ()
 });
 
 test("an attach view is grouped with the floor host, stamped, and selects the session's window", () => {
-  expect(attachViewArgv('ward-a-f3', 'ward-a-f3-v1', 'ws-id', '@7')).toEqual([
+  expect(attachViewArgv('ward-a-f3', 'ward-a-f3-v1', 'ws-id', '@7', 'a f3')).toEqual([
     'new-session',
     '-d',
     '-t',
@@ -260,6 +299,18 @@ test("an attach view is grouped with the floor host, stamped, and selects the se
     '@ward_view',
     'ws-id',
     ';',
+    'set-option',
+    '-t',
+    '=ward-a-f3-v1:',
+    'set-titles',
+    'on',
+    ';',
+    'set-option',
+    '-t',
+    '=ward-a-f3-v1:',
+    'set-titles-string',
+    titleString('a f3'),
+    ';',
     'select-window',
     '-t',
     '=ward-a-f3-v1:@7',
@@ -267,11 +318,15 @@ test("an attach view is grouped with the floor host, stamped, and selects the se
 });
 
 test('an observe view is a session of its own, sized like a host, holding a placeholder', () => {
-  const argv = observeViewArgv('ward-a-f3-o1', 'ws-id');
+  const argv = observeViewArgv('ward-a-f3-o1', 'ws-id', 'a f3');
   expect(argv.slice(0, 4)).toEqual(['new-session', '-d', '-s', 'ward-a-f3-o1']);
   expect(argv.slice(0, argv.indexOf(';'))).not.toContain('-t'); // not grouped: no neighbor in it
   expect(argv.join(' ')).toContain('-x 120 -y 40');
-  expect(options(argv)).toEqual([['=ward-a-f3-o1:', '@ward_view', 'ws-id']]);
+  expect(options(argv)).toEqual([
+    ['=ward-a-f3-o1:', '@ward_view', 'ws-id'],
+    ['=ward-a-f3-o1:', 'set-titles', 'on'],
+    ['=ward-a-f3-o1:', 'set-titles-string', titleString('a f3', 'observe')],
+  ]);
 });
 
 test.each([

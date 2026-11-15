@@ -137,10 +137,19 @@ instead of in the foreground.
 
 - \`ward session open --detach\` (and \`ward session resume ID --detach\`) records the session,
   then starts the agent as one window of its floor's **floor host** — a tmux session named
-  \`ward-<workspace>-f<N>\`, one per floor — and returns. \`--foreground\` forces this terminal;
-  \`agent.host: tmux\` makes detaching the default, falling back to the foreground (and saying so)
-  where tmux 3.2 or later is not usable. Floor hosts live on your default tmux server, so
-  \`tmux ls\` shows them.
+  \`<workspace>-f<N>-<floor-slug>\`, one per floor — and returns. \`--foreground\` forces this
+  terminal; \`agent.host: tmux\` makes detaching the default, falling back to the foreground (and
+  saying so) where tmux 3.2 or later is not usable. Floor hosts live on your default tmux server,
+  so \`tmux ls\` shows them.
+- **Names say what a thing is, and are never how it is found.** A window is named for its
+  session — \`coord\` for the coordinator, a floor's slug for that floor's session,
+  \`t<room> <slug>\` for a task's (with the floor in front, \`f5t2 <slug>\`, in another floor's
+  host) — and a number only where two would read the same. A terminal looking at a host is titled
+  \`<window> · <workspace> f<N>\`, then whatever the agent titled its own pane; a foreground run's
+  terminal is titled once, before the agent takes it. Ward finds hosts and windows by stamps it
+  set on them, so renaming one by hand breaks nothing — and Ward names it back the next time a
+  session is opened into, or attached through, the workspace's hosts. A window's session id is
+  \`tmux display-message -p '#{@ward_session}'\`; \`ward status\` lists every id.
 - **The coordinator floats**: a workspace-scope session no other session started is linked into
   every floor host, so it is a keystroke away wherever you stand.
 - \`ward session attach ID\` joins the session's window to take part — its input is yours. It

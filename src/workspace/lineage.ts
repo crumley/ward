@@ -303,9 +303,18 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '068603e7e5d88f2e1118c9f466cf99b56ca60877078b8e5ce7b8b584c9d5f6fa',
         era: 'design 0031 phase 2 (detached sessions)',
       },
-      // Current since design 0058: two tasks holding one room (two machines
-      // that opened before their records synced) are each named by room and
-      // slug (`f5t45-distill-2026-10-18`), and doctor reports the room.
+      // design 0058 — two tasks holding one room (two machines that opened
+      // before their records synced) are each named by room and slug
+      // (`f5t45-distill-2026-10-18`), and doctor reports the room. A floor
+      // host was still named `ward-<workspace>-f<N>`.
+      {
+        sha256: '6426b5b942ac41946390ea812824fb55e692057c57dcebb49febed5638f47937',
+        era: 'design 0058 (room collisions)',
+      },
+      // Current since design 0061: a floor host is named
+      // `<workspace>-f<N>-<floor-slug>`, a window for what its session is,
+      // and a terminal is titled — names say what a thing is, and are never
+      // how it is found.
     ],
   },
 ];
