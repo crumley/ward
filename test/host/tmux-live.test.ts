@@ -10,7 +10,7 @@
 // tmux is not installed the suite is skipped, saying so; CI installs it.
 import {
   afterAll,
-  beforeAll,
+  afterEach,
   beforeEach,
   describe,
   expect,
@@ -533,7 +533,9 @@ function attach(
       },
     },
   });
-  return { proc, output: () => out };
+  const client = { proc, output: () => out };
+  clients.push(client);
+  return client;
 }
 
 async function exited(client: Client): Promise<number | null> {
@@ -648,7 +650,13 @@ function session(result: CliResult): SessionMutationShape {
 
 function tmux(...args: string[]): string {
   const result = Bun.spawnSync([TMUX ?? 'tmux', '-L', SOCKET, ...args]);
-  if (result.exitCode !== 0) throw new Error(`tmux ${args.join(' ')}: ${result.stderr.toString()}`);
+  const stderr = result.stderr.toString();
+  // A server holding no sessions answers a list with "no current target" — an
+  // empty answer, as Ward's own host reads it (0031 phase 2), not a failure.
+  if (result.exitCode !== 0 && args[0]?.startsWith('list-') && /no current target/.test(stderr)) {
+    return '';
+  }
+  if (result.exitCode !== 0) throw new Error(`tmux ${args.join(' ')}: ${stderr}`);
   return result.stdout.toString();
 }
 
@@ -736,10 +744,16 @@ ${tail}
   return path;
 }
 
-beforeAll(() => {
+/**
+ * The private server, started with no configuration file, so neither a human's
+ * ~/.tmux.conf nor their running server is involved. Started fresh for every
+ * case and ended after it: each case leaves panes (stub runs, remain-on-exit
+ * windows) and clients holding ptys, and a macOS runner's pty supply is small
+ * enough that one server kept across the whole suite ran out ("fork failed:
+ * Device not configured").
+ */
+function startServer(): void {
   if (TMUX === null) return;
-  // The private server, started by the suite with no configuration file, so
-  // neither a human's ~/.tmux.conf nor their running server is involved.
   const env: Record<string, string | undefined> = { ...process.env };
   delete env.WARD_AGENT;
   delete env.TMUX;
@@ -747,7 +761,10 @@ beforeAll(() => {
     [TMUX, '-L', SOCKET, '-f', '/dev/null', 'start-server', ';', 'set', '-s', 'exit-empty', 'off'],
     { env },
   );
-});
+}
+
+/** Every attach and observe client a case spawns, so none outlives its case. */
+const clients: Client[] = [];
 
 beforeEach(async () => {
   applyGitTestEnv();
@@ -760,11 +777,19 @@ beforeEach(async () => {
   runLog = join(scratch, `runs-${caseId}.log`);
   // The tmux server's environment is the suite's: the stub finds its log there.
   process.env.WARD_TEST_RUNS = runLog;
+  startServer();
   if (TMUX !== null) tmux('set-environment', '-g', 'WARD_TEST_RUNS', runLog);
   staying = writeStub(`stay-${caseId}.sh`, 'exec sleep 600');
   exiting = writeStub(`exit3-${caseId}.sh`, 'exit 3');
   exitingZero = writeStub(`exit0-${caseId}.sh`, 'exit 0');
   await createWorkspace(ws);
+});
+
+afterEach(() => {
+  for (const client of clients.splice(0)) {
+    if (client.proc.exitCode === null) client.proc.kill();
+  }
+  if (TMUX !== null) killServer(SOCKET);
 });
 
 afterAll(() => {
