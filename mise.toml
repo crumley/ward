@@ -77,8 +77,10 @@ description = "Run the test suite (bun test, files spread across isolated parall
 depends = ["deps"]
 # --parallel runs test files in separate worker processes (one per core by
 # default; --isolate is implied), so no file can see another's leftovers:
-# roughly 3x faster than one process running all 83 files in turn.
-run = "bun test --parallel"
+# roughly 3x faster than one process running all 83 files in turn. Workers
+# share the cores, so a case that spawns the CLI several times runs slower
+# than it would alone: --timeout gives each case 30s instead of Bun's 5s.
+run = "bun test --parallel --timeout=30000"
 
 [tasks.links]
 description = "Check Markdown links offline (lychee)"
