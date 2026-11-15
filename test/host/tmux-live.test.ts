@@ -475,6 +475,12 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
 
   test('a floor host wears its floor: its color and emoji on its own status line, and nowhere else', async () => {
     tmux('new-session', '-d', '-s', 'mine'); // a human's own session, on the same server
+    // The server's defaults differ between tmux builds (`bg=green,fg=black`
+    // on one, `bg=themegreen,fg=themeblack` on CI's macOS runner), so they are
+    // read here and compared, never spelled.
+    const defaults = ['status-style', 'status-left'].map((option) =>
+      tmux('show-options', '-gv', option),
+    );
     const coordinator = session(ward(['session', 'open', '--detach', '--json']));
     await openProject(ws, 'alpha');
     session(ward(['session', 'open', '--floor', '1', '--detach', '--json']));
@@ -489,8 +495,9 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     expect(windowsIn(f1)).toContain(coordinator.id);
 
     // Session options only: the server's defaults and the human's session are as they were.
-    expect(tmux('show-options', '-gv', 'status-style').trim()).toBe('bg=green,fg=black');
-    expect(tmux('show-options', '-gv', 'status-left').trim()).toBe('[#{session_name}]');
+    expect(
+      ['status-style', 'status-left'].map((option) => tmux('show-options', '-gv', option)),
+    ).toEqual(defaults);
     expect(tmux('show-options', '-t', '=mine:').trim()).toBe('');
   });
 
