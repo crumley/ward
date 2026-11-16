@@ -12,7 +12,7 @@ import { isAbsolute, join, relative } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import { taskAddress } from '../workspace/address.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
-import { checkoutPath, listRepositories } from '../workspace/repos.ts';
+import { listRepositories } from '../workspace/repos.ts';
 import { scopeFromCwd } from '../workspace/scope.ts';
 import { callerIsAgent } from './caller.ts';
 import { isCompletionCallback } from './suggest.ts';
@@ -168,7 +168,8 @@ async function resolveScope(root: string, cwd: string): Promise<string> {
   const rel = relative(root, cwd);
   if (rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)) {
     for (const repo of await listRepositories(root)) {
-      const checkout = relative(root, checkoutPath(root, repo.name));
+      // Only a contained checkout can enclose a directory inside the workspace.
+      const checkout = `repos/${repo.name}`;
       if (rel === checkout || rel.startsWith(`${checkout}/`)) return `repo:${repo.name}`;
     }
   }

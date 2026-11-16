@@ -2,6 +2,7 @@
 // each belonging to a DocumentType whose zod schema is enforced on read and
 // write. Writes are atomic — staged in .ward/tmp/ and renamed into place — so
 // no reader ever observes a partial document (ADR 0005).
+import { readFileSync } from 'node:fs';
 import { mkdir, rename } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import type { z } from 'zod';
@@ -22,7 +23,20 @@ export interface Document<T> {
 }
 
 export async function readDocument<T>(root: string, type: DocumentType<T>): Promise<Document<T>> {
-  const text = await Bun.file(join(root, type.relPath)).text();
+  return parseDocument(await Bun.file(join(root, type.relPath)).text(), type);
+}
+
+/**
+ * The same read, blocking — for the few questions asked from synchronous code
+ * deep in a call path (where a repository's canonical checkout stands,
+ * design/0065-external-checkouts-and-repo-commands/). One parser serves both,
+ * so the two reads can never disagree about what a valid document is.
+ */
+export function readDocumentSync<T>(root: string, type: DocumentType<T>): Document<T> {
+  return parseDocument(readFileSync(join(root, type.relPath), 'utf8'), type);
+}
+
+function parseDocument<T>(text: string, type: DocumentType<T>): Document<T> {
   const raw = splitFrontMatter(text, type.relPath);
   let parsed: unknown;
   try {

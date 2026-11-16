@@ -3,15 +3,16 @@
 // close, completion gated on the PR set resolved, teardown gated where it
 // would destroy unmerged deliverable work (§18)
 // (intent/01-concepts/03-work-lifecycle.md).
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { teardownSession } from '../agent/host.ts';
 import { WardError } from '../errors.ts';
 import { type PrForgeState, prBelongsToRemote, probeForge } from '../forge/gh.ts';
-import { readDocument, writeDocument } from '../store/document.ts';
+import { readDocument, readDocumentSync, writeDocument } from '../store/document.ts';
 import { withStoreLock } from '../store/lock.ts';
 import {
   type RepositoryRecord,
+  repositoryRecordType,
   type SessionRecord,
   sessionRecordType,
   type TaskRecord,
@@ -19,18 +20,30 @@ import {
   type WorktreeRecord,
 } from '../store/types.ts';
 import { nextRoom, ROOMS_PER_FLOOR, taskAddress, taskRoom } from './address.ts';
+import { checkoutLabel, resolveCheckout, unboundMessage } from './checkouts.ts';
+import {
+  commandSucceeded,
+  describeFailure,
+  repositoryCommands,
+  repositoryValues,
+  runRepositoryCommand,
+  shellWord,
+} from './commands.ts';
 import { git } from './git.ts';
 import { taskContainer } from './projects.ts';
-import {
-  checkoutPath,
-  listRepositories,
-  type RefreshReport,
-  refreshRepositories,
-} from './repos.ts';
+import { listRepositories, type RefreshReport, refreshRepositories } from './repos.ts';
 import { commitRecords, type FoundTask, readTasks, requireSlug, resolveOpenTask } from './scan.ts';
 import { readSessions, withEvent } from './sessions.ts';
 import { resolveWorkspaceMainLine } from './steward.ts';
-import { readTaskWorktrees } from './worktrees.ts';
+import {
+  absentBecause,
+  readTaskWorktrees,
+  registeredCheckouts,
+  removeOutsideLink,
+  standsOutside,
+  worktreeDir,
+  worktreePlacement,
+} from './worktrees.ts';
 
 export interface OpenTaskOptions {
   /**
@@ -270,7 +283,7 @@ export async function closeTask(
     });
 
     for (const worktree of worktrees) {
-      steps.push(removeWorktree(root, worktree, outcome));
+      steps.push(await removeWorktree(root, task, worktree, outcome));
     }
     if (worktrees.length === 0) steps.push({ step: 'worktrees', detail: 'none to tear down' });
 
@@ -400,8 +413,9 @@ async function verifyReachability(
   const refresh = await refreshOnce(root, repo.name, refreshed);
   const fresh = refresh.outcome === 'refreshed' || refresh.outcome === 'current';
   const target = `origin/${repo.mainLine}`;
-  const canonical = checkoutPath(root, repo.name);
+  const canonical = resolveCheckout(root, repo.name).path;
   const reachable =
+    canonical !== undefined &&
     existsSync(canonical) &&
     git(canonical, 'merge-base', '--is-ancestor', pr.mergeCommit, target).exitCode === 0;
   const short = pr.mergeCommit.slice(0, 7);
@@ -415,12 +429,12 @@ async function verifyReachability(
     // honest "cannot verify" beats a false "unreachable" (§20).
     return {
       step,
-      detail: `${pr.url} — cannot refresh repos/${repo.name} (${refresh.detail}); reachability unverifiable — ${TRUST}`,
+      detail: `${pr.url} — cannot refresh ${checkoutLabel(root, repo.name)} (${refresh.detail}); reachability unverifiable — ${TRUST}`,
     };
   }
   throw new WardError(
     `${pr.url} is merged, but its merge commit ${short} is not reachable from ${target} in ` +
-      `repos/${repo.name} — it merged into a base branch that never reached the main line, so a ` +
+      `${checkoutLabel(root, repo.name)} — it merged into a base branch that never reached the main line, so a ` +
       `delivered close would tear down the worktree and strand the work. Re-land it first: open ` +
       `a PR onto ${repo.mainLine} from the surviving branch (the one that received the merge) ` +
       `and merge that, then close.`,
@@ -469,10 +483,10 @@ function verifyWorkspaceReachability(root: string, worktree: WorktreeRecord): Cl
   let tip: string;
   if (branchRef.exitCode === 0) {
     tip = branchRef.stdout.trim();
-  } else if (existsSync(join(root, worktree.path))) {
+  } else if (existsSync(worktreeDir(root, worktree))) {
     // The branch ref is gone but the worktree still stands (a detached copy):
     // what teardown would destroy is its HEAD, so that is what must be proven.
-    tip = git(join(root, worktree.path), 'rev-parse', 'HEAD').stdout.trim();
+    tip = git(worktreeDir(root, worktree), 'rev-parse', 'HEAD').stdout.trim();
   } else {
     return {
       step,
@@ -510,7 +524,7 @@ function validateTeardown(
   outcome: Outcome,
 ): void {
   if (outcome !== 'delivered') return;
-  const absolute = join(root, worktree.path);
+  const absolute = worktreeDir(root, worktree);
   if (!existsSync(absolute)) return;
   if (git(absolute, 'status', '--porcelain').stdout.trim() !== '') {
     throw new WardError(
@@ -522,8 +536,7 @@ function validateTeardown(
   // reachability gate (verifyWorkspaceReachability) — stronger than the
   // ahead-of-main heuristic, and never forge-shaped.
   if (worktree.repo === undefined) return;
-  const canonical = join(root, 'repos', worktree.repo);
-  if (task.prs.length === 0 && aheadOfMain(canonical, worktree.branch)) {
+  if (task.prs.length === 0 && aheadOfMain(root, worktree.repo, worktree.branch)) {
     throw new WardError(
       `${worktree.path} holds commits that never reached a PR — open one and link it ` +
         '(ward task pr), or close with --outcome abandoned to discard them',
@@ -531,16 +544,105 @@ function validateTeardown(
   }
 }
 
-function removeWorktree(root: string, worktree: WorktreeRecord, outcome: Outcome): CloseStep {
+/**
+ * Tear one worktree down. Teardown speaks to the repository the worktree is
+ * of: the canonical checkout for a registered one, the workspace root itself
+ * for the stewardship case (design/0019-stewardship-worktrees/). A
+ * repository's own removal command runs in place of `git worktree remove`
+ * when this machine names one (design/0065-external-checkouts-and-repo-commands/);
+ * with none, git removes it wherever it stands — a worktree a custom command
+ * made is still a git worktree of the canonical checkout, which is the
+ * contract that lets it be removed without knowing how it was made.
+ */
+async function removeWorktree(
+  root: string,
+  task: FoundTask,
+  worktree: WorktreeRecord,
+  outcome: Outcome,
+): Promise<CloseStep> {
   const step = `worktree ${worktree.path}`;
-  const absolute = join(root, worktree.path);
-  // Teardown speaks to the repository the worktree is of: the canonical
-  // checkout for a registered one, the workspace root itself for the
-  // stewardship case (design/0019-stewardship-worktrees/).
-  const canonical = worktree.repo === undefined ? root : join(root, 'repos', worktree.repo);
+  const absolute = worktreeDir(root, worktree);
+  const canonical = worktree.repo === undefined ? root : resolveCheckout(root, worktree.repo).path;
+  const outside = standsOutside(worktree);
+  // The floor's link onto an outside worktree goes with it — or stays, with
+  // the worktree, when it stands on another machine.
+  const unlink = (): void => {
+    if (outside) removeOutsideLink(root, worktreePlacement(task, worktree.branch), absolute);
+  };
   if (!existsSync(absolute)) {
-    git(canonical, 'worktree', 'prune');
+    const absent = await absentBecause(worktree);
+    if (absent !== undefined) {
+      return {
+        step,
+        detail:
+          `stands on machine '${absent.elsewhere}' — not removed from here; remove it there ` +
+          `(git worktree remove ${shellWord(worktree.path)})`,
+      };
+    }
+    if (canonical !== undefined && existsSync(canonical)) git(canonical, 'worktree', 'prune');
+    unlink();
     return { step, detail: 'already gone' };
+  }
+  if (canonical === undefined) {
+    throw new WardError(
+      `cannot remove ${worktree.path}: ${unboundMessage(worktree.repo ?? '')}, then close`,
+    );
+  }
+  const remove =
+    worktree.repo === undefined
+      ? undefined
+      : (await repositoryCommands(worktree.repo)).worktree?.remove;
+  if (remove !== undefined && worktree.repo !== undefined) {
+    // The path is about to be handed to somebody's tool, and it comes from a
+    // record a pull can rewrite: it is given only what git itself lists as a
+    // worktree of this checkout.
+    const known = (registeredCheckouts(canonical) ?? []).some(
+      (checkout) =>
+        !checkout.prunable &&
+        existsSync(checkout.path) &&
+        realpathSync(checkout.path) === realpathSync(absolute),
+    );
+    if (!known) {
+      throw new WardError(
+        `cannot remove ${worktree.path}: it is not a worktree of ` +
+          `${checkoutLabel(root, worktree.repo)} that git knows, so the removal command is not ` +
+          'run on it — remove the directory by hand if it should go, then close',
+      );
+    }
+    const repo = readDocumentSync(root, repositoryRecordType(worktree.repo)).data;
+    const run = await runRepositoryCommand(
+      'worktree.remove',
+      remove,
+      {
+        ...repositoryValues(root, repo, canonical),
+        task: taskAddress(task),
+        branch: worktree.branch,
+        path: absolute,
+        outcome,
+      },
+      canonical,
+    );
+    if (!commandSucceeded(run)) {
+      throw new WardError(
+        `cannot remove ${worktree.path}: the removal command failed — ${describeFailure(run)}`,
+      );
+    }
+    // The command's word is not taken for it: the directory is looked at.
+    if (existsSync(absolute)) {
+      throw new WardError(
+        `cannot remove ${worktree.path}: the removal command exited 0 but the directory is ` +
+          'still there — a removal command must remove the worktree it is given ({path})',
+      );
+    }
+    git(canonical, 'worktree', 'prune');
+    unlink();
+    return {
+      step,
+      detail:
+        outcome === 'abandoned'
+          ? 'discarded by the removal command'
+          : 'removed by the removal command',
+    };
   }
   const args =
     outcome === 'abandoned'
@@ -550,12 +652,25 @@ function removeWorktree(root: string, worktree: WorktreeRecord, outcome: Outcome
   if (result.exitCode !== 0) {
     throw new WardError(`cannot remove ${worktree.path}: ${result.stderr.trim()}`);
   }
+  unlink();
   return { step, detail: outcome === 'abandoned' ? 'discarded' : 'removed' };
 }
 
-function aheadOfMain(canonical: string, branch: string): boolean {
-  const mainLine = git(canonical, 'symbolic-ref', '--short', 'HEAD').stdout.trim();
-  const count = git(canonical, 'rev-list', '--count', `${mainLine}..${branch}`);
+/**
+ * Whether the branch holds commits the main line lacks. A contained checkout
+ * stands on its main line, kept there by registration and refresh, so its
+ * HEAD is the comparison. An external checkout stands wherever its owner left
+ * it, so the comparison is the ref Ward keeps current there:
+ * origin/<mainLine>, by the record
+ * (design/0065-external-checkouts-and-repo-commands/).
+ */
+function aheadOfMain(root: string, repo: string, branch: string): boolean {
+  const checkout = resolveCheckout(root, repo);
+  if (checkout.path === undefined) return false;
+  const mainLine = checkout.external
+    ? `origin/${readDocumentSync(root, repositoryRecordType(repo)).data.mainLine}`
+    : git(checkout.path, 'symbolic-ref', '--short', 'HEAD').stdout.trim();
+  const count = git(checkout.path, 'rev-list', '--count', `${mainLine}..${branch}`);
   return count.exitCode === 0 && Number.parseInt(count.stdout.trim(), 10) > 0;
 }
 

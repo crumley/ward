@@ -14,6 +14,7 @@
 // directories, a symlink, the baseline backfill — so they land on the
 // workspace's own main line directly, as one journal commit, the way every
 // mutation verb's bookkeeping does (design/0019-stewardship-worktrees/).
+
 import { existsSync, readdirSync, renameSync, rmdirSync } from 'node:fs';
 import { appendFile, mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
@@ -31,6 +32,7 @@ import {
 } from '../store/types.ts';
 import { taskAddress, taskFloor } from './address.ts';
 import { sha256OfFile } from './baselines.ts';
+import { checkoutLabel, resolveCheckout } from './checkouts.ts';
 import { backfillIdentities } from './floor-identity.ts';
 import { carriesManifest, establishFloorManifest } from './floor-manifest.ts';
 import { establishFloorViews } from './floor-views.ts';
@@ -633,8 +635,8 @@ async function retireWorktreesDir(ctx: ConvergeContext): Promise<StepReport> {
   const sources = [
     { dir: ctx.root, spell: 'git' },
     ...listRepositoryNames(ctx.root).map((name) => ({
-      dir: join(ctx.root, 'repos', name),
-      spell: `git -C repos/${name}`,
+      dir: resolveCheckout(ctx.root, name).path,
+      spell: `git -C ${checkoutLabel(ctx.root, name)}`,
     })),
   ];
   for (const source of sources) {

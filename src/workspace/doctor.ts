@@ -50,12 +50,15 @@ import {
   catalogType,
   type RepositoryRecord,
   repositoryRecordType,
+  type WorktreeRecord,
   workspaceRecordType,
 } from '../store/types.ts';
 import { collidingRooms, distinctAddress, taskAddress, taskFloor } from './address.ts';
 import { claimsOf } from './affinity.ts';
 import { sha256OfFile } from './baselines.ts';
 import { readBrief } from './briefs.ts';
+import { checkoutLabel, resolveCheckout, unboundMessage } from './checkouts.ts';
+import { type CommandKind, unknownPlaceholders } from './commands.ts';
 import { carriesManifest, floorManifestPaths } from './floor-manifest.ts';
 import { carriesView, floorViewDir, floorViewGaps } from './floor-views.ts';
 import { git, gitAvailable, gitIdentityConfigured, hasCommits } from './git.ts';
@@ -67,10 +70,18 @@ import {
   LEGACY_WORKTREES_IGNORE,
 } from './layout.ts';
 import { findStandingProject, GROUND_FLOOR, readProjects } from './projects.ts';
-import { checkoutPath, listRepositoryNames } from './repos.ts';
+import { listRepositoryNames, remoteKey } from './repos.ts';
 import { type FoundTask, readTasks } from './scan.ts';
 import { readOpenSessions } from './sessions.ts';
-import { openWorktreeClaims, planRelocation, readTaskWorktrees } from './worktrees.ts';
+import {
+  absentBecause,
+  inspectOutsideLink,
+  openWorktreeClaims,
+  planRelocation,
+  readTaskWorktrees,
+  standsOutside,
+  worktreePlacement,
+} from './worktrees.ts';
 
 export type Severity = 'ok' | 'info' | 'warn' | 'error';
 
@@ -706,6 +717,7 @@ async function workspaceChecks(
   for (const name of listRepositoryNames(root)) {
     findings.push(...(await repositoryChecks(root, name)));
   }
+  findings.push(...repositoryCommandFindings(root, config.repositories));
 
   findings.push(...(await worktreeChecks(root)));
   findings.push(...(await worktreePlacementFindings(root)));
@@ -1345,17 +1357,29 @@ async function repositoryChecks(root: string, name: string): Promise<Finding[]> 
     check,
   );
   if (record === null) return findings;
-  const checkout = checkoutPath(root, name);
+  const where = resolveCheckout(root, name);
+  // An external checkout (design/0065-external-checkouts-and-repo-commands/)
+  // is the machine's to provide: doctor names one that is not bound here, or
+  // has gone missing, with the command that binds it — never restore, which
+  // would have nothing to clone it into.
+  if (where.path === undefined) {
+    findings.push({ check, severity: 'warn', message: unboundMessage(name) });
+    return findings;
+  }
+  const checkout = where.path;
   if (!existsSync(checkout)) {
     findings.push({
       check,
       severity: 'warn',
-      message:
-        `canonical checkout repos/${name}/ is missing — re-materialize it: ` +
-        `ward workspace restore (or: ward repo add ${record.remote})`,
+      message: where.external
+        ? `external checkout is missing at ${checkout} — put it back, or bind where it ` +
+          `stands now: ward repo add PATH --external --name ${name}`
+        : `canonical checkout repos/${name}/ is missing — re-materialize it: ` +
+          `ward workspace restore (or: ward repo add ${record.remote})`,
     });
     return findings;
   }
+  if (where.external) return [...findings, ...externalCheckoutFindings(check, checkout, record)];
   const origin = git(checkout, 'remote', 'get-url', 'origin').stdout.trim();
   if (origin !== record.remote) {
     findings.push({
@@ -1382,6 +1406,153 @@ async function repositoryChecks(root: string, name: string): Promise<Finding[]> 
 }
 
 /**
+ * An external checkout that is present. Its origin is compared by what
+ * identifies the repository, not by spelling (one machine clones over SSH,
+ * another over HTTPS), and what matters about its main line is the ref Ward
+ * reads — origin/<mainLine> — not which branch its owner has checked out.
+ */
+function externalCheckoutFindings(
+  check: string,
+  checkout: string,
+  record: RepositoryRecord,
+): Finding[] {
+  const origin = git(checkout, 'config', '--get', 'remote.origin.url').stdout.trim();
+  if (remoteKey(origin) !== remoteKey(record.remote)) {
+    return [
+      {
+        check,
+        severity: 'warn',
+        message:
+          `external checkout at ${checkout} has origin ${origin || '(none)'} but the record ` +
+          `says ${record.remote} — bind the right checkout: ward repo add PATH --external ` +
+          `--name ${record.name}`,
+      },
+    ];
+  }
+  const ref = `refs/remotes/origin/${record.mainLine}`;
+  if (git(checkout, 'rev-parse', '--verify', '--quiet', ref).exitCode !== 0) {
+    return [
+      {
+        check,
+        severity: 'warn',
+        message: `origin/${record.mainLine} does not exist in the external checkout at ${checkout}`,
+      },
+    ];
+  }
+  return [
+    {
+      check,
+      severity: 'ok',
+      message: `external checkout present at ${checkout}, reading origin/${record.mainLine}`,
+    },
+  ];
+}
+
+/**
+ * One worktree a repository's own command made outside the workspace
+ * (design/0065-external-checkouts-and-repo-commands/). On the machine that
+ * made it, it is on disk with its floor's link onto it, or it has gone
+ * missing; on any other machine it is neither — it stands where this one
+ * cannot look, which is information, not drift.
+ */
+async function outsideWorktreeFinding(
+  root: string,
+  task: FoundTask,
+  record: WorktreeRecord,
+  check: string,
+  source: string,
+): Promise<Finding> {
+  const absent = await absentBecause(record);
+  if (absent !== undefined) {
+    return {
+      check,
+      severity: 'info',
+      message: `stands on machine '${absent.elsewhere}' — branch '${record.branch}' of ${source}`,
+    };
+  }
+  if (!existsSync(record.path)) {
+    return {
+      check,
+      severity: 'warn',
+      message:
+        `missing on disk — task ${taskAddress(task)} anchors branch '${record.branch}' of ` +
+        `${source} there, outside the workspace; its repository's worktree command made it, and ` +
+        'restore does not rerun that command (see: ward workspace restore)',
+    };
+  }
+  const placement = worktreePlacement(task, record.branch);
+  const link = inspectOutsideLink(root, placement, record.path);
+  if (link !== 'linked') {
+    return {
+      check,
+      severity: 'warn',
+      message:
+        link === 'absent'
+          ? `on disk, but ${placement} does not link onto it — re-establish the link: ` +
+            `ward worktree create ${taskAddress(task)} --repo ${record.repo ?? ''} ` +
+            `--branch ${record.branch}`
+          : `on disk, but ${placement} is something else (kept) — the floor's path to this ` +
+            'worktree does not reach it',
+    };
+  }
+  return {
+    check,
+    severity: 'ok',
+    message: `on disk — branch '${record.branch}' of ${source}, linked from ${placement}`,
+  };
+}
+
+/**
+ * The commands this machine's configuration names for the repositories
+ * registered here (design/0065-external-checkouts-and-repo-commands/): each is
+ * checked for what would make it fail the moment a verb reached for it — a
+ * program that cannot be found, a placeholder Ward does not provide. Reported
+ * as `info` when it is sound, so "what will Ward run for this repository" has
+ * an answer a human can read without opening the file.
+ */
+export function repositoryCommandFindings(
+  root: string,
+  repositories: GlobalConfig['repositories'],
+): Finding[] {
+  const findings: Finding[] = [];
+  for (const name of listRepositoryNames(root)) {
+    const commands = repositories[name];
+    if (commands === undefined) continue;
+    const named: [CommandKind, readonly string[] | undefined][] = [
+      ['update', commands.update],
+      ['worktree.create', commands.worktree?.create],
+      ['worktree.remove', commands.worktree?.remove],
+    ];
+    for (const [kind, argv] of named) {
+      if (argv === undefined) continue;
+      const check = `repository ${name} ${kind} command`;
+      const unknown = unknownPlaceholders(kind, argv);
+      const program = argv[0] ?? '';
+      if (unknown.length > 0) {
+        findings.push({
+          check,
+          severity: 'warn',
+          message:
+            `uses ${unknown.map((value) => `{${value}}`).join(', ')}, which Ward does not ` +
+            `provide to a ${kind} command — fix repositories.${name}.${kind} in the global config`,
+        });
+      } else if (Bun.which(program, { PATH: process.env.PATH ?? '' }) === null) {
+        findings.push({
+          check,
+          severity: 'warn',
+          message: `'${program}' cannot be found — repositories.${name}.${kind} cannot run on this machine`,
+        });
+      } else {
+        // Spelled as the list it is: joined with spaces, an argument that
+        // holds one would read as two.
+        findings.push({ check, severity: 'info', message: `runs: ${JSON.stringify(argv)}` });
+      }
+    }
+  }
+  return findings;
+}
+
+/**
  * Record↔disk drift for the worktrees of non-closed tasks
  * (design/0021-restore-from-clone/): each record names repo (or the
  * workspace), branch, and path, and a fresh clone — or a hand-deleted
@@ -1400,7 +1571,13 @@ async function worktreeChecks(root: string): Promise<Finding[]> {
       for (const record of await readTaskWorktrees(root, task.dir)) {
         const check = `worktree ${record.path}`;
         const source =
-          record.repo === undefined ? "the workspace's own repository" : `repos/${record.repo}`;
+          record.repo === undefined
+            ? "the workspace's own repository"
+            : checkoutLabel(root, record.repo);
+        if (standsOutside(record)) {
+          findings.push(await outsideWorktreeFinding(root, task, record, check, source));
+          continue;
+        }
         findings.push(
           existsSync(join(root, record.path))
             ? {

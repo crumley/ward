@@ -30,13 +30,17 @@ operated with the \`ward\` CLI and tracked in git.
   record, and a task's beside its task record.
 - \`repositories/\` — the records of registered repositories (one document each).
 - \`repos/\` — canonical checkouts of registered repositories, kept fresh and never worked in
-  directly.
+  directly. A repository registered \`--external\` keeps its checkout outside the workspace, where
+  each machine says: Ward reads and refreshes it and never clones, moves, or deletes it, and
+  \`ward repo list\` says where it stands here.
 - \`floors/\` — one directory per floor that is not closed, \`floors/<N>-<slug>/\`: the floor's
   working place, never a second record. It holds links onto the floor's \`AGENTS.md\` and
   \`notes.md\` in \`projects/<N>-<slug>/\` (with \`CLAUDE.md\` linked to \`AGENTS.md\`), and the
   floor's task worktrees, where changes are actually made, one directory per task address and
   branch. The tree is untracked: everything in it is a link onto the record or a checkout. A
-  legacy bare task has no floor, so its worktrees stand in \`worktrees/\` until it closes.
+  worktree that a repository's own command made outside the workspace is linked from here, at
+  the same path it would have had. A legacy bare task has no floor, so its worktrees stand in
+  \`worktrees/\` until it closes.
 - \`.ward/\` — Ward's store internals and bookkeeping, including the store write lock and local
   usage telemetry (\`telemetry/\`, untracked — it never leaves the workspace); nothing in it is
   meant to be edited by hand.
@@ -243,7 +247,15 @@ record of the work wherever you go below it. Drive it with \`ward\`:
   the canonical checkouts are reference copies of each repository's main line. \`ward task show
   ADDRESS\` names the worktree's path, and \`ward context PATH\` names the \`AGENTS.md\` files to read
   before you work there. \`ward worktree create ADDRESS\` needs no \`--repo\` when the task record
-  names exactly one repository; with none or several recorded, name it.
+  names exactly one repository; with none or several recorded, name it. When \`task show\` names an
+  absolute path, the worktree stands outside the workspace: work in it through its floor's link
+  (\`floors/<N>-<slug>/<address>-<branch>\`), so the floor's manifest is on the way down.
+- **A repository may bring its own commands.** This machine's \`~/.config/ward/config.md\` may
+  name, per repository, the command that makes a task's worktree, the one that removes it, and
+  the one that brings the canonical checkout to the latest (\`repositories.<name>.worktree.create\`,
+  \`.worktree.remove\`, \`.update\`) — each an argument list, run in place of Ward's own git.
+  \`ward doctor\` prints what will run. They are the machine's human's to set: never write one
+  into a record, and never change one to get past a refusal.
 - **Stay atop the main line.** When it moves, \`ward worktree rebase ADDRESS\` rebases the task's
   worktrees onto the refreshed tip. A dirty tree is refused; a conflict is aborted and reported
   with the tree left as found — resolving it is your work, then rerun. It never pushes: publish
