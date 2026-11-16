@@ -61,9 +61,10 @@ resumed — by both humans and agents — and survive a human walking away. It i
   killing a live session discards an agent's unrecorded working state even though the record
   survives, so teardown spends the authority of a deliberate close (§18), never a heuristic's.
 - **Group sessions by the work they belong to** (by the scope or the lineage that owns them —
-  derived from the record, never from co-location) and **label them by identity** (the floor/room
-  codes humans already hold in their heads), so a human with a dozen sessions open finds the right
-  one at a glance. _Why:_ navigability is context management for the human
+  derived from the record, never from co-location) and **label them as a human recognizes the
+  work**: by its name, with its floor/room code wherever the code tells two apart or is what a
+  command takes, so a human with a dozen sessions open finds the right one at a glance. _Why:_
+  navigability is context management for the human
   ([`../00-foundation/00-vision.md`](../00-foundation/00-vision.md)).
 - Support **visual grouping/identification** coordinated with the theming seam
   ([`05-visual-theming.md`](05-visual-theming.md)).

@@ -32,9 +32,15 @@ identity.
   ([`../01-concepts/00-domain-model.md`](../01-concepts/00-domain-model.md)) — so the human reads
   _what kind of thing this is_, not only which one. _Why two cues:_ the accent answers "which one,"
   the glyph answers "what kind" — together a label like "🗂️ blue `4A12`" is self-describing. The
-  glyph is **categorical** (shared by every thing of a type); the accent is **per-instance** (must
-  be collision-free among what's visible together) — only the accent carries the
-  distinguish-them-apart burden.
+  glyph is **categorical** by default (shared by every thing of a type) and the accent is
+  **per-instance** (must be collision-free among what's visible together), so where kinds are mixed
+  in one view only the accent carries the distinguish-them-apart burden. Where a human sees
+  **several things of one kind side by side** (a row of floors), a kind glyph is the same mark on
+  each and tells them nothing, so such a thing may instead carry a **per-instance glyph**: a second
+  "which one" cue, recorded and kept distinct among what is visible together exactly as the accent
+  is. _Why a second cue:_ the accent alone fails a reader who cannot tell two colors apart, and any
+  surface that cannot paint one (a name, a title). A thing wears **one glyph**: per-instance where
+  its kind is already plain from where it stands, categorical where kinds are mixed.
 - **Record the visual identity as a nameable attribute, legible to the agent audience.** The accent
   and glyph are not only painted on a surface — they are **recorded on the work's identity** and
   **expressible in words** ("blue," "the project"), so an agent can **resolve a human's visual
@@ -66,9 +72,9 @@ identity.
 ## Canonical home for
 
 - The **theming contract**: a per-work visual identity carrying a **per-instance accent**
-  (stable-by-record, collision-free) _and_ a **per-type glyph**, **recorded as a nameable
-  attribute** (legible to human _and_ agent, §8), applied and torn down through idempotent hooks,
-  coordinated across every surface.
+  (stable-by-record, collision-free) _and_ a **glyph** (per-type, or per-instance where several of
+  one kind are seen together), **recorded as a nameable attribute** (legible to human _and_ agent,
+  §8), applied and torn down through idempotent hooks, coordinated across every surface.
 
 ## Left to implementation
 
