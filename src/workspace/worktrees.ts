@@ -3,10 +3,19 @@
 // record names and teardown is `git worktree remove`. Disposition is recorded
 // from day one; this entry builds only `deliverable`
 // (intent/01-concepts/00-domain-model.md, Anchor).
-import { existsSync, readdirSync, realpathSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  readdirSync,
+  readlinkSync,
+  realpathSync,
+  symlinkSync,
+  unlinkSync,
+} from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { WardError } from '../errors.ts';
+import { readMachine } from '../global/machine.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
 import { withStoreLock } from '../store/lock.ts';
 import {
@@ -16,6 +25,15 @@ import {
   worktreeRecordType,
 } from '../store/types.ts';
 import { taskAddress, taskFloor } from './address.ts';
+import { checkoutLabel, checkoutPath, resolveCheckout } from './checkouts.ts';
+import {
+  commandSucceeded,
+  describeFailure,
+  repositoryCommands,
+  repositoryValues,
+  runRepositoryCommand,
+  shellWord,
+} from './commands.ts';
 import { establishFloorView, floorViewDir } from './floor-views.ts';
 import { git, gitOrThrow } from './git.ts';
 import { LEGACY_WORKTREES_DIR } from './layout.ts';
@@ -62,6 +80,67 @@ async function prepareFloorView(root: string, task: FoundTask): Promise<void> {
   if (project !== undefined) await establishFloorView(root, project);
 }
 
+/**
+ * Where a worktree record's directory stands, absolute. The record's `path`
+ * is workspace-relative for a worktree under the workspace and absolute for
+ * one a repository's own command made elsewhere
+ * (design/0065-external-checkouts-and-repo-commands/); `resolve` answers both,
+ * so no caller joins the root onto a path that may not be under it.
+ */
+export function worktreeDir(root: string, record: Pick<WorktreeRecord, 'path'>): string {
+  return resolve(root, record.path);
+}
+
+/** Whether the record's worktree stands outside the workspace. */
+export function standsOutside(record: Pick<WorktreeRecord, 'path'>): boolean {
+  return isAbsolute(record.path);
+}
+
+/**
+ * Why a worktree that is not on disk is not: `elsewhere` names the machine an
+ * outside worktree was made on when that is not this one — it is not missing,
+ * it is somewhere this machine cannot see.
+ */
+export async function absentBecause(
+  record: WorktreeRecord,
+): Promise<{ readonly elsewhere: string } | undefined> {
+  if (record.machine === undefined) return undefined;
+  return record.machine === (await readMachine()).name ? undefined : { elsewhere: record.machine };
+}
+
+// -- the floor's link onto an outside worktree --------------------------------
+// A worktree a repository's command made outside the workspace is not below
+// the root, so the path the reading rule walks (design/0057-context-from-root/)
+// would never pass its floor's manifest. Its placement under the floor's view
+// therefore holds a link onto it: the worktree is reached, and its context
+// chain read, at exactly the path every other worktree of the task has.
+
+/** How the placement of an outside worktree stands on disk. */
+export type OutsideLink = 'linked' | 'absent' | 'elsewhere' | 'occupied';
+
+export function inspectOutsideLink(root: string, placement: string, target: string): OutsideLink {
+  const at = join(root, placement);
+  let stat: ReturnType<typeof lstatSync>;
+  try {
+    stat = lstatSync(at);
+  } catch {
+    return 'absent';
+  }
+  if (!stat.isSymbolicLink()) return 'occupied';
+  return resolve(dirname(at), readlinkSync(at)) === target ? 'linked' : 'elsewhere';
+}
+
+/** Put the link in place where the placement is free; anything already there is left alone. */
+function establishOutsideLink(root: string, placement: string, target: string): void {
+  if (inspectOutsideLink(root, placement, target) !== 'absent') return;
+  symlinkSync(target, join(root, placement));
+}
+
+/** Remove the link Ward made for an outside worktree — a link onto it, and nothing else. */
+export function removeOutsideLink(root: string, placement: string, target: string): void {
+  if (inspectOutsideLink(root, placement, target) === 'linked') unlinkSync(join(root, placement));
+}
+
 export async function createWorktree(
   root: string,
   taskCode: string,
@@ -78,12 +157,18 @@ export async function createWorktree(
   const recordType = worktreeRecordType(task.dir, fileName);
   // Under the task's floor (design/0057-context-from-root/); the directory
   // still carries the task's ADDRESS (design/0036-floor-addressed-tasks/).
-  const path = worktreePlacement(task, branch);
+  const placement = worktreePlacement(task, branch);
 
   if (existsSync(join(root, recordType.relPath))) {
     const existing = (await readDocument(root, recordType)).data;
-    if (existsSync(join(root, existing.path))) {
-      return { task, record: existing }; // convergent: already there
+    if (existsSync(worktreeDir(root, existing))) {
+      // Convergent: already there. An outside worktree's link is derived
+      // state under an ignored tree, so converging re-establishes it.
+      if (standsOutside(existing)) {
+        await prepareFloorView(root, task);
+        establishOutsideLink(root, placement, existing.path);
+      }
+      return { task, record: existing };
     }
   }
 
@@ -91,30 +176,42 @@ export async function createWorktree(
   await refreshRepositories(root, repoName);
   await prepareFloorView(root, task);
 
-  const canonical = join(root, 'repos', repoName);
+  const canonical = checkoutPath(root, repoName);
+  const label = checkoutLabel(root, repoName);
   // A task worktree is always cut fresh from the main line; an existing branch
   // of the same name is never adopted (`-b` below would refuse it anyway). Say
   // so before git does, with the ways forward
   // (design/0047-stewardship-fresh-branch/).
   if (branchExists(canonical, branch)) {
     throw new WardError(
-      `branch '${branch}' already exists in repos/${repoName} — a task worktree is cut fresh ` +
+      `branch '${branch}' already exists in ${label} — a task worktree is cut fresh ` +
         `from origin/${repoRecord.mainLine} and never adopts an existing branch. If it is a ` +
-        `leftover whose work has landed, delete it (git -C repos/${repoName} branch -D ` +
+        `leftover whose work has landed, delete it (git -C ${label} branch -D ` +
         `${branch}); otherwise name a fresh branch with --branch NAME.`,
     );
   }
-  const result = git(
-    canonical,
-    'worktree',
-    'add',
-    '-b',
-    branch,
-    join(root, path),
-    `origin/${repoRecord.mainLine}`,
-  );
-  if (result.exitCode !== 0) {
-    throw new WardError(`git worktree add failed: ${result.stderr.trim()}`);
+  const base = `origin/${repoRecord.mainLine}`;
+  const create = (await repositoryCommands(repoName)).worktree?.create;
+  let path = placement;
+  let machine: string | undefined;
+  if (create === undefined) {
+    const result = git(canonical, 'worktree', 'add', '-b', branch, join(root, placement), base);
+    if (result.exitCode !== 0) {
+      throw new WardError(`git worktree add failed: ${result.stderr.trim()}`);
+    }
+  } else {
+    const made = await createByCommand(root, placement, create, {
+      ...repositoryValues(root, repoRecord, canonical),
+      task: taskAddress(task),
+      branch,
+      base,
+      path: join(root, placement),
+    });
+    if (made !== placement) {
+      path = made;
+      machine = (await readMachine()).name;
+      establishOutsideLink(root, placement, made);
+    }
   }
 
   const record: WorktreeRecord = {
@@ -123,6 +220,7 @@ export async function createWorktree(
     branch,
     disposition: 'deliverable',
     path,
+    ...(machine === undefined ? {} : { machine }),
     createdAt: new Date().toISOString(),
   };
   // Only the record write and its commit are serialized (§17) — the refresh
@@ -140,6 +238,82 @@ export async function createWorktree(
     commitRecords(root, `Create worktree ${branch} for task ${taskCode}`, task.dir);
   });
   return { task, record };
+}
+
+/**
+ * Make the worktree with the repository's own command
+ * (design/0065-external-checkouts-and-repo-commands/) and return where it
+ * stands: the workspace-relative placement, or an absolute path outside the
+ * workspace. The command is told the branch, the base, and the path Ward
+ * proposes; where it actually put the worktree is not something it reports —
+ * git is asked. The contract is that the result is a git worktree of the
+ * canonical checkout on the branch Ward named, which is what lets rebase,
+ * freshness, and the close gate treat it exactly as one Ward made, and what
+ * makes a wrong answer impossible to hand back: a path that does not exist,
+ * or one on another branch, is not what git lists.
+ *
+ * Nothing is recorded unless all of it holds. A command that fails is not
+ * cleaned up after — what it left may be its tool's own state — but what it
+ * left is named, with the commands that clear it.
+ */
+async function createByCommand(
+  root: string,
+  placement: string,
+  argv: readonly string[],
+  values: Readonly<Record<string, string>>,
+): Promise<string> {
+  const canonical = values.checkout ?? '';
+  const branch = values.branch ?? '';
+  const proposed = values.path ?? '';
+  // The branch is about to become an argument of somebody's tool: refuse what
+  // git itself would refuse (a leading dash, whitespace, control characters)
+  // before the tool sees it.
+  if (git(canonical, 'check-ref-format', '--branch', branch).exitCode !== 0) {
+    throw new WardError(`'${branch}' is not a valid branch name — name another with --branch NAME`);
+  }
+  const run = await runRepositoryCommand('worktree.create', argv, values, canonical);
+  const found = (registeredCheckouts(canonical) ?? []).find(
+    (checkout) => checkout.branch === branch,
+  );
+  const at = `git -C ${shellWord(canonical)}`;
+  const leftover =
+    found === undefined
+      ? branchExists(canonical, branch)
+        ? ` It left branch '${branch}' behind — delete it (${at} branch -D ` +
+          `${shellWord(branch)}), then rerun.`
+        : ''
+      : ` It left a worktree at ${found.path} on '${branch}' — remove it (${at} worktree ` +
+        `remove ${shellWord(found.path)}) and its branch (${at} branch -D ` +
+        `${shellWord(branch)}), then rerun.`;
+  if (!commandSucceeded(run)) {
+    throw new WardError(
+      `the worktree command failed — ${describeFailure(run)}. Nothing was recorded.${leftover}`,
+    );
+  }
+  if (found === undefined) {
+    throw new WardError(
+      `the worktree command exited 0, but git knows no worktree of ${canonical} on branch ` +
+        `'${branch}' — the command must make a git worktree of that checkout on the branch it ` +
+        `is given ({branch}). Nothing was recorded.${leftover}`,
+    );
+  }
+  if (found.prunable || !existsSync(found.path)) {
+    throw new WardError(
+      `the worktree command exited 0, but the worktree git lists for '${branch}' at ` +
+        `${found.path} is not on disk. Nothing was recorded.${leftover}`,
+    );
+  }
+  const actual = realpathSync(found.path);
+  const inside = workspaceRelative(root, actual);
+  if (inside === placement) return placement;
+  if (inside !== undefined) {
+    throw new WardError(
+      `the worktree command made the worktree at ${actual}, inside the workspace but not at ` +
+        `the path Ward proposed (${proposed}) — inside the workspace a worktree stands under ` +
+        `its floor; make it at {path}, or outside the workspace. Nothing was recorded.${leftover}`,
+    );
+  }
+  return actual;
 }
 
 // -- the workspace as a worktree source -------------------------------------
@@ -167,7 +341,7 @@ export async function createWorkspaceWorktree(
   let record: WorktreeRecord;
   if (existsSync(join(root, recordType.relPath))) {
     record = (await readDocument(root, recordType)).data;
-    if (existsSync(join(root, record.path))) {
+    if (existsSync(worktreeDir(root, record))) {
       return { task, record }; // convergent: already there
     }
   } else {
@@ -297,12 +471,16 @@ async function rebaseOne(
   record: WorktreeRecord,
   refreshed: Map<string, RefreshReport>,
 ): Promise<RebaseReport> {
-  const worktree = join(root, record.path);
+  const worktree = worktreeDir(root, record);
   if (!existsSync(worktree)) {
+    const absent = await absentBecause(record);
     return {
       record,
       outcome: 'failed',
-      detail: 'worktree is missing on disk — recreate it with: ward worktree create',
+      detail:
+        absent === undefined
+          ? 'worktree is missing on disk — recreate it with: ward worktree create'
+          : `worktree stands on machine '${absent.elsewhere}' — rebase it there`,
     };
   }
   // The fail-safe first, before any other work: evidence of unrecorded work
@@ -343,10 +521,10 @@ async function rebaseOne(
       // be stale — rebasing onto it would be rebasing onto yesterday.
       const why =
         refresh.outcome === 'dirty'
-          ? `repos/${record.repo} is dirty — the canonical checkout is never worked in directly; clean it first`
+          ? `${checkoutLabel(root, record.repo)} is dirty — the canonical checkout is never worked in directly; clean it first`
           : refresh.outcome === 'conflicted'
-            ? `repos/${record.repo} has unresolved conflicts — resolve them there first (${refresh.detail})`
-            : `cannot refresh repos/${record.repo}: ${refresh.detail}`;
+            ? `${checkoutLabel(root, record.repo)} has unresolved conflicts — resolve them there first (${refresh.detail})`
+            : `cannot refresh ${checkoutLabel(root, record.repo)}: ${refresh.detail}`;
       return { record, outcome: 'failed', detail: why };
     }
     const mainLine = (await readDocument(root, repositoryRecordType(record.repo))).data.mainLine;
@@ -482,9 +660,17 @@ export async function worktreeStatuses(root: string, taskDir: string): Promise<W
 }
 
 async function freshnessOf(root: string, record: WorktreeRecord): Promise<WorktreeStatus> {
-  const worktree = join(root, record.path);
+  const worktree = worktreeDir(root, record);
   if (!existsSync(worktree)) {
-    return { record, freshness: 'unreadable', detail: MISSING_ON_DISK };
+    const absent = await absentBecause(record);
+    return {
+      record,
+      freshness: 'unreadable',
+      detail:
+        absent === undefined
+          ? MISSING_ON_DISK
+          : `unreadable (stands on machine '${absent.elsewhere}')`,
+    };
   }
   const tree = git(worktree, 'status', '--porcelain');
   if (tree.exitCode !== 0) {
@@ -577,7 +763,7 @@ export async function listWorktrees(root: string): Promise<WorktreeListing[]> {
         taskCode: task.record.code,
         taskAddress: taskAddress(task),
         record,
-        present: existsSync(join(root, record.path)),
+        present: existsSync(worktreeDir(root, record)),
       });
     }
   }
@@ -630,8 +816,8 @@ export interface RegisteredCheckout {
  * Every linked worktree registered in the repository at `repoDir` — the main
  * checkout itself excluded. Null when git cannot answer (no repository there).
  */
-export function registeredCheckouts(repoDir: string): RegisteredCheckout[] | null {
-  if (!existsSync(repoDir)) return null;
+export function registeredCheckouts(repoDir: string | undefined): RegisteredCheckout[] | null {
+  if (repoDir === undefined || !existsSync(repoDir)) return null;
   const list = git(repoDir, 'worktree', 'list', '--porcelain');
   if (list.exitCode !== 0) return null;
   const blocks = list.stdout.split('\n\n').filter((block) => block.trim() !== '');
@@ -651,9 +837,12 @@ export function registeredCheckouts(repoDir: string): RegisteredCheckout[] | nul
   return checkouts;
 }
 
-/** The repository a worktree record's checkout is a worktree of. */
-export function sourceRepositoryDir(root: string, record: WorktreeRecord): string {
-  return record.repo === undefined ? root : join(root, 'repos', record.repo);
+/**
+ * The repository a worktree record's checkout is a worktree of — undefined
+ * when that is an external checkout this machine has not bound.
+ */
+export function sourceRepositoryDir(root: string, record: WorktreeRecord): string | undefined {
+  return record.repo === undefined ? root : resolveCheckout(root, record.repo).path;
 }
 
 /** A path git reported, made workspace-relative; undefined when it is outside the workspace. */
@@ -757,6 +946,10 @@ export function planRelocation(
   claims: readonly WorktreeClaim[],
 ): RelocationPlan {
   const placement = worktreePlacement(task, record.branch);
+  // A worktree a repository's own command made outside the workspace is where
+  // that command put it, on purpose: its placement holds a link, and there is
+  // nothing to move (design/0065-external-checkouts-and-repo-commands/).
+  if (standsOutside(record)) return { kind: 'placed', placement };
   const repoDir = sourceRepositoryDir(root, record);
   const checkouts = registeredCheckouts(repoDir);
   if (checkouts === null) {
@@ -765,7 +958,7 @@ export function planRelocation(
       kind: 'refused',
       placement,
       at: record.path,
-      reason: `repos/${record.repo ?? '?'} is not on this machine to ask where the branch is`,
+      reason: `${record.repo === undefined ? 'the repository' : checkoutLabel(root, record.repo)} is not on this machine to ask where the branch is`,
       command: 'ward workspace restore',
     };
   }
@@ -853,7 +1046,7 @@ export async function moveCheckout(
 ): Promise<string | undefined> {
   await mkdir(dirname(join(root, to)), { recursive: true });
   const move = git(
-    sourceRepositoryDir(root, record),
+    sourceRepositoryDir(root, record) ?? root,
     'worktree',
     'move',
     join(root, from),

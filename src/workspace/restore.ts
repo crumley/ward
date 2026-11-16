@@ -14,25 +14,29 @@
 // loudly, with the record left intact for the human to adjudicate — never
 // silently skipped, never re-invented from the main line.
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { WardError } from '../errors.ts';
 import { readDocument } from '../store/document.ts';
 import { repositoryRecordType, type WorktreeRecord } from '../store/types.ts';
 import { taskAddress } from './address.ts';
+import { resolveCheckout, unboundMessage } from './checkouts.ts';
+import { shellWord } from './commands.ts';
 import { establishFloorViews } from './floor-views.ts';
 import { git } from './git.ts';
 import { readProjects } from './projects.ts';
-import { addRepository, checkoutPath, listRepositoryNames } from './repos.ts';
+import { addRepository, listRepositoryNames } from './repos.ts';
 import { readOpenSessions } from './sessions.ts';
 import { refuseStewardshipCopy } from './steward.ts';
 import {
+  absentBecause,
   moveCheckout,
   moveRefusal,
   type OpenSessionsAt,
   openWorktreeClaims,
   ownCheckout,
   registeredCheckouts,
+  standsOutside,
   type WorktreeClaim,
+  worktreeDir,
 } from './worktrees.ts';
 
 export type RestoreRepositoryOutcome = 'restored' | 'satisfied' | 'failed';
@@ -152,7 +156,25 @@ export async function restoreWorkspace(root: string): Promise<RestoreReport> {
 async function restoreRepository(root: string, name: string): Promise<RestoreRepositoryItem> {
   try {
     const record = (await readDocument(root, repositoryRecordType(name))).data;
-    if (existsSync(checkoutPath(root, name))) {
+    const checkout = resolveCheckout(root, name);
+    if (checkout.external) {
+      // An external checkout is never Ward's to materialize
+      // (design/0065-external-checkouts-and-repo-commands/): restore reports
+      // whether this machine has one, and what binds it when it does not.
+      if (checkout.path === undefined) {
+        return { name, outcome: 'failed', detail: unboundMessage(name) };
+      }
+      return existsSync(checkout.path)
+        ? { name, outcome: 'satisfied', detail: `external checkout present at ${checkout.path}` }
+        : {
+            name,
+            outcome: 'failed',
+            detail:
+              `the external checkout is missing at ${checkout.path} — put it back, or bind ` +
+              `where it stands now: ward repo add PATH --external --name ${name}`,
+          };
+    }
+    if (checkout.path !== undefined && existsSync(checkout.path)) {
       return { name, outcome: 'satisfied', detail: `checkout present at repos/${name}/` };
     }
     await addRepository(root, record.remote, name);
@@ -191,8 +213,25 @@ async function restoreWorktree(
     outcome,
     detail,
   });
-  const destination = join(root, record.path);
+  const destination = worktreeDir(root, record);
   if (existsSync(destination)) return item('satisfied', 'on disk');
+  // A worktree a repository's own command made outside the workspace
+  // (design/0065-external-checkouts-and-repo-commands/) is not re-made here:
+  // on another machine it is not missing, and on this one only the command
+  // that made it knows how it is made.
+  if (standsOutside(record)) {
+    const absent = await absentBecause(record);
+    if (absent !== undefined) {
+      return item('satisfied', `stands on machine '${absent.elsewhere}' — nothing to restore here`);
+    }
+    return item(
+      'failed',
+      `it was made outside the workspace by its repository's worktree command and is gone — ` +
+        `restore does not rerun that command. If the branch survives, check it out by hand ` +
+        `(git worktree add ${shellWord(record.path)} ${shellWord(record.branch)}); otherwise close the task ` +
+        `(ward task close ${taskCode} --outcome abandoned)`,
+    );
+  }
 
   // The repository the worktree is of: the canonical checkout for a
   // registered one, the workspace root itself for the stewardship case —
@@ -208,7 +247,9 @@ async function restoreWorktree(
     if (repository.outcome === 'failed') {
       return item('failed', `its repository '${record.repo}' was not restored — see that row`);
     }
-    repoDir = checkoutPath(root, record.repo);
+    const checkout = resolveCheckout(root, record.repo).path;
+    if (checkout === undefined) return item('failed', unboundMessage(record.repo));
+    repoDir = checkout;
   }
 
   // A hand-deleted directory can leave a stale registration behind; prune

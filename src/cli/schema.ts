@@ -98,7 +98,10 @@ export const statusWorktreeShape = z.strictObject({
   /** 'workspace': a worktree of the workspace's own repository — the stewardship case (0019). */
   source: z.enum(['workspace']).optional(),
   branch: z.string(),
+  /** Workspace-relative, or absolute for a worktree standing outside the workspace (0065). */
   path: z.string(),
+  /** The machine an absolute `path` is on — present exactly when it is absolute (0065). */
+  machine: z.string().optional(),
   freshness: z.enum(['current', 'behind', 'dirty', 'drifted', 'unreadable']).optional(),
   /** Commits origin/<mainLine> holds that the worktree lacks — present exactly when behind. */
   behindBy: z.number().int().positive().optional(),
@@ -303,7 +306,10 @@ export const worktreeListShape = z.array(
     source: z.enum(['workspace']).optional(),
     branch: z.string(),
     disposition: z.literal('deliverable'),
+    /** Workspace-relative, or absolute for a worktree standing outside the workspace (0065). */
     path: z.string(),
+    /** The machine an absolute `path` is on — present exactly when it is absolute (0065). */
+    machine: z.string().optional(),
     present: z.boolean(),
     createdAt: z.string(),
   }),
@@ -316,6 +322,13 @@ export const repoListShape = z.array(
     remote: z.string(),
     mainLine: z.string(),
     registeredAt: z.string(),
+    /** 'external': the checkout stands outside the workspace and is not Ward's (0065). */
+    checkout: z.enum(['external']).optional(),
+    /**
+     * Absolute path of the canonical checkout on this machine — absent exactly
+     * when it is external and this machine has not bound one (0065).
+     */
+    path: z.string().optional(),
   }),
 );
 export type RepoListShape = z.infer<typeof repoListShape>;
@@ -467,6 +480,10 @@ export const repoAddShape = z.strictObject({
   remote: z.string(),
   mainLine: z.string(),
   registeredAt: z.string(),
+  /** 'external': registered against a checkout outside the workspace (0065). */
+  checkout: z.enum(['external']).optional(),
+  /** Absolute path of the canonical checkout on this machine (0065). */
+  path: z.string(),
 });
 export type RepoAddShape = z.infer<typeof repoAddShape>;
 
@@ -495,7 +512,10 @@ export const repoRemoveShape = z.strictObject({
   name: z.string(),
   remote: z.string(),
   mainLine: z.string(),
-  checkout: z.enum(['deleted', 'missing']),
+  /** 'kept': an external checkout, which Ward never deletes (0065). */
+  checkout: z.enum(['deleted', 'missing', 'kept']),
+  /** Where a kept external checkout still stands, when this machine had it bound (0065). */
+  path: z.string().optional(),
 });
 export type RepoRemoveShape = z.infer<typeof repoRemoveShape>;
 
@@ -632,7 +652,10 @@ export const worktreeCreateShape = z.strictObject({
   source: z.enum(['workspace']).optional(),
   branch: z.string(),
   disposition: z.literal('deliverable'),
+  /** Workspace-relative, or absolute when the repository's command made it elsewhere (0065). */
   path: z.string(),
+  /** The machine an absolute `path` is on — present exactly when it is absolute (0065). */
+  machine: z.string().optional(),
   createdAt: z.string(),
 });
 export type WorktreeCreateShape = z.infer<typeof worktreeCreateShape>;

@@ -89,6 +89,15 @@ export const repositorySchema = z.object({
   remote: z.string().min(1),
   mainLine: z.string().min(1),
   registeredAt: z.string().min(1),
+  /**
+   * `external` marks a repository whose canonical checkout the workspace does
+   * not contain (design/0065-external-checkouts-and-repo-commands/): it stands
+   * somewhere else on each machine, Ward never clones, moves, or deletes it,
+   * and where it stands is that machine's fact — bound outside the record, so
+   * no path travels in it. Absent means the contained checkout at
+   * `repos/<name>/`, which is every record written before this field.
+   */
+  checkout: z.literal('external').optional(),
 });
 export type RepositoryRecord = z.infer<typeof repositorySchema>;
 
@@ -255,12 +264,26 @@ export const worktreeSchema = z
     source: z.literal('workspace').optional(),
     branch: z.string().min(1),
     disposition: z.literal('deliverable'),
-    /** Workspace-relative directory of the worktree itself. */
+    /**
+     * The directory of the worktree itself: workspace-relative, or absolute
+     * when a repository's own command made it outside the workspace
+     * (design/0065-external-checkouts-and-repo-commands/).
+     */
     path: z.string().min(1),
+    /**
+     * The machine whose filesystem an absolute `path` names — present exactly
+     * then. The record travels to every machine sharing the workspace and the
+     * directory does not, so the record says where it stands rather than
+     * leaving every other machine to read it as missing.
+     */
+    machine: z.string().min(1).optional(),
     createdAt: z.string().min(1),
   })
   .refine((record) => (record.repo === undefined) !== (record.source === undefined), {
     message: "exactly one of 'repo' and 'source: workspace' names the worktree's repository",
+  })
+  .refine((record) => record.path.startsWith('/') === (record.machine !== undefined), {
+    message: "'machine' is recorded exactly when 'path' is absolute",
   });
 export type WorktreeRecord = z.infer<typeof worktreeSchema>;
 

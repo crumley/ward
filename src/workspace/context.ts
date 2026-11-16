@@ -5,10 +5,11 @@
 // workspace root). A walk over path segments plus one `lstat`/`readlink` per
 // hop: it reads nothing but the filesystem, takes no lock, and writes
 // nothing, so the CLI only prints what this returns.
-import { existsSync, lstatSync, readlinkSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readlinkSync, realpathSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { WardError } from '../errors.ts';
 import { type ClaudeGuidance, inspectClaudeGuidance } from './layout.ts';
+import { openWorktreeClaims, standsOutside, worktreePlacement } from './worktrees.ts';
 
 /** One level of the chain: a directory that carries an `AGENTS.md`. */
 export interface ContextLevel {
@@ -68,6 +69,30 @@ export function contextChain(root: string, target: string): ContextChain {
     if (level !== undefined) chain.push(level);
   }
   return { root, path: rel === '' ? '.' : rel, chain };
+}
+
+/**
+ * The path to walk for `target`: itself, unless it lies inside a worktree
+ * that a repository's own command made outside the workspace
+ * (design/0065-external-checkouts-and-repo-commands/). Such a worktree is not
+ * below the root, but its placement under its floor's view links onto it, so
+ * the target is re-spelled through that link — and the chain then passes the
+ * floor's manifest exactly as it does for a worktree that stands under it.
+ */
+export async function contextTarget(root: string, target: string): Promise<string> {
+  const absolute = resolve(target);
+  const rel = relative(root, absolute);
+  if (!rel.startsWith('..') && !isAbsolute(rel)) return absolute;
+  const spellings = [absolute, ...(existsSync(absolute) ? [realpathSync(absolute)] : [])];
+  for (const claim of await openWorktreeClaims(root)) {
+    if (!standsOutside(claim.record)) continue;
+    for (const spelling of spellings) {
+      const inside = relative(claim.record.path, spelling);
+      if (inside.startsWith('..') || isAbsolute(inside)) continue;
+      return join(root, worktreePlacement(claim.task, claim.record.branch), inside);
+    }
+  }
+  return absolute;
 }
 
 function levelAt(root: string, dir: string): ContextLevel | undefined {

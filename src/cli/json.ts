@@ -166,6 +166,7 @@ function statusWorktreeJson(status: WorktreeStatus): StatusWorktreeShape {
     ...(status.record.source === undefined ? {} : { source: status.record.source }),
     branch: status.record.branch,
     path: status.record.path,
+    ...(status.record.machine === undefined ? {} : { machine: status.record.machine }),
     ...(status.freshness === undefined ? {} : { freshness: status.freshness }),
     ...(status.behindBy === undefined ? {} : { behindBy: status.behindBy }),
     ...(status.checkedOut === undefined ? {} : { checkedOut: status.checkedOut }),
@@ -329,6 +330,7 @@ export function worktreeListJson(listings: readonly WorktreeListing[]): Worktree
     branch: listing.record.branch,
     disposition: listing.record.disposition,
     path: listing.record.path,
+    ...(listing.record.machine === undefined ? {} : { machine: listing.record.machine }),
     present: listing.present,
     createdAt: listing.record.createdAt,
   }));
@@ -375,13 +377,21 @@ export function workspaceRegistryJson(report: RegistryReport): WorkspaceRegistry
   };
 }
 
-export function repoListJson(records: readonly RepositoryRecord[]): RepoListShape {
-  return records.map((record) => ({
-    name: record.name,
-    remote: record.remote,
-    mainLine: record.mainLine,
-    registeredAt: record.registeredAt,
-  }));
+export function repoListJson(
+  records: readonly RepositoryRecord[],
+  pathOf: (name: string) => string | undefined,
+): RepoListShape {
+  return records.map((record) => {
+    const path = pathOf(record.name);
+    return {
+      name: record.name,
+      remote: record.remote,
+      mainLine: record.mainLine,
+      registeredAt: record.registeredAt,
+      ...(record.checkout === undefined ? {} : { checkout: record.checkout }),
+      ...(path === undefined ? {} : { path }),
+    };
+  });
 }
 
 // -- mutation reports (design/0015-mutation-json/) --------------------------
@@ -437,6 +447,8 @@ export function repoAddJson(report: AddReport): RepoAddShape {
     remote: report.record.remote,
     mainLine: report.record.mainLine,
     registeredAt: report.record.registeredAt,
+    ...(report.record.checkout === undefined ? {} : { checkout: report.record.checkout }),
+    path: report.path,
   };
 }
 
@@ -455,6 +467,7 @@ export function repoRemoveJson(report: RemoveReport): RepoRemoveShape {
     remote: report.record.remote,
     mainLine: report.record.mainLine,
     checkout: report.checkout,
+    ...(report.path === undefined ? {} : { path: report.path }),
   };
 }
 
@@ -572,6 +585,7 @@ export function worktreeCreateJson(
     branch: record.branch,
     disposition: record.disposition,
     path: record.path,
+    ...(record.machine === undefined ? {} : { machine: record.machine }),
     createdAt: record.createdAt,
   };
 }

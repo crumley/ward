@@ -6,21 +6,48 @@
 // (design/0033-repo-remove/). Records live at repositories/<name>.md, one per
 // repo. Refresh runs the repositories concurrently and reports them in
 // registration order (design/0023-refresh-concurrency-ux/).
-import { existsSync, readdirSync, rmSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { existsSync, readdirSync, realpathSync, rmSync } from 'node:fs';
+import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
+import { bindCheckout, unbindCheckout } from '../global/checkouts.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
 import { withStoreLock } from '../store/lock.ts';
 import { type RepositoryRecord, repositoryRecordType, worktreeRecordType } from '../store/types.ts';
 import { taskAddress } from './address.ts';
+import { checkoutLabel, checkoutPath, resolveCheckout, unboundMessage } from './checkouts.ts';
+import {
+  commandSucceeded,
+  describeFailure,
+  repositoryCommands,
+  repositoryValues,
+  runRepositoryCommand,
+} from './commands.ts';
 import { git, gitAsync, gitOrThrow } from './git.ts';
+import { workspaceId } from './identity.ts';
 import { commitRecords, readTasks } from './scan.ts';
+
+// Where a checkout stands is checkouts.ts's question
+// (design/0065-external-checkouts-and-repo-commands/); re-exported because
+// this module is where every caller has always asked it.
+export { checkoutPath };
 
 export interface AddReport {
   readonly record: RepositoryRecord;
   /** 'registered' — new; 'converged' — record existed, checkout re-established; 'satisfied' — nothing to do. */
   readonly outcome: 'registered' | 'converged' | 'satisfied';
+  /** Absolute path of the checkout on this machine. */
+  readonly path: string;
+}
+
+export interface AddOptions {
+  /**
+   * Register against a checkout that already stands outside the workspace
+   * (design/0065-external-checkouts-and-repo-commands/): nothing is cloned or
+   * moved, and the same verb binds an already-registered external repository
+   * on a machine that has not said where its checkout is.
+   */
+  readonly external?: boolean;
 }
 
 /**
@@ -77,21 +104,19 @@ export interface RefreshOptions {
  */
 const REFRESH_CONCURRENCY = 8;
 
-export function checkoutPath(root: string, name: string): string {
-  return join(root, 'repos', name);
-}
-
 // -- add ------------------------------------------------------------------
 
 export async function addRepository(
   root: string,
   source: string,
   explicitName?: string,
+  options: AddOptions = {},
 ): Promise<AddReport> {
+  if (options.external === true) return addExternalRepository(root, source, explicitName);
   const local = isLocalSource(source);
   const name = explicitName ?? deriveName(source);
   const recordType = repositoryRecordType(name);
-  const checkout = checkoutPath(root, name);
+  const checkout = join(root, 'repos', name);
 
   // Adoption reads the source checkout's own origin, so the record points at
   // the real remote; a source with no origin is itself the remote of record.
@@ -105,10 +130,14 @@ export async function addRepository(
           `refusing to overwrite it with ${remote}; use --name to register under another name`,
       );
     }
-    if (existsSync(checkout)) return { record: existing, outcome: 'satisfied' };
+    // An external repository is never converged by cloning: the record says
+    // the workspace does not contain its checkout, and a clone into repos/
+    // would be a second canonical checkout the record does not describe.
+    if (existing.checkout === 'external') throw new WardError(unboundMessage(name));
+    if (existsSync(checkout)) return { record: existing, outcome: 'satisfied', path: checkout };
     clone(local ? resolve(source) : source, checkout, local ? remote : null);
     ensureOnMainLine(checkout, existing.mainLine);
-    return { record: existing, outcome: 'converged' };
+    return { record: existing, outcome: 'converged', path: checkout };
   }
 
   if (!existsSync(checkout)) {
@@ -129,7 +158,7 @@ export async function addRepository(
             `refusing to overwrite it with ${remote}; use --name to register under another name`,
         );
       }
-      return { record: existing, outcome: 'satisfied' as const };
+      return { record: existing, outcome: 'satisfied' as const, path: checkout };
     }
     const record: RepositoryRecord = {
       type: 'repository',
@@ -147,8 +176,130 @@ export async function addRepository(
     });
     gitOrThrow(root, 'add', '--', recordType.relPath);
     gitOrThrow(root, 'commit', '-m', `Register repository ${name} (ward ${pkg.version})`);
-    return { record, outcome: 'registered' as const };
+    return { record, outcome: 'registered' as const, path: checkout };
   });
+}
+
+/**
+ * Register a repository against a checkout that already stands outside the
+ * workspace, or bind one already registered that way on this machine
+ * (design/0065-external-checkouts-and-repo-commands/). Read-only toward the
+ * checkout: its remote and main line are read from it, and nothing in it is
+ * fetched, checked out, or moved. The record carries `checkout: external` and
+ * no path; the path is bound in this machine's state.
+ */
+async function addExternalRepository(
+  root: string,
+  source: string,
+  explicitName?: string,
+): Promise<AddReport> {
+  if (!existsSync(source)) {
+    throw new WardError(
+      `--external takes the path of a checkout already on this machine, and nothing is at ` +
+        `'${source}' — to clone a remote, leave --external off`,
+    );
+  }
+  const top = git(resolve(source), 'rev-parse', '--show-toplevel');
+  if (top.exitCode !== 0) {
+    throw new WardError(`${resolve(source)} is not a git checkout: ${top.stderr.trim()}`);
+  }
+  const path = realpathSync(top.stdout.trim());
+  const within = relative(realpathSync(root), path);
+  if (!within.startsWith('..') && !isAbsolute(within)) {
+    throw new WardError(
+      `${path} is inside the workspace — an external checkout stands outside it; leave ` +
+        '--external off to adopt a local checkout into repos/',
+    );
+  }
+  const remote = originOf(path);
+  if (remote === null) {
+    throw new WardError(
+      `${path} has no 'origin' remote — Ward reads a repository's main line as origin/<branch>, ` +
+        'so an external checkout needs one (git remote add origin URL)',
+    );
+  }
+  const name = explicitName ?? deriveName(path);
+  const recordType = repositoryRecordType(name);
+  const id = await workspaceId(root);
+
+  if (existsSync(join(root, recordType.relPath))) {
+    const existing = (await readDocument(root, recordType)).data;
+    refuseMismatch(existing, remote, name);
+    const changed = await bindCheckout(id, name, path);
+    return { record: existing, outcome: changed ? 'converged' : 'satisfied', path };
+  }
+
+  const mainLine = detectMainLine(path, path);
+  if (
+    git(path, 'rev-parse', '--verify', '--quiet', `refs/remotes/origin/${mainLine}`).exitCode !== 0
+  ) {
+    throw new WardError(
+      `${path} has no origin/${mainLine} yet — fetch it there first (git fetch origin), then rerun`,
+    );
+  }
+  const report = await withStoreLock(root, `repo add ${name}`, async () => {
+    if (existsSync(join(root, recordType.relPath))) {
+      const existing = (await readDocument(root, recordType)).data;
+      refuseMismatch(existing, remote, name);
+      return { record: existing, outcome: 'satisfied' as const, path };
+    }
+    const record: RepositoryRecord = {
+      type: 'repository',
+      name,
+      remote,
+      mainLine,
+      registeredAt: new Date().toISOString(),
+      checkout: 'external',
+    };
+    await writeDocument(root, recordType, {
+      data: record,
+      body:
+        `The record of the \`${name}\` repository: its remote and its main line, read from the ` +
+        'repository itself. Its canonical checkout is **external**: it stands outside the ' +
+        'workspace, where each machine says (`ward repo add PATH --external --name ' +
+        `${name}\`), and Ward never clones, moves, or deletes it.`,
+    });
+    gitOrThrow(root, 'add', '--', recordType.relPath);
+    gitOrThrow(root, 'commit', '-m', `Register repository ${name} (ward ${pkg.version})`);
+    return { record, outcome: 'registered' as const, path };
+  });
+  // Record first, binding second: interrupted between the two, the world is
+  // an external record with no binding — the state every other machine starts
+  // in, which this same verb converges.
+  const changed = await bindCheckout(id, name, path);
+  return report.outcome === 'satisfied' && changed ? { ...report, outcome: 'converged' } : report;
+}
+
+/** An existing record this registration must not silently redefine. */
+function refuseMismatch(existing: RepositoryRecord, remote: string, name: string): void {
+  if (existing.checkout !== 'external') {
+    throw new WardError(
+      `repository '${name}' is already registered with a checkout contained in the workspace ` +
+        `(repos/${name}/) — remove it first (ward repo remove ${name}) to register it external, ` +
+        'or use --name to register under another name',
+    );
+  }
+  if (remoteKey(existing.remote) !== remoteKey(remote)) {
+    throw new WardError(
+      `repository '${name}' is already registered with remote ${existing.remote} — ` +
+        `refusing to bind it to a checkout of ${remote}; use --name to register under another name`,
+    );
+  }
+}
+
+/**
+ * A remote reduced to what identifies the repository, so one repository
+ * cloned over SSH on one machine and HTTPS on another binds to the same
+ * record: scheme, user, a trailing `.git` and slash, and the host's case are
+ * transport spelling, not identity.
+ */
+export function remoteKey(remote: string): string {
+  const scp = /^[^/@:]+@([^:/]+):(.+)$/.exec(remote);
+  const url = /^[a-z][a-z0-9+.-]*:\/\/(?:[^/@]+@)?([^/]+)\/(.+)$/i.exec(remote);
+  const [host, path] =
+    scp !== null ? [scp[1], scp[2]] : url !== null ? [url[1], url[2]] : ['', remote];
+  const tail = (path ?? '').replace(/\/+$/, '').replace(/\.git$/, '');
+  return host === '' ? tail : `${(host ?? '').toLowerCase()}/${tail}`;
 }
 
 // -- remove ---------------------------------------------------------------
@@ -156,8 +307,14 @@ export async function addRepository(
 export interface RemoveReport {
   /** The record as it stood — its remote is what re-registering takes. */
   readonly record: RepositoryRecord;
-  /** 'deleted' — the checkout was removed; 'missing' — there was none on disk. */
-  readonly checkout: 'deleted' | 'missing';
+  /**
+   * 'deleted' — the checkout was removed; 'missing' — there was none on disk;
+   * 'kept' — the checkout is external, never Ward's to delete
+   * (design/0065-external-checkouts-and-repo-commands/).
+   */
+  readonly checkout: 'deleted' | 'missing' | 'kept';
+  /** Where an external checkout still stands, when this machine had it bound. */
+  readonly path?: string;
 }
 
 /**
@@ -196,6 +353,18 @@ export async function removeRepository(root: string, name: string): Promise<Remo
       );
     }
 
+    if (record.checkout === 'external') {
+      // An external checkout is not Ward's: unregistering forgets it and
+      // touches nothing in it, so there is no unrecorded work to guard — the
+      // one gate left is the one above, the open tasks standing on it.
+      const { path } = resolveCheckout(root, name);
+      rmSync(join(root, recordType.relPath));
+      commitRecords(root, `Unregister repository ${name}`, recordType.relPath);
+      const id = await workspaceId(root).catch(() => undefined);
+      if (id !== undefined) await unbindCheckout(id, name).catch(() => false);
+      return { record, checkout: 'kept' as const, ...(path === undefined ? {} : { path }) };
+    }
+
     const checkout = checkoutPath(root, name);
     const hadCheckout = existsSync(checkout);
     if (hadCheckout) refuseUnrecordedWork(checkout, name, record.mainLine);
@@ -207,7 +376,7 @@ export async function removeRepository(root: string, name: string): Promise<Remo
     if (hadCheckout) rmSync(checkout, { recursive: true, force: true });
     rmSync(join(root, recordType.relPath));
     commitRecords(root, `Unregister repository ${name}`, recordType.relPath);
-    return { record, checkout: hadCheckout ? 'deleted' : 'missing' };
+    return { record, checkout: hadCheckout ? ('deleted' as const) : ('missing' as const) };
   });
 }
 
@@ -339,32 +508,60 @@ export async function refreshRepositories(
 
 async function refreshOne(root: string, name: string, stash: boolean): Promise<RefreshReport> {
   const record = (await readDocument(root, repositoryRecordType(name))).data;
-  const checkout = checkoutPath(root, name);
+  const where = resolveCheckout(root, name);
+  if (where.path === undefined) return { name, outcome: 'failed', detail: unboundMessage(name) };
+  const checkout = where.path;
+  const label = checkoutLabel(root, name);
   if (!existsSync(checkout)) {
     return {
       name,
       outcome: 'failed',
-      detail: `checkout is missing — run: ward repo add ${record.remote}`,
+      detail: where.external
+        ? `the external checkout is missing at ${checkout} — put it back, or bind where it ` +
+          `stands now: ward repo add PATH --external --name ${name}`
+        : `checkout is missing — run: ward repo add ${record.remote}`,
     };
   }
+  // This machine's own update command, when it names one
+  // (design/0065-external-checkouts-and-repo-commands/).
+  const update = (await repositoryCommands(name)).update;
+  const how: Advance =
+    update === undefined
+      ? { by: 'git' }
+      : { by: 'command', argv: update, values: repositoryValues(root, record, checkout) };
   const status = await gitAsync(checkout, 'status', '--porcelain');
+  const dirty = status.stdout.trim() !== '';
+  // An external checkout is somebody's own working place: it may be dirty,
+  // mid-merge, or on another branch for reasons that are none of Ward's. With
+  // no update command, everything Ward needs from a refresh is
+  // origin/<mainLine>, and a fetch moves that without touching the tree — so
+  // the tree is fast-forwarded only when it is clean and on the main line.
+  if (where.external && how.by === 'git') {
+    const branch = (await gitAsync(checkout, 'symbolic-ref', '--short', 'HEAD')).stdout.trim();
+    if (dirty || branch !== record.mainLine) {
+      const why = dirty
+        ? 'it has uncommitted changes'
+        : `it is on ${branch === '' ? 'a detached HEAD' : `'${branch}'`}`;
+      return fetchOnly(checkout, name, record.mainLine, why);
+    }
+  }
   // Conflict is read off the checkout, never remembered: unmerged paths are
   // the evidence, and they are evidence whether this run created them or a
   // previous one left them. A conflicted checkout is skipped exactly as a
   // dirty one is — including under --stash, which would otherwise stash a
   // half-merged index and hand the human two problems.
   if (hasUnmergedPaths(status.stdout)) {
-    return { name, outcome: 'conflicted', detail: conflictDetail(name) };
+    return { name, outcome: 'conflicted', detail: conflictDetail(label) };
   }
   // The fail-safe: evidence of unrecorded work stops the toil, whatever the
   // record says (intent/01-concepts/03-work-lifecycle.md). --stash is the
   // human's explicit, narrow exception to it — the work is preserved and put
-  // back, never discarded.
-  const dirty = status.stdout.trim() !== '';
+  // back, never discarded. It holds for an update command too: a machine's
+  // own tool is never run through a dirty tree on Ward's initiative.
   if (dirty && !stash) {
     return { name, outcome: 'dirty', detail: 'uncommitted changes — refusing to touch it' };
   }
-  if (!dirty) return advance(checkout, name, record.mainLine);
+  if (!dirty) return advance(checkout, name, record.mainLine, how);
 
   const stackBefore = await stashRef(checkout);
   const push = await gitAsync(checkout, 'stash', 'push', '-u', '-m', STASH_MESSAGE);
@@ -372,14 +569,14 @@ async function refreshOne(root: string, name: string, stash: boolean): Promise<R
     return {
       name,
       outcome: 'failed',
-      detail: `cannot stash repos/${name}: ${oneLine(push.stderr)} — the checkout is untouched`,
+      detail: `cannot stash ${label}: ${oneLine(push.stderr)} — the checkout is untouched`,
     };
   }
   // Whether an entry was actually created is read from the stack, not from
   // git's prose: a push that saved nothing (git says so and still exits 0)
   // must not be followed by a pop that would take somebody else's entry.
   const stashed = (await stashRef(checkout)) !== stackBefore;
-  const advanced = await advance(checkout, name, record.mainLine);
+  const advanced = await advance(checkout, name, record.mainLine, how);
   if (!stashed) return advanced;
   // The stash comes back whatever the fast-forward did: leaving the human's
   // work parked because the network failed would be the fail-safe inverted.
@@ -390,22 +587,37 @@ async function refreshOne(root: string, name: string, stash: boolean): Promise<R
       // Left exactly as git left it — markers in the tree, the stash entry
       // still on the stack (git keeps it on a failed pop). Resolving is
       // judgement, and judgement is the human's (§18).
-      return { name, outcome: 'conflicted', detail: conflictDetail(name) };
+      return { name, outcome: 'conflicted', detail: conflictDetail(label) };
     }
     return {
       name,
       outcome: 'failed',
       detail:
         `refreshed, but restoring the stash failed: ${oneLine(pop.stderr)} — your changes are ` +
-        `still on the stack in repos/${name} (git stash list)`,
+        `still on the stack in ${label} (git stash list)`,
     };
   }
   if (advanced.outcome === 'failed') return advanced;
   return { ...advanced, detail: `${advanced.detail}; stashed and restored` };
 }
 
+/** How the checkout is brought to the latest: Ward's own git, or the machine's command. */
+type Advance =
+  | { readonly by: 'git' }
+  | {
+      readonly by: 'command';
+      readonly argv: readonly string[];
+      readonly values: Readonly<Record<string, string>>;
+    };
+
 /** Fetch, then fast-forward to the recorded main line — the refresh proper. */
-async function advance(checkout: string, name: string, mainLine: string): Promise<RefreshReport> {
+async function advance(
+  checkout: string,
+  name: string,
+  mainLine: string,
+  how: Advance,
+): Promise<RefreshReport> {
+  if (how.by === 'command') return advanceByCommand(checkout, name, mainLine, how);
   const fetch = await gitAsync(checkout, 'fetch', 'origin');
   if (fetch.exitCode !== 0) {
     return { name, outcome: 'failed', detail: `fetch failed: ${oneLine(fetch.stderr)}` };
@@ -423,6 +635,84 @@ async function advance(checkout: string, name: string, mainLine: string): Promis
   return before === after
     ? { name, outcome: 'current', detail: `at ${after} on ${mainLine}` }
     : { name, outcome: 'refreshed', detail: `${before} → ${after} on ${mainLine}` };
+}
+
+/** The short commit `origin/<mainLine>` names in a checkout, or '' when it names none. */
+async function mainLineTip(checkout: string, mainLine: string): Promise<string> {
+  const tip = await gitAsync(
+    checkout,
+    'rev-parse',
+    '--short',
+    '--verify',
+    '--quiet',
+    `refs/remotes/origin/${mainLine}`,
+  );
+  return tip.exitCode === 0 ? tip.stdout.trim() : '';
+}
+
+/**
+ * The fetch alone, for an external checkout whose tree Ward leaves as it is.
+ * Sufficient by construction: worktrees are cut from `origin/<mainLine>`,
+ * rebased onto it, measured against it, and the close gate asks it.
+ */
+async function fetchOnly(
+  checkout: string,
+  name: string,
+  mainLine: string,
+  why: string,
+): Promise<RefreshReport> {
+  const before = await mainLineTip(checkout, mainLine);
+  const fetch = await gitAsync(checkout, 'fetch', 'origin');
+  if (fetch.exitCode !== 0) {
+    return { name, outcome: 'failed', detail: `fetch failed: ${oneLine(fetch.stderr)}` };
+  }
+  const after = await mainLineTip(checkout, mainLine);
+  const left = `working tree left alone (${why})`;
+  return before === after
+    ? { name, outcome: 'current', detail: `origin/${mainLine} at ${after}; ${left}` }
+    : { name, outcome: 'refreshed', detail: `origin/${mainLine} ${before} → ${after}; ${left}` };
+}
+
+/**
+ * The machine's own update command in place of fetch + fast-forward. Its
+ * contract is its result: exit 0, and `origin/<mainLine>` resolving in the
+ * checkout — the one ref everything downstream reads. What the command did to
+ * get there (and to the working tree) is its own business.
+ */
+async function advanceByCommand(
+  checkout: string,
+  name: string,
+  mainLine: string,
+  how: Extract<Advance, { by: 'command' }>,
+): Promise<RefreshReport> {
+  const before = await mainLineTip(checkout, mainLine);
+  let run: Awaited<ReturnType<typeof runRepositoryCommand>>;
+  try {
+    run = await runRepositoryCommand('update', how.argv, how.values, checkout);
+  } catch (error) {
+    if (error instanceof WardError) return { name, outcome: 'failed', detail: error.message };
+    throw error;
+  }
+  if (!commandSucceeded(run)) {
+    return { name, outcome: 'failed', detail: `update command failed — ${describeFailure(run)}` };
+  }
+  const after = await mainLineTip(checkout, mainLine);
+  if (after === '') {
+    return {
+      name,
+      outcome: 'failed',
+      detail:
+        `the update command exited 0 but origin/${mainLine} does not resolve in the checkout — ` +
+        'an update command must leave that ref at the latest',
+    };
+  }
+  return before === after
+    ? { name, outcome: 'current', detail: `origin/${mainLine} at ${after} (update command)` }
+    : {
+        name,
+        outcome: 'refreshed',
+        detail: `origin/${mainLine} ${before} → ${after} (update command)`,
+      };
 }
 
 /**
@@ -444,9 +734,9 @@ async function stashRef(checkout: string): Promise<string> {
   return result.exitCode === 0 ? result.stdout.trim() : '';
 }
 
-function conflictDetail(name: string): string {
+function conflictDetail(label: string): string {
   return (
-    `unresolved conflicts in repos/${name} — resolve the unmerged paths (git status), ` +
+    `unresolved conflicts in ${label} — resolve the unmerged paths (git status), ` +
     'git add them, then drop the entry git kept (git stash drop); ' +
     'refresh skips this repository until it is clean'
   );

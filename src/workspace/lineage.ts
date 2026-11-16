@@ -318,8 +318,15 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '06774a17014352c84e68a11fbaca099c03b68504c80badf7ce364d5562d6dcdc',
         era: 'design 0061 (host names and titles)',
       },
-      // Current since design 0060: every floor has a color and an emoji, worn
-      // by its host, and `ward project identity` changes them.
+      // design 0060 — every floor has a color and an emoji, worn by its host,
+      // and `ward project identity` changes them. Every canonical checkout was
+      // contained, and every worktree stood under its floor.
+      {
+        sha256: '9d96072ad09f90e663bd4ecff2548744827a1187f3fcb6a17c4ce7da94644581',
+        era: 'design 0060 (floor identity)',
+      },
+      // Current since design 0065: a repository may keep its checkout outside
+      // the workspace and bring its own worktree and update commands.
     ],
   },
 ];

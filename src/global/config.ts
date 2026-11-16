@@ -20,6 +20,28 @@ import type { DocumentType } from '../store/document.ts';
 import { configDir } from './paths.ts';
 import { type GlobalRead, readGlobal } from './store.ts';
 
+/**
+ * A command Ward runs for a repository, spelled as an argument list — never a
+ * shell string (design/0065-external-checkouts-and-repo-commands/): the first
+ * element is the program, the rest its arguments, each handed over whole, so
+ * no value Ward substitutes is ever parsed by a shell.
+ */
+const repositoryCommandSchema = z.array(z.string().min(1)).min(1);
+
+export const repositoryCommandsSchema = z.object({
+  /** Brings the canonical checkout to the latest, in place of fetch + fast-forward. */
+  update: repositoryCommandSchema.optional(),
+  worktree: z
+    .object({
+      /** Makes a task's worktree, in place of `git worktree add`. */
+      create: repositoryCommandSchema.optional(),
+      /** Removes a task's worktree at close, in place of `git worktree remove`. */
+      remove: repositoryCommandSchema.optional(),
+    })
+    .optional(),
+});
+export type RepositoryCommands = z.infer<typeof repositoryCommandsSchema>;
+
 export const globalConfigSchema = z.object({
   type: z.literal('ward-config'),
   /**
@@ -40,6 +62,16 @@ export const globalConfigSchema = z.object({
    * may contain, applied to configured and derived names alike.
    */
   machine: z.string().min(1).optional(),
+  /**
+   * `repositories.<name>.*` — the commands this machine runs for the
+   * repository registered under that name
+   * (design/0065-external-checkouts-and-repo-commands/). The global layer is
+   * their ONLY home, and that is the trust model: a workspace record travels
+   * through git, so a command stored in one would be a command a pull can
+   * change and Ward then executes. Here, what Ward executes is what this
+   * machine's own human wrote down.
+   */
+  repositories: z.record(z.string().min(1), repositoryCommandsSchema).optional(),
   repo: z
     .object({
       refresh: z
@@ -84,6 +116,8 @@ export interface GlobalConfig {
    * table of Ward's opinions.
    */
   readonly machine: string | undefined;
+  /** The per-repository commands AS WRITTEN: an unnamed repository has none. */
+  readonly repositories: Readonly<Record<string, RepositoryCommands>>;
   readonly repo: { readonly refresh: { readonly stash: boolean } };
 }
 
@@ -97,6 +131,7 @@ export interface GlobalConfig {
 export const CONFIG_DEFAULTS: GlobalConfig = {
   agent: {},
   machine: undefined,
+  repositories: {},
   repo: { refresh: { stash: false } },
 };
 
@@ -123,6 +158,7 @@ function resolveConfig(read: GlobalRead<GlobalConfigRecord>): GlobalConfig {
   return {
     agent: record.agent ?? CONFIG_DEFAULTS.agent,
     machine: record.machine,
+    repositories: record.repositories ?? CONFIG_DEFAULTS.repositories,
     repo: {
       refresh: { stash: record.repo?.refresh?.stash ?? CONFIG_DEFAULTS.repo.refresh.stash },
     },

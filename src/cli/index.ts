@@ -26,6 +26,7 @@ import { WardError } from '../errors.ts';
 import { type PrForgeState, probeForge } from '../forge/gh.ts';
 import { readConfig } from '../global/config.ts';
 import { locateRepo, locateWorkspace } from '../global/locate.ts';
+import { readMachine } from '../global/machine.ts';
 import {
   listWorkspaces,
   type RegistryReport,
@@ -63,7 +64,8 @@ import {
   requireRegistered,
 } from '../workspace/affinity.ts';
 import { recordBrief } from '../workspace/briefs.ts';
-import { contextChain } from '../workspace/context.ts';
+import { resolveCheckout } from '../workspace/checkouts.ts';
+import { contextChain, contextTarget } from '../workspace/context.ts';
 import type { StepReport } from '../workspace/converge.ts';
 import { createWorkspace } from '../workspace/create.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
@@ -129,7 +131,9 @@ import {
   listWorktrees,
   type RebaseReport,
   rebaseTaskWorktrees,
+  standsOutside,
   type WorktreeStatus,
+  worktreePlacement,
 } from '../workspace/worktrees.ts';
 import { callerIsAgent, declaredSession } from './caller.ts';
 import {
@@ -414,9 +418,18 @@ const repoAdd = command(
     action: constant('repo-add'),
     source: argument(string({ metavar: 'SOURCE' })),
     name: optional(option('--name', string({ metavar: 'NAME' }))),
+    // A checkout Ward does not own (design/0065-external-checkouts-and-repo-commands/):
+    // SOURCE is where it already stands, and nothing is cloned or moved. The
+    // same spelling binds an already-registered external repository on a
+    // machine that has not said where its checkout is.
+    external: option('--external', {
+      description: message`Register against the checkout already standing at SOURCE, outside the workspace: never cloned, moved, or deleted. Also binds an external repository on this machine.`,
+    }),
     json: jsonFlag(),
   }),
-  { brief: message`Register a repository: clone a URL or adopt a local checkout.` },
+  {
+    brief: message`Register a repository: clone a URL, adopt a local checkout, or use one in place (--external).`,
+  },
 );
 
 const repoRefresh = command(
@@ -1067,7 +1080,7 @@ try {
         await cmdShellDiff(result.shell, result.names, result.dir);
         break;
       case 'repo-add':
-        await cmdRepoAdd(result.source, result.name, result.json);
+        await cmdRepoAdd(result.source, result.name, result.external, result.json);
         break;
       case 'repo-refresh':
         await cmdRepoRefresh(result.name, result.json, result.stash);
@@ -1304,6 +1317,16 @@ try {
                 `branch ${created.record.branch}, deliverable)`,
             ),
         );
+        // Made outside the workspace by its repository's command (0065): say
+        // where the floor reaches it, since that is the path to work through.
+        if (standsOutside(created.record)) {
+          console.log(
+            pc.dim(
+              `  reached from ${worktreePlacement(created.task, created.record.branch)} — ` +
+                'work through that path, so its floor is on the way down',
+            ),
+          );
+        }
         break;
       }
       case 'worktree-rebase': {
@@ -1422,7 +1445,9 @@ async function cmdWorkspaceCreate(path: string, json: boolean): Promise<void> {
 async function cmdContext(path: string | undefined, json: boolean): Promise<void> {
   const found = await requireWorkspace();
   const root = stewardshipEnclosure(found) ?? found;
-  const report = contextChain(root, path ?? process.cwd());
+  // A worktree standing outside the workspace is walked through its floor's
+  // link onto it (design/0065-external-checkouts-and-repo-commands/).
+  const report = contextChain(root, await contextTarget(root, path ?? process.cwd()));
   if (json) {
     printJson(contextJson(report));
     return;
@@ -2056,9 +2081,14 @@ async function resolveTaskTarget(
   return { root, code: address, worktreePath: scope.worktree.path };
 }
 
-async function cmdRepoAdd(source: string, name: string | undefined, json: boolean): Promise<void> {
+async function cmdRepoAdd(
+  source: string,
+  name: string | undefined,
+  external: boolean,
+  json: boolean,
+): Promise<void> {
   const root = await requireMutableWorkspace();
-  const report = await addRepository(root, source, name);
+  const report = await addRepository(root, source, name, { external });
   if (json) {
     printJson(repoAddJson(report));
     return;
@@ -2071,7 +2101,11 @@ async function cmdRepoAdd(source: string, name: string | undefined, json: boolea
   console.log(`${verb} ${pc.bold(report.record.name)}`);
   console.log(`  remote    ${report.record.remote}`);
   console.log(`  main line ${report.record.mainLine}`);
-  console.log(`  checkout  ${pc.dim(`repos/${report.record.name}/`)}`);
+  console.log(
+    report.record.checkout === 'external'
+      ? `  checkout  ${report.path} ${pc.dim('(external — bound on this machine, never moved or deleted)')}`
+      : `  checkout  ${pc.dim(`repos/${report.record.name}/`)}`,
+  );
 }
 
 /**
@@ -2088,6 +2122,14 @@ async function cmdRepoRemove(name: string, json: boolean): Promise<void> {
     return;
   }
   console.log(`${pc.green('removed')} ${pc.bold(report.record.name)}`);
+  if (report.checkout === 'kept') {
+    // An external checkout was never Ward's (0065): it is left exactly as it
+    // stood, and the undo is the registration that named it.
+    const where = report.path ?? 'PATH';
+    console.log(`  checkout  ${pc.dim(where)} left in place ${pc.dim('(external)')}`);
+    console.log(`  re-add with ${pc.dim(`ward repo add ${where} --external`)}`);
+    return;
+  }
   console.log(
     `  checkout  ${pc.dim(`repos/${report.record.name}/`)} ` +
       (report.checkout === 'deleted' ? 'deleted' : pc.dim('was already gone')),
@@ -2141,7 +2183,7 @@ async function cmdRepoList(json: boolean): Promise<void> {
   const root = await requireWorkspace();
   const records = await listRepositories(root);
   if (json) {
-    printJson(repoListJson(records));
+    printJson(repoListJson(records, (name) => resolveCheckout(root, name).path));
     return;
   }
   if (records.length === 0) {
@@ -2149,8 +2191,14 @@ async function cmdRepoList(json: boolean): Promise<void> {
     return;
   }
   for (const record of records) {
+    // An external checkout's place is the one thing the record cannot say
+    // (0065), so the listing does: where it stands here, or that it is unbound.
+    const external =
+      record.checkout === 'external'
+        ? ` ${pc.dim('external:')} ${resolveCheckout(root, record.name).path ?? pc.yellow('not bound on this machine')}`
+        : '';
     console.log(
-      `  ${pc.bold(record.name)} ${pc.dim('—')} ${record.remote} ${pc.dim(`(${record.mainLine})`)}`,
+      `  ${pc.bold(record.name)} ${pc.dim('—')} ${record.remote} ${pc.dim(`(${record.mainLine})`)}${external}`,
     );
   }
 }
@@ -2609,8 +2657,16 @@ async function cmdWorktreeList(json: boolean): Promise<void> {
     console.log(pc.dim('no worktrees — create one with: ward worktree create ADDRESS --repo NAME'));
     return;
   }
+  const machine = (await readMachine()).name;
   for (const { taskAddress: address, record, present } of listings) {
-    const where = present ? pc.dim(record.path) : pc.yellow(`${record.path} (missing)`);
+    // An outside worktree made on another machine is not missing — it is
+    // somewhere this machine cannot look (0065).
+    const elsewhere = !present && record.machine !== undefined && record.machine !== machine;
+    const where = present
+      ? pc.dim(record.path)
+      : elsewhere
+        ? pc.dim(`${record.path} (on ${record.machine})`)
+        : pc.yellow(`${record.path} (missing)`);
     // A workspace-anchored worktree names its source plainly — the workspace
     // repo has no name in the repository set (0019).
     const source = record.repo ?? 'workspace';

@@ -10,8 +10,9 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { WardError } from '../errors.ts';
+import { resolveCheckout, unboundMessage } from '../workspace/checkouts.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
-import { checkoutPath, listRepositoryNames } from '../workspace/repos.ts';
+import { listRepositoryNames } from '../workspace/repos.ts';
 import {
   findListing,
   listWorkspaces,
@@ -140,7 +141,9 @@ export async function locateRepo(
   // that is not there would be the wrong kind of honesty. It is remembered,
   // so that if nothing else answers, the report is the drift and its remedy
   // rather than a bare "not found" (§20).
-  let claimed: { workspace: WorkspaceRef; path: string; repo: string } | undefined;
+  let claimed:
+    | { workspace: WorkspaceRef; path: string | undefined; external: boolean; repo: string }
+    | undefined;
   // Rung by rung across the WHOLE search order, never workspace by workspace
   // across the whole ladder: an exact name in the default workspace must beat
   // a shorthand in the one underfoot, or a repository would become
@@ -156,13 +159,24 @@ export async function locateRepo(
             `'${workspace.name}': ${matches.join(', ')} — name one exactly`,
         );
       }
-      const path = checkoutPath(workspace.path, only);
-      if (!existsSync(path)) {
-        claimed ??= { workspace, path, repo: only };
+      // Contained or external (design/0065-external-checkouts-and-repo-commands/):
+      // the answer is wherever the checkout stands on this machine.
+      const { path, external } = resolveCheckout(workspace.path, only);
+      if (path === undefined || !existsSync(path)) {
+        claimed ??= { workspace, path, external, repo: only };
         continue;
       }
       return { repo: only, workspace, path, matched: rung.kind };
     }
+  }
+  if (claimed?.external === true) {
+    throw new WardError(
+      claimed.path === undefined
+        ? `${unboundMessage(claimed.repo)} (registered in workspace '${claimed.workspace.name}')`
+        : `'${claimed.repo}' is registered in workspace '${claimed.workspace.name}' but its ` +
+            `external checkout is missing at ${claimed.path} — put it back, or bind where it ` +
+            `stands now: ward repo add PATH --external --name ${claimed.repo}`,
+    );
   }
   if (claimed !== undefined) {
     throw new WardError(
