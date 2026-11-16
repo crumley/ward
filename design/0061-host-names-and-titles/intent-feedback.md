@@ -15,6 +15,6 @@
 - **Proposed revision:** Say that a label names the work as a human recognizes it — its name, with
   its code where the code disambiguates or is what a verb takes — rather than asserting that the
   codes are already held.
-- **Status:** pending — ruled by Ryan 2026-11-15, awaiting the intent edit: accepted as proposed — a
-  label names the work as a human recognizes it, with its code where the code tells two apart or is
-  what a command takes (https://github.com/crumley/ward/pull/139)
+- **Status:** adjudicated — [#139](https://github.com/crumley/ward/pull/139) (Ryan's ruling,
+  2026-11-15: a label names the work as a human recognizes it, with its code where the code tells
+  two apart or is what a command takes)
