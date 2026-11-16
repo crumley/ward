@@ -150,7 +150,7 @@ test('status: the floor session rides its floor row, not the workspace block', (
 
   const human = ward(['status']).stdout;
   expect(human).toMatch(
-    /floor 1 — 🌲 alpha \[active\] · green\n {2}session f1-1@test — run alpha \(/u,
+    /floor 1 — 🌊 alpha \[active\] · blue\n {2}session f1-1@test — run alpha \(/u,
   );
 });
 

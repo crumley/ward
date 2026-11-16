@@ -14,9 +14,7 @@ import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts'
 test('project open --repo claims at open; project list shows the claims', () => {
   expect(runWard(['project', 'open', 'toolchain', '--repo', 'demo'], ws).exitCode).toBe(0);
   const listed = runWard(['project', 'list'], ws);
-  expect(listed.stdout).toContain(
-    'floor 1 — 🌲 toolchain [active] (0 tasks · repos: demo) · green',
-  );
+  expect(listed.stdout).toContain('floor 1 — 🌊 toolchain [active] (0 tasks · repos: demo) · blue');
 
   const json = JSON.parse(runWard(['project', 'list', '--json'], ws).stdout);
   expect(json.projects[1]).toMatchObject({ floor: 1, repositories: ['demo'] });

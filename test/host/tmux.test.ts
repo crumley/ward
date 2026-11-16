@@ -57,6 +57,23 @@ test('a title leads with the window, says where it stands, and adds a pane title
   expect(titleString('c# f1')).toContain('· c## f1#{?');
 });
 
+test("a title leads with the floor's emoji when it has one, and with no gap when it has none", () => {
+  // design/0064-floor-identity-palette/: a tab shows the head of a title.
+  expect(titleString('main f7', 'attach', '🌸')).toStartWith('🌸 #{window_name} · main f7#{?');
+  expect(titleString('main f7', 'observe', '🌸')).toStartWith(
+    '🌸 #{window_name} · main f7 (observing)#{?',
+  );
+  expect(titleString('main f7', 'attach', undefined)).toStartWith('#{window_name} · main f7');
+  expect(titleString('main f7', 'attach', '')).toStartWith('#{window_name} · main f7');
+  const pink = { color: 'pink', emoji: '🌸', label: 'f7 ward-development' } as const;
+  expect(
+    options([';', ...titleGroupArgv('main-f7-x', { title: 'main f7', identity: pink })]),
+  ).toEqual([
+    ['=main-f7-x:', 'set-titles', 'on'],
+    ['=main-f7-x:', 'set-titles-string', titleString('main f7', 'attach', '🌸')],
+  ]);
+});
+
 test('renaming is in place: a host by exact name, a window by its id, titles per tmux session', () => {
   expect(renameGroupArgv('ward-main-f7', 'main-f7-ward-development')).toEqual([
     'rename-session',
@@ -70,7 +87,7 @@ test('renaming is in place: a host by exact name, a window by its id, titles per
     '@3',
     't33 host names',
   ]);
-  const argv = titleGroupArgv('main-f7-x', 'main f7');
+  const argv = titleGroupArgv('main-f7-x', { title: 'main f7' });
   expect(argv[0]).toBe('set-option');
   expect(options([';', ...argv])).toEqual([
     ['=main-f7-x:', 'set-titles', 'on'],
@@ -78,7 +95,9 @@ test('renaming is in place: a host by exact name, a window by its id, titles per
   ]);
   expect(argv).not.toContain('-g'); // never the server's, never another session's
   // A standing observe view is retitled as one: its mark stays (0063).
-  expect(options([';', ...titleGroupArgv('main-f7-x-o1', 'main f7', 'observe')])).toEqual([
+  expect(
+    options([';', ...titleGroupArgv('main-f7-x-o1', { title: 'main f7' }, 'observe')]),
+  ).toEqual([
     ['=main-f7-x-o1:', 'set-titles', 'on'],
     ['=main-f7-x-o1:', 'set-titles-string', titleString('main f7', 'observe')],
   ]);
@@ -116,7 +135,7 @@ test("a host is created at the detached size, stamped, and holding nothing of a 
     'ward-main-f3',
     { workspace: 'ws-id-0123456789ab', floor: 3 },
     '0.1.0',
-    'main f3',
+    { title: 'main f3' },
   );
   expect(argv.slice(0, 8)).toEqual([
     'new-session',
@@ -305,7 +324,7 @@ test('a view takes the smallest free number, v for attach and o for observe', ()
 });
 
 test("an attach view is grouped with the floor host, stamped, and selects the session's window", () => {
-  expect(attachViewArgv('ward-a-f3', 'ward-a-f3-v1', 'ws-id', '@7', 'a f3')).toEqual([
+  expect(attachViewArgv('ward-a-f3', 'ward-a-f3-v1', 'ws-id', '@7', { title: 'a f3' })).toEqual([
     'new-session',
     '-d',
     '-t',
@@ -338,7 +357,7 @@ test("an attach view is grouped with the floor host, stamped, and selects the se
 });
 
 test('an observe view is a session of its own, sized like a host, holding a placeholder', () => {
-  const argv = observeViewArgv('ward-a-f3-o1', 'ws-id', 'a f3');
+  const argv = observeViewArgv('ward-a-f3-o1', 'ws-id', { title: 'a f3' });
   expect(argv.slice(0, 4)).toEqual(['new-session', '-d', '-s', 'ward-a-f3-o1']);
   expect(argv.slice(0, argv.indexOf(';'))).not.toContain('-t'); // not grouped: no neighbor in it
   expect(argv.join(' ')).toContain('-x 120 -y 40');
@@ -441,6 +460,7 @@ test('a missing tmux is unusable, with the reason, and never throws', () => {
 test.each<[string, string, string]>([
   ['blue', 'bg=colour26,fg=colour231', 'light ink on a dark swatch'],
   ['yellow', 'bg=colour220,fg=colour16', 'dark ink on a light swatch'],
+  ['silver', 'bg=colour250,fg=colour16', "the ground floor's"],
 ])('a %s floor is a %s status line (%s)', (color, style) => {
   const argv = themeArgv('main-f7-ward-development', {
     color: color as 'blue',

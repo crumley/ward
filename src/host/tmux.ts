@@ -95,26 +95,46 @@ export function mintGroupName(wanted: string): string {
   return munge(wanted);
 }
 
+/** What a terminal's title is built from: where it stands, and the floor's mark. */
+export interface Titling {
+  /** What the title says after the window's own name — literal text. */
+  readonly title: string;
+  /** The emoji of the floor whose host this is, which the title leads with. */
+  readonly identity?: GroupIdentity;
+}
+
 /**
- * The title tmux hands a terminal looking at a host or a view: the current
- * window's name, where it stands, and — when the run has set one — the
- * pane's own title (the harness's line about what it is doing). A pane that
- * never set a title carries the machine's hostname, which says nothing and
- * is left out. `standing` is literal text, so its `#` is escaped.
+ * The title tmux hands a terminal looking at a host or a view: the floor's
+ * emoji first when it has one (design/0064-floor-identity-palette/ — a tab
+ * shows the head of a title, and the emoji is the shortest thing that says
+ * which floor), then the current window's name, where it stands, and — when
+ * the run has set one — the pane's own title (the harness's line about what
+ * it is doing). A pane that never set a title carries the machine's
+ * hostname, which says nothing and is left out. `standing` and the emoji are
+ * literal text, so a `#` in either is escaped. The string is the SESSION's,
+ * so a window linked into several hosts leads with the emoji of the host it
+ * is seen through.
  */
-export function titleString(standing: string, mode: ViewMode = 'attach'): string {
+export function titleString(
+  standing: string,
+  mode: ViewMode = 'attach',
+  emoji: string | undefined = undefined,
+): string {
   const unset = (name: string) => `#{==:#{pane_title},#{${name}}}`;
   const untitled = `#{||:#{==:#{pane_title},},#{||:${unset('host')},${unset('host_short')}}}`;
   const watching = mode === 'observe' ? ' (observing)' : '';
-  return `#{window_name} · ${standing.replace(/#/g, '##')}${watching}#{?${untitled},, · #{pane_title}}`;
+  const literal = (text: string) => text.replace(/#/g, '##');
+  const lead = emoji === undefined || emoji === '' ? '' : `${literal(emoji)} `;
+  return `${lead}#{window_name} · ${literal(standing)}${watching}#{?${untitled},, · #{pane_title}}`;
 }
 
 /** Turn terminal titles on for one tmux session, and say what they read. */
-function titleOptions(name: string, standing: string, mode: ViewMode = 'attach'): string[] {
+function titleOptions(name: string, titling: Titling, mode: ViewMode = 'attach'): string[] {
   const target = ['-t', windowTarget(name)];
+  const string = titleString(titling.title, mode, titling.identity?.emoji);
   return [
     ...setOption(target, 'set-titles', 'on'),
-    ...setOption(target, 'set-titles-string', titleString(standing, mode)),
+    ...setOption(target, 'set-titles-string', string),
   ];
 }
 
@@ -126,10 +146,10 @@ export function renameGroupArgv(from: string, to: string): string[] {
 /** Title a tmux session that already exists — a host, or a view in its own mode. */
 export function titleGroupArgv(
   name: string,
-  standing: string,
+  titling: Titling,
   mode: ViewMode = 'attach',
 ): string[] {
-  return titleOptions(name, standing, mode).slice(1);
+  return titleOptions(name, titling, mode).slice(1);
 }
 
 export function renameWindowArgv(window: string, label: string): string[] {
@@ -163,7 +183,7 @@ export function createGroupArgv(
   name: string,
   stamp: GroupStamp,
   version: string,
-  title: string,
+  title: Titling,
 ): string[] {
   const target = windowTarget(name);
   return [
@@ -306,7 +326,7 @@ export function attachViewArgv(
   name: string,
   workspace: string,
   window: string,
-  title: string,
+  title: Titling,
 ) {
   return [
     'new-session',
@@ -327,7 +347,7 @@ export function attachViewArgv(
 }
 
 /** An observe view: a tmux session of its own, holding a placeholder the link will replace. */
-export function observeViewArgv(name: string, workspace: string, title: string): string[] {
+export function observeViewArgv(name: string, workspace: string, title: Titling): string[] {
   return [
     'new-session',
     '-d',
@@ -772,7 +792,7 @@ export function tmuxHost(env: Env = process.env): SessionHost {
           );
         }
         const [window = '', index = ''] = must(
-          createGroupArgv(minted, request.group, request.version, request.naming.title),
+          createGroupArgv(minted, request.group, request.version, request.naming),
           `create host ${minted}`,
         )
           .trim()
@@ -874,7 +894,7 @@ export function tmuxHost(env: Env = process.env): SessionHost {
             failed.push(`${name}: ${why(hostMoved)}`);
           }
         }
-        const titled = call(titleGroupArgv(current, naming.title));
+        const titled = call(titleGroupArgv(current, naming));
         if (!titled.ok) failed.push(`${current}: ${why(titled)}`);
         let dressed = false;
         if (naming.identity !== undefined) {
@@ -902,7 +922,7 @@ export function tmuxHost(env: Env = process.env): SessionHost {
               failed.push(`${view.name}: ${why(followed)}`);
             }
           }
-          const viewTitled = call(titleGroupArgv(now, naming.title, view.mode));
+          const viewTitled = call(titleGroupArgv(now, naming, view.mode));
           if (!viewTitled.ok) failed.push(`${now}: ${why(viewTitled)}`);
           if (!dressed || naming.identity === undefined) continue;
           if (call(themeArgv(now, naming.identity)).ok) worn.push(now);
@@ -922,14 +942,14 @@ export function tmuxHost(env: Env = process.env): SessionHost {
         const name = viewName(request.group, request.mode, new Set(groups().map((g) => g.name)));
         if (request.mode === 'attach') {
           const made = call(
-            attachViewArgv(request.group, name, request.workspace, request.window, request.title),
+            attachViewArgv(request.group, name, request.workspace, request.window, request),
           );
           if (made.ok) return worn({ name, mode: 'attach' }, request);
           last = made.stderr;
           if (!/duplicate session/.test(made.stderr)) break;
           continue;
         }
-        const made = call(observeViewArgv(name, request.workspace, request.title));
+        const made = call(observeViewArgv(name, request.workspace, request));
         if (!made.ok) {
           last = made.stderr;
           if (/duplicate session/.test(made.stderr)) continue;

@@ -127,8 +127,8 @@ test('attach renames a host and its windows in place, then joins through the new
           name: old.f1,
           naming: {
             name: group('f1'),
-            title: `🌲 ${name()} f1`,
-            identity: { color: 'green', emoji: '🌲', label: 'f1 alpha' },
+            title: `${name()} f1`,
+            identity: { color: 'blue', emoji: '🌊', label: 'f1 alpha' },
           },
         },
       ],
@@ -139,7 +139,7 @@ test('attach renames a host and its windows in place, then joins through the new
     },
   ]);
   expect(host.views.map((view) => [view.group, view.title])).toEqual([
-    [group('f1'), `🌲 ${name()} f1`],
+    [group('f1'), `${name()} f1`],
   ]);
   expect(host.placed).toEqual([]); // renamed, never re-created
   expect(host.closed).toEqual([]);
@@ -189,8 +189,8 @@ let caseId = 0;
 /** The title and identity of a fresh workspace's ground floor (design/0060-floor-identity/). */
 function GROUND() {
   return {
-    title: `🌊 ${name()} f0`,
-    identity: { color: 'blue', emoji: '🌊', label: 'f0 workspace' },
+    title: `${name()} f0`,
+    identity: { color: 'silver', emoji: '🔧', label: 'f0 workspace' },
   } as const;
 }
 

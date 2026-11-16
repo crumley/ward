@@ -81,13 +81,14 @@ export function hostName(workspace: string, floor: FloorIdentity): string {
 }
 
 /**
- * Where a terminal is standing, for its title: `<workspace> f<N>`, led by the
- * floor's emoji when it has one. The window's own name, which the title leads
- * with, says the rest.
+ * Where a terminal is standing, for its title: `<workspace> f<N>`. The
+ * window's own name, which comes before it, says the rest; the floor's emoji
+ * is not here but at the head of the whole title
+ * (design/0064-floor-identity-palette/), where the host puts it from the
+ * identity it wears.
  */
 export function hostTitle(workspace: string, floor: FloorIdentity): string {
-  const mark = floor.emoji === undefined || floor.emoji === '' ? '' : `${floor.emoji} `;
-  return oneLine(`${mark}${workspace} f${floor.number}`);
+  return oneLine(`${workspace} f${floor.number}`);
 }
 
 /**
@@ -124,11 +125,23 @@ export function windowLabel(subject: Subject, hostFloor: number): string {
 
 /**
  * The title of a terminal running a session in the FOREGROUND, where there is
- * no host to say where it stands: the session's name with its floor spelled
- * out (`f7 ward-development`), then the workspace.
+ * no host to say where it stands: the floor's emoji first, as in a hosted
+ * title (design/0064-floor-identity-palette/), then the session's name with
+ * its floor spelled out (`f7 ward-development`), then the workspace. A
+ * session with no floor, or a floor with no emoji, has no lead and no gap.
  */
 export function foregroundTitle(subject: Subject, workspace: string): string {
-  return `${windowLabel(subject, NO_HOST)} · ${workspace}`;
+  const [emoji, plain] = unmarked(subject);
+  const lead = emoji === undefined || emoji === '' ? '' : `${emoji} `;
+  return `${lead}${windowLabel(plain, NO_HOST)} · ${workspace}`;
+}
+
+/** A subject's floor emoji, and the subject with it taken off its floor. */
+function unmarked(subject: Subject): [string | undefined, Subject] {
+  if (subject.kind !== 'floor' && subject.kind !== 'task') return [undefined, subject];
+  if (subject.floor === undefined) return [undefined, subject];
+  const { emoji, ...floor } = subject.floor;
+  return [emoji, { ...subject, floor }];
 }
 
 /** A host floor no floor has: every label names its floor. */

@@ -70,7 +70,11 @@ export interface PlaceRequest {
 export interface GroupNaming {
   /** The name wanted; the host may adapt it to the characters it takes. */
   readonly name: string;
-  /** What a terminal's title says after the window's own name. */
+  /**
+   * What a terminal's title says after the window's own name. The title
+   * leads with the emoji of `identity`, when the group wears one
+   * (design/0064-floor-identity-palette/).
+   */
   readonly title: string;
   /**
    * What the group wears (design/0060-floor-identity/) — absent when the

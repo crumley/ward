@@ -23,8 +23,9 @@ const LONG: FloorIdentity = { number: 4, slug: 'obsidian-brain-refresh-and-more'
 test.each<[string, FloorIdentity, string, string]>([
   ['main', F0, 'main-f0-workspace', 'main f0'],
   ['main', F7, 'main-f7-ward-development', 'main f7'],
-  // The name is the one a human types: a floor's emoji marks the title, never the name.
-  ['main', F9, 'main-f9-review-tool', '🔍 main f9'],
+  // The name is the one a human types, and where a title stands is plain: a
+  // floor's emoji is put at the head of the whole title by the host (0064).
+  ['main', F9, 'main-f9-review-tool', 'main f9'],
   ['main', LONG, 'main-f4-obsidian-brain-refresh', 'main f4'],
   ['main', { number: 3, slug: '' }, 'main-f3', 'main f3'], // no project record on the floor
 ])('workspace %p, floor %p: host %p, titled %p', (workspace, floor, name, title) => {
@@ -66,6 +67,14 @@ test.each<[string, Subject, string]>([
   ['the coordinator', { kind: 'coordinator' }, 'coord · main'],
   ["a floor's session", { kind: 'floor', floor: F7 }, 'f7 ward-development · main'],
   ['a task', { kind: 'task', floor: F7, room: 33, slug: 'titles' }, 'f7t33 titles · main'],
+  // A floor's emoji leads the title and stands apart from the address (0064).
+  ["an identified floor's session", { kind: 'floor', floor: F9 }, '🔍 f9 review-tool · main'],
+  [
+    'a task on an identified floor',
+    { kind: 'task', floor: F9, room: 6, slug: 'markup' },
+    '🔍 f9t6 markup · main',
+  ],
+  ['a legacy bare task', { kind: 'task', room: 2, slug: 'old-work' }, 'legacy-t2 old-work · main'],
 ])('in the foreground, %s is titled %p', (_name, subject, title) => {
   expect(foregroundTitle(subject, 'main')).toBe(title);
 });

@@ -45,15 +45,16 @@ test('every scope reads as what it is: coordinator, helper, floor, task', async 
   expect(await label(sweep)).toBe('Sweep the worktrees');
   expect(await label(floor)).toBe('alpha'); // a purpose never displaces what the session is
   expect(await label(task)).toBe('t1 fix-the-thing');
-  expect(await label(lineage)).toBe('🌊f0 workspace'); // another floor's, marked with its emoji
-  // A floor's emoji leads its title, and its host wears its identity (0060).
+  expect(await label(lineage)).toBe('🔧f0 workspace'); // another floor's, marked with its emoji
+  // Its host wears its identity (0060), whose emoji the host puts at the head
+  // of the title (0064) — so where it stands carries none.
   expect(naming.group(1)).toEqual({
     name: `${name}-f1-alpha`,
-    title: `🌲 ${name} f1`,
-    identity: { color: 'green', emoji: '🌲', label: 'f1 alpha' },
+    title: `${name} f1`,
+    identity: { color: 'blue', emoji: '🌊', label: 'f1 alpha' },
   });
   expect(naming.group(6)).toEqual({ name: `${name}-f6`, title: `${name} f6` });
-  expect(naming.foreground(await findSession(ws, floor.id))).toBe(`🌲f1 alpha · ${name}`);
+  expect(naming.foreground(await findSession(ws, floor.id))).toBe(`🌊 f1 alpha · ${name}`);
 });
 
 test('two sessions that would read the same are told apart; a foreground one never counts', async () => {
@@ -111,8 +112,8 @@ test('a refresh renames only what is verifiably this workspace’s own, and neve
           name: 'ward-old-f0',
           naming: {
             name: `${name}-f0-workspace`,
-            title: `🌊 ${name} f0`,
-            identity: { color: 'blue', emoji: '🌊', label: 'f0 workspace' },
+            title: `${name} f0`,
+            identity: { color: 'silver', emoji: '🔧', label: 'f0 workspace' },
           },
           views: [{ name: 'ward-old-f0-v1', mode: 'attach' }],
         },
