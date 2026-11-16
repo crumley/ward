@@ -20,6 +20,7 @@ import { basename, join, resolve } from 'node:path';
 import { z } from 'zod';
 import { WardError } from '../errors.ts';
 import { type DocumentType, readDocument } from '../store/document.ts';
+import { requireReadableFormat } from '../store/format.ts';
 import { workspaceRecordType } from '../store/types.ts';
 import { discoverWorkspace, isWorkspaceRoot } from '../workspace/layout.ts';
 import { refuseStewardshipCopy } from '../workspace/steward.ts';
@@ -153,6 +154,10 @@ export async function registerWorkspace(
   // enclosing workspace's record, so registering it would put a candidate copy
   // in the machine's fallback order and let a verb resolve to a preview.
   refuseStewardshipCopy(root);
+  // Registering reads the workspace's recorded name, so it is a read like any
+  // other (design/0066-workspace-format-guard/) — refused, rather than
+  // registered under a name guessed from a record this Ward cannot read.
+  requireReadableFormat(root);
   const name = await workspaceName(root);
   return mutate(dir, `workspace register ${name}`, (record) => {
     const existing = record.workspaces.find((entry) => samePath(entry.path, root));

@@ -7,6 +7,7 @@ import { mkdir, rename } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import type { z } from 'zod';
 import { WardError } from '../errors.ts';
+import { requireFormatFor, requireReadableFormat } from './format.ts';
 import { joinFrontMatter, splitFrontMatter } from './frontmatter.ts';
 
 export interface DocumentType<T> {
@@ -22,7 +23,17 @@ export interface Document<T> {
   readonly body: string;
 }
 
+/**
+ * Every read and every write first asks whether this Ward may read the
+ * workspace at all (design/0066-workspace-format-guard/): a record written at
+ * a format level above this Ward's is refused before a byte of it is parsed,
+ * because parsing it is how an older reader comes to misread it. The CLI asks
+ * the same question up front; asking it here too is what covers a path into
+ * the store that no one remembered to gate. A root with no workspace record —
+ * a global directory, a workspace being created — has no level and passes.
+ */
 export async function readDocument<T>(root: string, type: DocumentType<T>): Promise<Document<T>> {
+  requireReadableFormat(root);
   return parseDocument(await Bun.file(join(root, type.relPath)).text(), type);
 }
 
@@ -33,6 +44,7 @@ export async function readDocument<T>(root: string, type: DocumentType<T>): Prom
  * so the two reads can never disagree about what a valid document is.
  */
 export function readDocumentSync<T>(root: string, type: DocumentType<T>): Document<T> {
+  requireReadableFormat(root);
   return parseDocument(readFileSync(join(root, type.relPath), 'utf8'), type);
 }
 
@@ -96,6 +108,10 @@ export async function writeDocument<T>(
   document: Document<T>,
   options: { readonly stageIn?: string } = {},
 ): Promise<void> {
+  requireReadableFormat(root);
+  // And the other direction: a shape the workspace's level does not describe
+  // waits for the upgrade that raises it.
+  requireFormatFor(root, type.name, document.data);
   const text = renderDocument(type, document);
   const file = join(root, type.relPath);
   await mkdir(dirname(file), { recursive: true });

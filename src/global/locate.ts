@@ -10,6 +10,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { WardError } from '../errors.ts';
+import { requireReadableFormat } from '../store/format.ts';
 import { resolveCheckout, unboundMessage } from '../workspace/checkouts.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
 import { listRepositoryNames } from '../workspace/repos.ts';
@@ -136,6 +137,11 @@ export async function locateRepo(
   fuzzy = false,
 ): Promise<RepoLocation> {
   const order = await searchOrder(from, workspaceTarget);
+  // Every workspace the search may ask is one this Ward must be able to read
+  // (design/0066-workspace-format-guard/). Refused for the whole search, not
+  // skipped: passing over a workspace that would have answered first is a
+  // different answer given silently, and a path is what the caller acts on.
+  for (const workspace of order) requireReadableFormat(workspace.path);
   // A record that claims the name but has no checkout on disk does not end the
   // search — a later workspace may hold a real one, and answering with a path
   // that is not there would be the wrong kind of honesty. It is remembered,

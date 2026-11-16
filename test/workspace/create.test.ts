@@ -21,7 +21,7 @@ const MIGRATION_STEPS = ['worktree placement', 'retire worktrees/'];
 test('a fresh create establishes every step and commits once', async () => {
   const report = await createWorkspace(root);
   expect(report.steps.map((step) => step.outcome)).toEqual([
-    ...Array(17).fill('established'),
+    ...Array(18).fill('established'),
     'satisfied',
     'satisfied',
   ]);
@@ -45,7 +45,7 @@ test('a fresh create establishes every step and commits once', async () => {
 test('re-converging an existing workspace is satisfied throughout and changes nothing', async () => {
   await createWorkspace(root);
   const report = await convergeWorkspace(root);
-  expect(report.steps.map((step) => step.outcome)).toEqual(Array(18).fill('satisfied'));
+  expect(report.steps.map((step) => step.outcome)).toEqual(Array(19).fill('satisfied'));
   expect(commitCount()).toBe(1);
   expect(git(root, 'status', '--porcelain').stdout).toBe('');
 });
@@ -88,7 +88,7 @@ test('a run interrupted after the marker is finished by a converge, not by a sec
   expect(createWorkspace(root)).rejects.toThrow(/already a Ward workspace/);
   const report = await convergeWorkspace(root);
   expect(report.steps.map((step) => step.outcome)).toEqual([
-    ...Array(16).fill('established'),
+    ...Array(17).fill('established'),
     'satisfied',
     'satisfied',
   ]);

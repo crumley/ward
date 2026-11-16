@@ -51,6 +51,7 @@ import {
 import { CANDIDATE_KINDS, candidates, renderCandidates } from '../shell/candidates.ts';
 import { emitShellLayer } from '../shell/layer.ts';
 import { FISH_SHORTHAND_NAMES, findShorthand } from '../shell/shorthands.ts';
+import { requireReadableFormat } from '../store/format.ts';
 import type { SessionRecord, TaskRecord, WorkState } from '../store/types.ts';
 import { FLOOR_COLORS, type FloorColor, INK, PALETTE, POOL_COLORS } from '../theme/palette.ts';
 import { distinctAddress, taskAddress } from '../workspace/address.ts';
@@ -1673,7 +1674,17 @@ function renderUpgrade(report: UpgradeReport, json: boolean): void {
   );
   // Phase 1 first, in create's step style: the record's own shape is what
   // phase 2 stands on, and it is reported whether or not a vehicle followed.
-  for (const step of report.converged) printStep(step);
+  // Raising the format is the one converge step that takes something away —
+  // from every older Ward that shares this workspace — so its line is printed
+  // undimmed and marked, where it cannot be read past
+  // (design/0066-workspace-format-guard/).
+  for (const step of report.converged) {
+    if (step.step === 'workspace format' && step.detail.includes('→')) {
+      console.log(`  ${renderOutcome(step)}  ${step.step} ${pc.yellow('!')} ${step.detail}`);
+    } else {
+      printStep(step);
+    }
+  }
   if (report.converged.length > 0) console.log('');
   for (const artifact of report.artifacts) {
     console.log(
@@ -2002,8 +2013,19 @@ async function cmdShellDiff(
  * preference would turn that incidental state into a target. The two `path`
  * verbs are the deliberate exception — they are registry queries by
  * construction, so both audiences may ask them from anywhere.
+ *
+ * Whichever way the workspace was found, it is refused here when it needs a
+ * newer Ward than this one (design/0066-workspace-format-guard/) — before the
+ * verb reads a record, a read verb included: a `ward status` built from
+ * records this Ward misreads is the failure the guard exists to prevent.
  */
 async function requireWorkspace(): Promise<string> {
+  const root = await resolveWorkspace();
+  requireReadableFormat(root);
+  return root;
+}
+
+async function resolveWorkspace(): Promise<string> {
   const root = discoverWorkspace(process.cwd());
   if (root !== null) return root;
   if (callerIsAgent()) {

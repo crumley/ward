@@ -27,6 +27,7 @@ import type { Suggestion } from '@optique/core/parser';
 import { integer, string, type ValueParser } from '@optique/core/valueparser';
 import { listWorkspaces } from '../global/registry.ts';
 import { repoCandidates } from '../shell/candidates.ts';
+import { formatReadable } from '../store/format.ts';
 import { distinctAddress } from '../workspace/address.ts';
 import { git } from '../workspace/git.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
@@ -61,7 +62,7 @@ function suggesting(metavar: NonEmptyString, candidates: Candidates): ValueParse
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
       let found: readonly Candidate[];
       try {
-        found = await candidates(discoverWorkspace(process.cwd()));
+        found = await candidates(readableWorkspace());
       } catch {
         return; // contract 1: a throwing suggester would break the caller's shell
       }
@@ -79,6 +80,18 @@ function suggesting(metavar: NonEmptyString, candidates: Candidates): ValueParse
       }
     },
   };
+}
+
+/**
+ * The workspace a suggester reads: the one underfoot, unless it needs a newer
+ * Ward than this one (design/0066-workspace-format-guard/) — then none. A TAB
+ * is no place for the refusal, and offering names read from records this Ward
+ * may misread would be offering what the verb then refuses; so the menu is
+ * empty, and the verb itself says why when it is run.
+ */
+function readableWorkspace(): string | null {
+  const root = discoverWorkspace(process.cwd());
+  return root !== null && formatReadable(root) ? root : null;
 }
 
 /** Contract 3, in one place: outside a workspace there is nothing to read. */
@@ -144,7 +157,7 @@ export function floorNumber(include: 'open' | 'any' = 'open'): ValueParser<'asyn
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
       let found: readonly Candidate[];
       try {
-        const root = discoverWorkspace(process.cwd());
+        const root = readableWorkspace();
         found =
           root === null
             ? []
