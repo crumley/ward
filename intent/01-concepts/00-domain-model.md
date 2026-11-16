@@ -402,23 +402,31 @@ lookups on purpose — addressing optimizes for memory, containment for structur
 is that room codes run as a simple per-floor sequence (opening order on the floor), not grouped by
 task.
 
-Where global uniqueness genuinely is needed, it can be composed (e.g. floor number + room code). A
-**session** composes: its id is **unique over the workspace's history, across the machines that
-share it** — the slug, a **discriminator that is never reused**, and the **machine** the session ran
-on (`riley-1@mbp`, then `riley-2@mbp`) — so a **bare session id is a sufficient address** for every
-operation that touches it (resume, close, dispatch, recovery), without dragging a scope qualifier
-through every call. **Why workspace-unique rather than scope-relative:** a scope-relative id is
-ambiguous the moment two scopes both hold a `riley-1`, which forces every session operation to carry
-`(scope, id)` — a sign the model, not the intent, was wrong; keeping the APIs single-keyed is what
-the bare address buys. **Why over history rather than among the open sessions, and why the machine
-is in it:** unlike a room code, a session id is also the address of the **session's record**.
-Handing a closed session's discriminator to a new one overwrites that record — the handle, the
-events, the purpose — which spends _closed stays closed_ (`02-sessions-and-lifecycle.md`) on an id
-nobody needed to recycle, and "time and context" cannot disambiguate a record that no longer exists.
-And a workspace **travels**: two machines sharing one are two allocators, each reading its own view,
-so an id that does not name its machine is minted twice and the two records collide when the
-workspace syncs. A **room** may reuse its code precisely because it is a slot that empties and
-refills, not a record; a session is a record, so its id is permanent.
+Where global uniqueness genuinely is needed, it can be composed (e.g. floor number + room code, and
+the slug where two holders meet). A **session** composes: its id is **unique over the workspace's
+history, across the machines that share it** — the slug, a **discriminator that is never reused**,
+and the **machine** the session ran on (`riley-1@mbp`, then `riley-2@mbp`) — so a **bare session id
+is a sufficient address** for every operation that touches it (resume, close, dispatch, recovery),
+without dragging a scope qualifier through every call. **Why workspace-unique rather than
+scope-relative:** a scope-relative id is ambiguous the moment two scopes both hold a `riley-1`,
+which forces every session operation to carry `(scope, id)` — a sign the model, not the intent, was
+wrong; keeping the APIs single-keyed is what the bare address buys. **Why over history rather than
+among the open sessions, and why the machine is in it:** unlike a room code, a session id is also
+the address of the **session's record**. Handing a closed session's discriminator to a new one
+overwrites that record — the handle, the events, the purpose — which spends _closed stays closed_
+(`02-sessions-and-lifecycle.md`) on an id nobody needed to recycle, and "time and context" cannot
+disambiguate a record that no longer exists. And a workspace **travels**: two machines sharing one
+are two allocators, each reading its own view, so an id that does not name its machine is minted
+twice and the two records collide when the workspace syncs. A **room** may reuse its code precisely
+because it is a slot that empties and refills, not a record; a session is a record, so its id is
+permanent.
+
+Two machines can still fill one slot at once: each hands out the next room from its own view, and
+when their records meet, two open tasks hold the same room. Rooms do not buy uniqueness with the
+machine, because a slot is sized to the work in flight and almost every room has one holder. The
+collision is broken by context instead: the task's slug, already part of its record, qualifies the
+room for as long as the collision lasts. Ward names a collision wherever it speaks the room and
+never picks between the holders.
 
 The **workspace** is the one thing whose identity is not a name a human types. It carries an
 **immutable id**, minted once — when the workspace is created, or, for a workspace made before the
