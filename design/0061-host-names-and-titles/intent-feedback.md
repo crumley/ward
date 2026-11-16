@@ -2,7 +2,9 @@
 
 ## IF-001 — "the floor/room codes humans already hold in their heads" did not hold for floors
 
-**Status:** pending
+**Status:** pending — ruled by Ryan 2026-11-15, awaiting the intent edit: accepted as proposed — a
+label names the work as a human recognizes it, with its code where the code tells two apart or is
+what a command takes (https://github.com/crumley/ward/pull/139)
 
 **Slice:** [`session-multiplexer`](../../intent/02-subsystems/01-session-multiplexer.md), the
 constraint to group sessions by their work and label them by identity.
