@@ -33,7 +33,7 @@ import {
 import { taskAddress, taskFloor } from './address.ts';
 import { sha256OfFile } from './baselines.ts';
 import { checkoutLabel, resolveCheckout } from './checkouts.ts';
-import { backfillIdentities } from './floor-identity.ts';
+import { convergeIdentities, type IdentityConvergence } from './floor-identity.ts';
 import { carriesManifest, establishFloorManifest } from './floor-manifest.ts';
 import { establishFloorViews } from './floor-views.ts';
 import { git, gitAvailable, gitOrThrow, hasCommits } from './git.ts';
@@ -442,30 +442,38 @@ function moveTracked(root: string, from: string, to: string): void {
 }
 
 /**
- * Every open floor's visual identity (design/0060-floor-identity/): a floor
- * whose record carries no color or no emoji — one opened before identities
- * existed, or the ground floor the step above has just established — is
- * given what it lacks, in floor order, each pick clear of what the other
- * open floors wear. Check-then-do: a floor that has both is never touched,
- * so an identity a human chose survives every later run. The writes ride the
- * run's one journal commit, under the store lock already held.
+ * Every open floor's visual identity (design/0060-floor-identity/,
+ * design/0064-floor-identity-palette/): the ground floor is brought to the
+ * identity it wears in every workspace; a floor whose record carries no
+ * color or no emoji — one opened before identities existed, or the ground
+ * floor the step above has just established — is given what it lacks; and a
+ * floor whose emoji a lower-numbered open floor already wears is given
+ * another, its color kept. In floor order, each pick clear of what the other
+ * open floors wear. Check-then-do: an identity that is whole and distinct is
+ * never touched, so one a human chose survives every later run. Every write
+ * is named in the step's detail, and all ride the run's one journal commit,
+ * under the store lock already held.
  */
 async function establishFloorIdentities(ctx: ConvergeContext): Promise<StepReport> {
   const step = 'floor identities';
-  const written = await backfillIdentities(ctx.root);
+  const written = await convergeIdentities(ctx.root);
   if (written.length === 0) return { step, outcome: 'satisfied', detail: 'every open floor' };
   ctx.establishedPaths.push(
     ...written
-      .map((project) => projectRecordType(project.dir).relPath)
+      .map(({ project }) => projectRecordType(project.dir).relPath)
       .filter((path) => !ctx.establishedPaths.includes(path)),
   );
-  return {
-    step,
-    outcome: 'established',
-    detail: written
-      .map(({ record }) => `floor ${record.floor} ${record.emoji} ${record.color}`)
-      .join(', '),
-  };
+  return { step, outcome: 'established', detail: written.map(identityLine).join(', ') };
+}
+
+/** One identity write, as the upgrade's report says it: what it was, what it is, why. */
+function identityLine({ project, reason, was, repeated }: IdentityConvergence): string {
+  const { floor, emoji, color } = project.record;
+  if (reason === 'assigned') return `floor ${floor} ${emoji} ${color}`;
+  if (reason === 'reserved') {
+    return `floor ${floor} ${was.emoji} ${was.color} → ${emoji} ${color} (the ground floor's own)`;
+  }
+  return `floor ${floor} ${was.emoji} → ${emoji} ${color} (floor ${repeated} wears ${was.emoji})`;
 }
 
 /**

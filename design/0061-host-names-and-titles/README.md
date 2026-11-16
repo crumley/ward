@@ -154,7 +154,8 @@ way in; this takes it off the screen once they are there.
     the title too is the fuller answer, and loses because a tab shows the head of a title: the
     window's name is the specific thing, the slug is already in it or in the host's name, and the
     harness's line is worth the remaining width. A pane that never set a title carries the machine's
-    hostname, which is left out.
+    hostname, which is left out. (Revised: the floor's emoji now leads the title, ahead of the
+    window, by [0064](../0064-floor-identity-palette/README.md).)
   - **A foreground run is titled once, and the harness may replace it.** Measured on a pty: Claude
     Code writes its own title (`✳ Claude Code`, then a line about the work) moments after it starts,
     replacing Ward's; `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` stops it. Setting that variable for

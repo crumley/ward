@@ -325,8 +325,16 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '9d96072ad09f90e663bd4ecff2548744827a1187f3fcb6a17c4ce7da94644581',
         era: 'design 0060 (floor identity)',
       },
-      // Current since design 0065: a repository may keep its checkout outside
-      // the workspace and bring its own worktree and update commands.
+      // design 0065 — a repository may keep its checkout outside the workspace
+      // and bring its own worktree and update commands. Open floors could
+      // still share an emoji, and the ground floor took the pool's first
+      // identity.
+      {
+        sha256: 'da8c6b261d340b4f5d8eb03a10a4a04420ea21151d5c8477456a6e9cf4cc4f7f',
+        era: 'design 0065 (external checkouts and repository commands)',
+      },
+      // Current since design 0064 (built after 0065): no two open floors share
+      // an emoji, and the ground floor wears 🔧 silver in every workspace.
     ],
   },
 ];

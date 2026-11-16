@@ -73,9 +73,14 @@ operated with the \`ward\` CLI and tracked in git.
   Ward says so when it moves one.
 - **Every floor has a color and an emoji** — its identity, recorded on the floor (\`color\` and
   \`emoji\` in \`ward status --json\` and \`ward project list --json\`) and worn by its floor
-  host's status line, so "the blue one" names a floor. Ward assigns them when a floor opens;
-  \`ward project identity FLOOR [--color NAME] [--emoji EMOJI]\` changes them, and dresses a host
-  that is already standing where it stands.
+  host's status line and at the head of its terminal titles, so "the blue one" names a floor.
+  **When you open a floor, choose an emoji that fits what it is about**:
+  \`ward project open fantasy-football --emoji 🏈\`. It is one emoji drawn as one by itself (no
+  variation selector, joiner, skin tone, or flag), and one no other open floor wears; Ward refuses
+  anything else and says why. Leave it out and Ward picks one, and picks the color either way
+  (\`--color NAME\` names it). \`ward project identity FLOOR [--color NAME] [--emoji EMOJI]\`
+  changes them later, and dresses a host that is already standing where it stands. **The ground
+  floor wears 🔧 silver in every workspace**: that is not changed, and no other floor wears either.
 - Work is never committed to a repository's main line directly; changes travel through a worktree
   and a pull request.
 - When a main line moves under work in progress, \`ward worktree rebase\` replays the task's

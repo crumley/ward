@@ -52,7 +52,7 @@ import { CANDIDATE_KINDS, candidates, renderCandidates } from '../shell/candidat
 import { emitShellLayer } from '../shell/layer.ts';
 import { FISH_SHORTHAND_NAMES, findShorthand } from '../shell/shorthands.ts';
 import type { SessionRecord, TaskRecord, WorkState } from '../store/types.ts';
-import { FLOOR_COLORS, type FloorColor, INK, PALETTE } from '../theme/palette.ts';
+import { FLOOR_COLORS, type FloorColor, INK, PALETTE, POOL_COLORS } from '../theme/palette.ts';
 import { distinctAddress, taskAddress } from '../workspace/address.ts';
 import {
   type ClaimReport,
@@ -579,10 +579,20 @@ const project = command(
         action: constant('project-open'),
         slug: argument(string({ metavar: 'SLUG' })),
         repo: multiple(option('--repo', repoName())),
+        emoji: optional(
+          option('--emoji', string({ metavar: 'EMOJI' }), {
+            description: message`The floor's emoji — one that fits what the floor is about, and that no other open floor wears. Left out, Ward picks one.`,
+          }),
+        ),
+        color: optional(
+          option('--color', choice([...POOL_COLORS], { metavar: 'COLOR' }), {
+            description: message`The floor's color, by name. Left out, Ward picks the one fewest open floors wear.`,
+          }),
+        ),
         json: jsonFlag(),
       }),
       {
-        brief: message`Open a project; it takes the next floor number. --repo claims a repository for it.`,
+        brief: message`Open a project; it takes the next floor number. --emoji names its emoji; --repo claims a repository for it.`,
       },
     ),
     command(
@@ -619,12 +629,12 @@ const project = command(
         floor: argument(floorNumber()),
         color: optional(
           option('--color', choice([...FLOOR_COLORS], { metavar: 'COLOR' }), {
-            description: message`The floor's color, by name: blue, green, orange, purple, yellow, teal, red, pink, brown, gray.`,
+            description: message`The floor's color, by name: blue, green, orange, purple, yellow, teal, red, pink, brown, gray. (silver is the ground floor's.)`,
           }),
         ),
         emoji: optional(
           option('--emoji', string({ metavar: 'EMOJI' }), {
-            description: message`The floor's emoji — exactly one.`,
+            description: message`The floor's emoji — one that fits what the floor is about, and that no other open floor wears.`,
           }),
         ),
         json: jsonFlag(),
@@ -1096,7 +1106,11 @@ try {
         // Validated before anything is written: a claim on an unregistered
         // name routes nothing, so it is a bad argument, not a stored fact.
         for (const name of result.repo) requireRegistered(root, name);
-        const record = await openProject(root, result.slug, { repositories: result.repo });
+        const record = await openProject(root, result.slug, {
+          repositories: result.repo,
+          ...(result.color === undefined ? {} : { color: result.color }),
+          ...(result.emoji === undefined ? {} : { emoji: result.emoji }),
+        });
         if (result.json) {
           printJson(projectOpenJson(record));
           break;

@@ -129,7 +129,9 @@ floor's emoji in its titles and labels; this entry is what fills it.
     label and has no legibility to protect. The ten the palette offers are single code points from
     Unicode 6, so every font has them and tmux measures them two cells wide; an emoji with a
     variation selector or a joiner may be measured wrongly by a terminal, and that is the chooser's
-    trade.
+    trade. (Revised by [0064](../0064-floor-identity-palette/README.md): the opener chooses the
+    emoji, one a terminal measures alike and no other open floor wears; the ground floor's identity
+    is reserved.)
   - **One verb, `ward project identity`, that also dresses the host.** A separate verb to re-dress
     was considered. It lost because the two are one intention, and running the verb with no flag is
     already the re-dress.

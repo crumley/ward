@@ -112,8 +112,8 @@ test('doctor --json: findings as data, healthy as the verdict, exit code kept', 
 test('the human rendering is unchanged by the flag existing', () => {
   const result = runWard(['status'], ws);
   expect(result.stdout).toContain('Workspace: active');
-  expect(result.stdout).toContain('floor 0 — 🌊 workspace (ground floor)');
-  expect(result.stdout).toContain('floor 1 — 🌲 agent-output');
+  expect(result.stdout).toContain('floor 0 — 🔧 workspace (ground floor)');
+  expect(result.stdout).toContain('floor 1 — 🌊 agent-output');
   expect(result.stdout).not.toContain('{');
 });
 

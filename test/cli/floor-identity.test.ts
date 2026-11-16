@@ -1,4 +1,5 @@
-// Floor identity at the CLI (design/0060-floor-identity/): the identity shown
+// Floor identity at the CLI (design/0060-floor-identity/,
+// design/0064-floor-identity-palette/): the identity shown
 // wherever floors are listed, for both audiences, and the verb that changes
 // it. No tmux here — the host is pinned absent; the real one is
 // test/host/tmux-live.test.ts's.
@@ -16,11 +17,11 @@ import { applyGitTestEnv, makeTempDir, NO_GH, removeDir, runWardEnv } from '../h
 test('status and project list name each floor by its emoji and its color', () => {
   ward(['project', 'open', 'alpha']);
   expect(ward(['status']).stdout).toContain(
-    'floor 0 — 🌊 workspace (ground floor) [active] · blue\nfloor 1 — 🌲 alpha [active] · green\n',
+    'floor 0 — 🔧 workspace (ground floor) [active] · silver\nfloor 1 — 🌊 alpha [active] · blue\n',
   );
   expect(ward(['project', 'list']).stdout).toBe(
-    '  floor 0 — 🌊 workspace (ground floor) [active] (0 tasks) · blue\n' +
-      '  floor 1 — 🌲 alpha [active] (0 tasks) · green\n',
+    '  floor 0 — 🔧 workspace (ground floor) [active] (0 tasks) · silver\n' +
+      '  floor 1 — 🌊 alpha [active] (0 tasks) · blue\n',
   );
 });
 
@@ -28,10 +29,10 @@ test('--json carries the identity as recorded: a palette name and an emoji', () 
   const opened = projectOpenShape.parse(
     JSON.parse(ward(['project', 'open', 'alpha', '--json']).stdout),
   );
-  expect(opened).toMatchObject({ floor: 1, color: 'green', emoji: '🌲' });
+  expect(opened).toMatchObject({ floor: 1, color: 'blue', emoji: '🌊' });
   const wears = [
-    { floor: 0, color: 'blue', emoji: '🌊' },
-    { floor: 1, color: 'green', emoji: '🌲' },
+    { floor: 0, color: 'silver', emoji: '🔧' },
+    { floor: 1, color: 'blue', emoji: '🌊' },
   ];
   const status = statusShape.parse(JSON.parse(ward(['status', '--json']).stdout));
   expect(status.projects).toMatchObject(wears);
@@ -41,31 +42,32 @@ test('--json carries the identity as recorded: a palette name and an emoji', () 
 
 test('a terminal that takes color is shown the swatch as the host paints it', () => {
   const listed = ward(['project', 'list'], { FORCE_COLOR: '1' });
-  expect(listed.stdout).toContain('\x1b[48;5;26;38;5;231m blue \x1b[0m');
+  expect(listed.stdout).toContain('\x1b[48;5;250;38;5;16m silver \x1b[0m');
   // A declared agent is given the word alone.
   expect(ward(['project', 'list'], { FORCE_COLOR: '1', WARD_AGENT: '1' }).stdout).toContain(
-    '(0 tasks) · blue\n',
+    '(0 tasks) · silver\n',
   );
 });
 
 test('project identity: changes what is named, says who shares the color, and reports the host', () => {
   ward(['project', 'open', 'alpha']);
-  const changed = ward(['project', 'identity', '1', '--color', 'blue', '--emoji', '🚀']);
+  ward(['project', 'open', 'beta']);
+  const changed = ward(['project', 'identity', '1', '--color', 'green', '--emoji', '🚀']);
   expect(changed.stdout).toBe(
-    'identified floor 1 — alpha as 🚀 blue\n' +
-      'blue is also worn by floor 0\n' +
+    'identified floor 1 — alpha as 🚀 green\n' +
+      'green is also worn by floor 2\n' +
       'no host is standing for this floor — the next one opens wearing it\n',
   );
-  expect(ward(['status']).stdout).toContain('floor 1 — 🚀 alpha [active] · blue');
+  expect(ward(['status']).stdout).toContain('floor 1 — 🚀 alpha [active] · green');
 
   const again = ward(['project', 'identity', '1', '--json']);
   expect(projectIdentityShape.parse(JSON.parse(again.stdout))).toEqual({
     floor: 1,
     slug: 'alpha',
-    color: 'blue',
+    color: 'green',
     emoji: '🚀',
     outcome: 'satisfied',
-    sharedColorWith: [0],
+    sharedColorWith: [2],
     host: { outcome: 'absent', groups: [] },
   });
 });
@@ -73,11 +75,72 @@ test('project identity: changes what is named, says who shares the color, and re
 test.each<[string, string[], string]>([
   ['a color outside the palette', ['--color', 'mauve'], 'Expected one of "blue"'],
   ['more than one emoji', ['--emoji', '🌊🌊'], 'is not one emoji'],
+  [
+    'an emoji with a variation selector',
+    ['--emoji', '⚙️'],
+    'is not an emoji every terminal draws two cells wide',
+  ],
+  ['a joined emoji', ['--emoji', '👩‍💻'], 'a status line is measured in cells'],
+  ['a flag', ['--emoji', '🇺🇸'], 'is not one emoji'],
+  ["the ground floor's emoji", ['--emoji', '🔧'], "🔧 is the ground floor's"],
+  ["the ground floor's color", ['--color', 'silver'], "silver is the ground floor's"],
+  ['an emoji another open floor wears', ['--emoji', '🌲'], '🌲 is worn by floor 2 — beta'],
 ])('project identity refuses %s', (_, flags, says) => {
-  const refused = ward(['project', 'identity', '0', ...flags, '--json']);
+  ward(['project', 'open', 'alpha']);
+  ward(['project', 'open', 'beta']); // green 🌲
+  const refused = ward(['project', 'identity', '1', ...flags, '--json']);
   expect(refused.exitCode).not.toBe(0);
   expect(refused.stdout).toBe('');
   expect(refused.stderr).toContain(says);
+});
+
+test('the ground floor wears its own identity, and the verb will not change it', () => {
+  const refused = ward(['project', 'identity', '0', '--emoji', '🚀']);
+  expect(refused.exitCode).not.toBe(0);
+  expect(refused.stderr).toContain(
+    'floor 0 is the ground floor — it wears 🔧 silver in every workspace',
+  );
+  // With nothing named it still dresses the host, as for any floor.
+  expect(ward(['project', 'identity', '0']).stdout).toBe(
+    'floor 0 — workspace is 🔧 silver\n' +
+      'no host is standing for this floor — the next one opens wearing it\n',
+  );
+});
+
+// -- chosen at open (design/0064-floor-identity-palette/) ----------------------
+
+test('project open takes the emoji the opener chose, and Ward picks the color', () => {
+  const opened = ward(['project', 'open', 'fantasy-football', '--emoji', '🏈']);
+  expect(opened.stdout).toBe('opened floor 1 — 🏈 fantasy-football · blue\n');
+  // Named, the color is the opener's too; the emoji is then Ward's pick for it.
+  const second = ward(['project', 'open', 'garden', '--color', 'teal', '--json']);
+  expect(projectOpenShape.parse(JSON.parse(second.stdout))).toMatchObject({
+    floor: 2,
+    color: 'teal',
+    emoji: '🐬',
+  });
+  // Both, and a color an open floor already wears is the opener's to share.
+  const third = ward(['project', 'open', 'ocean', '--color', 'blue', '--emoji', '🚀', '--json']);
+  expect(JSON.parse(third.stdout)).toMatchObject({ floor: 3, color: 'blue', emoji: '🚀' });
+});
+
+test.each<[string, string[], string]>([
+  ['an emoji another open floor wears', ['--emoji', '🌊'], '🌊 is worn by floor 1 — alpha'],
+  ["the ground floor's emoji", ['--emoji', '🔧'], "🔧 is the ground floor's"],
+  ["the ground floor's color", ['--color', 'silver'], 'Expected one of "blue"'],
+  [
+    'an emoji with a variation selector',
+    ['--emoji', '⚙️'],
+    'is not an emoji every terminal draws two cells wide',
+  ],
+  ['a word', ['--emoji', 'football'], 'is not one emoji'],
+])('project open refuses %s, and opens nothing', (_, flags, says) => {
+  ward(['project', 'open', 'alpha']); // blue 🌊
+  const refused = ward(['project', 'open', 'beta', ...flags, '--json']);
+  expect(refused.exitCode).not.toBe(0);
+  expect(refused.stdout).toBe('');
+  expect(refused.stderr).toContain(says);
+  expect(ward(['project', 'list']).stdout).not.toContain('beta');
 });
 
 test('ward schema documents the verb', () => {

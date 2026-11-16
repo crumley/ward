@@ -8,7 +8,7 @@ import { WardError } from '../errors.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
 import { withStoreLock } from '../store/lock.ts';
 import { type ProjectRecord, projectRecordType } from '../store/types.ts';
-import { assignIdentity, worn } from './floor-identity.ts';
+import { identityAtOpen, requireAsked } from './floor-identity.ts';
 import {
   carriesManifest,
   establishFloorManifest,
@@ -26,6 +26,13 @@ export interface OpenProjectOptions {
    * can already be placed by it. Validated by the caller.
    */
   readonly repositories?: readonly string[];
+  /**
+   * The identity the opener names (design/0064-floor-identity-palette/): an
+   * emoji that fits what the floor is about, a palette color. Either left
+   * out is Ward's to pick.
+   */
+  readonly color?: string;
+  readonly emoji?: string;
 }
 
 export async function openProject(
@@ -34,6 +41,10 @@ export async function openProject(
   options: OpenProjectOptions = {},
 ): Promise<ProjectRecord> {
   const slug = requireSlug(slugInput);
+  const asked = requireAsked({
+    ...(options.color === undefined ? {} : { color: options.color }),
+    ...(options.emoji === undefined ? {} : { emoji: options.emoji }),
+  });
   // Allocation through commit is the serialized critical section (§17): the
   // floor scan must not race another writer's, and the commit must not race
   // another commit (design/0013-telemetry-and-serialized-writes/).
@@ -42,6 +53,11 @@ export async function openProject(
     // writer of `standing: true`, so `project open` cannot mint a second
     // standing project, whatever slug it is given
     // (design/0018-standing-workspace-project/).
+    // Its identity is picked with its number, under the same lock
+    // (design/0060-floor-identity/, design/0064-floor-identity-palette/):
+    // what the opener named, the rest clear of what the open floors wear —
+    // and refused before anything is written.
+    const identity = identityAtOpen(await readProjects(root), asked);
     const floor = await nextFloor(root);
     const dir = `projects/${floor}-${slug}`;
     const claims = [...(options.repositories ?? [])].sort();
@@ -52,9 +68,7 @@ export async function openProject(
       ...(claims.length === 0 ? {} : { repositories: claims }),
       state: 'active',
       openedAt: new Date().toISOString(),
-      // Its identity is picked with its number, under the same lock
-      // (design/0060-floor-identity/): clear of what the open floors wear.
-      ...assignIdentity(worn(await readProjects(root))),
+      ...identity,
     };
     await writeDocument(root, projectRecordType(dir), {
       data: record,
