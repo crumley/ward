@@ -41,6 +41,6 @@ directly.
   the holders." Optionally, in the same slice, replace "(e.g. floor number + room code)" with "(e.g.
   floor number + room code, and the slug where two holders meet)".
 
-- **Status:** pending — ruled by Ryan 2026-11-15, awaiting the intent edit: accepted as proposed — a
-  doubly-held room is tolerated and broken by the task's slug, never by the machine, and Ward never
-  picks a holder (https://github.com/crumley/ward/pull/139)
+- **Status:** adjudicated — [#139](https://github.com/crumley/ward/pull/139) (Ryan's ruling,
+  2026-11-15: a doubly-held room is tolerated and broken by the task's slug, never by the machine,
+  and Ward never picks a holder)

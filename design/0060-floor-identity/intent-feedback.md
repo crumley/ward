@@ -19,7 +19,6 @@
   floor) may carry a per-instance glyph as a second "which one" cue, and keep the categorical glyph
   for marking kind where kinds are mixed in one view (a task beside a session). State whether a
   thing may carry both.
-- **Status:** pending — ruled by Ryan 2026-11-15, awaiting the intent edit: accepted — a thing seen
-  several at a time may carry a per-instance glyph as a second "which one" cue, the categorical
-  glyph stays for views that mix kinds, and a thing wears one glyph
-  (https://github.com/crumley/ward/pull/139)
+- **Status:** adjudicated — [#139](https://github.com/crumley/ward/pull/139) (Ryan's ruling,
+  2026-11-15: a thing seen several at a time may carry a per-instance glyph as a second "which one"
+  cue, the categorical glyph stays for views that mix kinds, and a thing wears one glyph)
