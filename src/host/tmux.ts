@@ -123,9 +123,13 @@ export function renameGroupArgv(from: string, to: string): string[] {
   return ['rename-session', '-t', sessionTarget(from), to];
 }
 
-/** Title a tmux session that already exists. */
-export function titleGroupArgv(name: string, standing: string): string[] {
-  return titleOptions(name, standing).slice(1);
+/** Title a tmux session that already exists — a host, or a view in its own mode. */
+export function titleGroupArgv(
+  name: string,
+  standing: string,
+  mode: ViewMode = 'attach',
+): string[] {
+  return titleOptions(name, standing, mode).slice(1);
 }
 
 export function renameWindowArgv(window: string, label: string): string[] {
@@ -261,6 +265,7 @@ export function listGroupsArgv(): string[] {
       '#{session_attached}',
       '#{@ward_version}',
       '#{session_windows}',
+      '#{session_group}',
     ].join(FIELD),
   ];
 }
@@ -270,11 +275,24 @@ export function listGroupsArgv(): string[] {
  * `-o<n>` for an observe view, with the smallest `n` no tmux session wears.
  */
 export function viewName(group: string, mode: ViewMode, taken: ReadonlySet<string>): string {
-  const letter = mode === 'attach' ? 'v' : 'o';
   for (let n = 1; ; n++) {
-    const name = `${group}-${letter}${n}`;
+    const name = `${group}-${viewLetter(mode)}${n}`;
     if (!taken.has(name)) return name;
   }
+}
+
+function viewLetter(mode: ViewMode): string {
+  return mode === 'attach' ? 'v' : 'o';
+}
+
+/**
+ * Whether a view already wears a name derived from `group` — the only thing a
+ * view's name is ever read for: deciding whether it is due a new one
+ * (design/0063-views-follow-their-host/). What a view IS comes from its stamp.
+ */
+export function namedFor(view: string, group: string, mode: ViewMode): boolean {
+  const lead = `${group}-${viewLetter(mode)}`;
+  return view.startsWith(lead) && /^[1-9][0-9]*$/.test(view.slice(lead.length));
 }
 
 /**
@@ -422,33 +440,6 @@ export function statusText(text: string): string {
   return text.replace(/#/g, '##').replace(/%/g, '%%');
 }
 
-/** Every tmux session, with the view stamp and the session group that say what it views. */
-export function listViewsArgv(): string[] {
-  return [
-    'list-sessions',
-    '-F',
-    ['#{session_name}', '#{@ward_view}', '#{session_group}'].join(FIELD),
-  ];
-}
-
-/**
- * The ATTACH views of one tmux session: tmux holds a view in its host's
- * session group, so they are the other members of that group that carry a
- * view stamp — found by group and stamp, never by name. An observe view is
- * no member of the group: it is dressed once, when it is made.
- */
-export function viewsOf(stdout: string, host: string): string[] {
-  const rows = lines(stdout).map((line) => {
-    const [name = '', view = '', group = ''] = line.split(FIELD);
-    return { name, view, group };
-  });
-  const group = rows.find((row) => row.name === host)?.group ?? '';
-  if (group === '') return [];
-  return rows
-    .filter((row) => row.name !== host && row.view !== '' && row.group === group)
-    .map((row) => row.name);
-}
-
 /** Read one window's tag, then end it — two calls, the read first. */
 export function windowTagArgv(window: string): string[] {
   return ['display-message', '-p', '-t', window, '#{@ward_session}'];
@@ -487,6 +478,27 @@ export interface GroupRow {
   readonly clients: number;
   readonly version: string;
   readonly windows: number;
+  /** The tmux session group it is a member of — empty when it is in none. */
+  readonly group: string;
+}
+
+/**
+ * The floor host each ATTACH view looks at, by view name: tmux holds a view in
+ * its host's session group, so the host is the member of that group that is
+ * no view — found by group and stamp, never by name. An observe view is a
+ * member of no group, and is not here.
+ */
+export function viewHosts(rows: readonly GroupRow[]): Map<string, string> {
+  const hosts = new Map<string, string>();
+  for (const row of rows) {
+    if (row.group !== '' && !row.view && row.stamp !== undefined) hosts.set(row.group, row.name);
+  }
+  const found = new Map<string, string>();
+  for (const row of rows) {
+    const host = row.view && row.group !== '' ? hosts.get(row.group) : undefined;
+    if (host !== undefined) found.set(row.name, host);
+  }
+  return found;
 }
 
 export function parseGroups(stdout: string): GroupRow[] {
@@ -500,6 +512,7 @@ export function parseGroups(stdout: string): GroupRow[] {
       clients = '',
       version = '',
       windows = '',
+      group = '',
     ] = line.split(FIELD);
     return {
       name,
@@ -510,6 +523,7 @@ export function parseGroups(stdout: string): GroupRow[] {
       clients: Number.parseInt(clients, 10) || 0,
       version,
       windows: Number.parseInt(windows, 10) || 0,
+      group,
     };
   });
 }
@@ -828,6 +842,7 @@ export function tmuxHost(env: Env = process.env): SessionHost {
     },
     rename(request: RenameRequest): Renamed {
       const renamed: { from: string; to: string }[] = [];
+      const moved: { from: string; to: string }[] = [];
       const failed: string[] = [];
       const themed: { group: string; views: string[] }[] = [];
       let taken: Set<string>;
@@ -836,48 +851,69 @@ export function tmuxHost(env: Env = process.env): SessionHost {
       } catch (error) {
         return {
           groups: [],
+          views: [],
           failed: [error instanceof Error ? error.message : String(error)],
           themed: [],
         };
       }
-      for (const { name, naming } of request.groups) {
+      const why = (result: CallResult) => result.stderr || 'tmux gave no reason';
+      for (const { name, naming, views = [] } of request.groups) {
         if (!taken.has(name)) continue;
         const wanted = mintGroupName(naming.name);
         let current = name;
         // A name another tmux session wears is left to it: this host keeps
         // the name it has, which nothing depends on.
         if (wanted !== name && !taken.has(wanted)) {
-          const moved = call(renameGroupArgv(name, wanted));
-          if (moved.ok) {
+          const hostMoved = call(renameGroupArgv(name, wanted));
+          if (hostMoved.ok) {
             current = wanted;
             taken.delete(name);
             taken.add(wanted);
             renamed.push({ from: name, to: wanted });
           } else {
-            failed.push(`${name}: ${moved.stderr || 'tmux gave no reason'}`);
+            failed.push(`${name}: ${why(hostMoved)}`);
           }
         }
         const titled = call(titleGroupArgv(current, naming.title));
-        if (!titled.ok) failed.push(`${current}: ${titled.stderr || 'tmux gave no reason'}`);
-        if (naming.identity === undefined) continue;
-        // The host, then every attach view a client is looking at it through:
-        // a view shares the host's windows, not its options.
-        const dressed = call(themeArgv(current, naming.identity));
-        if (!dressed.ok) {
-          failed.push(`${current}: ${dressed.stderr || 'tmux gave no reason'}`);
-          continue;
+        if (!titled.ok) failed.push(`${current}: ${why(titled)}`);
+        let dressed = false;
+        if (naming.identity !== undefined) {
+          const themedHost = call(themeArgv(current, naming.identity));
+          dressed = themedHost.ok;
+          if (!dressed) failed.push(`${current}: ${why(themedHost)}`);
         }
-        const listed = call(listViewsArgv());
-        const views = (listed.ok ? viewsOf(listed.stdout, current) : []).filter(
-          (view) => call(themeArgv(view, naming.identity as GroupIdentity)).ok,
-        );
-        themed.push({ group: current, views });
+        // Then every view a client is looking at the host through: a view
+        // shares the host's windows, not its name or its options, so each is
+        // renamed after the host as it is called now, titled, and dressed —
+        // in place, its client left exactly where it is.
+        const worn: string[] = [];
+        for (const view of views) {
+          if (!taken.has(view.name)) continue;
+          let now = view.name;
+          if (!namedFor(view.name, current, view.mode)) {
+            const wantedView = viewName(current, view.mode, taken);
+            const followed = call(renameGroupArgv(view.name, wantedView));
+            if (followed.ok) {
+              now = wantedView;
+              taken.delete(view.name);
+              taken.add(wantedView);
+              moved.push({ from: view.name, to: wantedView });
+            } else {
+              failed.push(`${view.name}: ${why(followed)}`);
+            }
+          }
+          const viewTitled = call(titleGroupArgv(now, naming.title, view.mode));
+          if (!viewTitled.ok) failed.push(`${now}: ${why(viewTitled)}`);
+          if (!dressed || naming.identity === undefined) continue;
+          if (call(themeArgv(now, naming.identity)).ok) worn.push(now);
+        }
+        if (dressed) themed.push({ group: current, views: worn });
       }
       for (const { window, label } of request.windows) {
         const relabelled = call(renameWindowArgv(window, label));
-        if (!relabelled.ok) failed.push(`${window}: ${relabelled.stderr || 'tmux gave no reason'}`);
+        if (!relabelled.ok) failed.push(`${window}: ${why(relabelled)}`);
       }
-      return { groups: renamed, failed, themed };
+      return { groups: renamed, views: moved, failed, themed };
     },
     view(request: ViewRequest): View {
       // A name another view just took fails the create; the next free one is tried.
@@ -942,11 +978,14 @@ export function tmuxHost(env: Env = process.env): SessionHost {
       }
       const listed = panes();
       if (!listed.ok) return { outcome: 'unknown', reason: listed.reason };
-      const rows = parseGroups(sessions.stdout).map(
+      const parsed = parseGroups(sessions.stdout);
+      const hosts = viewHosts(parsed);
+      const rows = parsed.map(
         (row): InventoryGroup => ({
           name: row.name,
           ...(row.stamp === undefined ? {} : { stamp: row.stamp }),
           ...(row.view ? { viewOf: row.viewOf } : {}),
+          ...viewHostOf(hosts.get(row.name)),
           clients: row.clients,
           windows: row.windows,
           created: row.created,
@@ -984,6 +1023,10 @@ export function tmuxHost(env: Env = process.env): SessionHost {
   function command(args: readonly string[]): string {
     return [program, ...prefix, ...args].map(shellQuote).join(' ');
   }
+}
+
+function viewHostOf(host: string | undefined): { viewHost?: string } {
+  return host === undefined ? {} : { viewHost: host };
 }
 
 /** The windows a find returned that stand in this workspace's hosts. */

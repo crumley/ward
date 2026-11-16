@@ -47,7 +47,7 @@ export interface Prepared {
   readonly repaired: readonly string[];
   /** Repairs that failed — reported, never a reason to refuse the attach. */
   readonly unrepaired: readonly string[];
-  /** Hosts attach renamed in place ("ward-main-f3 is now main-f3-alpha"). */
+  /** Hosts, and views of them, attach renamed in place ("ward-main-f3 is now main-f3-alpha"). */
   readonly renamed: readonly string[];
 }
 

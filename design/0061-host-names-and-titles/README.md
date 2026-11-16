@@ -77,7 +77,8 @@ way in; this takes it off the screen once they are there.
     and its name is seen by nobody but `tmux ls`; a view made under an old host name keeps it, and
     its terminal stays untitled, until that client next attaches. Safe to defer because a view is
     found by `@ward_view`, the next attach from that terminal makes a new one, and the old one ends
-    by itself.
+    by itself. (The deferral did not hold in use; built by
+    [0063](../0063-views-follow-their-host/README.md).)
   - **An explicit rename verb.** Safe to defer because the refresh rides the two acts that put a
     human in front of a host — nothing is looked at between a rename becoming due and the next open
     or attach except a detached host nobody is watching.

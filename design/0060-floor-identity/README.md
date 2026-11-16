@@ -75,7 +75,8 @@ floor's emoji in its titles and labels; this entry is what fills it.
     nothing outside a floor host is changed.
   - **Refreshing an observe view that is already open** when the identity changes. It is dressed
     when it is made and is gone when its one client leaves. Safe to defer because the next observe
-    is right.
+    is right. (Since built, with the views' names and titles, by
+    [0063](../0063-views-follow-their-host/README.md).)
 - **Acceptance:**
   1. `test/theme/palette.test.ts`: every palette pair holds a WCAG contrast of 4.5:1 or more, uses a
      fixed xterm color (16 to 255), and has a distinct single-code-point emoji.
