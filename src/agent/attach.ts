@@ -54,7 +54,19 @@ export interface Prepared {
 export interface Joined extends Prepared {
   /** The host client's exit code, once it has left the view. */
   readonly exitCode: number;
+  /**
+   * Set when an observer's terminal came back because the window it was
+   * watching went — not because the human left: what became of the session.
+   */
+  readonly ended?: Ended;
 }
+
+/**
+ * Why a watched window is no longer there: its session was `closed`; the
+ * window is `gone` with the session still open; or the run was `restarted`
+ * in another window (a resume cleared the one being watched).
+ */
+export type Ended = 'closed' | 'gone' | 'restarted';
 
 /**
  * `ward session attach ID`: join the session's live window through a view of
@@ -149,13 +161,39 @@ export async function observeSession(root: string, id: string, options: JoinOpti
     // left exactly as it is — watching changes nothing.
     ...(await viewNaming(root, own, live.group, live.floor)),
   });
-  return join(root, id, 'observed', view, host, options, {
+  const joined = await join(root, id, 'observed', view, host, options, {
     live,
     recreated: false,
     repaired: [],
     unrepaired: [],
     renamed: [],
   });
+  // The host returns an observer's terminal when the watched window goes
+  // (the host's own rule for an observe view), and tmux says only that the
+  // client detached — so the reason is read here, once, and never guessed:
+  // a host that cannot answer, or a window still standing, says nothing.
+  const ended = await endedUnder(root, id, live.window, host, workspace, kind);
+  return ended === undefined ? joined : { ...joined, ended };
+}
+
+/** What became of the window an observer was watching — undefined while it still stands. */
+async function endedUnder(
+  root: string,
+  id: string,
+  watched: string,
+  host: SessionHost,
+  workspace: string,
+  kind: HostedKind,
+): Promise<Ended | undefined> {
+  try {
+    const listing = (await readAllSessions(root)).find(({ record }) => record.id === id);
+    if (listing === undefined || listing.record.state !== 'open') return 'closed';
+    const { live } = await readLive(root, listing, host, workspace, kind);
+    if (live.state === 'unknown' || live.window === watched) return undefined;
+    return live.window === undefined ? 'gone' : 'restarted';
+  } catch {
+    return undefined;
+  }
 }
 
 /**

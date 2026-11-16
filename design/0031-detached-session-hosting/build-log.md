@@ -501,3 +501,106 @@ alone afterwards.
   that client needs something to act when the view ends; nothing here does.
 - The manifest does not say where a client lands when a host ends.
 - Everything under Scope's _Deferred_ stays deferred.
+
+## 2026-11-16 — Follow-up: the observer, the open's report, and the manifest
+
+**Goal.** Close the three things phase 3 left open or reported in passing: the observer that lands,
+read-only, in a session it never asked to watch; the real-tmux case that still asserted the open's
+own report of a run that had just been started; and the manifest's silence on where a terminal lands
+when a host ends.
+
+**1. An observer's terminal returns to the shell when its window goes.** The target was the obvious
+one: an observer asked to watch one window, so when that window goes the terminal comes back with a
+line saying what happened. The difficulty is the one phase 3 recorded. tmux decides what becomes of
+a client per session (`detach-on-destroy`), and when a floor's last window closes it ends the host
+and its views one after another, moving each one's clients into the most recently active session
+left. An observe view that detaches its clients therefore also detaches whoever tmux moved into it a
+moment earlier.
+
+The cascade was reproduced first, on a private server with raw tmux: a host, a grouped attach view,
+an observe view with `detach-on-destroy on`, one client in each (the observer joining last), and a
+fourth session standing. Killing the host's window dropped all three clients to the shell.
+
+What was built makes the decision per client instead of per view, and makes it while the observer is
+still in its own view:
+
+- **The view keeps its placeholder.** An observe view used to replace its placeholder window with
+  the link to the watched one (`link-window -k`). It now links the watched window in beside the
+  placeholder and selects it (`watchArgv`). The placeholder's entry in the view's window list is
+  emptied (`window-status-format` and `window-status-current-format` set to nothing on that one
+  window), so the observer's status line names one window. The view no longer ends in the same
+  breath as the watched window: it stands, showing the placeholder, until something ends it.
+- **A hook on the view does that.** When the watched window goes, the view's current window changes
+  to the placeholder, and the view's `session-window-changed` hook runs
+  `detach-client -t <the observer's client> ; kill-session`. No client of a read-only view can
+  select a window, and the view is created with the watched window current before the hook exists,
+  so the hook fires for exactly one reason.
+- **The observer's client is named, not inferred.** The hook is set by the observer's own client as
+  it joins (the same command sequence that sets `destroy-unattached`), with `set-option -F`, so
+  `#{client_name}` is expanded to that client there and then. Detaching by name is what keeps the
+  cascade out: a participant tmux has just moved into the observe view is not the named client, and
+  when `kill-session` then ends the view its `detach-on-destroy off` — unchanged from phase 3 —
+  moves that participant on. By the time a hook runs, the host and its attach views have already
+  ended, so "on" can only be a session still standing.
+- **Ward says why.** tmux prints only that the client detached. `observeSession` reads the session
+  once after the client returns and the verb prints one line: the session `was closed`; it `ended`
+  and its window is gone, the record still open; or it `was restarted in a new window`, when a
+  resume cleared the dead window being watched (naming `ward session observe ID` to watch again). A
+  human who leaves by choice gets no line: the window they were watching still stands. A host that
+  cannot answer gets none either — nothing is guessed.
+
+Alternatives weighed. Polling from the `ward session observe` process and detaching its own client
+once tmux had moved it loses because the observer does land in the other session first, for as long
+as the poll interval, which is the behaviour being removed. A hook on the server (`session-closed`,
+`client-session-changed`) would see every case without a placeholder, and loses because a server
+hook is global: it would sit on the human's default server and run for their own sessions, against
+the rule that Ward sets session options on its own tmux sessions and nothing else. The
+`no-detach-on-destroy` client flag is the same per-client decision made by tmux itself, and loses on
+two counts: it arrived after the 3.2 floor, and a human sitting in the host with a plain
+`tmux attach` does not carry it.
+
+Costs, named. An observe view holds two windows, one of them a `cat` nobody sees; the watched window
+sits at the view's second index, which the status line shows (`1:coord` where it was `0:coord`). If
+a tmux build did not run the hook, the observer would be left looking at the empty placeholder,
+read-only, and would leave with the prefix and `d`; nothing else depends on the hook. The hook is
+set as the observer joins, so a view whose client never arrived (the verb killed between making the
+view and entering it) no longer ends with the watched window; `ward doctor` already names it as a
+leftover view, with the command that ends it. And what phase 3 said of participants still holds:
+which session they land in is tmux's choice.
+
+**2. What the open's report promises.** "An exited run is legible" asserted that
+`ward session open --detach` of a stand-in harness that exits at once reports `exited 3`. That is
+true when the run has ended within the 300 ms beat before the read-back, and on a loaded machine it
+sometimes has not: the stub is a shell that walks the workspace before it exits.
+
+Decided: the report is one read, and `live` is an honest answer. Ward is not the hosted run's
+parent, so it cannot wait on it, and no fixed wait turns a read into a promise — a harness that
+fails after two seconds is as real as one that fails after two hundred milliseconds. The beat stays
+as the courtesy it is (a missing program or a bad flag is usually reported by the open itself), and
+the promise is stated where the value is declared (`HostedRun.live`): the truth as of that read —
+`exited` with how it ended, or `live` — and every later read (`ward session show`) says how the run
+ended, from the window kept for it. Making the open poll for longer was weighed and loses: it slows
+every healthy open to buy a report that is still only usually right.
+
+The case now asserts exactly that: the open's state is `live` or `exited`, carries exit status 3
+when it is `exited`, and names a window; then `session show`, waited on, reads `exited 3` from that
+same window. The observe case's refusal of an ended run had the same exposure — it observed straight
+after the open — and now waits the same way. That a dead window classifies as `exited` with its
+status needs no clock and stays where it was, in `test/agent/host.test.ts`.
+
+**3. The manifest says where a terminal lands.** The "Detached sessions — floor hosts" section gains
+one bullet: a terminal sitting in a host or attached through a view is moved to another tmux session
+still standing on that server (tmux's choice, possibly one of the human's own) and returns to the
+shell only when none is left; a terminal observing returns to the shell as soon as its window goes,
+with a line saying what became of the session. The outgoing default's hash joined the `AGENTS.md`
+lineage and the pin moved.
+
+**Tests.** `test/host/tmux.test.ts` pins the two argv changes. In `test/host/tmux-live.test.ts`,
+phase 3's three-client case (one client in the host, one in an attach view, one in an observe view,
+the observer joining last) now asserts both halves: the two participants are in the host still
+standing and neither process has exited, no read-only client is left on the server, and the
+observer's process has exited 0 having been told the session was closed. Run against a build where
+the observe view alone detaches its clients, the same case fails on the participants — it is a test
+of the cascade, not only of the observer. A second case walks one observer after another through
+closed, gone, restarted, and leaving by choice, with a session of the human's own standing as the
+place tmux would otherwise have put them.

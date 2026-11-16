@@ -333,8 +333,16 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: 'da8c6b261d340b4f5d8eb03a10a4a04420ea21151d5c8477456a6e9cf4cc4f7f',
         era: 'design 0065 (external checkouts and repository commands)',
       },
-      // Current since design 0064 (built after 0065): no two open floors share
-      // an emoji, and the ground floor wears 🔧 silver in every workspace.
+      // design 0064 (built after 0065) — no two open floors share an emoji, and
+      // the ground floor wears 🔧 silver in every workspace. The manifest did
+      // not yet say where a terminal lands when a floor host ends under it.
+      {
+        sha256: '716116cdadb2f40e8803aa7ee572bf9c4b079f53fc99b1516a9529fd6139774a',
+        era: 'design 0064 (floor identity palette)',
+      },
+      // Current since design 0031's observer follow-up: a participant whose
+      // host ends is moved to a session still standing, and an observer's
+      // terminal returns to the shell.
     ],
   },
 ];

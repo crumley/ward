@@ -64,7 +64,14 @@ export type LaunchedSession =
   | { readonly record: SessionRecord; readonly hosted: HostedRun };
 
 export interface HostedRun extends PlacedRun {
-  /** The window read back a beat after placing it — an instant exit shows here. */
+  /**
+   * The window as ONE read found it, a beat after it was placed: `exited`
+   * (with how it ended) when the run had already ended by then, otherwise
+   * `live`. A report, not a guarantee — `live` says the run was going when
+   * read, and a run that ends a moment later is told by every later read
+   * (`ward session show`), from the window kept for it. Callers that need
+   * "has it ended" ask again; they never treat this `live` as settled.
+   */
   readonly live: LiveState | undefined;
 }
 
@@ -77,8 +84,12 @@ export interface LaunchOptions {
 
 /**
  * How long a hosted launch waits before reading its window back: long enough
- * for a run that cannot start (a missing program, a bad flag) to have died,
- * short enough not to be felt.
+ * for a run that cannot start (a missing program, a bad flag) to have died
+ * on an idle machine, short enough not to be felt. It is a courtesy, not a
+ * bound: on a loaded machine a run can take longer than this to start and
+ * fail, and the open then reports `live` honestly (see {@link HostedRun}).
+ * No wait is long enough to turn the report into a promise about a process
+ * Ward is not the parent of, so the beat stays short.
  */
 const VERIFY_BEAT_MS = 300;
 
@@ -206,7 +217,7 @@ async function titleForeground(root: string, listing: OpenSessionListing): Promi
   }
 }
 
-/** Read a placed window back a beat later, so an instant exit is reported now. */
+/** Read a placed window back a beat later, so an exit already over is reported now. */
 async function verified(
   root: string,
   choice: Extract<HostChoice, { host: unknown }>,

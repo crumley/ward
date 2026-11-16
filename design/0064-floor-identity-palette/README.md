@@ -65,8 +65,9 @@ wrongly, and 0061's "the title leads with the window".
     the last, the name has to stay a word a human says, and the emoji now carries the burden the
     color cannot.
   - **A doctor finding for two open floors sharing an emoji.** Two machines that each open a floor
-    before their records sync can still record the same one. Safe to defer because the next upgrade
-    converges it and names what it changed, and nothing but the eye depends on the emoji.
+    before their records sync can still record the same one. Deferred when this entry was built,
+    because the next upgrade converges it; added on 2026-11-16, see
+    [Added: doctor names the clashes](#added-2026-11-16-doctor-names-the-clashes).
   - **Re-validating an emoji already recorded.** A floor that wears a sequence the new rule would
     refuse (recorded by an earlier Ward) keeps it and its record still reads. Safe to defer because
     the human chose it and sees it; the verb changes it whenever they like.
@@ -197,3 +198,38 @@ wrongly, and 0061's "the title leads with the window".
     over reserving gray for the reasons above.
   - **Lineage.** The manifest default of 0060 is the newest entry of the `AGENTS.md` lineage, so an
     untouched manifest is brought forward by the upgrade's artifact pass.
+
+## Added 2026-11-16: doctor names the clashes
+
+The finding Scope deferred. The verbs refuse a worn emoji and the ground floor's identity, so the
+records reach either state only from outside one machine's view: two machines sharing a workspace
+each open a floor before their records sync, and each picks clear of the floors it can see. Until an
+upgrade ran, nothing said so, and the human saw two hosts with one emoji and no reason for it.
+
+- **What it reports.** `ward doctor` gains a `floor identities` check over the open floors. One
+  finding per emoji two or more open floors wear, naming every floor by number and slug; and one per
+  ordinary floor wearing the ground floor's emoji, its color, or both. A floor wearing `🔧` is
+  reported once, as wearing the ground floor's, never also as sharing with floor 0. A clean
+  workspace gets no finding, as with room collisions and floor claims.
+- **Information, never an error.** Nothing but the eye depends on a floor's emoji: every host is
+  found by its stamps and every address still resolves. So the severity is `info` and doctor's exit
+  code is unchanged.
+- **The remedy is named, and doctor runs nothing.** A shared emoji names
+  `ward project identity N --emoji EMOJI` for each floor after the lowest, which keeps what it has
+  because it had it first — the order convergence uses — and says the next `ward workspace upgrade`
+  would give the later floor another if left alone. A reserved half names the same verb with
+  `--emoji`, `--color`, or both. Doctor does not pick the replacement: which emoji a floor wears is
+  its opener's choice, and a read verb that rewrote records would break the rule that doctor only
+  reports.
+- **Where it lives.** `identityClashes` in `src/workspace/floor-identity.ts` beside the rules it
+  reads, pure over the project records; `floorIdentityFindings` in `src/workspace/doctor.ts` words
+  it. Convergence is unchanged and does not use it: it walks floors in order and rewrites as it
+  goes, where the finding has to describe the records as they stand.
+- **Not done.** Convergence still leaves `silver` on an ordinary floor alone (it settles emoji, not
+  color), so for that one clash the verb is the only remedy and the finding does not mention the
+  upgrade.
+- **Proof.** `test/workspace/floor-identity.test.ts`: a table of record states against the exact
+  findings — distinct floors, two and three floors on one emoji, the ground floor's emoji, its
+  color, both, and a closed floor that shares with nobody — each asserting `info` and that the
+  workspace's commit and working tree are unchanged after doctor ran; and one case where the verb
+  the finding names clears it.

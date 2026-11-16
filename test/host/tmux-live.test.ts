@@ -103,10 +103,24 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
 
   test('an exited run is legible; resume clears it, records how it ended, and refuses over a live one', async () => {
     const opened = session(ward(['session', 'open', '--detach', '--json'], { stub: exiting }));
-    expect(opened.live).toMatchObject({ state: 'exited', exitStatus: 3 });
-    expect(session(ward(['session', 'show', opened.id, '--json'])).live).toMatchObject({
+    // The open's report is ONE read, a beat after the run was placed. It
+    // promises the truth as of that read and nothing about the next moment:
+    // `exited` with the status when the run had ended by then, else `live` —
+    // never `gone`, never unknown, and never an exit status it did not see.
+    // Which of the two depends on how long the run took to start and end,
+    // which a loaded machine stretches past the beat; both are honest.
+    expect(['live', 'exited']).toContain(opened.live?.state ?? 'none');
+    expect(opened.live).toMatchObject(
+      opened.live?.state === 'exited' ? { exitStatus: 3, strangers: [] } : { strangers: [] },
+    );
+    expect(opened.live?.window).toMatch(/^@\d+$/);
+    // What IS promised without a clock: every later read says how it ended,
+    // from the window the open reported, kept for exactly that.
+    const ended = await exitedSoon(opened.id);
+    expect(ended.live).toMatchObject({
       state: 'exited',
       exitStatus: 3,
+      window: opened.live?.window,
     });
 
     fabricateTranscript(opened.handle?.replace('claude:', '') ?? '');
@@ -323,6 +337,7 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     expect(windowsIn(`${name}-f0-workspace`).sort()).toEqual([coordinator.id, helper.id].sort());
 
     const ended = session(ward(['session', 'open', '--detach', '--json'], { stub: exiting }));
+    await exitedSoon(ended.id); // waited for: the open's own report may honestly read live
     const refused = attach(['session', 'observe', ended.id]);
     expect(await exited(refused)).toBe(1);
     expect(refused.output()).toContain('is not running (exited 3)');
@@ -462,15 +477,16 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     expect(await exited(own)).toBe(0);
   });
 
-  test('when a host ends under them, everyone in it moves to a host still standing — nobody to the shell', async () => {
+  test('when a host ends under them, the participants move to a host still standing; the observer returns to the shell, told why', async () => {
     await openProject(ws, 'alpha');
     await openProject(ws, 'beta');
     const closing = session(ward(['session', 'open', '--floor', '1', '--detach', '--json']));
     const standing = session(ward(['session', 'open', '--floor', '2', '--detach', '--json']));
     const [f1, f2] = [`${name}-f1-alpha`, `${name}-f2-beta`];
     // Three ways to be looking at floor 1: sitting in the host itself, and
-    // through each kind of view. The view clients join last, so a view is the
-    // session tmux would move the sitter into first.
+    // through each kind of view. The observer joins last, so its view is the
+    // session tmux moves the sitter into first when the host ends — the
+    // cascade: a view that detached everyone in it would drop the sitter too.
     const sitter = human(f1);
     await clientOn(f1, sitter);
     const viewer = attach(['session', 'attach', closing.id]);
@@ -481,17 +497,81 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
       expect(sessionOption(group, 'detach-on-destroy')).toBe('off');
     }
 
-    // Floor 1's only window closes, and tmux ends the host and both views.
+    // Floor 1's only window closes, and the host and both views end.
     expect(session(ward(['session', 'close', closing.id, '--json'])).teardown?.outcome).toBe(
       'closed',
     );
+    // The observer asked to watch one window: its terminal is handed back,
+    // saying what happened — it is not left watching some other session.
+    expect(await exited(watcher)).toBe(0);
+    expect(watcher.output()).toContain(
+      `session ${closing.id} was closed — the window you were watching ended with it`,
+    );
+    // Both participants are in the host still standing, and neither is at the shell.
     expect(await groupsSoon((names) => names.length === 1)).toEqual([f2]);
-    expect(await clientsSoon(3)).toEqual([f2, f2, f2]);
-    for (const client of [sitter, viewer, watcher]) expect(client.proc.exitCode).toBeNull();
+    expect(await clientsSoon(2)).toEqual([f2, f2]);
+    expect(tmux('list-clients', '-F', '#{client_flags}')).not.toContain('read-only');
+    for (const client of [sitter, viewer]) expect(client.proc.exitCode).toBeNull();
     expect(session(ward(['session', 'show', standing.id, '--json'])).live?.state).toBe('live');
 
     tmux('detach-client', '-s', `=${f2}`);
-    for (const client of [sitter, viewer, watcher]) expect(await exited(client)).toBe(0);
+    for (const client of [sitter, viewer]) expect(await exited(client)).toBe(0);
+  });
+
+  test("an observer's terminal returns when its window goes, whatever else stands: closed, gone, or restarted", async () => {
+    const coordinator = session(ward(['session', 'open', '--detach', '--json']));
+    const f0 = `${name}-f0-workspace`;
+    // A session of the human's own, the most recently used on the server:
+    // where tmux would have put an observer whose view ended under it.
+    tmux('new-session', '-d', '-s', 'mine', 'cat');
+    const own = human('mine');
+    await clientOn('mine', own);
+    const watch = async (id: string) => {
+      const watcher = attach(['session', 'observe', id]);
+      const view = await clientOn(`${f0}-o1`, watcher);
+      // One window is all the observer sees named: the view's holder has no entry.
+      expect(windowsIn(view)).toEqual([id]);
+      return watcher;
+    };
+    const returned = async (watcher: Client, said: string) => {
+      expect(await exited(watcher)).toBe(0);
+      expect(watcher.output()).toContain(said);
+      // The view is gone, the human's own session has its one client, and the host stands.
+      expect(await groupsSoon((names) => names.length === 1)).toEqual([f0]);
+      expect(clientSessions()).toEqual(['mine']);
+    };
+
+    // Closed: the session's window ends, the floor host stands (the coordinator is in it).
+    const closed = session(ward(['session', 'open', '--detach', '--json']));
+    let watcher = await watch(closed.id);
+    ward(['session', 'close', closed.id]);
+    await returned(watcher, `session ${closed.id} was closed`);
+
+    // Gone: the window ended by hand, the record still open.
+    const gone = session(ward(['session', 'open', '--detach', '--json']));
+    watcher = await watch(gone.id);
+    tmux('kill-window', '-t', gone.live?.window ?? '');
+    await returned(watcher, `session ${gone.id} ended — the window you were watching is gone`);
+
+    // Restarted: the run ends under the observer, who goes on seeing its dead
+    // window until a resume clears it for the replacement.
+    const restarted = session(ward(['session', 'open', '--detach', '--json']));
+    watcher = await watch(restarted.id);
+    const window = restarted.live?.window ?? '';
+    process.kill(Number(tmux('display-message', '-p', '-t', window, '#{pane_pid}').trim()));
+    await exitedSoon(restarted.id);
+    expect(watcher.proc.exitCode).toBeNull();
+    fabricateTranscript(restarted.handle?.replace('claude:', '') ?? '');
+    session(ward(['session', 'resume', restarted.id, '--detach', '--json']));
+    await returned(watcher, `session ${restarted.id} was restarted in a new window`);
+
+    // Leaving by choice says nothing: the window is still there.
+    watcher = await watch(coordinator.id);
+    tmux('detach-client', '-s', `=${f0}-o1`);
+    expect(await exited(watcher)).toBe(0);
+    expect(watcher.output()).not.toContain('you were watching');
+    tmux('detach-client', '-s', '=mine');
+    expect(await exited(own)).toBe(0);
   });
 
   // -- names and titles (design/0061-host-names-and-titles/) ---------------------

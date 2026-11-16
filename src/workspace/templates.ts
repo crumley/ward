@@ -183,6 +183,11 @@ instead of in the foreground.
   \`ward session locate ID\` say where a hosted run stands (live, exited, gone, or could not
   determine), and \`ward doctor\` reports stray windows, duplicate hosts, leftover views, and gone
   sessions, each with the command that would end it — ending none itself.
+- **When a host ends under a terminal.** A terminal sitting in a floor host, or attached through
+  a view, is moved to another tmux session still standing on that server — tmux picks the most
+  recently used, which may be one of your own — and returns to the shell only when none is
+  left. A terminal observing returns to the shell as soon as the window it watches goes, with a
+  line saying what became of the session.
 
 ## Driving \`ward\` as an agent
 

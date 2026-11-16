@@ -11,7 +11,7 @@ import { choice, integer, string } from '@optique/core/valueparser';
 import { run } from '@optique/run';
 import picocolors from 'picocolors';
 import pkg from '../../package.json' with { type: 'json' };
-import { attachSession, observeSession } from '../agent/attach.ts';
+import { attachSession, type Ended, observeSession } from '../agent/attach.ts';
 import {
   closeHostedSession,
   describeExit,
@@ -2971,7 +2971,27 @@ async function cmdSessionJoin(verb: 'attach' | 'observe', id: string): Promise<v
       );
     },
   });
+  // An observer whose window went is back at the shell without having left:
+  // say why, since tmux says only that the client detached.
+  if (joined.ended !== undefined) console.error(describeEnded(id, joined.ended));
   if (joined.exitCode !== 0) await exitWhenFlushed(joined.exitCode);
+}
+
+function describeEnded(id: string, ended: Ended): string {
+  switch (ended) {
+    case 'closed':
+      return `session ${id} was closed — the window you were watching ended with it`;
+    case 'gone':
+      return (
+        `session ${id} ended — the window you were watching is gone ` +
+        `(where it stands: ward session show ${id})`
+      );
+    case 'restarted':
+      return (
+        `session ${id} was restarted in a new window — the one you were watching is gone; ` +
+        `watch it again: ward session observe ${id}`
+      );
+  }
 }
 
 /** `--detach` and `--foreground` as the one choice they are; both together is refused. */

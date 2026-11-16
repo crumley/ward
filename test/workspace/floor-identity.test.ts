@@ -12,9 +12,11 @@ import { projectRecordType } from '../../src/store/types.ts';
 import { PALETTE, POOL_COLORS, POOL_EMOJI } from '../../src/theme/palette.ts';
 import { convergeWorkspace } from '../../src/workspace/converge.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
+import { runDoctor } from '../../src/workspace/doctor.ts';
 import {
   assignIdentity,
   type FloorLook,
+  identityClashes,
   identityOf,
   setFloorIdentity,
 } from '../../src/workspace/floor-identity.ts';
@@ -337,6 +339,80 @@ test('convergence picks clear of a higher floor it has not reached, so that one 
   git(ws, 'commit', '-am', 'a hand edit');
   expect((await identitiesStep())?.detail).toBe('floor 2 🌲 → 🍀 green (floor 1 wears 🌲)');
   expect(identityOf((await resolveProject(ws, 3)).record)).toEqual({ color: 'pink', emoji: '🐸' });
+});
+
+// -- what doctor says about identities the verbs would have refused ----------------
+
+const BLUE = { color: 'blue', emoji: '🌊' } as const;
+const GREEN = { color: 'green', emoji: '🌲' } as const;
+
+test.each<[string, Record<string, FloorLook>, string[]]>([
+  ['every open floor distinct: nothing to say', { '1-alpha': BLUE, '2-beta': GREEN }, []],
+  [
+    'two floors, one emoji: both named, the later one given the verb',
+    { '1-alpha': BLUE, '2-beta': { color: 'green', emoji: '🌊' } },
+    [
+      'floors 1 (alpha) and 2 (beta) both wear 🌊 — as two machines leave them when each ' +
+        'opens a floor before their records sync. Tell them apart: ward project identity 2 ' +
+        '--emoji EMOJI (floor 1 had it first; left alone, the next ward workspace upgrade ' +
+        'gives the later one another)',
+    ],
+  ],
+  [
+    'three floors, one emoji: one finding, a verb for each later floor',
+    { '1-alpha': BLUE, '2-beta': BLUE, '3-gamma': BLUE },
+    [
+      expect.stringMatching(
+        /^floors 1 \(alpha\), 2 \(beta\) and 3 \(gamma\) all wear 🌊 .* ward project identity 2 --emoji EMOJI; ward project identity 3 --emoji EMOJI /,
+      ),
+    ],
+  ],
+  [
+    "the ground floor's emoji on another floor: reported as reserved, once",
+    { '1-alpha': { color: 'blue', emoji: '🔧' }, '2-beta': GREEN },
+    [
+      "floor 1 (alpha) wears 🔧, the ground floor's — floor 0 wears 🔧 silver in every " +
+        'workspace, so the two read alike. Give it its own: ward project identity 1 --emoji EMOJI',
+    ],
+  ],
+  [
+    "the ground floor's color, and both halves",
+    { '1-alpha': { color: 'silver', emoji: '🌊' }, '2-beta': { color: 'silver', emoji: '🔧' } },
+    [
+      expect.stringMatching(/^floor 1 \(alpha\) wears silver, .* identity 1 --color COLOR$/),
+      expect.stringMatching(
+        /^floor 2 \(beta\) wears 🔧 silver, .* identity 2 --emoji EMOJI --color COLOR$/,
+      ),
+    ],
+  ],
+  [
+    'a closed floor shares with nobody',
+    { '1-alpha': BLUE, '2-beta': GREEN, '3-gamma': BLUE, close: BLUE },
+    [],
+  ],
+])('doctor on floor identities — %s', async (_name, looks, expected) => {
+  for (const slug of ['alpha', 'beta', 'gamma']) await openProject(ws, slug);
+  if ('close' in looks) await closeProject(3);
+  for (const [dir, look] of Object.entries(looks)) if (dir !== 'close') wear(dir, look);
+  git(ws, 'commit', '-am', 'as two machines left them');
+  const before = git(ws, 'rev-parse', 'HEAD').stdout;
+
+  const findings = (await runDoctor(ws)).workspace.filter((f) => f.check === 'floor identities');
+  expect(findings.map((finding) => finding.message)).toEqual(expected);
+  // Information with the remedy, never an error — and doctor changed nothing.
+  expect(findings.every((finding) => finding.severity === 'info')).toBe(true);
+  expect(git(ws, 'rev-parse', 'HEAD').stdout).toBe(before);
+  expect(git(ws, 'status', '--porcelain').stdout).toBe('');
+});
+
+test('what doctor names, the verb it names settles', async () => {
+  await openProject(ws, 'alpha');
+  await openProject(ws, 'beta');
+  wear('2-beta', BLUE);
+  git(ws, 'commit', '-am', 'as two machines left them');
+  expect(identityClashes(await readProjects(ws))).toHaveLength(1);
+  await setFloorIdentity(ws, 2, { emoji: '🚀' });
+  expect(identityClashes(await readProjects(ws))).toEqual([]);
 });
 
 // -- scaffolding ----------------------------------------------------------------
