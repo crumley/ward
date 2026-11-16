@@ -110,6 +110,17 @@ test('the AGENTS.md 0029 supersedes is in history — every workspace still on i
   expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
     'b942afc03d90c477197b96630f25a8d9ddcfa0984549f3f7bf75b57324bf3242', // design 0057
   );
+  expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
+    '068603e7e5d88f2e1118c9f466cf99b56ca60877078b8e5ce7b8b584c9d5f6fa', // 0031 phase 2
+  );
+  expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
+    '6426b5b942ac41946390ea812824fb55e692057c57dcebb49febed5638f47937', // design 0058
+  );
+  // …and the 0061 manifest, superseded by design/0060-floor-identity/'s
+  // color-and-emoji bullet.
+  expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
+    '06774a17014352c84e68a11fbaca099c03b68504c80badf7ce364d5562d6dcdc', // design 0061
+  );
 });
 
 // The maintenance guard-rail: the lineage's history is maintained by hand, so
@@ -119,13 +130,13 @@ test('the AGENTS.md 0029 supersedes is in history — every workspace still on i
 // exactly the bookkeeping that keeps every shipped default recognizable.
 test('the current defaults are pinned; changing one must move its old hash into history', () => {
   expect(sha256OfText(AGENTS_MD)).toBe(
-    '068603e7e5d88f2e1118c9f466cf99b56ca60877078b8e5ce7b8b584c9d5f6fa', // since 0031 (phase 2)
+    '9d96072ad09f90e663bd4ecff2548744827a1187f3fcb6a17c4ce7da94644581', // since 0060 (built after 0061)
   );
   expect(sha256OfText(WARD_INTERNAL_README)).toBe(
     '6f10845611635508f006727f83bdc2222d840a9da972393781662c9f6ff04ac4', // since 65f1e8b (0013)
   );
   expect(sha256OfText(lineageOf('catalog.md').current())).toBe(
-    '0487e4b2d1136c28c1138e45bca3ff4411d7ebfa70ab959751b3cfa0a9b135dd', // since a71b091 (0002)
+    '8feb635436c6e911b37761bd564ee0eb758bca721850f02da9167280bd5f4dd6', // the 0002 catalog, in the serializer's stable spelling
   );
 });
 

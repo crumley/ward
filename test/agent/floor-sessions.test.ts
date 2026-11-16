@@ -149,7 +149,9 @@ test('status: the floor session rides its floor row, not the workspace block', (
   expect(document.sessions.map((session) => session.id)).toEqual(['workspace-1@test']);
 
   const human = ward(['status']).stdout;
-  expect(human).toMatch(/floor 1 — alpha \[active\]\n {2}session f1-1@test — run alpha \(/);
+  expect(human).toMatch(
+    /floor 1 — 🌲 alpha \[active\] · green\n {2}session f1-1@test — run alpha \(/u,
+  );
 });
 
 test('show, locate, resume, close: one floor session through every verb, with --json', () => {

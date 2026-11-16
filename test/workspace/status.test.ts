@@ -6,12 +6,18 @@
 // anywhere (design/0009-live-forge-state/).
 import { expect, test } from 'bun:test';
 import type { PrForgeState } from '../../src/forge/gh.ts';
-import type { RepositoryRecord, TaskRecord, WorkState } from '../../src/store/types.ts';
+import type {
+  ProjectRecord,
+  RepositoryRecord,
+  TaskRecord,
+  WorkState,
+} from '../../src/store/types.ts';
 import {
   deriveNeedsYou,
   deriveStatus,
   inReview,
   type NeedsYouEntry,
+  projectState,
   type TaskStatus,
 } from '../../src/workspace/status.ts';
 
@@ -31,6 +37,33 @@ for (const { children, expected, why } of derivations) {
     expect(deriveStatus(children)).toBe(expected);
   });
 }
+
+// The standing floor never closes (floor 0): every task on it closed reads as
+// an empty standing container, active, never closed.
+const floor = (over: Partial<ProjectRecord>): ProjectRecord =>
+  ({ type: 'project', floor: 1, slug: 'x', state: 'active', ...over }) as ProjectRecord;
+test.each([
+  ['an ordinary floor with every task closed is closed', {}, ['closed', 'closed'], 'closed'],
+  [
+    'the standing floor with every task closed stays active',
+    { standing: true },
+    ['closed'],
+    'active',
+  ],
+  [
+    'the standing floor with a paused task reads paused',
+    { standing: true },
+    ['closed', 'paused'],
+    'paused',
+  ],
+  ['the standing floor with no tasks is active', { standing: true }, [], 'active'],
+  ['a paused record speaks for itself', { state: 'paused' }, ['active'], 'paused'],
+] as [string, Partial<ProjectRecord>, WorkState[], WorkState][])(
+  '%s',
+  (_name, over, states, expected) => {
+    expect(projectState(floor(over), states)).toBe(expected);
+  },
+);
 
 test('in-review without forge state: linked PRs on a non-closed task; never on a closed one', () => {
   expect(inReview(task({ prs: ['https://x/pr/1'], state: 'active' }))).toBe(true);

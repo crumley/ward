@@ -14,6 +14,7 @@
 // beside src/host/tmux.ts, selected by `agent.host`, and the Ward side does
 // not change.
 import type { HostedKind } from '../store/types.ts';
+import type { FloorColor } from '../theme/palette.ts';
 
 /** The stamps that identify a floor's group: whose workspace, which floor. */
 export interface GroupStamp {
@@ -32,8 +33,12 @@ export interface WindowTags {
 
 export interface PlaceRequest {
   readonly group: GroupStamp;
-  /** Used only to mint a group's name when the floor has none; never a lookup key. */
-  readonly workspaceName: string;
+  /**
+   * What the floor's group is called and titled
+   * (design/0061-host-names-and-titles/) — used to name a group this
+   * placement creates; never a lookup key.
+   */
+  readonly naming: GroupNaming;
   readonly tags: WindowTags;
   /** What the window is called — presentation only; nothing reads it back. */
   readonly label: string;
@@ -56,6 +61,36 @@ export interface PlaceRequest {
   readonly floating: readonly WindowTags[];
   /** The Ward version, stamped on a group this placement creates. */
   readonly version: string;
+}
+
+/**
+ * What a human reads on a group: its name, and where a terminal looking at
+ * it is said to stand. Presentation only — a group is found by its stamps.
+ */
+export interface GroupNaming {
+  /** The name wanted; the host may adapt it to the characters it takes. */
+  readonly name: string;
+  /** What a terminal's title says after the window's own name. */
+  readonly title: string;
+  /**
+   * What the group wears (design/0060-floor-identity/) — absent when the
+   * floor's record carries no identity, and then the group is left as it looks.
+   */
+  readonly identity?: GroupIdentity;
+}
+
+/**
+ * What a floor's group looks like (design/0060-floor-identity/): the floor's
+ * recorded color and emoji, and the words that name it beside them. Stated in
+ * the record's terms — a palette name, an emoji, a label — and never in any
+ * one host's styling language: how a color becomes a status line is the
+ * host's own business. Presentation only; nothing finds a group by it.
+ */
+export interface GroupIdentity {
+  readonly color: FloorColor;
+  readonly emoji: string;
+  /** The floor in words, as a human reads it beside the emoji (`f7 ward-development`). */
+  readonly label: string;
 }
 
 export interface Placement {
@@ -122,6 +157,49 @@ export interface ViewRequest {
   readonly mode: ViewMode;
   /** The workspace id the view is stamped with, so doctor can attribute a leftover one. */
   readonly workspace: string;
+  /** What a terminal looking through the view is titled with, after the window's name. */
+  readonly title: string;
+  /** The identity of the floor the view looks at, which the view wears too. */
+  readonly identity?: GroupIdentity;
+}
+
+/**
+ * Names to bring up to date on what the host already holds
+ * (design/0061-host-names-and-titles/): each group by the name it wears now,
+ * each window by its host-assigned id. Nothing is created, moved, or ended.
+ */
+export interface RenameRequest {
+  readonly groups: readonly {
+    readonly name: string;
+    readonly naming: GroupNaming;
+    /**
+     * The views standing over this group (design/0063-views-follow-their-host/),
+     * each by the name it wears now: renamed after the group, titled as it is,
+     * and dressed as it is — with whoever is looking through one left looking.
+     */
+    readonly views?: readonly StandingView[];
+  }[];
+  readonly windows: readonly { readonly window: string; readonly label: string }[];
+}
+
+/** A view that already stands: the name it wears, and how its client joined. */
+export interface StandingView {
+  readonly name: string;
+  readonly mode: ViewMode;
+}
+
+export interface Renamed {
+  /** The groups whose name changed: what each was called, and is called now. */
+  readonly groups: readonly { readonly from: string; readonly to: string }[];
+  /** The views whose name changed, the same way. */
+  readonly views: readonly { readonly from: string; readonly to: string }[];
+  /** What could not be renamed, and why — reported, never a reason to stop. */
+  readonly failed: readonly string[];
+  /**
+   * The groups dressed in their identity (design/0060-floor-identity/): each by
+   * the name it wears now, with the views of it that were dressed beside it.
+   */
+  readonly themed: readonly { readonly group: string; readonly views: readonly string[] }[];
 }
 
 /** A per-client view: a host-side object that exists while one client looks through it. */
@@ -137,6 +215,12 @@ export interface InventoryGroup {
   readonly stamp?: GroupStamp;
   /** The workspace a VIEW was made for — present exactly on views. */
   readonly viewOf?: string;
+  /**
+   * The group an ATTACH view looks at, by the name it wears now — what the
+   * host itself says the view shares windows with, never read from a name.
+   * Absent on an observe view, which holds one window and shares no group.
+   */
+  readonly viewHost?: string;
   /** How many clients are looking at it right now. */
   readonly clients: number;
   /** How many windows it shows, Ward's or not (a human's own shell counts). */
@@ -198,6 +282,15 @@ export interface SessionHost {
    * A window already in the group is left as it is.
    */
   link(window: string, group: string): void;
+  /**
+   * Bring names and titles up to date in place: rename each group to the name
+   * wanted (left as it is when another group already wears that name), title
+   * it, dress it in the identity given, bring each view named with it after
+   * it — renamed, titled, dressed — and relabel each window. Touches those
+   * groups and views only, never the host's own defaults, and moves no
+   * client. Never throws: what it could not do is in the answer.
+   */
+  rename(request: RenameRequest): Renamed;
   /**
    * Make a view for one client: for `attach`, a view of the whole group with
    * `window` current in it, so attaching never moves another client's current

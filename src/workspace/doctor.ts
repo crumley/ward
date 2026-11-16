@@ -52,7 +52,7 @@ import {
   repositoryRecordType,
   workspaceRecordType,
 } from '../store/types.ts';
-import { taskAddress, taskFloor } from './address.ts';
+import { collidingRooms, distinctAddress, taskAddress, taskFloor } from './address.ts';
 import { claimsOf } from './affinity.ts';
 import { sha256OfFile } from './baselines.ts';
 import { readBrief } from './briefs.ts';
@@ -642,6 +642,7 @@ async function workspaceChecks(
   findings.push(claudeGuidanceFinding(root));
   findings.push(await standingProjectFinding(root));
   findings.push(...(await legacyBareTaskFinding(root)));
+  findings.push(...(await roomCollisionFindings(root)));
   findings.push(...(await claimFindings(root)));
   findings.push(...(await floorManifestFindings(root)));
   findings.push(...(await floorViewFindings(root)));
@@ -1189,6 +1190,37 @@ async function legacyBareTaskFinding(root: string): Promise<Finding[]> {
 }
 
 /**
+ * Rooms two open tasks hold at once (design/0058-room-collisions/): what two
+ * machines sharing the workspace leave behind when each opened a task before
+ * their records synced — each allocator read its own view and handed out the
+ * same next room. Warn, not error: nothing is lost and every verb still
+ * works, but the room address names neither task, so the finding spells the
+ * address that does name each, and how the collision ends — it is a slot, so
+ * it clears the moment all but one holder closes, with nothing to renumber.
+ */
+async function roomCollisionFindings(root: string): Promise<Finding[]> {
+  const check = 'room collisions';
+  try {
+    const tasks = await readTasks(root);
+    return collidingRooms(tasks).map(({ address, holders }) => {
+      const named = holders.map((task) => distinctAddress(task, tasks)).sort();
+      return {
+        check,
+        severity: 'warn' as const,
+        message:
+          `${address} is held by ${holders.length} open tasks: ${named.join(', ')} — the ` +
+          'room was handed out twice, as two machines do when each opens a task before ' +
+          'their records sync. Name each by the address shown ' +
+          `(ward task show ${named[0]}); the room clears when all but one close`,
+      };
+    });
+  } catch (error) {
+    if (!(error instanceof WardError)) throw error;
+    return [{ check, severity: 'error', message: error.message }];
+  }
+}
+
+/**
  * Claims that point at nothing (design/0037-repo-floor-affinity/): a floor
  * claiming a repository the workspace no longer has registered. Warn, never
  * error — a dangling claim breaks nothing, it simply routes nothing, and the
@@ -1455,19 +1487,20 @@ async function briefFindings(root: string): Promise<Finding[]> {
     return []; // an unreadable task record is reported by the worktree checks
   }
   for (const task of tasks) {
+    const address = distinctAddress(task, tasks);
     const brief = await readBrief(root, task.dir);
     const path = `${task.dir}/brief.md`;
     if (brief.standing === 'untyped') {
       findings.push({
-        check: `brief ${taskAddress(task)}`,
+        check: `brief ${address}`,
         severity: 'info',
         message:
           `${path} carries no front matter — it still serves as the brief; type it in place: ` +
-          `ward task brief ${taskAddress(task)} ${path}`,
+          `ward task brief ${address} ${path}`,
       });
     } else if (brief.standing === 'invalid') {
       findings.push({
-        check: `brief ${taskAddress(task)}`,
+        check: `brief ${address}`,
         severity: 'warn',
         message: brief.reason,
       });

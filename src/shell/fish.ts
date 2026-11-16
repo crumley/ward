@@ -41,11 +41,12 @@ const PICKER_SEAM_NOTE = `# The only two functions that know a picker exists, an
 # named. To swap in fzy, sk, or a future in-process \`ward\` picker, rewrite
 # these two; nothing else in this file changes.`;
 
-const COMPLETION_NOTE = `# wrr inherits ward's own generated completions by wrapping the command it
-# forwards to, so the tree is never described twice (install them with
-# \`ward completion fish\`). wrcd, wwcd, and wws are new names, so they carry
-# their own — fed by the same callback the functions use, NAME<TAB>CUE being
-# exactly what fish reads as a candidate and its description.`;
+const COMPLETION_NOTE = `# wrr, ws, and the session shorthands (wsa, wso, wsr, wsc) inherit ward's own
+# generated completions by wrapping the command they forward to, so the tree
+# is never described twice (install them with \`ward completion fish\`). wrcd,
+# wwcd, and wws are new names, so they carry their own — fed by the same
+# callback the functions use, NAME<TAB>CUE being exactly what fish reads as a
+# candidate and its description.`;
 
 /** The picker seam, by name: the two helpers the note above is about. */
 const SEAM = ['__ward_picker_present', '__ward_picker'];

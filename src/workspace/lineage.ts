@@ -89,8 +89,15 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
     path: 'catalog.md',
     current: currentCatalogText,
     history: [
-      // One default ever: the seeded catalog has been byte-stable since
-      // a71b091 (design 0002).
+      // a71b091 (design 0002) — the seeded catalog as Bun before 1.4.4 wrote
+      // it, with a trailing space after `artifactTypes:`. The content never
+      // changed; the serializer's output is now the same on every Bun
+      // (`stableYaml`, src/store/document.ts), and this is the older spelling.
+      {
+        sha256: '0487e4b2d1136c28c1138e45bca3ff4411d7ebfa70ab959751b3cfa0a9b135dd',
+        era: 'a71b091 (design 0002)',
+      },
+      // Current: the same catalog, written without the trailing space.
     ],
   },
   {
@@ -288,9 +295,31 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: 'b942afc03d90c477197b96630f25a8d9ddcfa0984549f3f7bf75b57324bf3242',
         era: 'design 0057 (context from the root)',
       },
-      // Current since design 0031 (phase 2): the Detached sessions section —
-      // `--detach`, floor hosts, the floating coordinator, attach, observe,
-      // and the `window-size latest` sizing caveat.
+      // design 0031 (phase 2) — the Detached sessions section: `--detach`,
+      // floor hosts, the floating coordinator, attach, observe, and the
+      // `window-size latest` sizing caveat. A task sharing its room with
+      // another had no spelling of its own yet.
+      {
+        sha256: '068603e7e5d88f2e1118c9f466cf99b56ca60877078b8e5ce7b8b584c9d5f6fa',
+        era: 'design 0031 phase 2 (detached sessions)',
+      },
+      // design 0058 — two tasks holding one room (two machines that opened
+      // before their records synced) are each named by room and slug
+      // (`f5t45-distill-2026-10-18`), and doctor reports the room. A floor
+      // host was still named `ward-<workspace>-f<N>`.
+      {
+        sha256: '6426b5b942ac41946390ea812824fb55e692057c57dcebb49febed5638f47937',
+        era: 'design 0058 (room collisions)',
+      },
+      // design 0061 — a floor host is named `<workspace>-f<N>-<floor-slug>`, a
+      // window for what its session is, and a terminal is titled. A floor had
+      // no color or emoji yet.
+      {
+        sha256: '06774a17014352c84e68a11fbaca099c03b68504c80badf7ce364d5562d6dcdc',
+        era: 'design 0061 (host names and titles)',
+      },
+      // Current since design 0060: every floor has a color and an emoji, worn
+      // by its host, and `ward project identity` changes them.
     ],
   },
 ];

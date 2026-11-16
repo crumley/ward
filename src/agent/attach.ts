@@ -10,7 +10,7 @@
 // act, and it never starts, re-creates, or repairs anything — watching must
 // not disturb. Both verify the window is the record's own before showing it.
 import { WardError } from '../errors.ts';
-import type { FoundWindow, SessionHost, View } from '../host/host.ts';
+import type { FoundWindow, SessionHost, View, ViewRequest } from '../host/host.ts';
 import type { HostedKind, SessionRecord } from '../store/types.ts';
 import { workspaceId } from '../workspace/identity.ts';
 import {
@@ -20,6 +20,7 @@ import {
   requireOpenSession,
 } from '../workspace/sessions.ts';
 import { classify, describeExit, hostedBy, hostOf, type LiveState } from './host.ts';
+import { readNaming, refreshNames } from './naming.ts';
 import { floats, placementFloor } from './placement.ts';
 import { resumeSession } from './run.ts';
 
@@ -42,10 +43,12 @@ export interface Prepared {
   readonly view: View;
   /** True when attach found the run gone (or ended) and re-created it first. */
   readonly recreated: boolean;
-  /** Floating links attach put back ("workspace-1@mbp into ward-main-f3"). */
+  /** Floating links attach put back ("workspace-1@mbp into main-f3-alpha"). */
   readonly repaired: readonly string[];
   /** Repairs that failed — reported, never a reason to refuse the attach. */
   readonly unrepaired: readonly string[];
+  /** Hosts, and views of them, attach renamed in place ("ward-main-f3 is now main-f3-alpha"). */
+  readonly renamed: readonly string[];
 }
 
 export interface Joined extends Prepared {
@@ -68,6 +71,9 @@ export async function attachSession(root: string, id: string, options: JoinOptio
   requireTerminal(id, options.terminal, 'attach');
   const host = usableHost(kind, env, options.host, 'attach');
   const workspace = await workspaceId(root);
+  // Names are brought up to date before anything is read by name: a host
+  // from an older naming is renamed here, in place, and found again below.
+  const { renamed } = await refreshNames(root, host, workspace, kind);
   let { live, own } = await readLive(root, open, host, workspace, kind);
   refuseUnknownOrStranger(id, live, own, host);
   let recreated = false;
@@ -95,12 +101,19 @@ export async function attachSession(root: string, id: string, options: JoinOptio
     workspace,
     kind,
   });
-  const view = host.view({ group: live.group, window: live.window, mode: 'attach', workspace });
+  const view = host.view({
+    group: live.group,
+    window: live.window,
+    mode: 'attach',
+    workspace,
+    ...(await viewNaming(root, own, live.group, live.floor)),
+  });
   return join(root, id, 'attached', view, host, options, {
     live,
     recreated,
     repaired,
     unrepaired,
+    renamed,
   });
 }
 
@@ -132,13 +145,33 @@ export async function observeSession(root: string, id: string, options: JoinOpti
     window: live.window,
     mode: 'observe',
     workspace,
+    // The view observe makes wears the floor it watches; the host itself is
+    // left exactly as it is — watching changes nothing.
+    ...(await viewNaming(root, own, live.group, live.floor)),
   });
   return join(root, id, 'observed', view, host, options, {
     live,
     recreated: false,
     repaired: [],
     unrepaired: [],
+    renamed: [],
   });
+}
+
+/**
+ * Where a view of `group` says its terminal stands, and what it wears
+ * (design/0060-floor-identity/): those of the floor the group is stamped for —
+ * which is not the session's own when its window was moved, or floats.
+ */
+async function viewNaming(
+  root: string,
+  own: FoundWindow,
+  group: string | undefined,
+  placed: number,
+): Promise<Pick<ViewRequest, 'title' | 'identity'>> {
+  const floor = own.groups.find((g) => g.name === group)?.stamp?.floor ?? placed;
+  const { title, identity } = (await readNaming(root)).group(floor);
+  return { title, ...(identity === undefined ? {} : { identity }) };
 }
 
 async function join(

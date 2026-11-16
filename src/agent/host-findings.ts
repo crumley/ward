@@ -31,6 +31,9 @@ const ENVIRONMENT = 'host environment';
 const WINDOWS = 'host windows';
 const HOSTS = 'floor hosts';
 
+/** What every floor host's name began with before design 0061 named hosts for their floors. */
+const LEGACY_GROUP_PREFIX = 'ward-';
+
 /**
  * Every host finding for one workspace. `workspace` is the workspace's id —
  * undefined when the record carries none yet, in which case nothing can have
@@ -289,8 +292,12 @@ function hostShapeFindings(
   const foreign = groups.filter(
     (group) =>
       group.viewOf === undefined &&
-      group.name.startsWith('ward-') &&
-      group.stamp?.workspace !== workspace,
+      group.stamp?.workspace !== workspace &&
+      // Another workspace's host says so by its stamp; an unstamped session is
+      // Ward's business only when it wears the name hosts were once minted
+      // under (design/0061-host-names-and-titles/) — anything else is a
+      // human's own tmux session.
+      (group.stamp !== undefined || group.name.startsWith(LEGACY_GROUP_PREFIX)),
   );
   if (foreign.length > 0) {
     findings.push({

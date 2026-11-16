@@ -16,9 +16,11 @@ import {
   closeHostedSession,
   describeExit,
   type HostFlag,
+  hostOf,
   type LiveState,
   liveStateOf,
 } from '../agent/host.ts';
+import { type Dressed, dressFloor } from '../agent/naming.ts';
 import { type HostedRun, launchSession, locateSession, resumeSession } from '../agent/run.ts';
 import { WardError } from '../errors.ts';
 import { type PrForgeState, probeForge } from '../forge/gh.ts';
@@ -49,7 +51,8 @@ import { CANDIDATE_KINDS, candidates, renderCandidates } from '../shell/candidat
 import { emitShellLayer } from '../shell/layer.ts';
 import { FISH_SHORTHAND_NAMES, findShorthand } from '../shell/shorthands.ts';
 import type { SessionRecord, TaskRecord, WorkState } from '../store/types.ts';
-import { taskAddress } from '../workspace/address.ts';
+import { FLOOR_COLORS, type FloorColor, INK, PALETTE } from '../theme/palette.ts';
+import { distinctAddress, taskAddress } from '../workspace/address.ts';
 import {
   type ClaimReport,
   claimRepository,
@@ -64,6 +67,7 @@ import { contextChain } from '../workspace/context.ts';
 import type { StepReport } from '../workspace/converge.ts';
 import { createWorkspace } from '../workspace/create.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
+import { type IdentityReport, setFloorIdentity } from '../workspace/floor-identity.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
 import { closeCommand, rebaseCommand } from '../workspace/next.ts';
 import {
@@ -81,7 +85,7 @@ import {
   removeRepository,
 } from '../workspace/repos.ts';
 import { restoreConverged, restoreWorkspace } from '../workspace/restore.ts';
-import { readTasks, resolveOpenTask } from '../workspace/scan.ts';
+import { readTasks, resolvableAddress, resolveOpenTask } from '../workspace/scan.ts';
 import { scopeFromCwd } from '../workspace/scope.ts';
 import {
   closeSession,
@@ -92,7 +96,6 @@ import {
   openWorkspaceSession,
 } from '../workspace/sessions.ts';
 import {
-  deriveStatus,
   filterLiftsWindow,
   forgeStates,
   glanceOrder,
@@ -101,6 +104,7 @@ import {
   matchesTaskFilter,
   type NeedsYouEntry,
   openPrUrls,
+  projectState,
   SETTLED_AFTER_DAYS,
   type SessionStatus,
   type StatusReport,
@@ -133,6 +137,7 @@ import {
   doctorJson,
   printJson,
   projectClaimJson,
+  projectIdentityJson,
   projectListJson,
   projectNoteJson,
   projectOpenJson,
@@ -481,7 +486,7 @@ const shellInit = command(
   'init',
   object({ action: constant('shell-init'), shell: argument(string({ metavar: 'SHELL' })) }),
   {
-    brief: message`Emit the shell layer of shorthands (wrr, wrcd, wwcd, wws) — redirect it into your shell config.`,
+    brief: message`Emit the shell layer of shorthands (wrr, wrcd, wwcd, wws, wsa, wso, wsr, wsc, ws) — redirect it into your shell config.`,
   },
 );
 
@@ -490,6 +495,9 @@ const shellCandidates = command(
   object({
     action: constant('shell-candidates'),
     kind: argument(choice([...CANDIDATE_KINDS], { metavar: 'KIND' })),
+    // Narrows `coordinators` to one floor's own sessions, for `wsa N`
+    // (design/0059-session-shorthands/); the other kinds ignore it.
+    floor: optional(option('--floor', floorNumber())),
   }),
   {
     brief: message`Machinery: one NAME<TAB>CUE line per candidate, for the emitted shell layer to pick from.`,
@@ -590,6 +598,27 @@ const project = command(
       'list',
       object({ action: constant('project-list'), all: allFlag(), json: jsonFlag() }),
       { brief: message`List projects with their derived status.` },
+    ),
+    command(
+      'identity',
+      object({
+        action: constant('project-identity'),
+        floor: argument(floorNumber()),
+        color: optional(
+          option('--color', choice([...FLOOR_COLORS], { metavar: 'COLOR' }), {
+            description: message`The floor's color, by name: blue, green, orange, purple, yellow, teal, red, pink, brown, gray.`,
+          }),
+        ),
+        emoji: optional(
+          option('--emoji', string({ metavar: 'EMOJI' }), {
+            description: message`The floor's emoji — exactly one.`,
+          }),
+        ),
+        json: jsonFlag(),
+      }),
+      {
+        brief: message`Set a floor's color or emoji, and dress its host in them. With neither, re-dress the host.`,
+      },
     ),
     command(
       'note',
@@ -1022,7 +1051,7 @@ try {
         // no color, no header, and NOTHING on an empty set — a picker with no
         // candidates is an empty picker, never an error in the human's shell
         // mid-keystroke (§20).
-        const found = await candidates(result.kind, process.cwd());
+        const found = await candidates(result.kind, process.cwd(), result.floor);
         if (found.length > 0) console.log(renderCandidates(found));
         break;
       }
@@ -1060,7 +1089,8 @@ try {
           break;
         }
         console.log(
-          `${pc.green('opened')} floor ${pc.bold(String(record.floor))} — ${record.slug}` +
+          `${pc.green('opened')} floor ${pc.bold(String(record.floor))} — ` +
+            `${floorGlyph(record)}${record.slug}${floorColorCue(record)}` +
             (record.repositories === undefined
               ? ''
               : pc.dim(` (claims ${record.repositories.join(', ')})`)),
@@ -1095,6 +1125,22 @@ try {
       case 'project-list':
         await cmdProjectList(result.all, result.json);
         break;
+      case 'project-identity': {
+        const root = await requireMutableWorkspace();
+        const report = await setFloorIdentity(root, result.floor, {
+          ...(result.color === undefined ? {} : { color: result.color }),
+          ...(result.emoji === undefined ? {} : { emoji: result.emoji }),
+        });
+        // The record first, then the live half: a host already standing is
+        // dressed where it stands, never re-created.
+        const hosts = await dressFloor(root, result.floor, hostOf('tmux'), 'tmux');
+        if (result.json) {
+          printJson(projectIdentityJson(report, hosts));
+          break;
+        }
+        renderIdentity(report, hosts);
+        break;
+      }
       case 'project-note': {
         const root = await requireMutableWorkspace();
         const report = await appendFloorNote(root, result.floor, result.text);
@@ -1153,11 +1199,11 @@ try {
         const target = await resolveTaskTarget(result.code, 'ward task pause ADDRESS', result.json);
         const paused = await setTaskState(target.root, target.code, 'paused');
         if (result.json) {
-          printJson(taskMutationJson(paused.record, taskAddress(paused)));
+          printJson(taskMutationJson(paused.record, await resolvableAddress(target.root, paused)));
           break;
         }
         console.log(
-          `${pc.yellow('paused')} ${pc.bold(taskAddress(paused))} — ${paused.record.slug}`,
+          `${pc.yellow('paused')} ${pc.bold(await resolvableAddress(target.root, paused))} — ${paused.record.slug}`,
         );
         break;
       }
@@ -1169,11 +1215,13 @@ try {
         );
         const resumed = await setTaskState(target.root, target.code, 'active');
         if (result.json) {
-          printJson(taskMutationJson(resumed.record, taskAddress(resumed)));
+          printJson(
+            taskMutationJson(resumed.record, await resolvableAddress(target.root, resumed)),
+          );
           break;
         }
         console.log(
-          `${pc.green('resumed')} ${pc.bold(taskAddress(resumed))} — ${resumed.record.slug}`,
+          `${pc.green('resumed')} ${pc.bold(await resolvableAddress(target.root, resumed))} — ${resumed.record.slug}`,
         );
         break;
       }
@@ -1184,13 +1232,13 @@ try {
           ? await removeTaskPr(target.root, target.code, result.url)
           : await addTaskPr(target.root, target.code, result.url);
         if (result.json) {
-          printJson(taskMutationJson(linked.record, taskAddress(linked)));
+          printJson(taskMutationJson(linked.record, await resolvableAddress(target.root, linked)));
           break;
         }
         console.log(
           (result.unlink
-            ? `${pc.green('unlinked')} ${result.url} from ${pc.bold(taskAddress(linked))} `
-            : `${pc.green('linked')} ${result.url} to ${pc.bold(taskAddress(linked))} `) +
+            ? `${pc.green('unlinked')} ${result.url} from ${pc.bold(await resolvableAddress(target.root, linked))} `
+            : `${pc.green('linked')} ${result.url} to ${pc.bold(await resolvableAddress(target.root, linked))} `) +
             pc.dim(`(${linked.record.prs.length} in the set)`),
         );
         break;
@@ -1241,7 +1289,11 @@ try {
             : await createWorktree(target.root, target.code, repo, result.branch);
         if (result.json) {
           printJson(
-            worktreeCreateJson(created.task.record.code, taskAddress(created.task), created.record),
+            worktreeCreateJson(
+              created.task.record.code,
+              await resolvableAddress(target.root, created.task),
+              created.record,
+            ),
           );
           break;
         }
@@ -1557,8 +1609,9 @@ async function impliedUpgradeTask(
   }
   const scope = await scopeFromCwd(root, process.cwd());
   if (scope === null) return undefined;
-  echo(pc.dim(`task ${taskAddress(scope.task)} — from the working directory`));
-  return taskAddress(scope.task);
+  const address = await resolvableAddress(root, scope.task);
+  echo(pc.dim(`task ${address} — from the working directory`));
+  return address;
 }
 
 /**
@@ -1998,8 +2051,9 @@ async function resolveTaskTarget(
   // Under --json the derivation echo moves to stderr: stdout carries one JSON
   // document, alone (0005), and the echo is a human affordance, not data.
   const echo = json ? console.error : console.log;
-  echo(pc.dim(`task ${taskAddress(scope.task)} — from the working directory`));
-  return { root, code: taskAddress(scope.task), worktreePath: scope.worktree.path };
+  const address = await resolvableAddress(root, scope.task);
+  echo(pc.dim(`task ${address} — from the working directory`));
+  return { root, code: address, worktreePath: scope.worktree.path };
 }
 
 async function cmdRepoAdd(source: string, name: string | undefined, json: boolean): Promise<void> {
@@ -2219,6 +2273,55 @@ function renderClaim(report: ClaimReport): void {
 }
 
 /**
+ * A floor's emoji, leading its name wherever a floor is listed
+ * (design/0060-floor-identity/) — the same glyph its host shows, so it is
+ * learned once. Nothing for a floor that has no identity yet.
+ */
+function floorGlyph(project: { readonly emoji?: string | undefined }): string {
+  return project.emoji === undefined ? '' : `${project.emoji} `;
+}
+
+/**
+ * A floor's color, by name — the word a human says and an agent resolves —
+ * painted as its host paints it (the swatch behind its own ink) where the
+ * terminal takes color.
+ */
+function floorColorCue(project: { readonly color?: FloorColor | undefined }): string {
+  if (project.color === undefined) return '';
+  return ` ${pc.dim('·')} ${paintSwatch(project.color)}`;
+}
+
+function paintSwatch(color: FloorColor): string {
+  if (!pc.isColorSupported) return color;
+  const swatch = PALETTE[color];
+  return `\x1b[48;5;${swatch.xterm};38;5;${INK[swatch.ink]}m ${color} \x1b[0m`;
+}
+
+function renderIdentity(report: IdentityReport, hosts: Dressed): void {
+  const floor = pc.bold(String(report.project.floor));
+  const wears = `${report.identity.emoji} ${paintSwatch(report.identity.color)}`;
+  console.log(
+    report.outcome === 'changed'
+      ? `${pc.green('identified')} floor ${floor} — ${report.project.slug} as ${wears}`
+      : pc.dim(`floor ${report.project.floor} — ${report.project.slug} is `) + wears,
+  );
+  if (report.sharedColorWith.length > 0) {
+    const others = report.sharedColorWith.map((other) => `floor ${other}`).join(', ');
+    console.log(pc.dim(`${report.identity.color} is also worn by ${others}`));
+  }
+  if (hosts.outcome === 'themed') {
+    console.log(pc.dim(`dressed ${hosts.groups.join(', ')}`));
+  } else if (hosts.outcome === 'unknown') {
+    console.log(
+      pc.yellow(`could not dress the floor's host (${hosts.reason}) — it will pick this up `) +
+        pc.yellow('at the next attach, or run this again'),
+    );
+  } else {
+    console.log(pc.dim('no host is standing for this floor — the next one opens wearing it'));
+  }
+}
+
+/**
  * The ground floor says what it is on the line that names it
  * (design/0041-ground-floor/): floor 0 is not just the first row, it is the
  * floor every workspace has and the home of work on the workspace itself, and
@@ -2244,10 +2347,10 @@ async function cmdProjectList(all: boolean, json: boolean): Promise<void> {
   let hiddenTasks = 0;
   const entries = projects.flatMap((project) => {
     const own = tasks.filter((task) => task.dir.startsWith(`${project.dir}/`));
-    const derived =
-      project.record.state === 'active'
-        ? deriveStatus(own.map((task) => task.record.state))
-        : project.record.state;
+    const derived = projectState(
+      project.record,
+      own.map((task) => task.record.state),
+    );
     if (
       !all &&
       settledProject(
@@ -2281,9 +2384,11 @@ async function cmdProjectList(all: boolean, json: boolean): Promise<void> {
         ? ''
         : ` · repos: ${entry.record.repositories.join(', ')}`;
     console.log(
-      `  floor ${pc.bold(String(entry.record.floor))} — ${entry.record.slug}` +
+      `  floor ${pc.bold(String(entry.record.floor))} — ` +
+        `${floorGlyph(entry.record)}${entry.record.slug}` +
         `${groundFloorNote(entry.record)} [${renderState(entry.derived)}] ` +
-        pc.dim(`(${entry.taskCount} tasks${claims})`),
+        pc.dim(`(${entry.taskCount} tasks${claims})`) +
+        floorColorCue(entry.record),
     );
   }
   renderHidden(hidden, 'ward project list --all');
@@ -2295,7 +2400,8 @@ async function cmdTaskList(filter: TaskFilter, all: boolean, json: boolean): Pro
   // filter and were cut by the window — what the caller asked for and did
   // not get. A task the filter excluded was excluded on request, not hidden
   // (design/0049-task-list-filters/).
-  const tasks = (await readTasks(root)).filter((task) => matchesTaskFilter(task.record, filter));
+  const everyone = await readTasks(root);
+  const tasks = everyone.filter((task) => matchesTaskFilter(task.record, filter));
   const now = Date.now();
   const windowed = all || filterLiftsWindow(filter);
   const shown = glanceOrder(
@@ -2312,7 +2418,10 @@ async function cmdTaskList(filter: TaskFilter, all: boolean, json: boolean): Pro
     const forge = forgeStates(task.record, probe);
     return {
       record: task.record,
-      address: taskAddress(task),
+      // Among the whole workspace, not the filtered rows: a filter that left
+      // out one of two tasks sharing a room must not make the other's room
+      // address look unique (design/0058-room-collisions/).
+      address: distinctAddress(task, everyone),
       inReview: inReview(task.record, forge),
       ...(forge === undefined ? {} : { forge }),
     };
@@ -2455,7 +2564,7 @@ async function cmdTaskClose(
 
 async function cmdWorktreeRebase(root: string, code: string, json: boolean): Promise<void> {
   const { task, reports } = await rebaseTaskWorktrees(root, code);
-  const address = taskAddress(task);
+  const address = await resolvableAddress(root, task);
   // A dirty refusal is the fail-safe honored, not a failure — the same exit
   // posture as repo refresh; conflict and failed broke the verb's promise.
   const broken = reports.some((r) => r.outcome === 'conflict' || r.outcome === 'failed');
@@ -2780,6 +2889,7 @@ async function cmdSessionJoin(verb: 'attach' | 'observe', id: string): Promise<v
       if (prepared.recreated) {
         console.error(pc.dim(`re-created session ${id} from its record (it was not running)`));
       }
+      for (const moved of prepared.renamed) console.error(pc.dim(`renamed: ${moved}`));
       for (const link of prepared.repaired) console.error(pc.dim(`relinked ${link}`));
       for (const link of prepared.unrepaired) console.error(pc.yellow(`could not relink ${link}`));
       const how = verb === 'observe' ? 'watching read-only' : 'attaching';
@@ -2976,8 +3086,10 @@ async function cmdStatus(all: boolean, json: boolean): Promise<void> {
   }
   for (const project of report.projects) {
     console.log(
-      `${pc.bold(`floor ${project.project.floor}`)} — ${project.project.slug}` +
-        `${groundFloorNote(project.project)} [${renderState(project.derived)}]`,
+      `${pc.bold(`floor ${project.project.floor}`)} — ` +
+        `${floorGlyph(project.project)}${project.project.slug}` +
+        `${groundFloorNote(project.project)} [${renderState(project.derived)}]` +
+        floorColorCue(project.project),
     );
     // The floor's own sessions lead its row (design/0051-floor-scope-sessions/):
     // whoever is responsible for the floor reads before the work on it.

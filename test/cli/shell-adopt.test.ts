@@ -74,6 +74,24 @@ const fileSets: ReadonlyArray<{ name: string; files: readonly string[] }> = [
       'functions/__ward_workspace_root.fish',
     ],
   },
+  {
+    // wsa picks among the sessions it already read when several are open
+    // (design/0059-session-shorthands/), so it carries the picker seam — not
+    // the chooser, which re-reads a kind with no floor, and not the workspace
+    // resolver, because it ends in an attach, not a cd.
+    name: 'wsa',
+    files: [
+      'functions/wsa.fish',
+      'completions/wsa.fish',
+      'functions/__ward_picker_present.fish',
+      'functions/__ward_picker.fish',
+    ],
+  },
+  // The pass-through three need nothing: each is one `ward session` verb.
+  { name: 'wso', files: ['functions/wso.fish', 'completions/wso.fish'] },
+  { name: 'wsr', files: ['functions/wsr.fish', 'completions/wsr.fish'] },
+  { name: 'wsc', files: ['functions/wsc.fish', 'completions/wsc.fish'] },
+  { name: 'ws', files: ['functions/ws.fish', 'completions/ws.fish'] },
 ];
 
 for (const row of fileSets) {
@@ -323,7 +341,9 @@ const findings: ReadonlyArray<{
       {
         check: 'fish shorthands',
         severity: 'info',
-        message: expect.stringContaining('wrr, wrcd, wwcd, wws not adopted'),
+        message: expect.stringContaining(
+          'wrr, wrcd, wwcd, wws, wsa, wso, wsr, wsc, ws not adopted',
+        ),
       },
     ],
   },

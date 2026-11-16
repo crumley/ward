@@ -25,7 +25,10 @@ test('attach: a live window of its own is joined through an attach view, and rec
   const session = await hosted();
   const host = fakeHost({ windows: [own(session, ['f0'])], exitCode: 7 });
   const joined = await attachSession(ws, session.id, { terminal: true, host });
-  expect(host.views).toEqual([{ group: group('f0'), window: '@1', mode: 'attach', workspace: id }]);
+  expect(host.views).toEqual([
+    { group: group('f0'), window: '@1', mode: 'attach', workspace: id, ...GROUND() },
+  ]);
+  expect(joined.renamed).toEqual([]); // a host already wearing its name is left alone
   expect(host.entered).toEqual([{ name: `${group('f0')}-v1`, mode: 'attach' }]);
   expect(joined).toMatchObject({ exitCode: 7, recreated: false });
   expect(await events(session.id)).toEqual(['opened', 'attached']);
@@ -90,13 +93,67 @@ test('attaching the coordinator links it into every floor host it is missing fro
   expect(host.links).toEqual([`@1 into ${group('f2')}`]);
 });
 
+// -- names, brought up to date in place (design/0061-host-names-and-titles/) ----
+
+test('attach renames a host and its windows in place, then joins through the new name', async () => {
+  const coordinator = await hosted();
+  await openProject(ws, 'alpha');
+  const floor = await hostedFloor(1);
+  const old = { f0: `ward-${name()}-f0`, f1: `ward-${name()}-f1` };
+  const at = (record: SessionRecord, names: string[], window: string): FoundWindow => ({
+    ...own(record, [], window),
+    groups: names.map((n) => ({
+      name: n,
+      stamp: { workspace: id, floor: n === old.f0 ? 0 : 1 },
+    })),
+  });
+  const host = fakeHost({
+    windows: [at(coordinator, [old.f0, old.f1], '@1'), at(floor, [old.f1], '@2')],
+    groups: [{ name: 'someone-else', clients: 0, windows: 1, created: 0 }],
+  });
+  const joined = await attachSession(ws, floor.id, { terminal: true, host });
+  expect(joined.renamed).toEqual([
+    `${old.f0} is now ${group('f0')}`,
+    `${old.f1} is now ${group('f1')}`,
+  ]);
+  // Only this workspace's hosts, and only windows that verify as its own.
+  expect(host.renames).toEqual([
+    {
+      groups: [
+        // Each with the identity it wears: the same pass dresses a host from
+        // before floors had one (design/0060-floor-identity/).
+        { name: old.f0, naming: { name: group('f0'), ...GROUND() } },
+        {
+          name: old.f1,
+          naming: {
+            name: group('f1'),
+            title: `🌲 ${name()} f1`,
+            identity: { color: 'green', emoji: '🌲', label: 'f1 alpha' },
+          },
+        },
+      ],
+      windows: [
+        { window: '@1', label: 'coord' },
+        { window: '@2', label: 'alpha' },
+      ],
+    },
+  ]);
+  expect(host.views.map((view) => [view.group, view.title])).toEqual([
+    [group('f1'), `🌲 ${name()} f1`],
+  ]);
+  expect(host.placed).toEqual([]); // renamed, never re-created
+  expect(host.closed).toEqual([]);
+});
+
 test('observe: a live window is watched through a one-window view, and recorded', async () => {
   const session = await hosted();
   const host = fakeHost({ windows: [own(session, ['f0'])] });
   await observeSession(ws, session.id, { terminal: true, host });
   expect(host.views).toEqual([
-    { group: group('f0'), window: '@1', mode: 'observe', workspace: id },
+    // The view wears the floor it watches (0060); the host is not touched.
+    { group: group('f0'), window: '@1', mode: 'observe', workspace: id, ...GROUND() },
   ]);
+  expect(host.renames).toEqual([]); // watching changes nothing, names included
   expect(host.entered.map((view) => view.mode)).toEqual(['observe']);
   expect(host.links).toEqual([]); // watching changes nothing, links included
   expect(await events(session.id)).toEqual(['opened', 'observed']);
@@ -129,8 +186,22 @@ let ws: string;
 let id: string;
 let caseId = 0;
 
+/** The title and identity of a fresh workspace's ground floor (design/0060-floor-identity/). */
+function GROUND() {
+  return {
+    title: `🌊 ${name()} f0`,
+    identity: { color: 'blue', emoji: '🌊', label: 'f0 workspace' },
+  } as const;
+}
+
+function name(): string {
+  return `ws-${caseId}`;
+}
+
+/** The host of a floor, as it is named now: floor 1 is `alpha` where a case opens it. */
 function group(floor: string): string {
-  return `ward-ws-${caseId}-${floor}`;
+  const slug = { f0: '-workspace', f1: '-alpha' }[floor] ?? '';
+  return `${name()}-${floor}${slug}`;
 }
 
 /** The session's own window: its tag, its latest launch as epoch, in this workspace's hosts. */

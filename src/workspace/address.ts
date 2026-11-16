@@ -33,11 +33,20 @@ import { WardError } from '../errors.ts';
  */
 export const ROOMS_PER_FLOOR = 99;
 
-/** The shape an address is read off: containment plus the record's room. */
+/**
+ * The shape an address is read off: containment plus the record's room — and
+ * the slug and state, which only the qualified address and the collision
+ * rule read (design/0058-room-collisions/).
+ */
 export interface AddressedTask {
   /** Workspace-relative task directory — `projects/3-slug/tasks/t1-slug` or `tasks/t1-slug`. */
   readonly dir: string;
-  readonly record: { readonly code: string; readonly floor?: number | undefined };
+  readonly record: {
+    readonly code: string;
+    readonly floor?: number | undefined;
+    readonly slug?: string;
+    readonly state?: string;
+  };
 }
 
 /**
@@ -48,6 +57,12 @@ export interface TaskAddress {
   readonly floor?: number;
   readonly legacy?: true;
   readonly room: number;
+  /**
+   * The slug qualifier (`f5t45-distill-2026-10-18`), when the caller named one
+   * (design/0058-room-collisions/): it narrows the room to the one task whose
+   * record directory is `t<room>-<slug>`.
+   */
+  readonly slug?: string;
 }
 
 /**
@@ -60,7 +75,7 @@ export interface TaskAddress {
  */
 export const LEGACY_PREFIX = 'legacy-';
 
-const ADDRESS = /^(?:(legacy-)|f(\d+))?t(\d+)$/;
+const ADDRESS = /^(?:(legacy-)|f(\d+))?t(\d+)(?:-([a-z0-9][a-z0-9-]*))?$/;
 const PROJECT_DIR = /^projects\/(\d+)-/;
 
 /**
@@ -98,8 +113,64 @@ export function taskAddress(task: AddressedTask): string {
 }
 
 /**
+ * The room address qualified by the slug — `f5t45-distill-2026-10-18`, the
+ * floor prefixed to the record's own directory name
+ * (design/0058-room-collisions/). Unique by construction: two tasks in one
+ * container cannot share a directory. Every task answers to it; Ward speaks
+ * it only where the room address alone would not name the task
+ * (`distinctAddress`), and uses it where an address must round-trip into a
+ * resolver whatever the room's neighbours.
+ */
+export function qualifiedAddress(task: AddressedTask): string {
+  const slug = task.record.slug;
+  return slug === undefined ? taskAddress(task) : `${taskAddress(task)}-${slug}`;
+}
+
+/**
+ * The address that names `task` among `all` (design/0058-room-collisions/):
+ * its room address (`f5t45`) whenever that resolves to it, else the
+ * slug-qualified one. A room address resolves the way the resolvers read it
+ * — an open task first, then a closed one — so it names an OPEN task while no
+ * other open task holds the same room, and a CLOSED task only while no other
+ * task at all does. Two machines sharing a workspace are two allocators, and
+ * each can hand out the same room before their records sync: this is what
+ * keeps every task nameable, and what every candidate list, listing, and
+ * `address` field speaks, so a copied line always resolves (§8).
+ */
+export function distinctAddress(task: AddressedTask, all: readonly AddressedTask[]): string {
+  const room = taskAddress(task);
+  const rivals = all.filter((other) => other.dir !== task.dir && taskAddress(other) === room);
+  const contested =
+    task.record.state === 'closed'
+      ? rivals.length > 0
+      : rivals.some((other) => other.record.state !== 'closed');
+  return contested ? qualifiedAddress(task) : room;
+}
+
+/**
+ * Floor rooms held by more than one open task, each with its holders — the
+ * collision two unsynced machines leave behind (design/0058-room-collisions/).
+ * Keyed by room address, in address order.
+ */
+export function collidingRooms<T extends AddressedTask>(
+  tasks: readonly T[],
+): ReadonlyArray<{ readonly address: string; readonly holders: readonly T[] }> {
+  const byRoom = new Map<string, T[]>();
+  for (const task of tasks) {
+    if (task.record.state === 'closed') continue;
+    const address = taskAddress(task);
+    byRoom.set(address, [...(byRoom.get(address) ?? []), task]);
+  }
+  return [...byRoom.entries()]
+    .filter(([, holders]) => holders.length > 1)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([address, holders]) => ({ address, holders }));
+}
+
+/**
  * Whether a task answers to a parsed address: the room, and the container
- * the caller named — a floor, or the legacy pool (a task with no floor). The
+ * the caller named — a floor, or the legacy pool (a task with no floor) —
+ * and the slug when the caller qualified the room with one (0058). The
  * bare shorthand names no container, so every task in the room answers and
  * the caller decides what several answers mean. Both resolvers (open-only
  * and read) match through here, so the two can never disagree on what an
@@ -107,14 +178,21 @@ export function taskAddress(task: AddressedTask): string {
  */
 export function addressMatches(task: AddressedTask, wanted: TaskAddress): boolean {
   if (taskRoom(task) !== wanted.room) return false;
+  if (wanted.slug !== undefined && task.record.slug !== wanted.slug) return false;
   if (wanted.legacy === true) return taskFloor(task) === undefined;
   return wanted.floor === undefined || taskFloor(task) === wanted.floor;
 }
 
-/** The address a parsed one canonically spells — `f3t1`, `legacy-t2`, or the bare `t1`. */
+/**
+ * The address a parsed one canonically spells — `f3t1`, `legacy-t2`, the bare
+ * `t1`, or any of them qualified by a slug (`f5t45-distill-2026-10-18`).
+ */
 export function spellAddress(wanted: TaskAddress): string {
-  if (wanted.legacy === true) return `${LEGACY_PREFIX}t${wanted.room}`;
-  return wanted.floor === undefined ? `t${wanted.room}` : `f${wanted.floor}t${wanted.room}`;
+  const qualifier = wanted.slug === undefined ? '' : `-${wanted.slug}`;
+  if (wanted.legacy === true) return `${LEGACY_PREFIX}t${wanted.room}${qualifier}`;
+  return wanted.floor === undefined
+    ? `t${wanted.room}${qualifier}`
+    : `f${wanted.floor}t${wanted.room}${qualifier}`;
 }
 
 /**
@@ -123,7 +201,10 @@ export function spellAddress(wanted: TaskAddress): string {
  * plus case-folding, never a family of spellings (`3t1`, `3-1`) that would
  * make the surface unpredictable for both audiences. The legacy pool's
  * `legacy-` takes the floor's place, so `legacy-t2` is the one spelling of a
- * legacy task's full address. Returns null for
+ * legacy task's full address. Any of the forms may carry a slug qualifier
+ * (`f5t45-distill-2026-10-18` — the floor plus the record's directory name),
+ * which is how a task sharing its room with another is named
+ * (design/0058-room-collisions/). Returns null for
  * anything that is not an address at all, so callers can say what a bad
  * argument was rather than reporting a lookup miss.
  */
@@ -132,12 +213,13 @@ export function parseTaskAddress(input: string): TaskAddress | null {
   if (match === null) return null;
   const room = Number.parseInt(match[3] ?? '', 10);
   if (room < 1 || room > ROOMS_PER_FLOOR) return null;
-  if (match[1] !== undefined) return { legacy: true, room };
+  const slug = match[4] === undefined ? {} : { slug: match[4] };
+  if (match[1] !== undefined) return { legacy: true, room, ...slug };
   const floor = match[2] === undefined ? undefined : Number.parseInt(match[2], 10);
   // Floor 0 is the ground floor (design/0041-ground-floor/), so `f0t7` is an
   // address like any other; a negative floor cannot be spelled at all.
   if (floor !== undefined && floor < 0) return null;
-  return floor === undefined ? { room } : { floor, room };
+  return floor === undefined ? { room, ...slug } : { floor, room, ...slug };
 }
 
 /** The parse, or the refusal that names the accepted forms. */
@@ -147,7 +229,8 @@ export function requireTaskAddress(input: string): TaskAddress {
     throw new WardError(
       `'${input}' is not a task address — floor tasks are f<floor>t<room> (f3t1), legacy ` +
         `bare tasks are legacy-t<room> (legacy-t18), and a bare t<room> is a shorthand for ` +
-        `either while unique; rooms 1–${ROOMS_PER_FLOOR} (see: ward task list)`,
+        `either while unique; any of them may be qualified by the task's slug ` +
+        `(f3t1-my-task); rooms 1–${ROOMS_PER_FLOOR} (see: ward task list)`,
     );
   }
   return parsed;
@@ -170,6 +253,15 @@ export function requireTaskAddress(input: string): TaskAddress {
  * agent's re-read of a stale listing. Going round the floor spends the whole
  * address space before repeating, so a room comes back only after the time
  * the intent already relies on to disambiguate reuse.
+ *
+ * **One allocator per record, not per workspace.** The scan sees only the
+ * record on THIS machine, so two machines sharing a workspace that each open
+ * a task before their records sync hand out the same room — the same cursor,
+ * the same step. Nothing offline can prevent that short of putting the
+ * machine into every room address, which the identity scheme declines
+ * (design/0058-room-collisions/); the collision is made harmless instead: the
+ * slug-qualified address names each holder (`distinctAddress`), and doctor
+ * reports the room until all but one holder closes.
  *
  * `occupied` are the rooms held by the container's non-closed tasks;
  * `blocked` reports rooms that must be skipped for another reason (today: a

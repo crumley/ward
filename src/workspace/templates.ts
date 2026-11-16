@@ -51,7 +51,10 @@ operated with the \`ward\` CLI and tracked in git.
   the ground floor. Every task lives on a floor; only legacy bare tasks, opened before the ground
   floor existed, are addressed \`legacy-t<room>\` (\`legacy-t2\`). Spelling is case-insensitive. A
   bare \`t1\` is also a shorthand that works while exactly one open task holds that room; when
-  several do, Ward names each by its full address and asks for one.
+  several do, Ward names each by its full address and asks for one. Two machines that each open a
+  task before their records sync can hand out the same room: Ward then names each task by its
+  room and slug (\`f5t45-distill-2026-10-18\`, its record's directory on the floor), every verb
+  accepts that spelling, and \`ward doctor\` reports the room until all but one close.
 - Standing inside a task's worktree, task-addressed verbs need no address — Ward derives the task
   from the working directory (\`ward task pr URL\`, \`ward worktree rebase\`) and echoes what it
   derived. An explicit address always works, and \`ward task close\` always takes one.
@@ -64,6 +67,11 @@ operated with the \`ward\` CLI and tracked in git.
   the task touches and, with no \`--project\`, opens it on the claiming floor. \`--project\`
   always wins. Moving a claim changes where new work lands and leaves open tasks where they are —
   Ward says so when it moves one.
+- **Every floor has a color and an emoji** — its identity, recorded on the floor (\`color\` and
+  \`emoji\` in \`ward status --json\` and \`ward project list --json\`) and worn by its floor
+  host's status line, so "the blue one" names a floor. Ward assigns them when a floor opens;
+  \`ward project identity FLOOR [--color NAME] [--emoji EMOJI]\` changes them, and dresses a host
+  that is already standing where it stands.
 - Work is never committed to a repository's main line directly; changes travel through a worktree
   and a pull request.
 - When a main line moves under work in progress, \`ward worktree rebase\` replays the task's
@@ -134,10 +142,19 @@ instead of in the foreground.
 
 - \`ward session open --detach\` (and \`ward session resume ID --detach\`) records the session,
   then starts the agent as one window of its floor's **floor host** — a tmux session named
-  \`ward-<workspace>-f<N>\`, one per floor — and returns. \`--foreground\` forces this terminal;
-  \`agent.host: tmux\` makes detaching the default, falling back to the foreground (and saying so)
-  where tmux 3.2 or later is not usable. Floor hosts live on your default tmux server, so
-  \`tmux ls\` shows them.
+  \`<workspace>-f<N>-<floor-slug>\`, one per floor — and returns. \`--foreground\` forces this
+  terminal; \`agent.host: tmux\` makes detaching the default, falling back to the foreground (and
+  saying so) where tmux 3.2 or later is not usable. Floor hosts live on your default tmux server,
+  so \`tmux ls\` shows them.
+- **Names say what a thing is, and are never how it is found.** A window is named for its
+  session — \`coord\` for the coordinator, a floor's slug for that floor's session,
+  \`t<room> <slug>\` for a task's (with the floor in front, \`f5t2 <slug>\`, in another floor's
+  host) — and a number only where two would read the same. A terminal looking at a host is titled
+  \`<window> · <workspace> f<N>\`, then whatever the agent titled its own pane; a foreground run's
+  terminal is titled once, before the agent takes it. Ward finds hosts and windows by stamps it
+  set on them, so renaming one by hand breaks nothing — and Ward names it back the next time a
+  session is opened into, or attached through, the workspace's hosts. A window's session id is
+  \`tmux display-message -p '#{@ward_session}'\`; \`ward status\` lists every id.
 - **The coordinator floats**: a workspace-scope session no other session started is linked into
   every floor host, so it is a keystroke away wherever you stand.
 - \`ward session attach ID\` joins the session's window to take part — its input is yours. It

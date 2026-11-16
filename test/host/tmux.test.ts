@@ -13,6 +13,7 @@ import {
   insideServer,
   linkWindowArgv,
   mintGroupName,
+  namedFor,
   observeViewArgv,
   parseEnvironmentNames,
   parseGroups,
@@ -20,23 +21,67 @@ import {
   parseVersion,
   parseWindows,
   prepareArgv,
+  renameGroupArgv,
+  renameWindowArgv,
   sessionTarget,
   shellQuote,
   startRunArgv,
+  statusText,
+  themeArgv,
+  titleGroupArgv,
+  titleString,
   tmuxHost,
+  viewHosts,
   viewName,
   windowTarget,
 } from '../../src/host/tmux.ts';
 
 test.each([
-  ['main', 0, 'ward-main-f0'],
-  ['main', 12, 'ward-main-f12'],
-  ['my work', 3, 'ward-my-work-f3'],
-  ['a.b:c', 1, 'ward-a-b-c-f1'], // `.` and `:` are tmux target syntax
-  ['ünï', 2, 'ward--n--f2'],
-  ['under_score-ok', 4, 'ward-under_score-ok-f4'],
-])('the host minted for %p floor %p is %p', (name, floor, expected) => {
-  expect(mintGroupName(name, floor)).toBe(expected);
+  ['main-f0-workspace', 'main-f0-workspace'],
+  ['my work-f3-alpha', 'my-work-f3-alpha'],
+  ['a.b:c-f1-x', 'a-b-c-f1-x'], // `.` and `:` are tmux target syntax
+  ['ünï-f2', '-n--f2'],
+  ['under_score-ok-f4', 'under_score-ok-f4'],
+])('the host wanted as %p is named %p', (wanted, expected) => {
+  expect(mintGroupName(wanted)).toBe(expected);
+});
+
+// -- names and titles in place (design/0061-host-names-and-titles/) ------------
+
+test('a title leads with the window, says where it stands, and adds a pane title only when one was set', () => {
+  const unset =
+    '#{||:#{==:#{pane_title},},#{||:#{==:#{pane_title},#{host}},#{==:#{pane_title},#{host_short}}}}';
+  expect(titleString('main f7')).toBe(`#{window_name} · main f7#{?${unset},, · #{pane_title}}`);
+  expect(titleString('main f7', 'observe')).toContain('· main f7 (observing)#{?');
+  // Where it stands is literal text: a `#` in it is never read as a format.
+  expect(titleString('c# f1')).toContain('· c## f1#{?');
+});
+
+test('renaming is in place: a host by exact name, a window by its id, titles per tmux session', () => {
+  expect(renameGroupArgv('ward-main-f7', 'main-f7-ward-development')).toEqual([
+    'rename-session',
+    '-t',
+    '=ward-main-f7',
+    'main-f7-ward-development',
+  ]);
+  expect(renameWindowArgv('@3', 't33 host names')).toEqual([
+    'rename-window',
+    '-t',
+    '@3',
+    't33 host names',
+  ]);
+  const argv = titleGroupArgv('main-f7-x', 'main f7');
+  expect(argv[0]).toBe('set-option');
+  expect(options([';', ...argv])).toEqual([
+    ['=main-f7-x:', 'set-titles', 'on'],
+    ['=main-f7-x:', 'set-titles-string', titleString('main f7')],
+  ]);
+  expect(argv).not.toContain('-g'); // never the server's, never another session's
+  // A standing observe view is retitled as one: its mark stays (0063).
+  expect(options([';', ...titleGroupArgv('main-f7-x-o1', 'main f7', 'observe')])).toEqual([
+    ['=main-f7-x-o1:', 'set-titles', 'on'],
+    ['=main-f7-x-o1:', 'set-titles-string', titleString('main f7', 'observe')],
+  ]);
 });
 
 test('every name target is exact-match; windows and panes are addressed by id', () => {
@@ -71,6 +116,7 @@ test("a host is created at the detached size, stamped, and holding nothing of a 
     'ward-main-f3',
     { workspace: 'ws-id-0123456789ab', floor: 3 },
     '0.1.0',
+    'main f3',
   );
   expect(argv.slice(0, 8)).toEqual([
     'new-session',
@@ -88,6 +134,8 @@ test("a host is created at the detached size, stamped, and holding nothing of a 
     ['=ward-main-f3:', '@ward_floor', '3'],
     ['=ward-main-f3:', '@ward_version', '0.1.0'],
     ['=ward-main-f3:', 'detach-on-destroy', 'off'],
+    ['=ward-main-f3:', 'set-titles', 'on'],
+    ['=ward-main-f3:', 'set-titles-string', titleString('main f3')],
   ]);
 });
 
@@ -154,9 +202,9 @@ test('shell quoting survives a quote', () => {
 test('hosts are read with their stamps; a view or an unstamped session carries none', () => {
   expect(
     parseGroups(
-      'ward-main-f0\tws-id-0123456789ab\t0\t\t100\t1\t0.1.0\t3\n' +
+      'ward-main-f0\tws-id-0123456789ab\t0\t\t100\t1\t0.1.0\t3\tG\n' +
         'scratch\t\t\t\t50\t0\t\t1\n' +
-        'ward-main-f0-v1\tws-id-0123456789ab\t0\tws-id-0123456789ab\t120\t0\t\t3\n',
+        'ward-main-f0-v1\tws-id-0123456789ab\t0\tws-id-0123456789ab\t120\t0\t\t3\tG\n',
     ),
   ).toEqual([
     {
@@ -168,8 +216,18 @@ test('hosts are read with their stamps; a view or an unstamped session carries n
       clients: 1,
       version: '0.1.0',
       windows: 3,
+      group: 'G',
     },
-    { name: 'scratch', view: false, viewOf: '', created: 50, clients: 0, version: '', windows: 1 },
+    {
+      name: 'scratch',
+      view: false,
+      viewOf: '',
+      created: 50,
+      clients: 0,
+      version: '',
+      windows: 1,
+      group: '',
+    },
     {
       name: 'ward-main-f0-v1',
       stamp: { workspace: 'ws-id-0123456789ab', floor: 0 },
@@ -179,6 +237,7 @@ test('hosts are read with their stamps; a view or an unstamped session carries n
       clients: 0,
       version: '',
       windows: 3,
+      group: 'G',
     },
   ]);
 });
@@ -246,7 +305,7 @@ test('a view takes the smallest free number, v for attach and o for observe', ()
 });
 
 test("an attach view is grouped with the floor host, stamped, and selects the session's window", () => {
-  expect(attachViewArgv('ward-a-f3', 'ward-a-f3-v1', 'ws-id', '@7')).toEqual([
+  expect(attachViewArgv('ward-a-f3', 'ward-a-f3-v1', 'ws-id', '@7', 'a f3')).toEqual([
     'new-session',
     '-d',
     '-t',
@@ -260,6 +319,18 @@ test("an attach view is grouped with the floor host, stamped, and selects the se
     '@ward_view',
     'ws-id',
     ';',
+    'set-option',
+    '-t',
+    '=ward-a-f3-v1:',
+    'set-titles',
+    'on',
+    ';',
+    'set-option',
+    '-t',
+    '=ward-a-f3-v1:',
+    'set-titles-string',
+    titleString('a f3'),
+    ';',
     'select-window',
     '-t',
     '=ward-a-f3-v1:@7',
@@ -267,11 +338,15 @@ test("an attach view is grouped with the floor host, stamped, and selects the se
 });
 
 test('an observe view is a session of its own, sized like a host, holding a placeholder', () => {
-  const argv = observeViewArgv('ward-a-f3-o1', 'ws-id');
+  const argv = observeViewArgv('ward-a-f3-o1', 'ws-id', 'a f3');
   expect(argv.slice(0, 4)).toEqual(['new-session', '-d', '-s', 'ward-a-f3-o1']);
   expect(argv.slice(0, argv.indexOf(';'))).not.toContain('-t'); // not grouped: no neighbor in it
   expect(argv.join(' ')).toContain('-x 120 -y 40');
-  expect(options(argv)).toEqual([['=ward-a-f3-o1:', '@ward_view', 'ws-id']]);
+  expect(options(argv)).toEqual([
+    ['=ward-a-f3-o1:', '@ward_view', 'ws-id'],
+    ['=ward-a-f3-o1:', 'set-titles', 'on'],
+    ['=ward-a-f3-o1:', 'set-titles-string', titleString('a f3', 'observe')],
+  ]);
 });
 
 test.each([
@@ -292,14 +367,11 @@ test.each([
 ] as const)('entering a view: %s', (_, mode, inside, join) => {
   const argv = enterArgv({ name: 'v', mode }, inside);
   expect(argv.slice(0, join.length)).toEqual([...join]);
-  // Set only once the client is in it: tmux ends an unattached session the moment it is set.
-  expect(argv.slice(join.length)).toEqual([
-    ';',
-    'set-option',
-    '-t',
-    '=v:',
-    'destroy-unattached',
-    'on',
+  expect(options(argv.slice(join.length))).toEqual([
+    // Set only once the client is in it: tmux ends an unattached session the moment it is set.
+    ['=v:', 'destroy-unattached', 'on'],
+    // A view that ends under its client moves it on, as the host does — never to the shell.
+    ['=v:', 'detach-on-destroy', 'off'],
   ]);
 });
 
@@ -362,6 +434,89 @@ test('a missing tmux is unusable, with the reason, and never throws', () => {
   const check = tmuxHost({ WARD_TMUX_BIN: '/nonexistent/tmux' }).check();
   expect(check.usable).toBe(false);
   expect(check.usable === false && check.reason).toContain('/nonexistent/tmux');
+});
+
+// -- the theme (design/0060-floor-identity/) ----------------------------------
+
+test.each<[string, string, string]>([
+  ['blue', 'bg=colour26,fg=colour231', 'light ink on a dark swatch'],
+  ['yellow', 'bg=colour220,fg=colour16', 'dark ink on a light swatch'],
+])('a %s floor is a %s status line (%s)', (color, style) => {
+  const argv = themeArgv('main-f7-ward-development', {
+    color: color as 'blue',
+    emoji: '🌊',
+    label: 'f7 ward-development',
+  });
+  const host = '=main-f7-ward-development:';
+  expect(options(argv)).toEqual([
+    [host, 'status-style', style],
+    [host, 'status-left', '#[bold] 🌊 f7 ward-development #[nobold] '],
+    [host, 'status-left-length', '26'], // the whole name: tmux's default 10 cuts it mid-word
+    [host, '@ward_color', color],
+    [host, '@ward_emoji', '🌊'],
+  ]);
+});
+
+test('a theme is set on one session, by exact name — never globally, never on the server', () => {
+  const argv = themeArgv('main-f7-x', { color: 'teal', emoji: '🐬', label: 'f7 x' });
+  expect(argv[0]).toBe('set-option');
+  for (const flag of ['-g', '-s', '-w', '-p', '-a']) expect(argv).not.toContain(flag);
+  expect(argv.filter((word) => word === 'set-option')).toHaveLength(5);
+  expect(argv.filter((word) => word === '=main-f7-x:')).toHaveLength(5);
+});
+
+test("the floor's name is shown literally, and a long one cannot crowd out the window list", () => {
+  expect(statusText('50% #done')).toBe('50%% ##done');
+  const long = themeArgv('h', { color: 'red', emoji: '🍎', label: `f3 ${'x'.repeat(80)}` });
+  expect(options(long)[2]).toEqual(['=h:', 'status-left-length', '48']);
+});
+
+test.each<[string, string[], Record<string, string>]>([
+  [
+    'the host is the stamped member of its session group that is no view',
+    [
+      'main-f7-a\tWS\t7\t\tG7',
+      'main-f7-a-v1\t\t\tWS\tG7',
+      'main-f0-w\tWS\t0\t\tG0',
+      'main-f0-w-v1\t\t\tWS\tG0',
+    ],
+    { 'main-f7-a-v1': 'main-f7-a', 'main-f0-w-v1': 'main-f0-w' },
+  ],
+  [
+    'found by group and stamp, never by name: a view from an older naming, and a renamed one',
+    [
+      'main-f7-a\tWS\t7\t\tward-main-f7',
+      'ward-main-f7-v1\t\t\tWS\tward-main-f7',
+      'x\t\t\tWS\tward-main-f7',
+    ],
+    { 'ward-main-f7-v1': 'main-f7-a', x: 'main-f7-a' },
+  ],
+  [
+    "an observe view is in no group; a human's own grouped session is no view",
+    ['main-f7-a\tWS\t7\t\tG7', 'main-f7-a-o1\t\t\tWS\t', 'main-f7-a-v9\t\t\t\tG7'],
+    {},
+  ],
+  ["a view whose group holds no host of Ward's has none", ['mine\t\t\t\tG1', 'v\t\t\tWS\tG1'], {}],
+])('the host an attach view looks at — %s', (_, rows, expected) => {
+  // name, workspace stamp, floor stamp, view stamp, session group
+  const listed = rows.map((row) => {
+    const [name, workspace, floor, view, group] = row.split('\t');
+    return [name, workspace, floor, view, '0', '0', '', '1', group].join('\t');
+  });
+  expect(Object.fromEntries(viewHosts(parseGroups(`${listed.join('\n')}\n`)))).toEqual(expected);
+});
+
+test.each<[string, string, 'attach' | 'observe', boolean]>([
+  ['main-f7-a-v1', 'main-f7-a', 'attach', true],
+  ['main-f7-a-v12', 'main-f7-a', 'attach', true],
+  ['main-f7-a-o1', 'main-f7-a', 'observe', true],
+  ['main-f7-a-o1', 'main-f7-a', 'attach', false], // the other mode's letter
+  ['ward-main-f7-v1', 'main-f7-a', 'attach', false], // an older naming
+  ['main-f7-a-v', 'main-f7-a', 'attach', false],
+  ['main-f7-a-v1x', 'main-f7-a', 'attach', false],
+  ['main-f7-a-b-v1', 'main-f7-a', 'attach', false], // a longer host's view
+])('whether view %s is already named for %s (%s)', (view, group, mode, expected) => {
+  expect(namedFor(view, group, mode)).toBe(expected);
 });
 
 // -- helpers ------------------------------------------------------------------

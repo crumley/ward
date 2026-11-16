@@ -389,3 +389,115 @@ and the current one is repinned.
 3. `detach-on-destroy` behaviour for attached clients beyond what close needs, and the same-server
    `switch-client` path exercised against a real attached client.
 4. Status to built — awaiting review once those land.
+
+## 2026-11-15 — Build, phase 3: hosts that outlive what happens in them
+
+**Goal.** Finish the list phase 2 left: a resume that never empties a host, the two acceptance cases
+still unproven on a real tmux, what becomes of an attached client when the tmux session under it
+ends, and the same-server `switch-client` path against a real client. Each item was first checked
+against the code as it stands after designs 0057, 0060, and 0061; what the check found is said under
+each.
+
+**1. A dead window is cleared after its replacement is placed.** The list item held as written.
+Resume's gate used to end the dead window before the `resumed` event was written, and the placement
+came after: a host whose only window was the dead one stood empty in between, tmux ended it, and the
+replacement landed in a host minted again. Anyone sitting in the old host was moved out of it, and a
+view of it was ended under its client. For the coordinator it was worse than phase 2 noted: its one
+window is linked into every floor host, so a dead coordinator that was the only window of several
+hosts took all of them with it.
+
+- The gate (`guardResume`) now ends nothing. It answers with how the previous run ended and the
+  means to clear its window (`ResumeGate.clearDead`), and the resume calls that once the replacement
+  stands, still inside the store write. The window is cleared by the id it was verified under: the
+  `resumed` event written in between makes it another launch's, and a lookup after that would read
+  it as a stranger.
+- It is cleared when the placement fails too. Left standing, it would wear the session's tag under
+  an epoch the record has moved past, and the next attach would refuse it as a stranger.
+- A foreground resume has no replacement to wait for: it clears the dead window after the event is
+  recorded, under the same lock.
+- What "not moved" means, exactly: nobody leaves the host, and the host and its views are the same
+  tmux sessions before and after. A client whose current window was the dead one is put on whichever
+  window tmux picks when that window goes — the replacement, when it is the only one. The
+  replacement takes the next free index rather than the dead window's place; nothing reads indexes,
+  and keeping the place would mean re-using the window across launches, which the epoch tag is there
+  to prevent.
+
+**2. The two acceptance cases, on a real tmux.** Neither needed restating beyond the host names 0061
+gave (`<workspace>-f<N>-<floor-slug>`).
+
+- _Acceptance 6, the concurrent resume._ Two `ward session resume ID --detach` started together over
+  a dead window: one exits 0 and one exits 1, the loser refused with the join command; the record
+  carries one `resumed`, the host one window, and the stand-in harness started once more, not twice.
+  The loser can be refused at either of resume's two looks — the early read-only one, or the binding
+  one under the lock — and both say the same thing, so the case asserts the refusal and not which
+  look made it.
+- _Acceptance 9, a floor host killed by hand._ With the coordinator and a session on each of two
+  floors, `tmux kill-session` on floor 1's host leaves the coordinator's window — the same window,
+  pane, and process — in floor 0's host and floor 2's, reads floor 1's own session as `gone`, and
+  the next open on floor 1 mints its host again with the coordinator linked in at its left edge.
+
+**3. What becomes of a client when the tmux session under it ends.** This item needed restating.
+"Beyond what close needs" turned out to be a defect in the one promise the design makes here: floor
+hosts set `detach-on-destroy off` so that a human in a host tmux ends is moved to another tmux
+session, not dropped to the shell. Views never set the option, so they followed the server's default
+(`on`). Two consequences, both seen on a real server:
+
+- A human who joined with `ward session attach` from inside tmux has their own client switched into
+  the view. When the view ended under them, that client was detached from tmux altogether — thrown
+  out of the tmux session they had been working in, not returned to it.
+- The host's own promise did not hold while any view of it existed. tmux ends a host and its views
+  one after another, and moves each one's clients to the most recently active session left — a view
+  that is about to end as readily as any. A human sitting in the host was moved into a view and
+  detached with it a moment later.
+
+So every view now sets `detach-on-destroy off` as its client joins, beside `destroy-unattached on`:
+whoever is looking at a floor when its last window closes — in the host, through an attach view, or
+through an observe view — lands in a tmux session still standing. The costs are named:
+
+- `ward session attach` and `ward session observe` run from a plain terminal no longer return when
+  the floor's host ends while another tmux session stands on that server; the terminal moves there,
+  and the verb returns when the human detaches. Before, with tmux's default, it returned to the
+  shell. With no session left to move to, tmux still detaches the client and the verb returns.
+- Which session they land in is tmux's choice (the most recently active), not Ward's: on the default
+  server it can be a session of the human's own that has nothing to do with Ward.
+- An observer keeps its read-only client flag wherever it lands. It can change nothing there, but it
+  is no longer looking at the one window it asked for. Detaching the observer alone was tried first
+  and is what exposed the cascade above: one view that detaches its clients can drop anyone tmux has
+  just moved into it.
+
+The manifest's section is unchanged: it says a view is gone when you leave, which still holds, and
+says nothing yet about where a client lands when a host ends.
+
+The same-server `switch-client` path needed no change. A real-tmux case now runs
+`ward session attach` from inside a pane of a tmux session a real client is attached to: that one
+client is switched into the view (no second client appears), the verb returns 0 at once, the trail
+gains `attached`, and when the floor's last window is closed the client is back in its own session.
+
+**4. Status** is `built — awaiting review`.
+
+**Tests.** Five real-tmux cases joined `test/host/tmux-live.test.ts`, one per behaviour above, each
+waiting on what tmux reports and never on a fixed delay. The known intermittent in "attach
+re-creates a run that ended" — the open's own report read `live` because the stand-in harness had
+not exited yet, a beat after it was placed — is gone: that case, and the new ones that need a dead
+window, wait until `session show` reads `exited`. The five new cases and that one were run 36 times
+on macOS (tmux 3.7c) with no failure: 12 runs alone, then 24 as three loops side by side to load the
+machine. Linux is proven by CI only.
+
+**By hand**, on a private server (`WARD_TMUX_SOCKET`) in a throwaway workspace with a stand-in
+harness: a client attached to a host whose only window had died stayed attached through
+`ward session resume --detach`; the host kept its tmux session id (`$0`), and held the new window
+alone afterwards.
+
+**What works now — with the exact command that proves it:**
+
+- `bun install --frozen-lockfile && env -u WARD_AGENT mise run check` → exit 0 on this branch.
+- `env -u WARD_AGENT bun test test/host/tmux-live.test.ts -t 'places its replacement first|racing
+  make one window|killed by hand|from inside tmux|ends under them'`
+  → the five phase 3 cases alone.
+
+**Left open.**
+
+- The observer that lands, read-only, in another session when its window closes (above). Ending only
+  that client needs something to act when the view ends; nothing here does.
+- The manifest does not say where a client lands when a host ends.
+- Everything under Scope's _Deferred_ stays deferred.

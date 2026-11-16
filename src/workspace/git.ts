@@ -12,7 +12,14 @@ export function git(cwd: string, ...args: string[]): GitResult {
   // env is passed explicitly: without it, Bun.spawnSync uses the process's
   // original environment and silently ignores runtime process.env changes —
   // the tests' hermetic git identity depends on those being honored.
-  const result = Bun.spawnSync(['git', ...args], { cwd, env: { ...process.env } });
+  // stdin is detached: git must never wait on the caller's input. Inherited, a
+  // parent whose stdin stays open (a test worker's IPC pipe, an agent's
+  // harness) can stall a git step until that parent ends.
+  const result = Bun.spawnSync(['git', ...args], {
+    cwd,
+    env: { ...process.env },
+    stdin: 'ignore',
+  });
   return {
     exitCode: result.exitCode,
     stdout: result.stdout.toString(),

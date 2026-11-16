@@ -9,7 +9,15 @@ import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
 import { readDocument } from '../store/document.ts';
 import { type TaskRecord, taskRecordType } from '../store/types.ts';
-import { addressMatches, requireTaskAddress, spellAddress, taskAddress } from './address.ts';
+import {
+  type AddressedTask,
+  addressMatches,
+  distinctAddress,
+  qualifiedAddress,
+  requireTaskAddress,
+  spellAddress,
+  taskAddress,
+} from './address.ts';
 import { gitOrThrow } from './git.ts';
 import { warnJournalOffMainLine } from './steward.ts';
 
@@ -49,7 +57,10 @@ export async function readTasks(root: string): Promise<FoundTask[]> {
  * it resolves while it is unique among the workspace's open tasks — the bare
  * pool and every floor — and when several floors hold that room it refuses
  * deterministically, naming every candidate by its full address and slug — so
- * the refusal itself spells what to type, the legacy candidate included. Refusing is
+ * the refusal itself spells what to type, the legacy candidate included. Any
+ * form qualified by the slug (`f5t45-distill-2026-10-18`) names the one task in
+ * that room with that slug — the spelling for a room two machines both handed
+ * out before their records synced (design/0058-room-collisions/). Refusing is
  * the point: the alternative is picking one, and a verb that picks silently
  * between two live tasks is how a close lands on the wrong one. Closed tasks
  * are addressable by neither form; their rooms belong to whoever holds them
@@ -57,7 +68,8 @@ export async function readTasks(root: string): Promise<FoundTask[]> {
  */
 export async function resolveOpenTask(root: string, input: string): Promise<FoundTask> {
   const wanted = requireTaskAddress(input);
-  const open = (await readTasks(root)).filter((task) => task.record.state !== 'closed');
+  const everyone = await readTasks(root);
+  const open = everyone.filter((task) => task.record.state !== 'closed');
   const matches = open.filter((task) => addressMatches(task, wanted));
   const first = matches[0];
   if (first === undefined) {
@@ -71,14 +83,43 @@ export async function resolveOpenTask(root: string, input: string): Promise<Foun
             `task in room ${wanted.room} (see: ward task list)`,
     );
   }
-  if (matches.length > 1) {
-    const named = matches
-      .map((task) => `${taskAddress(task)} (${task.record.slug})`)
-      .sort()
-      .join(', ');
-    throw new WardError(`${input.toLowerCase()} is ambiguous — ${named}; name one`);
-  }
+  if (matches.length > 1) throw ambiguous(input, matches, everyone);
   return first;
+}
+
+/**
+ * The refusal for an address several tasks answer to, naming each candidate
+ * by the spelling that resolves to it (designs 0053 and 0058): its room
+ * address with the slug beside it (`f1t2 (statement-ingest)`) where the room
+ * alone names it, and the slug-qualified address alone
+ * (`f5t45-distill-2026-10-18`) where another task holds the same room. Both
+ * resolvers refuse through here, so the candidates are spelled one way.
+ */
+export function ambiguous(
+  input: string,
+  matches: readonly FoundTask[],
+  everyone: readonly AddressedTask[],
+): WardError {
+  const named = matches
+    .map((task) => {
+      const address = distinctAddress(task, everyone);
+      return address === qualifiedAddress(task) && address !== taskAddress(task)
+        ? address
+        : `${address} (${task.record.slug})`;
+    })
+    .sort()
+    .join(', ');
+  return new WardError(`${input.toLowerCase()} is ambiguous — ${named}; name one`);
+}
+
+/**
+ * The address that names `task` in the workspace as it stands — the room
+ * address, or the slug-qualified one when another task holds the room
+ * (design/0058-room-collisions/). For callers holding one task that must
+ * speak it or hand it back to a resolver.
+ */
+export async function resolvableAddress(root: string, task: FoundTask): Promise<string> {
+  return distinctAddress(task, await readTasks(root));
 }
 
 /** Smallest positive integer not taken, for codes sized to in-flight cardinality. */

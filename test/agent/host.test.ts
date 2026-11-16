@@ -159,8 +159,14 @@ test('placement runs inside the open, after the record is on disk, and asks for 
   const [request] = host.placed;
   expect(request).toMatchObject({
     group: { workspace: await workspaceId(ws), floor: 0 },
+    naming: {
+      name: `ws-${caseId}-f0-workspace`,
+      title: `🌊 ws-${caseId} f0`,
+      // The floor's recorded identity, in the record's terms (0060).
+      identity: { color: 'blue', emoji: '🌊', label: 'f0 workspace' },
+    },
     tags: { session: record.id, epoch: record.openedAt },
-    label: record.id,
+    label: 'coord', // what the session is, never its id
     cwd: ws,
     env: { WARD_AGENT: record.id }, // and nothing else of the caller's
     command: ['/bin/stub', '--session-id', 'abc'],
@@ -188,6 +194,8 @@ test("a floor session's placement links the live coordinator into its floor's ne
   });
   const floorRequest = host.placed[1];
   expect(floorRequest?.group.floor).toBe(1); // the coordinator is a floor-0 parent: no pull
+  expect(floorRequest?.naming.name).toBe(`ws-${caseId}-f1-alpha`);
+  expect(floorRequest?.label).toBe('alpha');
   expect(floorRequest?.floats).toBe(false);
   expect(floorRequest?.floating).toEqual([
     { session: coordinatorRecord.id, epoch: coordinatorRecord.openedAt },
@@ -211,7 +219,7 @@ test('resume over a live window is refused toward joining it; nothing is ended',
   expect(host.closed).toEqual([]);
 });
 
-test('resume over a dead window clears it and carries how it ended', async () => {
+test('resume over a dead window carries how it ended, and ends it only when told to', async () => {
   const open = await hostedOpen();
   const host = fakeHost({
     windows: [
@@ -224,8 +232,21 @@ test('resume over a dead window clears it and carries how it ended', async () =>
       }),
     ],
   });
-  expect(await guardResume(ws, open, {}, host)).toBe('previous run killed by SIGKILL');
+  const gate = await guardResume(ws, open, {}, host);
+  expect(gate.cause).toBe('previous run killed by SIGKILL');
+  // The gate ends nothing: the resume clears the window once its replacement stands.
+  expect(host.closed).toEqual([]);
+  gate.clearDead();
   expect(host.closed).toEqual(['@1']);
+});
+
+test('resume with no window at all has nothing to carry and nothing to clear', async () => {
+  const open = await hostedOpen();
+  const host = fakeHost();
+  const gate = await guardResume(ws, open, {}, host);
+  expect(gate.cause).toBeUndefined();
+  gate.clearDead();
+  expect(host.closed).toEqual([]);
 });
 
 test('resume when the host cannot answer is refused — never read as "not running"', async () => {
@@ -240,7 +261,7 @@ test('a foreground launch asks the host nothing at all', async () => {
   const record = await openWorkspaceSession(ws, 'plain', { handle: 'claude:p' });
   const host = fakeHost({ unknown: 'must not be asked' });
   const listing = { scopeDir: '', record };
-  expect(await guardResume(ws, listing, {}, host)).toBeUndefined();
+  expect((await guardResume(ws, listing, {}, host)).cause).toBeUndefined();
   expect(await teardownSession(ws, listing, {}, host)).toBeUndefined();
   expect(host.finds).toBe(0);
 });

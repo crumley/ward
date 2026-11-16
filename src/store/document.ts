@@ -51,7 +51,21 @@ export async function readDocument<T>(root: string, type: DocumentType<T>): Prom
  */
 export function renderDocument<T>(type: DocumentType<T>, document: Document<T>): string {
   const data = type.schema.parse(document.data);
-  return joinFrontMatter(Bun.YAML.stringify(data, null, 2), document.body);
+  return joinFrontMatter(stableYaml(Bun.YAML.stringify(data, null, 2)), document.body);
+}
+
+/**
+ * Bun's YAML writer, made byte-stable across Bun versions. Releases before
+ * 1.4.4 leave a trailing space after a key that opens a nested value
+ * (`prs: `) and put an empty collection on its own line (`prs: \n  []`);
+ * 1.4.4 writes `prs:` and `prs: []`. A record's bytes — and the hash an
+ * installed artifact's lineage pins (design/0020-deterministic-upgrade/) —
+ * must not depend on which Bun ran, so both spellings are folded to the newer
+ * one. Safe on this writer's output: every string is quoted on one line, so a
+ * line's trailing space or a bare `[]` line is never inside a value.
+ */
+export function stableYaml(text: string): string {
+  return text.replace(/[ \t]+$/gm, '').replace(/^(.*:)\n[ \t]+(\[\]|\{\})$/gm, '$1 $2');
 }
 
 /**
