@@ -334,6 +334,15 @@ export function observeViewArgv(name: string, workspace: string, title: string):
  * observe read-only and without resizing the window. Either way the view is
  * set to end when its client leaves — set only once the client is in it,
  * because tmux ends an unattached session the moment the option is set.
+ *
+ * What becomes of the client when the VIEW ends under it (the last window it
+ * shows closed) is said here too, never left to the server's default: it
+ * moves to another tmux session, as a client sitting in the floor host itself
+ * does. tmux ends a host and its views one after another, moving each one's
+ * clients into whatever session it finds — one of those views as readily as
+ * any — so a single view that detached its clients would drop to the shell
+ * whoever had just been moved into it. Every view moving its clients on is
+ * what makes the host's own promise hold.
  */
 export function enterArgv(view: View, inside: boolean): string[] {
   const target = sessionTarget(view.name);
@@ -346,7 +355,12 @@ export function enterArgv(view: View, inside: boolean): string[] {
           '-t',
           target,
         ];
-  return [...join, ...setOption(['-t', windowTarget(view.name)], 'destroy-unattached', 'on')];
+  const options = ['-t', windowTarget(view.name)];
+  return [
+    ...join,
+    ...setOption(options, 'destroy-unattached', 'on'),
+    ...setOption(options, 'detach-on-destroy', 'off'),
+  ];
 }
 
 /**

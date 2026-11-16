@@ -219,7 +219,7 @@ test('resume over a live window is refused toward joining it; nothing is ended',
   expect(host.closed).toEqual([]);
 });
 
-test('resume over a dead window clears it and carries how it ended', async () => {
+test('resume over a dead window carries how it ended, and ends it only when told to', async () => {
   const open = await hostedOpen();
   const host = fakeHost({
     windows: [
@@ -232,8 +232,21 @@ test('resume over a dead window clears it and carries how it ended', async () =>
       }),
     ],
   });
-  expect(await guardResume(ws, open, {}, host)).toBe('previous run killed by SIGKILL');
+  const gate = await guardResume(ws, open, {}, host);
+  expect(gate.cause).toBe('previous run killed by SIGKILL');
+  // The gate ends nothing: the resume clears the window once its replacement stands.
+  expect(host.closed).toEqual([]);
+  gate.clearDead();
   expect(host.closed).toEqual(['@1']);
+});
+
+test('resume with no window at all has nothing to carry and nothing to clear', async () => {
+  const open = await hostedOpen();
+  const host = fakeHost();
+  const gate = await guardResume(ws, open, {}, host);
+  expect(gate.cause).toBeUndefined();
+  gate.clearDead();
+  expect(host.closed).toEqual([]);
 });
 
 test('resume when the host cannot answer is refused — never read as "not running"', async () => {
@@ -248,7 +261,7 @@ test('a foreground launch asks the host nothing at all', async () => {
   const record = await openWorkspaceSession(ws, 'plain', { handle: 'claude:p' });
   const host = fakeHost({ unknown: 'must not be asked' });
   const listing = { scopeDir: '', record };
-  expect(await guardResume(ws, listing, {}, host)).toBeUndefined();
+  expect((await guardResume(ws, listing, {}, host)).cause).toBeUndefined();
   expect(await teardownSession(ws, listing, {}, host)).toBeUndefined();
   expect(host.finds).toBe(0);
 });

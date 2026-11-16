@@ -350,14 +350,11 @@ test.each([
 ] as const)('entering a view: %s', (_, mode, inside, join) => {
   const argv = enterArgv({ name: 'v', mode }, inside);
   expect(argv.slice(0, join.length)).toEqual([...join]);
-  // Set only once the client is in it: tmux ends an unattached session the moment it is set.
-  expect(argv.slice(join.length)).toEqual([
-    ';',
-    'set-option',
-    '-t',
-    '=v:',
-    'destroy-unattached',
-    'on',
+  expect(options(argv.slice(join.length))).toEqual([
+    // Set only once the client is in it: tmux ends an unattached session the moment it is set.
+    ['=v:', 'destroy-unattached', 'on'],
+    // A view that ends under its client moves it on, as the host does — never to the shell.
+    ['=v:', 'detach-on-destroy', 'off'],
   ]);
 });
 
