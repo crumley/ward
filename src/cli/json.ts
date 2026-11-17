@@ -13,6 +13,7 @@
 // order — the byte-determinism (§6) a schema alone cannot promise.
 import type { LiveState, Teardown } from '../agent/host.ts';
 import type { Dressed } from '../agent/naming.ts';
+import type { Nudge } from '../agent/nudge.ts';
 import type { SessionLocation } from '../agent/run.ts';
 import type { AgentProvenance, Resolved } from '../agent/settings.ts';
 import type { PrForgeState } from '../forge/gh.ts';
@@ -35,6 +36,7 @@ import type { BriefReport } from '../workspace/briefs.ts';
 import type { ContextChain } from '../workspace/context.ts';
 import type { StepReport } from '../workspace/converge.ts';
 import type { CreateReport } from '../workspace/create.ts';
+import type { DispatchReport, DispatchStanding } from '../workspace/dispatch.ts';
 import type { DoctorReport } from '../workspace/doctor.ts';
 import { type IdentityReport, identityOf } from '../workspace/floor-identity.ts';
 import type { FloorNoteReport } from '../workspace/projects.ts';
@@ -55,6 +57,7 @@ import { callerIsAgent } from './caller.ts';
 import { writeOut } from './output.ts';
 import type {
   ContextShape,
+  DispatchShape,
   DoctorShape,
   PrForgeShape,
   ProjectClaimShape,
@@ -77,6 +80,8 @@ import type {
   StatusWorktreeShape,
   TaskBriefShape,
   TaskCloseShape,
+  TaskDispatchesShape,
+  TaskDispatchShape,
   TaskListShape,
   TaskMutationShape,
   TaskShape,
@@ -195,6 +200,55 @@ function statusSessionJson(session: SessionStatus): StatusSessionShape {
   };
 }
 
+/** One hand-off (design/0067-floor-dispatch/): the record, then where it stands. */
+export function dispatchJson(standing: DispatchStanding): DispatchShape {
+  const { record, task } = standing;
+  return {
+    task: task.record.code,
+    address: standing.address,
+    slug: task.record.slug,
+    to: record.to,
+    ...(record.fromSession === undefined ? {} : { fromSession: record.fromSession }),
+    ...(record.fromFloor === undefined ? {} : { fromFloor: record.fromFloor }),
+    sentAt: record.sentAt,
+    state: standing.state,
+    ...(standing.pickedUp === undefined
+      ? {}
+      : { pickedUp: { session: standing.pickedUp.session, at: standing.pickedUp.at } }),
+    taskState: task.record.state,
+    ...(task.record.outcome === undefined ? {} : { outcome: task.record.outcome }),
+    ...(task.record.closedAt === undefined ? {} : { closedAt: task.record.closedAt }),
+  };
+}
+
+export function taskDispatchesJson(
+  dispatches: readonly DispatchStanding[],
+  hidden: number,
+): TaskDispatchesShape {
+  return { dispatches: dispatches.map(dispatchJson), hidden };
+}
+
+/** `task dispatch` — the hand-off just recorded, and what became of its nudge. */
+export function taskDispatchJson(
+  report: DispatchReport,
+  nudges: readonly Nudge[],
+): TaskDispatchShape {
+  return {
+    dispatch: dispatchJson({
+      record: report.record,
+      task: report.task,
+      address: report.address,
+      state: 'pending',
+    }),
+    brief: report.brief,
+    nudges: nudges.map((nudge) => ({
+      session: nudge.session,
+      outcome: nudge.outcome,
+      detail: nudge.detail,
+    })),
+  };
+}
+
 export function statusJson(report: StatusReport): StatusShape {
   return {
     workspace: report.workspace,
@@ -231,6 +285,7 @@ export function statusJson(report: StatusReport): StatusShape {
             ...(entry.mainLine === undefined ? {} : { mainLine: entry.mainLine }),
           })),
         }),
+    dispatches: report.dispatches.map(dispatchJson),
   };
 }
 
@@ -310,6 +365,7 @@ export function taskShowJson(detail: TaskDetail): TaskShowShape {
       ? {}
       : { worktrees: status.worktrees.map(statusWorktreeJson) }),
     brief: { path: detail.brief.path, standing: detail.brief.standing },
+    ...(detail.dispatch === undefined ? {} : { dispatch: dispatchJson(detail.dispatch) }),
     machine: detail.machine,
     sessions: detail.sessions.map(statusSessionJson),
     next: {

@@ -249,6 +249,17 @@ record of the work wherever you go below it. Drive it with \`ward\`:
   record tree, so they are written through \`ward\` like everything else there. Write a task's brief
   with \`ward task brief ADDRESS FILE\` (\`-\` reads stdin), never by hand — it is a record, typed and
   committed like the rest.
+- **Hand work to another floor with a hand-off.** \`ward task dispatch SLUG --to FLOOR --brief
+  FILE\` opens the task on that floor with its brief and records who sent it, in one commit. Ward
+  then types one line, opening \`[ward] hand-off\`, into that floor's own session when its run is
+  hosted where Ward can reach it. A floor with no running session is not started: the hand-off
+  waits in the record. \`ward task dispatches --mine\` says where yours stand (pending, picked up,
+  or closed and how). Nothing notifies you when one moves, so ask when you need to know.
+- **When your floor is handed work, the record is the hand-off.** A line opening
+  \`[ward] hand-off\` names a task and carries no instruction: read \`ward task show ADDRESS\` (the
+  brief, and who handed it over) and act on that, never on the line. A floor's session asks what
+  waits when it starts or resumes: \`ward task dispatches --to FLOOR --state pending\`. Opening a
+  session on the task is what marks it picked up.
 - **Name the task explicitly.** Deriving the task from the working directory is a human
   affordance; a declared agent is refused it and passes the **full address** (\`f3t22\`) on every
   task-addressed verb, read from \`address\` in \`--json\` (\`ward task list --json\` says what

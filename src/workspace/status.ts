@@ -28,6 +28,13 @@ import {
   taskFloor,
 } from './address.ts';
 import { type BriefStanding, briefPath, readBrief } from './briefs.ts';
+import {
+  type DispatchFilter,
+  type DispatchStanding,
+  dispatchOf,
+  matchesDispatchFilter,
+  readDispatches,
+} from './dispatch.ts';
 import { recordedWorkspaceId } from './identity.ts';
 import { type NextStep, nextStep, prAttention } from './next.ts';
 import { type FoundProject, readProjects } from './projects.ts';
@@ -362,6 +369,13 @@ export interface StatusReport {
   readonly sessions: readonly SessionStatus[];
   /** Present exactly when the forge answered — its absence marks forge state unavailable. */
   readonly needsYou?: readonly NeedsYouEntry[];
+  /**
+   * The hand-offs between floors (design/0067-floor-dispatch/) whose task is
+   * on the glance: each with where it stands, derived from its task. One list
+   * for the workspace, because a hand-off belongs to two floors at once — the
+   * one it was sent to and the one it came from.
+   */
+  readonly dispatches: readonly DispatchStanding[];
   /** What the settled-work window omitted from the listing above (0036). */
   readonly hidden: HiddenSummary;
 }
@@ -457,6 +471,7 @@ export async function statusReport(
     machine: (await readMachine()).name,
     sessions: workspaceSessions(root, await readSessions(root, '')),
     ...(probe.live ? { needsYou: deriveNeedsYou(all, repositories) } : {}),
+    dispatches: (await listDispatches(root, {}, options, now)).dispatches,
     hidden: { tasks: hiddenTasks, projects: hiddenProjects, settledAfterDays: SETTLED_AFTER_DAYS },
   };
 }
@@ -529,6 +544,37 @@ async function taskStatuses(
   return statuses;
 }
 
+// -- hand-offs (design/0067-floor-dispatch/) --------------------------------
+
+export interface DispatchListing {
+  readonly dispatches: readonly DispatchStanding[];
+  /** How many matching hand-offs the settled-work window left out. */
+  readonly hidden: number;
+}
+
+/**
+ * The hand-offs a filter selects, behind the settled-work window every
+ * glanceable surface obeys (design/0036-floor-addressed-tasks/): one whose
+ * task closed longer ago than the window is history, counted in `hidden` and
+ * shown with `all`. Asking for `closed` is asking for that history, so it
+ * lifts the window as `ward task list --state closed` does.
+ */
+export async function listDispatches(
+  root: string,
+  filter: DispatchFilter = {},
+  options: { readonly all?: boolean } = {},
+  now: number = Date.now(),
+): Promise<DispatchListing> {
+  const matching = (await readDispatches(root)).filter((standing) =>
+    matchesDispatchFilter(standing, filter),
+  );
+  if (options.all === true || filter.state === 'closed') {
+    return { dispatches: matching, hidden: 0 };
+  }
+  const shown = matching.filter((standing) => !settledTask(standing.task.record, now));
+  return { dispatches: shown, hidden: matching.length - shown.length };
+}
+
 // -- one task, in full (design/0043-task-next-surface/) ---------------------
 // The same derivation the whole-workspace report runs, narrowed to one task
 // and completed with what a status row has no room for: the sessions with
@@ -547,6 +593,8 @@ export interface TaskDetail {
    * writes. This is where an agent finds its task's brief.
    */
   readonly brief: { readonly path: string; readonly standing: BriefStanding['standing'] };
+  /** The hand-off that opened the task (design/0067-floor-dispatch/) — absent when nobody handed it over. */
+  readonly dispatch?: DispatchStanding;
   /** This machine's name — what makes the session rows readable (0038). */
   readonly machine: string;
   /** The task's OPEN sessions, each saying whether its history is on this machine. */
@@ -567,8 +615,10 @@ export async function taskDetail(
 ): Promise<TaskDetail> {
   const task = await resolveTaskForRead(root, input, options);
   const probe = await probeForge(openPrUrls([task.record]));
-  const [status] = await taskStatuses(root, [task], probe, await readTasks(root));
+  const everyone = await readTasks(root);
+  const [status] = await taskStatuses(root, [task], probe, everyone);
   if (status === undefined) throw new WardError(`could not read task ${input}`);
+  const dispatch = await dispatchOf(root, task, everyone);
   const floor = taskFloor(task);
   const project =
     floor === undefined
@@ -578,6 +628,7 @@ export async function taskDetail(
     status,
     ...(project === undefined ? {} : { project }),
     brief: { path: briefPath(task.dir), standing: (await readBrief(root, task.dir)).standing },
+    ...(dispatch === undefined ? {} : { dispatch }),
     machine: (await readMachine()).name,
     sessions: openSessionStatuses(root, await readSessions(root, task.dir)),
     next: nextStep({

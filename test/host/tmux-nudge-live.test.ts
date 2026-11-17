@@ -1,0 +1,360 @@
+// The nudge against a REAL tmux (design/0067-floor-dispatch/), end to end
+// through the spawned CLI: a hand-off is recorded, and its notice is typed
+// into the window of the target floor's own session — read back first, and
+// submitted only at an input line that holds it alone. A question on the
+// screen is never typed into, words already on the line are put back, and
+// nobody but the target floor's session receives a key.
+//
+// The runs are stand-ins that DRAW what the typing reads: a line between two
+// rules that echoes what is typed and logs each line submitted to it, or a
+// question with options that logs anything it is sent. What the real harness
+// does with the same keys was measured by hand and is in the entry.
+//
+// Every call goes to a PRIVATE server (`tmux -L <unique>`, through
+// WARD_TMUX_SOCKET), started with no configuration file and killed after each
+// case. When tmux is not installed the suite is skipped, saying so.
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from 'bun:test';
+import { chmodSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  type SessionMutationShape,
+  sessionMutationShape,
+  type TaskDispatchShape,
+  taskDispatchesShape,
+  taskDispatchShape,
+} from '../../src/cli/schema.ts';
+import { claudeInputLine } from '../../src/harness/claude.ts';
+import { createWorkspace } from '../../src/workspace/create.ts';
+import { openProject } from '../../src/workspace/projects.ts';
+import { applyGitTestEnv, type CliResult, makeTempDir, removeDir } from '../helpers.ts';
+
+setDefaultTimeout(30_000);
+
+const TMUX = Bun.which('tmux');
+if (TMUX === null) {
+  console.warn(
+    'test/host/tmux-nudge-live.test.ts: tmux is not installed — the real-tmux suite is skipped',
+  );
+}
+const SOCKET = `ward-nudge-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
+
+describe.skipIf(TMUX === null)('a hand-off, on a real tmux', () => {
+  test("recorded, then typed to the target floor's session — and to no one else", async () => {
+    const coordinator = open(['session', 'open', '--detach', '--json']);
+    const sender = open(['session', 'open', '--floor', '1', '--detach', '--json']);
+    const target = open(['session', 'open', '--floor', '2', '--detach', '--json']);
+    for (const each of [coordinator, sender, target]) await lineSoon(each);
+
+    const sent = dispatch(['fix-login'], sender.id);
+    expect(sent.dispatch).toMatchObject({
+      address: 'f2t1',
+      slug: 'fix-login',
+      to: 2,
+      fromSession: sender.id,
+      fromFloor: 1,
+      state: 'pending',
+    });
+    expect(sent.nudges).toEqual([
+      { session: target.id, outcome: 'typed', detail: expect.stringContaining('typed into') },
+    ]);
+    // Exactly one line reached exactly one run: the notice, whole, submitted once.
+    const notice =
+      '[ward] hand-off to floor 2: task f2t1 (fix-login) from floor 1. ' +
+      'Read it: ward task show f2t1';
+    expect(await typedSoon(1)).toEqual([`${target.id}: ${notice}`]);
+    // And the line is the target's again, empty, for whoever types next.
+    expect(await lineSoon(target)).toBe('');
+    expect(inputLine(coordinator)).toBe('');
+    expect(inputLine(sender)).toBe('');
+  });
+
+  test('a question on the screen is never typed into: the hand-off waits in the record', async () => {
+    const target = open(['session', 'open', '--floor', '2', '--detach', '--json'], question);
+    await shownSoon(target, 'Do you want to proceed?');
+    const before = screen(target);
+
+    const sent = dispatch(['fix-login']);
+    expect(sent.nudges).toEqual([
+      {
+        session: target.id,
+        outcome: 'withheld',
+        detail: 'its screen does not show an input line',
+      },
+    ]);
+    // Not one key reached it: the screen is as it was, and nothing was read.
+    expect(screen(target)).toBe(before);
+    await Bun.sleep(300);
+    expect(typed()).toEqual([]);
+    // The hand-off is no less recorded for it.
+    expect(pending(2)).toEqual(['f2t1']);
+  });
+
+  test("words already on the line are put back, and the line's owner sends them", async () => {
+    const target = open(['session', 'open', '--floor', '2', '--detach', '--json']);
+    await lineSoon(target);
+    tmux('send-keys', '-t', pane(target), '-l', '--', 'half a thought');
+    await lineSoon(target, 'half a thought');
+
+    const sent = dispatch(['fix-login']);
+    expect(sent.nudges).toEqual([
+      {
+        session: target.id,
+        outcome: 'withheld',
+        detail: 'its input line already held text — put back as it was',
+      },
+    ]);
+    expect(inputLine(target)).toBe('half a thought');
+    expect(typed()).toEqual([]);
+    // What the human then sends is what the human typed, and nothing of Ward's.
+    tmux('send-keys', '-t', pane(target), 'Enter');
+    expect(await typedSoon(1)).toEqual([`${target.id}: half a thought`]);
+  });
+
+  test('a window someone is scrolling, a run that ended, a floor with no session: each an answer', async () => {
+    const scrolling = open(['session', 'open', '--floor', '2', '--detach', '--json']);
+    await lineSoon(scrolling);
+    tmux('copy-mode', '-t', pane(scrolling));
+    expect(dispatch(['one']).nudges).toEqual([
+      {
+        session: scrolling.id,
+        outcome: 'withheld',
+        detail: 'someone is scrolling its window (copy mode)',
+      },
+    ]);
+    tmux('send-keys', '-t', pane(scrolling), '-X', 'cancel');
+    ward(['session', 'close', scrolling.id]);
+
+    const ended = open(['session', 'open', '--floor', '2', '--detach', '--json'], exiting);
+    await exitedSoon(ended.id);
+    expect(dispatch(['two']).nudges).toEqual([
+      { session: ended.id, outcome: 'not-running', detail: 'its run exited 3' },
+    ]);
+    ward(['session', 'close', ended.id]);
+
+    expect(dispatch(['three']).nudges).toEqual([]);
+    expect(typed()).toEqual([]);
+    expect(pending(2)).toEqual(['f2t1', 'f2t2', 'f2t3']);
+  });
+});
+
+// -- scaffolding ------------------------------------------------------------------
+
+let scratch: string;
+let ws: string;
+let configHome: string;
+let claudeHome: string;
+let typedLog: string;
+let asking: string;
+let question: string;
+let exiting: string;
+let brief: string;
+let caseId = 0;
+
+const cliPath = new URL('../../src/cli/index.ts', import.meta.url).pathname;
+const RULE = '─'.repeat(40);
+
+/**
+ * A stand-in run that draws an input line as the harness does — a rule, the
+ * prompt mark, a rule, a status row — leaves the cursor after the mark so the
+ * terminal echoes what is typed there, and logs every line submitted to it.
+ */
+const ASKING = `rule='${RULE}'
+draw() { printf '\\033[2J\\033[H%s\\n❯ \\n%s\\n  stub status\\n\\033[2;3H' "$rule" "$rule"; }
+draw
+while IFS= read -r line; do
+  echo "$WARD_AGENT: $line" >> "$WARD_TEST_TYPED"
+  draw
+done`;
+
+/** A stand-in run that is asking a question: anything it is sent, it logs. */
+const QUESTION = `printf '\\033[2J\\033[H${RULE}\\n Bash command\\n Do you want to proceed?\\n ❯ 1. Yes\\n   2. No\\n'
+while IFS= read -r line; do
+  echo "$WARD_AGENT: $line" >> "$WARD_TEST_TYPED"
+done`;
+
+function writeStub(file: string, body: string): string {
+  const path = join(scratch, file);
+  writeFileSync(path, `#!/bin/sh\n${body}\n`);
+  chmodSync(path, 0o755);
+  return path;
+}
+
+function wardEnv(stub: string, agent?: string): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = {
+    ...process.env,
+    NO_COLOR: '1',
+    WARD_CLAUDE_BIN: stub,
+    WARD_TMUX_SOCKET: SOCKET,
+    CLAUDE_CONFIG_DIR: claudeHome,
+    WARD_CONFIG_DIR: configHome,
+    WARD_STATE_DIR: configHome,
+  };
+  delete env.WARD_AGENT;
+  delete env.TMUX;
+  if (agent !== undefined) env.WARD_AGENT = agent;
+  return env;
+}
+
+function ward(argv: string[], stub: string = asking, agent?: string): CliResult {
+  const result = Bun.spawnSync(['bun', cliPath, ...argv], {
+    cwd: ws,
+    env: wardEnv(stub, agent),
+  });
+  return {
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  };
+}
+
+function open(argv: string[], stub: string = asking): SessionMutationShape {
+  const result = ward(argv, stub);
+  if (result.exitCode !== 0) throw new Error(`ward failed (${result.exitCode}): ${result.stderr}`);
+  return sessionMutationShape.parse(JSON.parse(result.stdout));
+}
+
+/** Hand a task to floor 2, as the session given (or as a human), and read the report. */
+function dispatch(argv: string[], agent?: string): TaskDispatchShape {
+  const result = ward(
+    ['task', 'dispatch', ...argv, '--to', '2', '--brief', brief, '--json'],
+    asking,
+    agent,
+  );
+  if (result.exitCode !== 0) throw new Error(`ward failed (${result.exitCode}): ${result.stderr}`);
+  return taskDispatchShape.parse(JSON.parse(result.stdout));
+}
+
+function pending(floor: number): string[] {
+  const result = ward([
+    'task',
+    'dispatches',
+    '--to',
+    String(floor),
+    '--state',
+    'pending',
+    '--json',
+  ]);
+  return taskDispatchesShape
+    .parse(JSON.parse(result.stdout))
+    .dispatches.map((each) => each.address);
+}
+
+function tmux(...args: string[]): string {
+  const result = Bun.spawnSync([TMUX ?? 'tmux', '-L', SOCKET, ...args]);
+  if (result.exitCode !== 0) throw new Error(`tmux ${args.join(' ')}: ${result.stderr}`);
+  return result.stdout.toString();
+}
+
+/** The pane a session's run was started in, by the window's own tag. */
+function pane(session: SessionMutationShape): string {
+  return tmux('show-options', '-wv', '-t', session.live?.window ?? '', '@ward_pane').trim();
+}
+
+function screen(session: SessionMutationShape): string {
+  return tmux('capture-pane', '-p', '-t', pane(session));
+}
+
+/** The run's input line, read exactly as the nudge reads it. */
+function inputLine(session: SessionMutationShape): string | null {
+  return claudeInputLine(screen(session));
+}
+
+async function lineSoon(session: SessionMutationShape, wanted = ''): Promise<string | null> {
+  for (let i = 0; i < 100 && inputLine(session) !== wanted; i++) await Bun.sleep(50);
+  return inputLine(session);
+}
+
+async function shownSoon(session: SessionMutationShape, text: string): Promise<void> {
+  for (let i = 0; i < 100 && !screen(session).includes(text); i++) await Bun.sleep(50);
+}
+
+function typed(): string[] {
+  try {
+    return readFileSync(typedLog, 'utf8')
+      .split('\n')
+      .filter((line) => line !== '');
+  } catch {
+    return [];
+  }
+}
+
+async function typedSoon(count: number): Promise<string[]> {
+  for (let i = 0; i < 100 && typed().length < count; i++) await Bun.sleep(50);
+  return typed();
+}
+
+async function exitedSoon(id: string): Promise<void> {
+  const state = () =>
+    sessionMutationShape.parse(JSON.parse(ward(['session', 'show', id, '--json']).stdout)).live
+      ?.state;
+  for (let i = 0; i < 100 && state() !== 'exited'; i++) await Bun.sleep(100);
+  if (state() !== 'exited') throw new Error(`session ${id} never read as exited`);
+}
+
+beforeEach(async () => {
+  applyGitTestEnv();
+  caseId += 1;
+  scratch ??= makeTempDir();
+  ws = join(scratch, `ws-${caseId}`);
+  claudeHome = join(scratch, `claude-home-${caseId}`);
+  configHome = join(scratch, `config-${caseId}`);
+  typedLog = join(scratch, `typed-${caseId}.log`);
+  brief = join(scratch, 'brief.md');
+  writeFileSync(brief, '# Fix the login page\n\nIt rejects every password.\n');
+  asking = writeStub(`asking-${caseId}.sh`, ASKING);
+  question = writeStub(`question-${caseId}.sh`, QUESTION);
+  exiting = writeStub(`exit3-${caseId}.sh`, 'exit 3');
+  if (TMUX !== null) {
+    const env: Record<string, string | undefined> = { ...process.env };
+    delete env.WARD_AGENT;
+    delete env.TMUX;
+    Bun.spawnSync(
+      [
+        TMUX,
+        '-L',
+        SOCKET,
+        '-f',
+        '/dev/null',
+        'start-server',
+        ';',
+        'set',
+        '-s',
+        'exit-empty',
+        'off',
+      ],
+      { env },
+    );
+    // The server's environment is what every pane inherits: the stand-ins find their log there.
+    tmux('set-environment', '-g', 'WARD_TEST_TYPED', typedLog);
+  }
+  await createWorkspace(ws);
+  await openProject(ws, 'alpha');
+  await openProject(ws, 'beta');
+});
+
+afterEach(() => {
+  if (TMUX !== null) killServer();
+});
+
+afterAll(() => {
+  if (TMUX !== null) killServer();
+  if (scratch !== undefined) removeDir(scratch);
+});
+
+/** End the private server, and remove its socket file, which tmux leaves behind. */
+function killServer(): void {
+  const args = [TMUX ?? 'tmux', '-L', SOCKET];
+  const path = Bun.spawnSync([...args, 'display-message', '-p', '#{socket_path}'])
+    .stdout.toString()
+    .trim();
+  Bun.spawnSync([...args, 'kill-server']);
+  if (path !== '') rmSync(path, { force: true });
+}

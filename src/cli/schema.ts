@@ -152,6 +152,76 @@ export const statusSessionShape = z.strictObject({
 });
 export type StatusSessionShape = z.infer<typeof statusSessionShape>;
 
+/**
+ * One hand-off between floors (design/0067-floor-dispatch/), as every surface
+ * that shows one reports it: what was recorded — the task, the floor it went
+ * to, who sent it and when — and where it stands, derived at read time from
+ * the task and its sessions and never stored.
+ */
+export const dispatchShape = z.strictObject({
+  /** The task's room code, as its record carries it. */
+  task: z.string(),
+  /** The task's full address now — what every task-addressed verb takes (0036). */
+  address: z.string(),
+  slug: z.string(),
+  /** The floor the work was handed to. */
+  to: z.number().int().nonnegative(),
+  /** The recorded session that sent it — absent when a human at a terminal did. */
+  fromSession: z.string().optional(),
+  /** The floor the sender is responsible for or works on — absent above the floors. */
+  fromFloor: z.number().int().nonnegative().optional(),
+  sentAt: z.string(),
+  /**
+   * `pending`: no session has been opened on the task. `picked-up`: one has.
+   * `closed`: the task is closed, and `outcome` says how.
+   */
+  state: z.enum(['pending', 'picked-up', 'closed']),
+  /** The first session opened on the task, and when — present once one has been. */
+  pickedUp: z.strictObject({ session: z.string(), at: z.string() }).optional(),
+  /** The task's own recorded state: a paused task's hand-off is still pending or picked up. */
+  taskState: workStateSchema,
+  outcome: z.enum(['delivered', 'abandoned']).optional(),
+  closedAt: z.string().optional(),
+});
+export type DispatchShape = z.infer<typeof dispatchShape>;
+
+/**
+ * `ward task dispatches` (design/0067-floor-dispatch/): the hand-offs a
+ * filter selects, oldest first. `hidden` counts matching hand-offs whose task
+ * closed longer ago than the settled-work window; `--all` shows them.
+ */
+export const taskDispatchesShape = z.strictObject({
+  dispatches: z.array(dispatchShape),
+  hidden: z.number().int().nonnegative(),
+});
+export type TaskDispatchesShape = z.infer<typeof taskDispatchesShape>;
+
+/**
+ * `ward task dispatch` (design/0067-floor-dispatch/): the hand-off as
+ * recorded, the brief written with it, and what became of the nudge — one
+ * entry per open session of the target floor, empty when the floor has none.
+ * A nudge never fails the verb: the hand-off is recorded before one is tried.
+ */
+export const taskDispatchShape = z.strictObject({
+  dispatch: dispatchShape,
+  /** Workspace-relative path of the brief recorded with the hand-off. */
+  brief: z.string(),
+  nudges: z.array(
+    z.strictObject({
+      session: z.string(),
+      /**
+       * `typed`: the notice was submitted to the session's run. `withheld`: its
+       * run is live and nothing was typed, or what was typed was taken back.
+       * `not-running`: its run has ended or is gone. `unreachable`: Ward cannot
+       * type to it from this machine. `unknown`: the host could not say.
+       */
+      outcome: z.enum(['typed', 'withheld', 'not-running', 'unreachable', 'unknown']),
+      detail: z.string(),
+    }),
+  ),
+});
+export type TaskDispatchShape = z.infer<typeof taskDispatchShape>;
+
 export const statusShape = z.strictObject({
   workspace: workStateSchema,
   /**
@@ -187,6 +257,12 @@ export const statusShape = z.strictObject({
   sessions: z.array(statusSessionShape),
   /** Present exactly when the forge answered; empty means nothing awaits (0009). */
   needsYou: z.array(needsYouShape).optional(),
+  /**
+   * The hand-offs between floors whose task is on the glance (0067), oldest
+   * first — one list for the workspace, since each belongs to the floor it
+   * went to and the floor it came from. Empty when there are none.
+   */
+  dispatches: z.array(dispatchShape),
   /** What the settled-work window hid from the listing above (0036). */
   hidden: hiddenShape,
 });
@@ -287,6 +363,8 @@ export const taskShowShape = z.strictObject({
     path: z.string(),
     standing: z.enum(['typed', 'untyped', 'invalid', 'absent']),
   }),
+  /** The hand-off that opened the task (0067) — absent when nobody handed it over. */
+  dispatch: dispatchShape.optional(),
   /** This machine's name (0038) — which of the sessions below can be resumed here. */
   machine: z.string(),
   /** The task's OPEN sessions; closed ones stay closed and are not listed. */
@@ -1104,6 +1182,7 @@ export const readVerbShapes: Readonly<Record<string, z.ZodType>> = {
   status: statusShape,
   'project list': projectListShape,
   'task list': taskListShape,
+  'task dispatches': taskDispatchesShape,
   'worktree list': worktreeListShape,
   'repo list': repoListShape,
   'workspace list': workspaceListShape,
@@ -1152,6 +1231,7 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'task close': taskCloseShape,
   'worktree create': worktreeCreateShape,
   'task brief': taskBriefShape,
+  'task dispatch': taskDispatchShape,
   'worktree rebase': worktreeRebaseShape,
   'session open': sessionMutationShape,
   'session resume': sessionMutationShape,

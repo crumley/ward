@@ -77,31 +77,56 @@ export async function recordBrief(
   now: Date = new Date(),
 ): Promise<BriefReport> {
   const body = briefBody(text);
-  if (body === '') throw new WardError('a brief needs a body — the file is empty');
   const session = declared === undefined ? undefined : await recordedSession(root, declared);
   const { task, path, record, replaced } = await withStoreLock(
     root,
     `task brief ${taskCode}`,
     async () => {
       const found = await resolveOpenTask(root, taskCode);
-      const type = briefRecordType(found.dir);
-      const written: BriefRecord = {
-        type: 'brief',
-        for: taskAddress(found),
-        createdAt: now.toISOString(),
-        ...(session === undefined ? {} : { session }),
-      };
-      const existed = existsSync(join(root, type.relPath));
-      await writeDocument(root, type, { data: written, body });
-      commitRecords(root, `Record brief for task ${taskAddress(found)}`, type.relPath);
-      return { task: found, path: type.relPath, record: written, replaced: existed };
+      const written = await writeBrief(root, found, body, session, now);
+      commitRecords(root, `Record brief for task ${taskAddress(found)}`, written.path);
+      return { task: found, ...written };
     },
   );
   return { task, address: taskAddress(task), path, record, replaced };
 }
 
-/** The body a brief file contributes, with any brief front matter set aside. */
-function briefBody(text: string): string {
+/**
+ * Write a task's brief, without the commit: the caller holds the store lock
+ * and commits what it wrote. `body` is a brief's body as `briefBody` returns
+ * it. A hand-off (design/0067-floor-dispatch/) writes the brief this way, in
+ * the commit that opens the task.
+ */
+export async function writeBrief(
+  root: string,
+  task: FoundTask,
+  body: string,
+  session: string | undefined,
+  now: Date = new Date(),
+): Promise<{ path: string; record: BriefRecord; replaced: boolean }> {
+  const type = briefRecordType(task.dir);
+  const record: BriefRecord = {
+    type: 'brief',
+    for: taskAddress(task),
+    createdAt: now.toISOString(),
+    ...(session === undefined ? {} : { session }),
+  };
+  const replaced = existsSync(join(root, type.relPath));
+  await writeDocument(root, type, { data: record, body });
+  return { path: type.relPath, record, replaced };
+}
+
+/**
+ * The body a brief file contributes, with any brief front matter set aside.
+ * An empty one is refused: a brief with no body hands nothing over.
+ */
+export function briefBody(text: string): string {
+  const body = bodyOf(text);
+  if (body === '') throw new WardError('a brief needs a body — the file is empty');
+  return body;
+}
+
+function bodyOf(text: string): string {
   if (!text.startsWith('---\n')) return text.trim();
   const raw = splitFrontMatter(text, 'the brief');
   let parsed: unknown;
@@ -119,7 +144,7 @@ function briefBody(text: string): string {
   return raw.body.trim();
 }
 
-async function recordedSession(root: string, id: string): Promise<string | undefined> {
+export async function recordedSession(root: string, id: string): Promise<string | undefined> {
   try {
     return (await findSession(root, id)).record.id;
   } catch (error) {

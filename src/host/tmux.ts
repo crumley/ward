@@ -51,6 +51,8 @@ import type {
   Renamed,
   RenameRequest,
   SessionHost,
+  TypeRequest,
+  TypeResult,
   View,
   ViewMode,
   ViewRequest,
@@ -521,6 +523,59 @@ export function killWindowArgv(window: string): string[] {
   return ['kill-window', '-t', window];
 }
 
+// -- typing into a run (design/0067-floor-dispatch/) ---------------------------
+
+/** What a typed line may be: one line of printable ASCII, short enough to read back. */
+export const TYPEABLE = /^[\x20-\x7e]{1,200}$/;
+
+/** How long a typed line is waited for on the screen, and its submission after it. */
+const TYPE_WAIT_MS = 2000;
+const TYPE_POLL_MS = 100;
+
+/** The window's session tag and the pane its run was started in. */
+export function windowRunArgv(window: string): string[] {
+  return ['display-message', '-p', '-t', window, ['#{@ward_session}', '#{@ward_pane}'].join(FIELD)];
+}
+
+/** The run's pane: the window it is in, whether its run has ended, whether it is in a mode. */
+export function paneStateArgv(pane: string): string[] {
+  return [
+    'display-message',
+    '-p',
+    '-t',
+    pane,
+    ['#{window_id}', '#{pane_dead}', '#{pane_in_mode}'].join(FIELD),
+  ];
+}
+
+/** The pane's visible screen, as plain text. */
+export function captureArgv(pane: string): string[] {
+  return ['capture-pane', '-p', '-t', pane];
+}
+
+/**
+ * Type text into a pane literally: `-l` so no word of it is read as a key
+ * name, `--` so none is read as a flag. Never carries the submitting key.
+ */
+export function typeArgv(pane: string, text: string): string[] {
+  return ['send-keys', '-t', pane, '-l', '--', text];
+}
+
+/** The submitting key, alone — sent only after the typed line was read back. */
+export function submitArgv(pane: string): string[] {
+  return ['send-keys', '-t', pane, 'Enter'];
+}
+
+/** Take back exactly `count` typed characters, at the cursor that typed them. */
+export function eraseArgv(pane: string, count: number): string[] {
+  return ['send-keys', '-t', pane, '-N', String(count), 'BSpace'];
+}
+
+/** Text as it compares across a wrapped input line: without its whitespace. */
+export function squash(text: string): string {
+  return text.replace(/\s+/gu, '');
+}
+
 /**
  * A run's command as tmux arguments. tmux runs two or more arguments directly
  * but hands a single one to `sh -c`, so a lone program is quoted to survive
@@ -742,9 +797,9 @@ export function tmuxHost(env: Env = process.env): SessionHost {
   const clientEnv: Env = { ...env };
   for (const key of ['TMUX', 'TMUX_PANE', 'WARD_AGENT']) delete clientEnv[key];
 
-  const call = (args: readonly string[]): CallResult => {
+  const call = (args: readonly string[], flags: readonly string[] = []): CallResult => {
     try {
-      const result = Bun.spawnSync([program, ...prefix, ...args], {
+      const result = Bun.spawnSync([program, ...flags, ...prefix, ...args], {
         env: clientEnv,
         timeout: CALL_TIMEOUT_MS,
         stdin: 'ignore',
@@ -911,6 +966,97 @@ export function tmuxHost(env: Env = process.env): SessionHost {
       const shown = must(['list-windows', '-t', windowTarget(group), '-F', '#{window_id}'], 'list');
       if (lines(shown).includes(window)) return;
       must(linkWindowArgv(window, group), `link ${window} into ${group}`);
+    },
+    typeLine(request: TypeRequest): TypeResult {
+      const { window, session, text } = request;
+      if (!TYPEABLE.test(text)) {
+        return { outcome: 'withheld', reason: 'the line is not one line of printable ASCII' };
+      }
+      const gone = (result: CallResult) =>
+        result.noServer || /can't find (window|pane)|no such (window|pane)/.test(result.stderr);
+      const run = call(windowRunArgv(window));
+      if (!run.ok) {
+        return gone(run) ? { outcome: 'absent' } : { outcome: 'unknown', reason: run.stderr };
+      }
+      const [tag = '', pane = ''] = run.stdout.trim().split(FIELD);
+      if (tag !== session || pane === '') {
+        const carries = tag === '' ? 'no session tag' : `'${tag}'`;
+        return {
+          outcome: 'withheld',
+          reason: `window ${window} carries ${carries}, not '${session}'`,
+        };
+      }
+      const state = call(paneStateArgv(pane));
+      if (!state.ok) {
+        return gone(state) ? { outcome: 'absent' } : { outcome: 'unknown', reason: state.stderr };
+      }
+      const [inWindow = '', dead = '', mode = ''] = state.stdout.trim().split(FIELD);
+      if (inWindow !== window) {
+        return { outcome: 'withheld', reason: `the run's pane is no longer in window ${window}` };
+      }
+      if (dead === '1') return { outcome: 'withheld', reason: 'its run has ended' };
+      // A pane in copy mode reads keys as scrolling commands, not as input.
+      if (mode !== '0') {
+        return { outcome: 'withheld', reason: 'someone is scrolling its window (copy mode)' };
+      }
+      const line = (): string | null => {
+        // `-u`: the screen is read as UTF-8 whatever locale Ward was run
+        // in — the marks an input line is known by are not ASCII, and a
+        // client in the C locale is handed `_` in their place.
+        const screen = call(captureArgv(pane), ['-u']);
+        return screen.ok ? request.inputLine(screen.stdout) : null;
+      };
+      if (line() === null) {
+        return { outcome: 'withheld', reason: 'its screen does not show an input line' };
+      }
+      const typed = call(typeArgv(pane, text));
+      if (!typed.ok) return { outcome: 'unknown', reason: typed.stderr || 'tmux gave no reason' };
+      // Read it back: the submitting key is sent only at an input line that
+      // holds this line and nothing else.
+      const wanted = squash(text);
+      const until = (done: (seen: string | null) => boolean): string | null => {
+        let seen = line();
+        for (let waited = 0; !done(seen) && waited < TYPE_WAIT_MS; waited += TYPE_POLL_MS) {
+          Bun.sleepSync(TYPE_POLL_MS);
+          seen = line();
+        }
+        return seen;
+      };
+      const seen = until((held) => held !== null && squash(held) === wanted);
+      if (seen === null) {
+        return {
+          outcome: 'unknown',
+          reason:
+            'its screen stopped showing an input line as the line was typed — not submitted; ' +
+            'the typed text may have gone to whatever took its place',
+        };
+      }
+      if (squash(seen) !== wanted) {
+        // Someone's own words were there first. The typed characters sit at
+        // the cursor that typed them, so taking back that many restores the
+        // line — done only when the screen shows them at its end.
+        const before = squash(seen).slice(0, -wanted.length);
+        if (squash(seen).endsWith(wanted) && call(eraseArgv(pane, text.length)).ok) {
+          const restored = until((held) => held !== null && squash(held) === before);
+          if (restored !== null && squash(restored) === before) {
+            return {
+              outcome: 'withheld',
+              reason: 'its input line already held text — put back as it was',
+            };
+          }
+        }
+        return {
+          outcome: 'unknown',
+          reason: 'its input line did not read back as typed — not submitted; the text may remain',
+        };
+      }
+      const sent = call(submitArgv(pane));
+      if (!sent.ok) return { outcome: 'unknown', reason: sent.stderr || 'tmux gave no reason' };
+      const after = until((held) => held === null || squash(held) !== wanted);
+      if (after !== null && squash(after) === wanted) {
+        return { outcome: 'unknown', reason: 'typed and submitted, but the line is still there' };
+      }
+      return { outcome: 'typed' };
     },
     rename(request: RenameRequest): Renamed {
       const renamed: { from: string; to: string }[] = [];

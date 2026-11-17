@@ -15,6 +15,8 @@ import type {
   Renamed,
   RenameRequest,
   SessionHost,
+  TypeRequest,
+  TypeResult,
   View,
   ViewRequest,
 } from '../../src/host/host.ts';
@@ -26,6 +28,7 @@ export interface FakeHost extends SessionHost {
   readonly views: ViewRequest[];
   readonly entered: View[];
   readonly renames: RenameRequest[];
+  readonly typed: TypeRequest[];
   readonly finds: number;
 }
 
@@ -37,6 +40,8 @@ export interface FakeHostOptions {
   readonly refuseClose?: string;
   readonly unusable?: string;
   readonly inherited?: string[];
+  /** What `typeLine` answers — typed, when nothing else is said. */
+  readonly typing?: TypeResult;
   /** What `enter` returns — the host client's exit code. */
   readonly exitCode?: number;
 }
@@ -49,6 +54,7 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
   const views: ViewRequest[] = [];
   const entered: View[] = [];
   const renames: RenameRequest[] = [];
+  const typed: TypeRequest[] = [];
   let finds = 0;
   let next = 100;
   const groups = (): InventoryGroup[] => {
@@ -76,6 +82,7 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
     views,
     entered,
     renames,
+    typed,
     get finds() {
       return finds;
     },
@@ -109,6 +116,10 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
     },
     link(window: string, group: string): void {
       links.push(`${window} into ${group}`);
+    },
+    typeLine(request: TypeRequest): TypeResult {
+      typed.push(request);
+      return options.typing ?? { outcome: 'typed' };
     },
     rename(request: RenameRequest): Renamed {
       renames.push(request);
