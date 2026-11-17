@@ -162,15 +162,19 @@ the **human**, or a scope to whom the human has **explicitly** delegated that sp
 **Why:** these are exactly the irreversible, outward-facing mistakes the system exists to prevent
 (the never-merge-to-main rule, `../01-concepts/03-work-lifecycle.md`, is the canonical case); the
 default for anything crossing the local↔remote boundary or destroying work is "ask," not "assume."
-The rule of thumb: **local + reversible = autonomous; outward or irreversible = gated.**
-_Deliverable_ work, because a `sandbox` worktree's scratch is not gated work: its disposition, fixed
-at creation, **is** the explicit declaration that nothing in it is destined to be kept
-(`../01-concepts/00-domain-model.md`, Anchor) — the authority to discard it was granted when the
-sandbox was created. _A repository's_ main line, because the workspace's **own** main line is the
-one main line with a lawful direct writer — Ward's journal — and fast-forward-publishing that record
-to its remote delivers no work and decides nothing, so it is a backup rather than a crossing; the
-carve-out and its limits (the merge onto that main line stays gated, and so does any repository's
-main line) live with the journal, `../01-concepts/06-workspace-lifecycle.md`.
+The rule of thumb: **local + reversible = autonomous; outward or irreversible = gated.** **Executing
+text is authorised by where the text came from, not only by what the action does:** a command that
+reached this machine in the record runs only once this machine's human has accepted that exact text,
+however local and reversible its effect. _Why:_ the rule of thumb sorts actions Ward itself defines,
+and a command someone else wrote can be any action at all. _Deliverable_ work, because a `sandbox`
+worktree's scratch is not gated work: its disposition, fixed at creation, **is** the explicit
+declaration that nothing in it is destined to be kept (`../01-concepts/00-domain-model.md`, Anchor)
+— the authority to discard it was granted when the sandbox was created. _A repository's_ main line,
+because the workspace's **own** main line is the one main line with a lawful direct writer — Ward's
+journal — and fast-forward-publishing that record to its remote delivers no work and decides
+nothing, so it is a backup rather than a crossing; the carve-out and its limits (the merge onto that
+main line stays gated, and so does any repository's main line) live with the journal,
+`../01-concepts/06-workspace-lifecycle.md`.
 
 ## 19. An open mechanism is room to try several techniques
 

@@ -194,9 +194,9 @@ that **tracks its main line** (its default branch), kept fresh on a cadence (`03
 so new worktrees branch from current code. The checkout is independent of every worktree and never
 worked in directly — which is what lets any agent, including one standing in a worktree, read the
 current main line locally at any moment. The _what_ is: the workspace maintains current, canonical,
-contained checkouts of its repositories, distinct from the per-task worktrees branched off them; the
-rest of the arc — registration, adopt-or-clone, why containment — is
-[`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s.
+checkouts of its repositories, contained by default, distinct from the per-task worktrees branched
+off them; the rest of the arc — registration, adopt-or-clone, why containment, and its one recorded
+exception — is [`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s.
 
 The workspace's **own** repository is not a member of this set: it is registered nowhere, needs no
 remote and no separate canonical checkout — the workspace root **is** its main-line checkout, and it

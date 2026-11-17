@@ -100,6 +100,19 @@ safe hook is one that checks state and converges to "done" no matter how many ti
 These hooks are **Ward-provided extension points, customized per workspace** and evolvable the same
 way the workflow policy is (see below; mechanism: `design/`).
 
+**A step may also be replaced, not only wrapped.** Where a repository's own tooling must do what
+Ward would otherwise do itself — make a worktree, remove one, bring the main line up to date — the
+step is **replaced** under a contract Ward states and then **verifies**: Ward checks the result
+rather than trusting that the replacement ran, and the idempotence above stays Ward's to guarantee,
+not the replacement's. _Why distinguish it:_ a hook adds to a step Ward still performs; a
+replacement removes Ward's own act, so only a checked result keeps the record true.
+
+**Text Ward executes is set on the machine that runs it.** A hook or a replacement is executable,
+and a command that arrives with the record — by a pull, from another machine or another person — and
+is then run is execution nobody on this machine reviewed. So executable customization lives in the
+machine's own configuration, or, where it travels in the record, runs only after this machine's
+human has accepted that exact text (`../00-foundation/01-principles.md` §18).
+
 ## Execution
 
 Once underway, work happens in the task's anchors — its worktrees and workdirs
@@ -140,6 +153,16 @@ changes as occupancy**: a dirty tree is never rebased or refreshed, whatever the
 **Why:** §16 prefers recorded state, but a fail-safe read of reality is what keeps "prefer the
 record" from becoming "trust the record over the work in front of you" — a lost update is silent
 corruption (§17) whether or not the writer announced itself.
+
+**The fail-safe guards what the toil would modify, not what it reads.** Reading an anchor and
+fetching into it are always allowed: a fetch moves only the local record of where the remote's main
+line stands, and touches nobody's work. A working tree Ward does not own — the checkout of a
+repository registered external ([`06-workspace-lifecycle.md`](06-workspace-lifecycle.md), _The
+repository set_), which is its owner's own working place and which Ward itself never works in — is
+modified only when it carries no evidence of anyone's work, and is otherwise left as found **without
+refusing**: the rest of the toil stands on the fetched main line, not on that tree. **Why:**
+refusing over the owner's state would make the repository unusable to Ward for reasons that are none
+of Ward's, and updating through that state would be Ward working in somebody else's tree.
 
 **The human may lift the fail-safe for one act, explicitly — never Ward, and never by default.** The
 fail-safe protects work whose owner has not been asked; when the owner _is_ the one asking, refusing
@@ -315,7 +338,8 @@ Local↔remote linkage is an **orthogonal attribute** that can change in any non
   to that fail-safe — set aside, update, put back, and report **conflicted** where restoring needs
   judgement — and the delivery toil serves `deliverable` worktrees only.
 - **Lifecycle hooks** — that they exist and must be **idempotent / validate-on-resume** (build
-  planned in [`design/`](../../design/)).
+  planned in [`design/`](../../design/)); that a step may be **replaced** under a contract Ward
+  verifies, not only wrapped; and that **text Ward executes is set on the machine that runs it**.
 - **Workflow policy** — opinionated-but-evolvable, as the worked instance of the general default →
   workspace-owned artifact → reconciled-on-upgrade pattern, which is
   [`06-workspace-lifecycle.md`](06-workspace-lifecycle.md)'s.

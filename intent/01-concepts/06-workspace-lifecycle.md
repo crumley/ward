@@ -114,26 +114,39 @@ Repositories). Populating that set is part of the workspace's arc, not a detail 
   branches new worktrees from the canonical checkout and refreshes it on a cadence
   ([`03-work-lifecycle.md`](03-work-lifecycle.md)); all of that is unreachable if the record cannot
   say what the repository is and what its checkout tracks.
-- **The canonical checkout lives inside the workspace.** For every registered repository, the
-  workspace **contains** a checkout tracking that repository's main line — one per repository,
-  independent of every worktree, never worked in directly. _Why three jobs converge on containment:_
-  an agent standing in a worktree can always read the current main line **locally** — diff against
-  it, trace what landed — without leaving its own branch or touching the network; the refresh and
-  rebase toil ([`03-work-lifecycle.md`](03-work-lifecycle.md)) has one fixed, known target per
-  repository; and a cold reader finds every repository's main line in the same place in every
-  workspace, which is self-sufficiency (§3) extended from the record to the code the record is
-  about. **Contained is not tracked:** the workspace's own repository (§15) ignores the checkouts
-  and worktrees within it — they are the world the record describes, not the record.
+- **The canonical checkout lives inside the workspace, by default.** For every registered repository
+  not registered external (below), the workspace **contains** a checkout tracking that repository's
+  main line — one per repository, independent of every worktree, never worked in directly. _Why
+  three jobs converge on containment:_ an agent standing in a worktree can always read the current
+  main line **locally** — diff against it, trace what landed — without leaving its own branch or
+  touching the network; the refresh and rebase toil ([`03-work-lifecycle.md`](03-work-lifecycle.md))
+  has one fixed, known target per repository; and a cold reader finds every repository's main line
+  in the same place in every workspace, which is self-sufficiency (§3) extended from the record to
+  the code the record is about. **Contained is not tracked:** the workspace's own repository (§15)
+  ignores the checkouts and worktrees within it — they are the world the record describes, not the
+  record. Worktrees are contained by default as well; one that a repository's own command makes may
+  stand outside, the record naming where and on which machine.
+- **A repository may be registered external: the workspace does not contain its checkout.** The
+  exception is explicit and recorded. The repository's record says the workspace does not contain
+  its checkout; where the checkout stands is each machine's own fact (_What may live outside the
+  workspace_, below); and Ward reads and refreshes it and never clones, moves, or deletes it. _Why
+  allow it:_ some checkouts cannot be duplicated or moved — too large, or kept by tooling that
+  expects them where they are — and a rule with no exception leaves those repositories outside Ward
+  altogether. _What it costs:_ two of the three benefits hold (the main line is still read locally,
+  and the toil still has one known target per repository); the third is traded knowingly: a cold
+  reader no longer finds this main line in the same place in every workspace, and learns from the
+  record that it is external and from Ward where it stands on this machine.
 - **The main line is recorded from the repository, not assumed.** _Why:_ repositories disagree about
   their default branch, and every downstream rule — never merge to main, branch from current, rebase
   onto the refreshed line — names a branch the workspace must have gotten right.
 - **Both adoption and cloning must be possible, and both converge on the contained checkout.** A
-  human without a local checkout has Ward clone one into place; a human with one has Ward **adopt**
-  it — the existing checkout supplies the content (moved in, or used as a local source; the
-  mechanism is [`design/`](../../design/)'s), so nothing already on disk is fetched again. _Why the
-  destination is still Ward's:_ the make-work the prime directive rejects is the needless
-  re-download, not the placement ([`../00-foundation/00-vision.md`](../00-foundation/00-vision.md))
-  — containment buys the three benefits above and costs the human nothing they chose.
+  repository registered external (above) is neither: its checkout is used where it stands. A human
+  without a local checkout has Ward clone one into place; a human with one has Ward **adopt** it —
+  the existing checkout supplies the content (moved in, or used as a local source; the mechanism is
+  [`design/`](../../design/)'s), so nothing already on disk is fetched again. _Why the destination
+  is still Ward's:_ the make-work the prime directive rejects is the needless re-download, not the
+  placement ([`../00-foundation/00-vision.md`](../00-foundation/00-vision.md)) — containment buys
+  the three benefits above and costs the human nothing they chose.
 - **No repository is required, and none is special.** The set may be empty (creation, above), and
   nothing in it privileges Ward's own source: a workspace need never contain the `ward` repository,
   and one that does — as the bootstrap workspace does
@@ -152,7 +165,9 @@ Repositories). Populating that set is part of the workspace's arc, not a detail 
   fail-safe of [`03-work-lifecycle.md`](03-work-lifecycle.md) applied to departure is what guards
   everything else. _Why autonomous:_ with those gates satisfied the checkout is re-creatable from
   its remote to the commit and the record's deletion is one journal commit from revert — local and
-  reversible, the same reason registration needs no authority.
+  reversible, the same reason registration needs no authority. A repository registered external
+  leaves without the unrecorded-work gate, because its removal deletes nothing: Ward forgets the
+  repository and touches nothing in its checkout. The refusal over an open task's worktree holds.
 
 ## Preconditions: self-sufficiency is about the record, not the machine
 
@@ -191,7 +206,13 @@ sense, and the machine's own global configuration is its natural home: set there
 carries what works for it and the workspace record carries nothing machine-shaped. A workspace may
 still override such a key, and then it is **workspace policy, not a promise about every machine the
 workspace will stand on**: its failure costs a launch, never the understanding or resumption of the
-work, and the health check names it on the machine where it does not hold.
+work, and the health check names it on the machine where it does not hold. A machine may likewise
+hold **where something the record names stands on that machine, and how it is made there** — the
+location of a checkout the workspace does not contain, the command that makes a repository's
+worktrees — **provided the record names the dependency**, so that a machine lacking the fact is
+refused with the remedy rather than guessed around. _Why this stays inside the boundary:_ the record
+alone still says what the work is and what it stands on; what a new machine lacks is one named fact,
+and supplying it is one command, not a reconstruction of the work.
 
 ## Workspace integrity: what can drift, and what Ward may do about it
 
@@ -652,13 +673,21 @@ What this slice owns beyond the stamp and the update/migrate paths above is **be
   workspace (_How a workspace evolves_, above), which it could not do if every generational
   difference froze writes.
 - **Newer CLI, older workspace, schema changed.** Reads proceed, with the skew **surfaced**;
-  **structural writes do not proceed** until the workspace is **migrated**. _Why:_ a CLI writing
-  records in a shape the workspace's schema does not describe is silent corruption of the source of
-  truth (§16, §17) — and inspection is exactly what a human needs in order to decide about the
-  upgrade.
-- **Older CLI, newer workspace, schema changed.** Structural writes are **refused**. _Why:_ an older
-  CLI can neither write the newer shape correctly nor migrate forward out of the situation, and
-  there is no version of "try anyway" that fails loudly enough to be safe.
+  **structural writes do not proceed** until the workspace is **brought forward**. A **structural
+  write** is one that would put into the record a shape the workspace's current level does not
+  describe; every other write proceeds. _Why:_ a CLI writing records in a shape the workspace's
+  schema does not describe is silent corruption of the source of truth (§16, §17) — and inspection
+  is exactly what a human needs in order to decide about the upgrade. _Why so narrow:_ what must
+  wait is the shape the workspace's level does not describe, not the work; a workspace that stopped
+  taking work the day a machine's binary updated would be blocked by an upgrade nobody has yet
+  chosen to run.
+- **Older CLI, newer workspace, schema changed.** The CLI **refuses to read or write the record**.
+  _Why:_ an older CLI can neither write the newer shape correctly nor migrate forward out of the
+  situation, and there is no version of "try anyway" that fails loudly enough to be safe. _Why reads
+  too:_ an older reader cannot tell a shape it misreads from one it reads, so a status built on it
+  is wrong while looking right (§16), and the write that follows is correct only for what was
+  misread. What must still answer is enough for a human to learn which Ward this is and that it is
+  the thing to change.
 - **Skew is surfaced, not nagged.** It is a recorded request for the human's attention — one item in
   "what needs me?" ([`../02-subsystems/07-human-shell.md`](../02-subsystems/07-human-shell.md)) —
   presented to a human caller and delivered to a declared **agent** caller as a deterministic result
@@ -669,6 +698,14 @@ What this slice owns beyond the stamp and the update/migrate paths above is **be
   previewed as a diff, merged into the workspace's own history (§15) so it can be rolled back.
   _Why:_ keeping the risky path rare and explicit (above) means little unless the rare path is also
   recoverable — and a migration is the change most worth reading before it lands.
+- **Raising what the record requires of its reader is convergence, and it is announced.** The level
+  moves together with the shapes it guards, in the step that converges the record's shape (_How a
+  workspace evolves_, above), so no commit on the main line holds a shape without the marker that
+  keeps an older CLI away from it. What the human is owed is the **announcement**: the upgrade says,
+  where it cannot be missed, that older CLIs sharing this workspace refuse from here on. The gate
+  above is for a transformation that **rewrites existing records**. _Why not gate the raise:_
+  convergence already writes new shapes directly, and a level that waited for a merge would leave
+  them unguarded in between — the hazard the level exists to close.
 
 ## Putting a workspace right: four operations, one map
 
@@ -715,9 +752,10 @@ read as an omission rather than a decision.
   **credentials are never workspace state**.
 - **The repository set's lifecycle** — deliberate registration recording remote and main line; the
   **contained canonical checkout** (inside the workspace, one per repository, independent of every
-  worktree, ignored by the workspace's own git); the main line read from the repository rather than
-  assumed; adopt-or-clone **converging on the contained checkout**; that **no repository is required
-  or special** — Ward's own source included; registration and **removal** as local, autonomous acts,
+  worktree, ignored by the workspace's own git); its recorded exception, the **external** checkout
+  the workspace does not contain; the main line read from the repository rather than assumed;
+  adopt-or-clone **converging on the contained checkout**; that **no repository is required or
+  special** — Ward's own source included; registration and **removal** as local, autonomous acts,
   removal refused while an open task's worktree stands on the checkout or it carries unrecorded
   work.
 - **Preconditions** — that §3's self-sufficiency is about the **record, not the machine**; the

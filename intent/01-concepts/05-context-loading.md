@@ -28,7 +28,10 @@ in ([`00-domain-model.md`](00-domain-model.md), the two axes).
 - **The layout makes the path carry the context.** A project's working places sit beneath a
   directory that carries the project's `AGENTS.md`, so the path down to any anchor passes through
   every level whose guidance applies to the work there. No level is reached by a pointer, a
-  variable, or a file named for one harness.
+  variable, or a file named for one harness. A working place that must stand elsewhere (a worktree
+  its repository's own tooling puts outside the workspace) is **reached** beneath its level's
+  directory through a link, and its chain is the one that link's path walks: the link carries no
+  guidance of its own, so every level is still read where it lives.
 
 Each `AGENTS.md` is the **manifest for its level**: it names the artifacts, skills, and records to
 load for that scope, rather than relying on the agent to discover them. An anchor's `AGENTS.md` is
