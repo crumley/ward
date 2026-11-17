@@ -604,3 +604,62 @@ the observe view alone detaches its clients, the same case fails on the particip
 of the cascade, not only of the observer. A second case walks one observer after another through
 closed, gone, restarted, and leaving by choice, with a session of the human's own standing as the
 place tmux would otherwise have put them.
+
+## 2026-11-16 — Follow-up: Ward ends a view, because tmux cannot be trusted to
+
+The real-tmux suite had begun failing on Linux, one run in three: a client detached from its view
+(`tmux detach-client -s =VIEW`) and `ward session observe` — or `attach` — exited 1 instead of 0.
+The terminal said why: `[server exited unexpectedly]`. The tmux server had died of a segmentation
+fault, taking every host and run on it along. The exit code was the mild end of it.
+
+**The fault is tmux's: reproduced on 3.6 (Linux) and 3.7c (macOS), and the code reads the same back
+to 3.2a, Ward's floor.** A client told to detach is flagged as exiting, and is not really gone until
+it has answered. In between, tmux no longer counts it as attached (`recalculate_sizes` skips exiting
+clients) while it still points at its session. Whenever tmux next looks for unattached sessions —
+which it does each time ANY client of the server disconnects, the `tmux detach-client` command's own
+client included — it finds the view with no one attached, `destroy-unattached on`, and destroys it
+without first moving its clients off (`server_check_unattached` calls `session_destroy` alone). The
+exiting client is left pointing into a destroyed session, and the server's next pass over its
+clients dereferences it. tmux's development branch calls `server_destroy_session` first; no release
+through 3.7c does, and that branch was read, not run.
+
+It is a race between two processes — the detaching client's answer and the other client's disconnect
+— which is why it showed on Linux runners and not on a laptop. Held still it is not a race at all:
+stop the view's client (`SIGSTOP`), run `tmux detach-client -s =VIEW`, and the server is dead before
+the client is continued, on macOS as on Linux, for an attach view as for an observe view. In use the
+window is narrow (a human's `prefix d` runs no second client), but anything that talks to the server
+in that instant — a status read, another `ward` verb, a script — is enough, and the cost is every
+agent the server hosts.
+
+**So a view is no longer `destroy-unattached` while it holds its client.** What was one rule is now
+two, by who is there to end the view:
+
+- **A client that attaches** (`attach` from outside tmux, and every `observe`) has Ward standing by:
+  the verb waits for the client to return. Its view joins with `detach-on-destroy off` (and the
+  observer's hook) and nothing else, and when the client has returned Ward ends the view —
+  `set-option -t '$N:' destroy-unattached on`, which tmux acts on at once for a session nobody is
+  attached to, and holds to for one that tmux has since moved another client into. The view is named
+  by its tmux session id, read before the join: a view that already ended (the observer's hook, a
+  closed host) is simply not found, and a name another client's fresh view has taken since is never
+  touched.
+- **A client that is switched** (`attach` from inside tmux) has nobody standing by — the verb
+  returns at once — so its view is still set `destroy-unattached on` as the client joins, and is
+  still exposed to the fault if that client is detached from tmux while it stands in the view.
+  Leaving the view any other way (switching away, the window closing) is not: the client is gone
+  from the session before tmux looks. Closing this needs someone to outlive the verb, and is left
+  open here.
+
+**Ward now outlives the client it waits for.** Ending the view is Ward's last act, so a hangup that
+kills Ward before the client has gone would leave the view standing — and closing the terminal is
+the ordinary way to leave. While it waits, Ward takes `SIGHUP` and `SIGTERM`, passes each on to the
+client (one sent to Ward alone still ends the join), and goes on waiting; the client's own exit code
+is still what the verb returns. A Ward that is killed outright leaves its view behind, which is what
+doctor's leftover-view finding has always named.
+
+**Tests.** `test/host/tmux.test.ts` pins the join's argv per path (only the switched view carries
+`destroy-unattached`) and the ending argv. `test/host/tmux-live.test.ts` gains two cases against a
+real server, each for an attach view and an observe view: the worst order held still (client
+stopped, detached, another client disconnecting, client continued) ends with the verb exiting 0, the
+view gone and the run live; and a terminal closed under the verb ends the view and nothing else. The
+first fails on the previous build at its first assertion, the second with the view left standing
+when Ward does not take the hangup.
