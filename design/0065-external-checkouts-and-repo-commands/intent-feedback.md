@@ -41,9 +41,9 @@ removes it, and the one that brings the main line up to date, each run in place 
   third containment benefit is traded, knowingly, for not duplicating what its owner already keeps.
   Adjust the domain model's sentence, the glossary entry, and the adopt-or-clone bullet ("converge
   on the contained checkout, unless the repository is registered external") to match.
-- **Status:** pending — ruled by Ryan 2026-11-16, awaiting the intent edit: containment is the
-  default, and a repository may be registered external as a recorded exception that names its cost
-  ([#146](https://github.com/crumley/ward/pull/146))
+- **Status:** adjudicated — [#146](https://github.com/crumley/ward/pull/146) (Ryan's ruling,
+  2026-11-16: containment is the default, and a repository may be registered external as a recorded
+  exception that names its cost)
 
 ## IF-002 — "never worked in directly" and the dirty-tree fail-safe assume the checkout is Ward's
 
@@ -71,9 +71,9 @@ removes it, and the one that brings the main line up to date, each run in place 
   carries no evidence of anyone's work. In "The repository set", scope "never worked in directly" to
   contained checkouts, and say of an external one that it is its owner's and that Ward itself never
   works in it.
-- **Status:** pending — ruled by Ryan 2026-11-16, awaiting the intent edit: the fail-safe guards
-  what the toil would modify, not what it reads, and an external repository leaves without the
-  unrecorded-work gate ([#146](https://github.com/crumley/ward/pull/146))
+- **Status:** adjudicated — [#146](https://github.com/crumley/ward/pull/146) (Ryan's ruling,
+  2026-11-16: the fail-safe guards what the toil would modify, not what it reads, and an external
+  repository leaves without the unrecorded-work gate)
 
 ## IF-003 — the global-state boundary, stretched to hold a binding work depends on
 
@@ -100,9 +100,9 @@ removes it, and the one that brings the main line up to date, each run in place 
   around. Under that wording the binding already conforms; the commands would conform once a record
   can say "this repository's worktrees are made by a machine-configured command" — a rule this item
   asks for a ruling on, since it decides whether falling back to git is acceptable.
-- **Status:** pending — ruled by Ryan 2026-11-16, awaiting the intent edit: a machine may hold where
-  a recorded thing stands and how it is made there, provided the record names the dependency
-  ([#146](https://github.com/crumley/ward/pull/146))
+- **Status:** adjudicated — [#146](https://github.com/crumley/ward/pull/146) (Ryan's ruling,
+  2026-11-16: a machine may hold where a recorded thing stands and how it is made there, provided
+  the record names the dependency)
 
 ## IF-004 — customizable lifecycle steps have no stated home, and §18 does not cover whose text runs
 
@@ -131,9 +131,9 @@ removes it, and the one that brings the main line up to date, each run in place 
   executes is set on the machine that runs it, or, if it is ever to travel in the record, runs only
   after that machine's human has accepted that exact text. Add to §18 (or beside it) that
   **executing text is authorised by where the text came from**, not only by what the action does.
-- **Status:** pending — ruled by Ryan 2026-11-16, awaiting the intent edit: a step may be replaced
-  under a contract Ward verifies, and text Ward executes is set on the machine that runs it
-  ([#146](https://github.com/crumley/ward/pull/146))
+- **Status:** adjudicated — [#146](https://github.com/crumley/ward/pull/146) (Ryan's ruling,
+  2026-11-16: a step may be replaced under a contract Ward verifies, and text Ward executes is set
+  on the machine that runs it)
 
 ## IF-005 — a working place that cannot sit beneath its floor's directory
 
@@ -158,6 +158,6 @@ removes it, and the one that brings the main line up to date, each run in place 
   path walks — keeping "no level is reached by a pointer" for levels, which is what it protects. In
   the lifecycle slice, say worktrees are contained by default and may stand outside when a
   repository's own command makes them, the record naming where and on which machine.
-- **Status:** pending — ruled by Ryan 2026-11-16, awaiting the intent edit: a working place that
-  must stand elsewhere is reached through a link beneath its level, and worktrees are contained by
-  default ([#146](https://github.com/crumley/ward/pull/146))
+- **Status:** adjudicated — [#146](https://github.com/crumley/ward/pull/146) (Ryan's ruling,
+  2026-11-16: a working place that must stand elsewhere is reached through a link beneath its level,
+  and worktrees are contained by default)
