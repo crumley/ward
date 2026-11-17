@@ -9,6 +9,7 @@ import {
   commandArgs,
   createGroupArgv,
   createWindowArgv,
+  endViewArgv,
   enterArgv,
   insideServer,
   linkWindowArgv,
@@ -369,6 +370,10 @@ test('an observe view is a session of its own, sized like a host, holding a plac
   ]);
 });
 
+test('a view whose client has left is ended by its tmux session id, never by a name another may hold', () => {
+  expect(endViewArgv('$7')).toEqual(['set-option', '-t', '$7:', 'destroy-unattached', 'on']);
+});
+
 test.each([
   ['attach, from outside tmux', 'attach', false, ['attach-session', '-t', '=v']],
   ['attach, already a client of this server', 'attach', true, ['switch-client', '-t', '=v']],
@@ -388,8 +393,10 @@ test.each([
   const argv = enterArgv({ name: 'v', mode }, inside);
   expect(argv.slice(0, join.length)).toEqual([...join]);
   expect(options(argv.slice(join.length))).toEqual([
-    // Set only once the client is in it: tmux ends an unattached session the moment it is set.
-    ['=v:', 'destroy-unattached', 'on'],
+    // Only a switched client's view is left to tmux to end — set once the
+    // client is in it, since tmux ends an unattached session the moment it is
+    // set. A client that attaches has Ward standing by, and Ward ends its view.
+    ...(mode === 'attach' && inside ? [['=v:', 'destroy-unattached', 'on']] : []),
     // A view that ends under its client moves it on, as the host does — never to the shell.
     ['=v:', 'detach-on-destroy', 'off'],
     // Only an observer leaves for the shell when its window goes — that one

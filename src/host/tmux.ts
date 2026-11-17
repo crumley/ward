@@ -412,9 +412,23 @@ export const OBSERVER_LEAVES = 'detach-client -t "#{client_name}" ; kill-session
 /**
  * Join a view. A caller already a client of this server is SWITCHED to it
  * (an attach run inside tmux would otherwise nest); anyone else attaches,
- * observe read-only and without resizing the window. Either way the view is
- * set to end when its client leaves — set only once the client is in it,
- * because tmux ends an unattached session the moment the option is set.
+ * observe read-only and without resizing the window.
+ *
+ * A view ends when its client leaves, and WHO ends it depends on who is
+ * still there to. A client that attaches has Ward standing by until it
+ * returns, and Ward ends the view then ({@link endViewArgv}) — never tmux
+ * while the client is still on its way out. A switched client has nobody
+ * standing by (the verb returns at once), so its view is set
+ * `destroy-unattached on` as the client joins — only once it is in, because
+ * tmux ends an unattached session the moment the option is set.
+ *
+ * The difference is a tmux fault, not a preference (through 3.7c): a client
+ * told to detach stops counting as attached before it has left its session,
+ * and the next time tmux looks for unattached sessions — any client of the
+ * server disconnecting is enough — it destroys a `destroy-unattached` view
+ * with that client still pointing into it, and the SERVER dies, every host
+ * and run on it with it. A view that is not `destroy-unattached` while it
+ * holds its client cannot be destroyed that way.
  *
  * What becomes of the client when the VIEW ends under it (the last window it
  * shows closed) is said here too, never left to the server's default: it
@@ -433,24 +447,40 @@ export const OBSERVER_LEAVES = 'detach-client -t "#{client_name}" ; kill-session
  */
 export function enterArgv(view: View, inside: boolean): string[] {
   const target = sessionTarget(view.name);
-  const join =
-    view.mode === 'attach' && inside
-      ? ['switch-client', '-t', target]
-      : [
-          'attach-session',
-          ...(view.mode === 'observe' ? ['-f', 'read-only,ignore-size'] : []),
-          '-t',
-          target,
-        ];
+  const join = switches(view, inside)
+    ? ['switch-client', '-t', target]
+    : [
+        'attach-session',
+        ...(view.mode === 'observe' ? ['-f', 'read-only,ignore-size'] : []),
+        '-t',
+        target,
+      ];
   const options = ['-t', windowTarget(view.name)];
   return [
     ...join,
-    ...setOption(options, 'destroy-unattached', 'on'),
+    ...(switches(view, inside) ? setOption(options, 'destroy-unattached', 'on') : []),
     ...setOption(options, 'detach-on-destroy', 'off'),
     ...(view.mode === 'observe'
       ? setOption(['-F', ...options], 'session-window-changed', OBSERVER_LEAVES)
       : []),
   ];
+}
+
+/** Whether joining `view` switches the caller's own client rather than attaching a new one. */
+function switches(view: View, inside: boolean): boolean {
+  return view.mode === 'attach' && inside;
+}
+
+/**
+ * End a view whose client has left: `destroy-unattached on`, which tmux acts
+ * on at once for a session nobody is attached to — and holds to for one that
+ * tmux has since moved another client into, until that client leaves too.
+ * The view is named by its tmux session id (`$N`), never by name: an id is
+ * not handed out twice, so a view that has already ended — its name perhaps
+ * taken by another client's fresh, not-yet-joined view — is simply not found.
+ */
+export function endViewArgv(sessionId: string): string[] {
+  return ['set-option', '-t', `${sessionId}:`, 'destroy-unattached', 'on'];
 }
 
 /**
@@ -1019,21 +1049,43 @@ export function tmuxHost(env: Env = process.env): SessionHost {
       );
     },
     async enter(view: View): Promise<number> {
-      const socket = call([
+      const where = call([
         'display-message',
         '-p',
         '-t',
         windowTarget(view.name),
-        '#{socket_path}',
+        `#{socket_path}${FIELD}#{session_id}`,
       ]);
-      const inside = insideServer(env.TMUX, socket.ok ? socket.stdout.trim() : '');
+      const [socketPath = '', sessionId = ''] = where.ok ? where.stdout.trim().split(FIELD) : [];
+      const inside = insideServer(env.TMUX, socketPath);
       const child = Bun.spawn([program, ...prefix, ...enterArgv(view, inside)], {
         // Switching needs the caller's own client named by $TMUX; a fresh
         // attach must not see it, or tmux refuses to nest.
         env: inside ? { ...clientEnv, TMUX: env.TMUX } : clientEnv,
         stdio: ['inherit', 'inherit', 'inherit'],
       });
-      return await child.exited;
+      if (switches(view, inside)) return await child.exited;
+      // Ward ends this view, so it has to outlive the client: a terminal that
+      // closes hangs up both, and a Ward that died of it would leave the view
+      // standing. The signal is passed on (one sent to Ward alone still ends
+      // the client) and Ward waits for the client to go.
+      const signals = ['SIGHUP', 'SIGTERM'] as const;
+      const passOn = (signal: NodeJS.Signals) => {
+        try {
+          child.kill(signal);
+        } catch {
+          // The client has already gone: nothing to pass the signal to.
+        }
+      };
+      for (const signal of signals) process.on(signal, passOn);
+      try {
+        return await child.exited;
+      } finally {
+        for (const signal of signals) process.off(signal, passOn);
+        // Best-effort: a view that has already ended is not found, and one
+        // Ward could not end is what doctor reports as a leftover view.
+        if (sessionId !== '') call(endViewArgv(sessionId));
+      }
     },
     inventory(): Inventory {
       const sessions = call(listGroupsArgv());

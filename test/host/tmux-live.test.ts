@@ -712,6 +712,54 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     expect(await exited(watcher)).toBe(0);
   });
 
+  test('a view ends once its client has left — never under a client still on its way out', async () => {
+    const helper = session(ward(['session', 'open', '--detach', '--json']));
+    const f0 = `${name}-f0-workspace`;
+    for (const [verb, view] of [
+      ['attach', `${f0}-v1`],
+      ['observe', `${f0}-o1`],
+    ] as const) {
+      const client = attach(['session', verb, helper.id]);
+      await clientOn(view, client);
+      // Ward ends this view when the client returns; tmux is not left to
+      // (through 3.7c it destroys a destroy-unattached session under a client
+      // that has been told to detach and has not yet gone, and dies of it).
+      expect(sessionOption(view, 'destroy-unattached')).toBe(''); // not set while it holds its client
+      // The worst order, held still: the client is told to detach and is slow
+      // to go, while another client of the server (this command's own)
+      // disconnects — which is when tmux looks for unattached sessions.
+      const pid = Number(clientOf(view));
+      process.kill(pid, 'SIGSTOP');
+      try {
+        tmux('detach-client', '-s', `=${view}`);
+        expect(tmux('list-sessions', '-F', '#{session_name}').split('\n')).toContain(view);
+      } finally {
+        process.kill(pid, 'SIGCONT');
+      }
+      expect(await exited(client)).toBe(0);
+      // The client has left, so the view is gone by the time the verb returns.
+      expect(tmux('list-sessions', '-F', '#{session_name}').split('\n')).not.toContain(view);
+    }
+    expect(session(ward(['session', 'show', helper.id, '--json'])).live?.state).toBe('live');
+  });
+
+  test('a terminal that closes on a view ends the view, and nothing else', async () => {
+    const helper = session(ward(['session', 'open', '--detach', '--json']));
+    const f0 = `${name}-f0-workspace`;
+    for (const [verb, view] of [
+      ['attach', `${f0}-v1`],
+      ['observe', `${f0}-o1`],
+    ] as const) {
+      const client = attach(['session', verb, helper.id]);
+      await clientOn(view, client);
+      // The terminal goes away under the verb: both it and its client are hung up.
+      client.proc.terminal?.close();
+      expect(await exited(client)).not.toBe(0);
+      expect(await groupsSoon((names) => !names.includes(view))).toEqual([f0]);
+    }
+    expect(session(ward(['session', 'show', helper.id, '--json'])).live?.state).toBe('live');
+  });
+
   test('attach and observe refuse a caller with no terminal, changing nothing', () => {
     const opened = session(ward(['session', 'open', '--detach', '--json']));
     for (const verb of ['attach', 'observe']) {

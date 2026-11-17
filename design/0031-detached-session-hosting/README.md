@@ -527,7 +527,10 @@ say what changed.
     **view**: a tmux session grouped with the floor host (`new-session -t`), sharing its windows but
     holding its own current window, stamped `@ward_view` and set `destroy-unattached on` so it
     vanishes when its client leaves; the session's window is selected in the view and the caller
-    attaches it (or, inside tmux, `switch-client`s to it). The human lands on the session's window
+    attaches it (or, inside tmux, `switch-client`s to it). (Since 2026-11-16 a view whose client
+    attaches is ended by Ward once the client has returned, and only a switched client's view is
+    left to `destroy-unattached`: tmux destroys such a session under a client still on its way out,
+    and dies of it — the build log's entry of that date.) The human lands on the session's window
     with the whole floor — and the coordinator — a keystroke away. The alternative — attach the
     floor host directly and `select-window` — is attractive for leaving no extra tmux session
     behind, and loses to the yank. The cost: while a human is attached, a view appears in `tmux ls`
