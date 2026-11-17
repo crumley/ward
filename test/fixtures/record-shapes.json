@@ -1,0 +1,554 @@
+{
+  "format": 1,
+  "shapes": {
+    "baselines": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "baselines"
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sha256": {
+                "type": "string",
+                "minLength": 64,
+                "maxLength": 64
+              },
+              "wardVersion": {
+                "type": "string",
+                "minLength": 1
+              },
+              "installedAt": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "path",
+              "sha256",
+              "wardVersion",
+              "installedAt"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "type",
+        "artifacts"
+      ],
+      "additionalProperties": false
+    },
+    "brief": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "brief"
+        },
+        "for": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "session": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "for",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    },
+    "catalog": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "catalog"
+        },
+        "artifactTypes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "name",
+              "description"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "type",
+        "artifactTypes"
+      ],
+      "additionalProperties": false
+    },
+    "project": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "project"
+        },
+        "floor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "slug": {
+          "type": "string",
+          "minLength": 1
+        },
+        "standing": {
+          "type": "boolean",
+          "const": true
+        },
+        "previousFloor": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "repositories": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "active",
+            "paused",
+            "closed"
+          ]
+        },
+        "openedAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "closedAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "color": {
+          "type": "string",
+          "enum": [
+            "blue",
+            "green",
+            "orange",
+            "purple",
+            "yellow",
+            "teal",
+            "red",
+            "pink",
+            "brown",
+            "gray",
+            "silver"
+          ]
+        },
+        "emoji": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "floor",
+        "slug",
+        "state",
+        "openedAt"
+      ],
+      "additionalProperties": false
+    },
+    "repository": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "repository"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "remote": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mainLine": {
+          "type": "string",
+          "minLength": 1
+        },
+        "registeredAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "checkout": {
+          "type": "string",
+          "const": "external"
+        }
+      },
+      "required": [
+        "type",
+        "name",
+        "remote",
+        "mainLine",
+        "registeredAt"
+      ],
+      "additionalProperties": false
+    },
+    "session": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "session"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "workspace",
+            "project",
+            "task"
+          ]
+        },
+        "task": {
+          "type": "string",
+          "minLength": 1
+        },
+        "floor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workingDirectory": {
+          "type": "string",
+          "minLength": 1
+        },
+        "handle": {
+          "type": "string",
+          "minLength": 1
+        },
+        "machine": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "effort": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parent": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "open",
+            "closed"
+          ]
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": [
+                  "opened",
+                  "resumed",
+                  "resume-failed",
+                  "attached",
+                  "observed",
+                  "closed"
+                ]
+              },
+              "at": {
+                "type": "string",
+                "minLength": 1
+              },
+              "cause": {
+                "type": "string",
+                "minLength": 1
+              },
+              "host": {
+                "type": "string",
+                "enum": [
+                  "tmux"
+                ]
+              }
+            },
+            "required": [
+              "event",
+              "at"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "openedAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "closedAt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "purpose",
+        "workingDirectory",
+        "state",
+        "openedAt"
+      ],
+      "additionalProperties": false
+    },
+    "task": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "task"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "slug": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "active",
+            "paused",
+            "closed"
+          ]
+        },
+        "floor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stewardship": {
+          "type": "string",
+          "enum": [
+            "upgrade"
+          ]
+        },
+        "repositories": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "prs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "delivered",
+            "abandoned"
+          ]
+        },
+        "openedAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "closedAt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "code",
+        "slug",
+        "state",
+        "prs",
+        "openedAt"
+      ],
+      "additionalProperties": false
+    },
+    "workspace": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "workspace"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "wardVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mainLine": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agent": {
+          "type": "object",
+          "properties": {
+            "harness": {
+              "type": "string",
+              "enum": [
+                "claude",
+                "pi"
+              ]
+            },
+            "host": {
+              "type": "string",
+              "enum": [
+                "foreground",
+                "tmux"
+              ]
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1
+            },
+            "effort": {
+              "type": "string",
+              "minLength": 1
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "command": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{16,64}$"
+        },
+        "format": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "name",
+        "wardVersion",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    },
+    "worktree": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "worktree"
+        },
+        "repo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "const": "workspace"
+        },
+        "branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "disposition": {
+          "type": "string",
+          "const": "deliverable"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "machine": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "branch",
+        "disposition",
+        "path",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

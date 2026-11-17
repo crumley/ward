@@ -15,6 +15,7 @@ import { floats } from '../agent/placement.ts';
 import { searchOrder } from '../global/locate.ts';
 import { readMachine } from '../global/machine.ts';
 import { listWorkspaces, resolutionOrder } from '../global/registry.ts';
+import { formatReadable } from '../store/format.ts';
 import { sessionScopeOf } from '../store/types.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
 import { listRepositoryNames } from '../workspace/repos.ts';
@@ -72,6 +73,9 @@ export async function candidates(
 export async function repoCandidates(from: string): Promise<readonly Candidate[]> {
   const found = new Map<string, string>();
   for (const workspace of await searchOrder(from)) {
+    // A workspace that needs a newer Ward offers nothing
+    // (design/0066-workspace-format-guard/): `repo path` would refuse it.
+    if (!formatReadable(workspace.path)) continue;
     for (const name of listRepositoryNames(workspace.path)) {
       if (!found.has(name)) found.set(name, workspace.name);
     }
@@ -126,7 +130,7 @@ export async function coordinatorCandidates(
 ): Promise<readonly Candidate[]> {
   const root =
     discoverWorkspace(resolve(from)) ?? resolutionOrder(await listWorkspaces())[0]?.path ?? null;
-  if (root === null) return [];
+  if (root === null || !formatReadable(root)) return [];
   const here = (await readMachine()).name;
   return (await readOpenSessions(root))
     .map((listing) => listing.record)

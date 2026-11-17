@@ -44,6 +44,7 @@ import {
   inspectInstalledShellArtifacts,
 } from '../shell/installed.ts';
 import { type DocumentType, readDocument } from '../store/document.ts';
+import { checkFormat, FORMAT_LEVEL, type FormatVerdict } from '../store/format.ts';
 import { inspectLock, inspectStoreLock } from '../store/lock.ts';
 import {
   baselinesType,
@@ -124,6 +125,20 @@ export interface DoctorReport {
    * arrangement `machineName` uses.
    */
   readonly workspaceId: string | null;
+  /**
+   * The format guard's two numbers (design/0066-workspace-format-guard/):
+   * the highest level this Ward reads — a fact about the binary, so answered
+   * anywhere — and the level the workspace underfoot records, null outside a
+   * workspace and where the marker is one this Ward cannot interpret.
+   * `readable: false` is the one state in which `workspace` holds a single
+   * finding and every other workspace field is null. Structure beside the
+   * `workspace format` finding, so an agent routes on it rather than on prose.
+   */
+  readonly format: {
+    readonly reads: number;
+    readonly workspace: number | null;
+    readonly readable: boolean;
+  };
   readonly healthy: boolean;
 }
 
@@ -135,9 +150,20 @@ export async function runDoctor(cwd: string): Promise<DoctorReport> {
   const name = machineName(config.config.machine);
   const machine = await machineChecks(cwd, config, name);
   const workspaceRoot = discoverWorkspace(cwd);
+  // A workspace that needs a newer Ward gets one finding and no others
+  // (design/0066-workspace-format-guard/): every other check reads a record
+  // this Ward may misread, and a list of findings derived from misread records
+  // would bury the one that explains them all. The machine checks above still
+  // ran — they are about this computer, and still true.
+  const verdict = workspaceRoot === null ? null : checkFormat(workspaceRoot);
   const inside =
-    workspaceRoot === null ? null : await workspaceChecks(workspaceRoot, config.config);
-  const workspace = inside?.findings ?? [];
+    workspaceRoot === null || verdict?.readable === false
+      ? null
+      : await workspaceChecks(workspaceRoot, config.config);
+  const workspace =
+    verdict?.readable === false
+      ? [{ check: 'workspace format', severity: 'error' as const, message: verdict.message }]
+      : (inside?.findings ?? []);
   const healthy = [...machine, ...workspace].every((finding) => finding.severity !== 'error');
   return {
     machine,
@@ -146,6 +172,11 @@ export async function runDoctor(cwd: string): Promise<DoctorReport> {
     agent: inside?.agent ?? null,
     machineName: name,
     workspaceId: inside?.workspaceId ?? null,
+    format: {
+      reads: FORMAT_LEVEL,
+      workspace: verdict === null ? null : recordedLevel(verdict),
+      readable: verdict?.readable !== false,
+    },
     healthy,
   };
 }
@@ -639,6 +670,7 @@ async function workspaceChecks(
               'artifact-only skew, nothing blocked',
           },
     );
+    findings.push(formatFinding(record.format ?? 0));
     findings.push(workspaceIdFinding(record.id));
   }
 
@@ -1748,6 +1780,39 @@ async function briefFindings(root: string): Promise<Finding[]> {
 }
 
 /** Read and validate one record, converting failures into findings. */
+/**
+ * The format level the workspace records against the one this Ward reads
+ * (design/0066-workspace-format-guard/). A workspace above this Ward never
+ * reaches here — `runDoctor` reports that as its only finding. Below it is a
+ * warning with the one remedy: nothing is blocked for this Ward, but until
+ * the upgrade raises the level, an older Ward sharing this workspace is not
+ * told to keep away from whatever this one writes.
+ */
+/** The level a verdict found recorded, or null when the marker could not be interpreted. */
+function recordedLevel(verdict: FormatVerdict): number | null {
+  if (verdict.readable) return verdict.level;
+  return verdict.recorded.state === 'level' ? verdict.recorded.level : null;
+}
+
+function formatFinding(level: number): Finding {
+  const check = 'workspace format';
+  if (level >= FORMAT_LEVEL) {
+    return {
+      check,
+      severity: 'ok',
+      message: `format ${level} — this ward reads up to ${FORMAT_LEVEL}`,
+    };
+  }
+  return {
+    check,
+    severity: 'warn',
+    message:
+      `the workspace records format ${level} and this ward writes format ${FORMAT_LEVEL} — ` +
+      'raise it, so an older ward on another machine refuses instead of misreading: ' +
+      'ward workspace upgrade',
+  };
+}
+
 async function checkDocument<T>(
   findings: Finding[],
   root: string,

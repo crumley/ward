@@ -426,6 +426,17 @@ export const doctorShape = z.strictObject({
   machineName: doctorMachineShape,
   /** The workspace's immutable id (0054); null outside a workspace or before it is minted. */
   workspaceId: z.string().nullable(),
+  /**
+   * The format guard (0066): the highest workspace format this ward reads; the
+   * level the workspace underfoot records (null outside one, or when its
+   * marker cannot be interpreted); and whether this ward may read it. When
+   * `readable` is false, `workspace` holds the one finding that says so.
+   */
+  format: z.strictObject({
+    reads: z.number().int(),
+    workspace: z.number().int().nullable(),
+    readable: z.boolean(),
+  }),
   /** Null outside a workspace, where only half the resolution exists. */
   agent: doctorAgentShape.nullable(),
   machine: z.array(findingShape),

@@ -836,6 +836,7 @@ export function doctorJson(report: DoctorReport): DoctorShape {
     workspaceRoot: report.workspaceRoot,
     machineName: { name: report.machineName.name, source: report.machineName.source },
     workspaceId: report.workspaceId,
+    format: { ...report.format },
     agent: report.agent === null ? null : agentConfigJson(report.agent),
     machine: report.machine.map(finding),
     workspace: report.workspace.map(finding),

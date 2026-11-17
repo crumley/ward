@@ -21,6 +21,7 @@ import { basename, join } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
+import { FORMAT_LEVEL, levelsCrossed } from '../store/format.ts';
 import { withStoreLock } from '../store/lock.ts';
 import {
   baselinesType,
@@ -133,6 +134,7 @@ export async function convergeWorkspace(root: string): Promise<ConvergeReport> {
   await withStoreLock(root, 'workspace converge', async () => {
     steps.push(await establishMarker(ctx));
     steps.push(await establishWorkspaceRecord(ctx));
+    steps.push(await establishFormat(ctx));
     steps.push(await establishWorkspaceId(ctx));
     steps.push(await establishCatalog(ctx));
     steps.push(await establishAgentsGuidance(ctx));
@@ -189,6 +191,40 @@ async function establishWorkspaceRecord(ctx: ConvergeContext): Promise<StepRepor
   });
   ctx.establishedPaths.push(relPath);
   return { step, outcome: 'established', detail: relPath };
+}
+
+/**
+ * The format level the record needs of its reader
+ * (design/0066-workspace-format-guard/): raised to this Ward's level when the
+ * workspace is below it. It is the second step, ahead of every step that
+ * writes a record, and rides the same journal commit as all of them — so a
+ * shape this Ward introduced and the marker that tells an older Ward to keep
+ * away reach the main line together, and no commit ever holds the first
+ * without the second. The step's detail is the upgrade's own account of what
+ * the raise costs: what a Ward that reads only the levels below can no longer
+ * do here. A record this run has just written is born at the level: nothing
+ * older ever read it, so there is nothing to say about what the raise costs.
+ * A workspace above this Ward's level never gets this far — the read of the
+ * workspace record in the step before has already refused it.
+ */
+async function establishFormat(ctx: ConvergeContext): Promise<StepReport> {
+  const step = 'workspace format';
+  const existing = await readDocument(ctx.root, workspaceRecordType);
+  const from = existing.data.format ?? 0;
+  if (from >= FORMAT_LEVEL) return { step, outcome: 'satisfied', detail: `format ${from}` };
+  const born = ctx.establishedPaths.includes(workspaceRecordType.relPath);
+  await writeDocument(ctx.root, workspaceRecordType, {
+    data: { ...existing.data, format: FORMAT_LEVEL },
+    body: existing.body,
+  });
+  if (!ctx.establishedPaths.includes(workspaceRecordType.relPath)) {
+    ctx.establishedPaths.push(workspaceRecordType.relPath);
+  }
+  if (born) return { step, outcome: 'established', detail: `format ${FORMAT_LEVEL}` };
+  const older = levelsCrossed(from, FORMAT_LEVEL)
+    .map((entry) => entry.older)
+    .join('; ');
+  return { step, outcome: 'established', detail: `format ${from} → ${FORMAT_LEVEL} — ${older}` };
 }
 
 /**

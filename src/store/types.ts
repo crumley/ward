@@ -57,6 +57,17 @@ export const workspaceRecordSchema = z.object({
    * beside the version stamp an upgrade's stewardship commit rewrites.
    */
   id: z.string().regex(WORKSPACE_ID_PATTERN).optional(),
+  /**
+   * The format level this workspace's record needs of the Ward that reads it
+   * (design/0066-workspace-format-guard/). Written at creation and raised by
+   * `ward workspace upgrade`; a Ward that reads less refuses the workspace
+   * before parsing anything. The guard reads this line by itself
+   * (src/store/format.ts), never through this schema, so it keeps working on
+   * a record whose shape has otherwise moved on. Absent means level 0 — every
+   * record written before the marker. Last in the shape, so the line a raise
+   * appends lands at the end, clear of the lines other writes touch.
+   */
+  format: z.number().int().nonnegative().optional(),
 });
 export type WorkspaceRecord = z.infer<typeof workspaceRecordSchema>;
 
