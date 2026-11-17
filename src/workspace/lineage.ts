@@ -361,8 +361,15 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '7aed6ca799564ee829e8e80b5efacd03d5c262eb28e6fa3095a73b007a9d650d',
         era: 'design 0069 (floor reflection)',
       },
-      // Current since design 0070: a run that exits cleanly closes its own
-      // window, and only a failed or killed one is kept.
+      // design 0070 — a run that exits cleanly closes its own window, and only
+      // a failed or killed one is kept. The manifest did not yet name the bulk
+      // resume.
+      {
+        sha256: '90dd5fd955002845c526981ff75be53e917a2efaa27c00851e8a8817bc24ac30',
+        era: 'design 0070 (a clean exit closes its window)',
+      },
+      // Current since design 0068 (built after 0070): `ward session resume
+      // --all`, the plan and `--go`, in the Detached sessions section.
     ],
   },
 ];

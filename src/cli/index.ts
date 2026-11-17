@@ -22,6 +22,14 @@ import {
 } from '../agent/host.ts';
 import { type Dressed, dressFloor } from '../agent/naming.ts';
 import { dispatchNotice, type Nudge, nudgeFloor } from '../agent/nudge.ts';
+import {
+  type EnactedSession,
+  enactResumeAll,
+  leftBroken,
+  planResumeAll,
+  type ResumePlan,
+  tally,
+} from '../agent/resume-all.ts';
 import { type HostedRun, launchSession, locateSession, resumeSession } from '../agent/run.ts';
 import { WardError } from '../errors.ts';
 import { type PrForgeState, probeForge } from '../forge/gh.ts';
@@ -182,6 +190,7 @@ import {
   repoRemoveJson,
   sessionLocateJson,
   sessionMutationJson,
+  sessionResumeAllJson,
   shellAdoptJson,
   statusJson,
   taskBriefJson,
@@ -303,13 +312,14 @@ function foregroundFlag() {
   });
 }
 
+function onExitOption() {
+  return option('--on-exit', choice(['ask', 'keep', 'close']), {
+    description: message`When the run exits: ask whether to close the session (default, humans at a terminal only), keep it open, or close it.`,
+  });
+}
+
 function onExitFlag() {
-  return withDefault(
-    option('--on-exit', choice(['ask', 'keep', 'close']), {
-      description: message`When the run exits: ask whether to close the session (default, humans at a terminal only), keep it open, or close it.`,
-    }),
-    'ask' as const,
-  );
+  return withDefault(onExitOption(), 'ask' as const);
 }
 
 const workspaceCreate = command(
@@ -1018,13 +1028,27 @@ const session = command(
       'resume',
       object({
         action: constant('session-resume'),
-        id: argument(sessionId()),
+        id: optional(argument(sessionId())),
+        all: option('--all', {
+          description: message`Every open session whose latest run was hosted, instead of one ID: print the plan — what would come back, coordinator first, then floor by floor — and start nothing.`,
+        }),
+        go: option('--go', {
+          description: message`With --all: enact the plan — start every session it marks resume, detached, one after another.`,
+        }),
+        floor: optional(
+          option('--floor', floorNumber(), {
+            description: message`With --all: only the sessions whose window belongs in this floor's host.`,
+          }),
+        ),
         detach: detachFlag(),
         foreground: foregroundFlag(),
-        onExit: onExitFlag(),
+        // Optional here, not defaulted: --all must tell "not given" from "ask".
+        onExit: optional(onExitOption()),
         json: jsonFlag(),
       }),
-      { brief: message`Re-attach to a session's agent run, in the directory it ran in.` },
+      {
+        brief: message`Re-attach to a session's agent run, in the directory it ran in — or, with --all, plan and bring back every hosted session.`,
+      },
     ),
     command('attach', object({ action: constant('session-attach'), id: argument(sessionId()) }), {
       brief: message`Join a detached session's live window, taking part — re-created from the record when it is gone.`,
@@ -1568,14 +1592,20 @@ try {
           result.json,
         );
         break;
-      case 'session-resume':
+      case 'session-resume': {
+        const id = resumeTarget(result);
+        if (id === undefined) {
+          await cmdSessionResumeAll(result.go, result.floor, result.json);
+          break;
+        }
         await cmdSessionResume(
-          result.id,
+          id,
           hostFlagOf(result.detach, result.foreground),
-          result.onExit,
+          result.onExit ?? 'ask',
           result.json,
         );
         break;
+      }
       case 'session-attach':
         await cmdSessionJoin('attach', result.id);
         break;
@@ -3344,6 +3374,231 @@ async function cmdSessionResume(
   }
   await afterRun(root, record.id, onExit, json);
   if (run.exitCode !== 0) await exitWhenFlushed(run.exitCode);
+}
+
+/** What `session resume` was handed, before it is known to be one session or all of them. */
+interface ResumeArgs {
+  readonly id: string | undefined;
+  readonly all: boolean;
+  readonly go: boolean;
+  readonly floor: number | undefined;
+  readonly detach: boolean;
+  readonly foreground: boolean;
+  readonly onExit: OnExit | undefined;
+}
+
+/**
+ * Which resume this is (design/0068-bulk-session-resume/): the ID of the one
+ * session, or undefined for `--all`. The two forms share a verb and not their
+ * flags, so every combination that means nothing is refused here, by name,
+ * before anything is read — a bulk resume that quietly ignored `--foreground`
+ * or an ID would be doing something other than what was typed.
+ */
+function resumeTarget(args: ResumeArgs): string | undefined {
+  const plan = 'ward session resume --all';
+  if (!args.all) {
+    const stray = args.go ? '--go' : args.floor !== undefined ? '--floor' : undefined;
+    if (stray !== undefined) {
+      throw new WardError(
+        `${stray} belongs to the bulk resume — ${plan} prints what would come back, ` +
+          `and ${plan} --go starts it${args.id === undefined ? '' : `; one session is ward session resume ${args.id}`}`,
+      );
+    }
+    if (args.id === undefined) {
+      throw new WardError(
+        `name the session to resume (ward session resume ID — ids are in ward status), ` +
+          `or see what a bulk resume would bring back: ${plan}`,
+      );
+    }
+    return args.id;
+  }
+  if (args.id !== undefined) {
+    throw new WardError(
+      `--all resumes every hosted session and ${args.id} names one — pass one or the other: ` +
+        `ward session resume ${args.id}, or ${plan}`,
+    );
+  }
+  if (args.foreground) {
+    throw new WardError(
+      '--all hosts every run detached — one terminal cannot hold several runs in the ' +
+        'foreground. Resume one session here with: ward session resume ID --foreground',
+    );
+  }
+  if (args.onExit !== undefined) {
+    throw new WardError(
+      '--on-exit answers for a foreground run when it exits — --all starts detached runs and ' +
+        'returns while they are going, so there is no exit to answer for',
+    );
+  }
+  // `--detach` beside `--all` says what is already true, and is let through.
+  return undefined;
+}
+
+/**
+ * `session resume --all` (design/0068-bulk-session-resume/) — the plan, and
+ * with `--go` its enactment. The bare form is a read: it prints, floor by
+ * floor, what would come back, and writes nothing. `--go` walks the same plan
+ * and prints each session as it is settled, so a human watching sees the
+ * floors come back in order; under `--json` the one document is emitted at
+ * the end, because it is the report of the whole run.
+ *
+ * The verdict is the exit code's, as `worktree rebase` set the precedent: the
+ * verb ran and reported, and exits 1 when something it tried — or could not
+ * read — is not running.
+ */
+async function cmdSessionResumeAll(
+  go: boolean,
+  floor: number | undefined,
+  json: boolean,
+): Promise<void> {
+  const root = go ? await requireMutableWorkspace() : await requireWorkspace();
+  const plan = await planResumeAll(root, { floor });
+  const floors = new Map(
+    (await readProjects(root)).map(({ record }) => [
+      record.floor,
+      `${floorGlyph(record)}${record.slug}`,
+    ]),
+  );
+  const width = Math.max(0, ...plan.sessions.map(({ record }) => record.id.length));
+  let heading: string | undefined;
+  const row = (session: EnactedSession) => {
+    if (json) return;
+    const under = session.floats
+      ? 'coordinator'
+      : `floor ${session.floor} — ${floors.get(session.floor) ?? '?'}`;
+    if (under !== heading) console.log(pc.bold(under));
+    heading = under;
+    console.log(
+      `  ${resumeWord(session)} ${session.record.id.padEnd(width)}  ${resumeNote(session)}`,
+    );
+  };
+  if (!json) console.log(resumeLead(plan, go));
+  const sessions = go
+    ? await enactResumeAll(root, plan, { onSession: row })
+    : plan.sessions.map((session) => {
+        row(session);
+        return session;
+      });
+  if (json) printJson(sessionResumeAllJson(plan, sessions, go));
+  else for (const line of resumeClosing(plan, sessions, go)) console.log(line);
+  if (go && leftBroken(sessions)) await exitWhenFlushed(1);
+}
+
+/** The line above the rows: what this is, and — for a plan — that nothing happened. */
+function resumeLead(plan: ResumePlan, go: boolean): string {
+  const where = plan.floor === undefined ? '' : `, floor ${plan.floor} only`;
+  if (plan.sessions.length === 0) {
+    return `no open session on ${plan.machine} was hosted detached${where} — nothing to resume`;
+  }
+  if (go && !plan.sessions.some((session) => session.step === 'resume')) {
+    return `nothing to resume on ${plan.machine}${where} — where things stand:`;
+  }
+  return go
+    ? `resuming on ${plan.machine}${where}, one after another:`
+    : `${pc.bold('plan')} — nothing was started. On ${plan.machine}${where}, in the order they would come back:`;
+}
+
+/** The row's one word: the outcome once attempted, the plan's step otherwise. */
+function resumeWord(session: EnactedSession): string {
+  const word = session.outcome ?? session.step;
+  const paint = {
+    resume: pc.cyan,
+    resumed: pc.green,
+    live: pc.dim,
+    gone: pc.yellow,
+    elsewhere: pc.dim,
+    unknown: pc.yellow,
+    exited: pc.red,
+    failed: pc.red,
+  }[word];
+  // Padded to the longest word, `elsewhere`, so the ids line up.
+  return paint(word.padEnd('elsewhere'.length));
+}
+
+function resumeNote(session: EnactedSession): string {
+  switch (session.outcome) {
+    case 'resumed':
+      return pc.dim(`${session.group ?? '?'}, window ${session.live.window ?? '?'}`);
+    case 'exited':
+      return `${session.cause ?? 'ended'} — see: ward session show ${session.record.id}`;
+    case 'failed':
+      return session.cause ?? 'did not start';
+    default:
+      return session.step === 'resume'
+        ? `${pc.dim(session.detail)}  ${session.record.purpose}`
+        : pc.dim(session.detail);
+  }
+}
+
+/** What follows the rows: the counts, what needs the human, and the next command. */
+function resumeClosing(
+  plan: ResumePlan,
+  sessions: readonly EnactedSession[],
+  go: boolean,
+): string[] {
+  const counts = tally(sessions);
+  const said = (n: number, text: string) => (n === 0 ? [] : [`${n} ${text}`]);
+  const lines: string[] = [];
+  const summary = [
+    ...(go
+      ? [
+          ...said(counts.resumed, 'resumed'),
+          ...said(counts.exited, 'ended at once'),
+          ...said(counts.failed, 'failed'),
+        ]
+      : said(counts.resume, 'to resume')),
+    ...said(counts.live, 'already running'),
+    ...said(counts.gone, 'with no history here'),
+    ...said(counts.elsewhere, 'on another machine'),
+    ...said(counts.unknown, 'could not be read'),
+  ];
+  if (summary.length > 0) lines.push('', `${summary.join(', ')}.`);
+  if (counts.gone > 0) {
+    lines.push(
+      pc.yellow(
+        `${counts.gone === 1 ? '1 session' : `${counts.gone} sessions`} cannot be resumed: the ` +
+          'harness history is gone. Nothing was attempted and no event was written; each stays ' +
+          'open until you close it (ward session close ID) or start a fresh session in its place.',
+      ),
+    );
+  }
+  if (plan.notHosted > 0) {
+    lines.push(
+      pc.dim(
+        `${plan.notHosted} open session${plan.notHosted === 1 ? ' was' : 's were'} not hosted ` +
+          '(run in a terminal, or recorded by its own agent) — Ward cannot see those runs and ' +
+          'starts nothing over them: ward status',
+      ),
+    );
+  }
+  if (plan.outside > 0) {
+    lines.push(
+      pc.dim(`${plan.outside} more hosted on other floors — leave out --floor to plan them all`),
+    );
+  }
+  if (!go && counts.resume > 0) {
+    lines.push(
+      pc.dim(
+        'Every open hosted session is here, including any whose run had already ended before ' +
+          'its host went away: Ward does not store whether a run was going. Close what should ' +
+          'not come back (ward session close ID), then:',
+      ),
+      `start them: ward session resume --all${plan.floor === undefined ? '' : ` --floor ${plan.floor}`} --go`,
+    );
+  }
+  if (go) {
+    const joins = [...new Set(sessions.flatMap((s) => (s.join === undefined ? [] : [s.join])))];
+    for (const join of joins) lines.push(`join: ${join}`);
+    if (leftBroken(sessions)) {
+      lines.push(
+        pc.yellow(
+          'Not everything came back. Each failure is recorded on its session where a run was ' +
+            'attempted; run the plan again to see where things stand: ward session resume --all',
+        ),
+      );
+    }
+  }
+  return lines;
 }
 
 /**

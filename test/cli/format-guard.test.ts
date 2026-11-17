@@ -63,6 +63,8 @@ const REFUSED: ReadonlyArray<readonly [action: string, argv: readonly string[]]>
   ['session-open', ['session', 'open', 'f0t1', '--purpose', 'p', '--handle', 'claude:x']],
   ['session-open', ['session', 'open', '--purpose', 'p', '--handle', 'claude:x']],
   ['session-resume', ['session', 'resume', 'workspace-1@test']],
+  ['session-resume', ['session', 'resume', '--all']],
+  ['session-resume', ['session', 'resume', '--all', '--go', '--json']],
   ['session-attach', ['session', 'attach', 'workspace-1@test']],
   ['session-observe', ['session', 'observe', 'workspace-1@test']],
   ['session-show', ['session', 'show', 'workspace-1@test']],

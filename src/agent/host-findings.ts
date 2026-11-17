@@ -168,10 +168,12 @@ function inventoryFindings(
   }
 
   // -- every open hosted session against its window ---------------------------
+  let notRunning = 0;
   for (const listing of sessions) {
     const { record } = listing;
     if (record.state !== 'open' || hostedBy(record) !== kind) continue;
     const window = verified.get(record.id)?.[0];
+    if (window === undefined || window.dead) notRunning += 1;
     if (window === undefined) {
       findings.push({
         check: WINDOWS,
@@ -217,6 +219,19 @@ function inventoryFindings(
         });
       }
     }
+  }
+
+  // Several at once is what a reboot leaves: one line names the bulk verb,
+  // whose bare form only prints what would come back
+  // (design/0068-bulk-session-resume/). One alone has its attach line above.
+  if (notRunning > 1) {
+    findings.push({
+      check: WINDOWS,
+      severity: 'info',
+      message:
+        `${notRunning} sessions are not running — see what would come back, and bring them ` +
+        'back together: ward session resume --all',
+    });
   }
 
   findings.push(...hostShapeFindings(host, inventory.groups, inOurs, ours, byId, workspace));

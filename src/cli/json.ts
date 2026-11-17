@@ -14,6 +14,7 @@
 import type { LiveState, Teardown } from '../agent/host.ts';
 import type { Dressed } from '../agent/naming.ts';
 import type { Nudge } from '../agent/nudge.ts';
+import { type EnactedSession, type ResumePlan, tally } from '../agent/resume-all.ts';
 import type { SessionLocation } from '../agent/run.ts';
 import type { AgentProvenance, Resolved } from '../agent/settings.ts';
 import type { PrForgeState } from '../forge/gh.ts';
@@ -79,6 +80,7 @@ import type {
   SessionLiveShape,
   SessionLocateShape,
   SessionMutationShape,
+  SessionResumeAllShape,
   ShellAdoptShape,
   StatusSessionShape,
   StatusShape,
@@ -861,6 +863,40 @@ export function sessionMutationJson(
             detail: overlay.teardown.detail,
           },
         }),
+  };
+}
+
+/** `ward session resume --all` (design/0068-bulk-session-resume/): the plan, enacted or not. */
+export function sessionResumeAllJson(
+  plan: ResumePlan,
+  sessions: readonly EnactedSession[],
+  enacted: boolean,
+): SessionResumeAllShape {
+  return {
+    machine: plan.machine,
+    enacted,
+    kind: plan.kind,
+    ...(plan.floor === undefined ? {} : { floor: plan.floor }),
+    sessions: sessions.map((session) => ({
+      id: session.record.id,
+      scope: sessionScopeOf(session.record),
+      ...(session.record.task === undefined ? {} : { task: session.record.task }),
+      purpose: session.record.purpose,
+      ...(session.record.machine === undefined ? {} : { machine: session.record.machine }),
+      floor: session.floor,
+      floats: session.floats,
+      step: session.step,
+      detail: session.detail,
+      ...(session.outcome === undefined ? {} : { outcome: session.outcome }),
+      ...(session.cause === undefined ? {} : { cause: session.cause }),
+      live: liveJson({
+        ...session.live,
+        ...(session.join === undefined ? {} : { join: session.join }),
+      }),
+    })),
+    notHosted: plan.notHosted,
+    outside: plan.outside,
+    summary: tally(sessions),
   };
 }
 

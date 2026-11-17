@@ -1220,6 +1220,67 @@ export const sessionMutationShape = z.strictObject({
 export type SessionMutationShape = z.infer<typeof sessionMutationShape>;
 
 /**
+ * `ward session resume --all` (design/0068-bulk-session-resume/): the plan,
+ * and — when `enacted` — what became of it, in one document. `sessions` lists
+ * every open session whose latest launch was hosted, in the order they are
+ * resumed: the coordinator, then floor by floor. `step` is what the plan says
+ * of each; `outcome` is present exactly on a `resume` row of an enacted run.
+ * The per-session events (`resumed`, `resume-failed`) are the durable record;
+ * this document is the run's report of them.
+ */
+export const sessionResumeAllShape = z.strictObject({
+  /** The machine the plan is an answer about. */
+  machine: z.string(),
+  /** False for the plan alone — nothing was started; true when `--go` enacted it. */
+  enacted: z.boolean(),
+  kind: z.enum(['tmux']),
+  /** The `--floor` narrowing, when one was given. */
+  floor: z.number().int().nonnegative().optional(),
+  sessions: z.array(
+    z.strictObject({
+      id: z.string(),
+      scope: z.enum(['workspace', 'project', 'task']),
+      task: z.string().optional(),
+      purpose: z.string(),
+      machine: z.string().optional(),
+      /** The floor whose host its window belongs in. */
+      floor: z.number().int().nonnegative(),
+      /** The coordinator: linked into every floor host, resumed first. */
+      floats: z.boolean(),
+      step: z.enum(['resume', 'live', 'gone', 'elsewhere', 'unknown']),
+      /** Why the step is what it is. */
+      detail: z.string(),
+      outcome: z.enum(['resumed', 'exited', 'failed']).optional(),
+      /** Why an attempt failed, or how a placed run ended. */
+      cause: z.string().optional(),
+      /** The window as last read: by the plan, or a beat after an attempt placed it. */
+      live: sessionLiveShape,
+    }),
+  ),
+  /** Open sessions whose latest run was not hosted — counted, never resumed here. */
+  notHosted: z.number().int().nonnegative(),
+  /** Open hosted sessions the `--floor` narrowing left out. */
+  outside: z.number().int().nonnegative(),
+  summary: z.strictObject({
+    resume: z.number().int().nonnegative(),
+    live: z.number().int().nonnegative(),
+    gone: z.number().int().nonnegative(),
+    elsewhere: z.number().int().nonnegative(),
+    unknown: z.number().int().nonnegative(),
+    resumed: z.number().int().nonnegative(),
+    exited: z.number().int().nonnegative(),
+    failed: z.number().int().nonnegative(),
+  }),
+});
+export type SessionResumeAllShape = z.infer<typeof sessionResumeAllShape>;
+
+/**
+ * `ward session resume`: one session's record (`ID`), or the bulk document
+ * (`--all`). The two are told apart by `sessions`, which only the bulk one has.
+ */
+export const sessionResumeShape = z.union([sessionMutationShape, sessionResumeAllShape]);
+
+/**
  * `ward shell adopt <shell>` (design/0027-shell-adoption/): the offering and
  * the write report in one document, because they are one verb's answer —
  * naming nothing lists what is offered (`offeredOnly: true`, every shorthand
@@ -1385,7 +1446,7 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'task dispatch': taskDispatchShape,
   'worktree rebase': worktreeRebaseShape,
   'session open': sessionMutationShape,
-  'session resume': sessionMutationShape,
+  'session resume': sessionResumeShape,
   'session close': sessionMutationShape,
   'workspace merge': workspaceMergeShape,
   'workspace restore': workspaceRestoreShape,
