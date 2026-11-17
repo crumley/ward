@@ -90,6 +90,16 @@ import {
 } from '../workspace/projects.ts';
 import type { Publication } from '../workspace/publish.ts';
 import {
+  openReflection,
+  REFLECTION_HINT_THRESHOLD,
+  type ReflectionAct,
+  type ReflectionHint,
+  type ReflectionPacket,
+  recordReflection,
+  reflectionHint,
+  reflectionPacket,
+} from '../workspace/reflection.ts';
+import {
   addRepository,
   listRepositories,
   refreshRepositories,
@@ -133,7 +143,14 @@ import {
   refuseStewardshipCopy,
   stewardshipEnclosure,
 } from '../workspace/steward.ts';
-import { addTaskPr, closeTask, openTask, removeTaskPr, setTaskState } from '../workspace/tasks.ts';
+import {
+  addTaskPr,
+  type CloseReport,
+  closeTask,
+  openTask,
+  removeTaskPr,
+  setTaskState,
+} from '../workspace/tasks.ts';
 import { selfServiceUpgrade, type UpgradeReport, upgradeWorkspace } from '../workspace/upgrade.ts';
 import {
   createWorkspaceWorktree,
@@ -155,6 +172,9 @@ import {
   projectListJson,
   projectNoteJson,
   projectOpenJson,
+  reflectionOpenJson,
+  reflectionPacketJson,
+  reflectionRecordJson,
   repoAddJson,
   repoListJson,
   repoPathJson,
@@ -671,6 +691,51 @@ const project = command(
   { brief: message`Operate on projects (floors).` },
 );
 
+// Reflection (design/0069-floor-reflection/): three verbs around a judgement
+// Ward does not make. `packet` says what there is to read, `open` builds the
+// stewardship vehicle, `record` writes down what was covered. Landing is the
+// existing gated merge.
+const reflection = command(
+  'reflection',
+  or(
+    command(
+      'packet',
+      object({
+        action: constant('reflection-packet'),
+        floor: argument(floorNumber('any')),
+        json: jsonFlag(),
+      }),
+      {
+        brief: message`What a floor's reflection would read: closed tasks since the last one, their sessions, and where each history stands.`,
+      },
+    ),
+    command(
+      'open',
+      object({
+        action: constant('reflection-open'),
+        floor: argument(floorNumber('any')),
+        json: jsonFlag(),
+      }),
+      {
+        brief: message`Open a floor's reflection: a ground-floor task and a worktree of the workspace's own repository to propose in.`,
+      },
+    ),
+    command(
+      'record',
+      object({
+        action: constant('reflection-record'),
+        floor: argument(floorNumber('any')),
+        file: argument(string({ metavar: 'FILE' })),
+        json: jsonFlag(),
+      }),
+      {
+        brief: message`Record a floor's reflection from the summary in FILE (- for stdin) and commit it, with the notes changes, on its branch.`,
+      },
+    ),
+  ),
+  { brief: message`Reflect on a floor's finished work, proposed on a stewardship branch.` },
+);
+
 const task = command(
   'task',
   or(
@@ -1055,6 +1120,7 @@ const cli = or(
   workspace,
   repo,
   project,
+  reflection,
   task,
   worktree,
   session,
@@ -1243,6 +1309,55 @@ try {
           `${pc.green('noted')} on floor ${pc.bold(String(report.floor))} — ${report.slug}` +
             pc.dim(` (${report.path}${report.seeded ? ', seeded' : ''})`),
         );
+        break;
+      }
+      case 'reflection-packet': {
+        const packet = await reflectionPacket(await requireWorkspace(), result.floor);
+        if (result.json) {
+          printJson(reflectionPacketJson(packet));
+          break;
+        }
+        renderReflectionPacket(packet);
+        break;
+      }
+      case 'reflection-open': {
+        const report = await openReflection(await requireMutableWorkspace(), result.floor);
+        if (result.json) {
+          printJson(reflectionOpenJson(report));
+          break;
+        }
+        console.log(
+          `${pc.green(report.outcome)} the reflection of floor ${pc.bold(String(report.floor))} — ` +
+            `${report.slug}: task ${pc.bold(report.task)}, branch ${report.branch}\n` +
+            `  ${report.path} ${pc.dim(`(${report.tasks} closed task${report.tasks === 1 ? '' : 's'} to cover)`)}\n` +
+            `  a reflection may change: ${report.editable.join(', ')}`,
+        );
+        renderReflectionActs(report.remaining);
+        break;
+      }
+      case 'reflection-record': {
+        const root = await requireMutableWorkspace();
+        const text =
+          result.file === '-' ? await Bun.stdin.text() : await readSummaryFile(result.file);
+        const report = await recordReflection(root, result.floor, text, declaredSession());
+        if (result.json) {
+          printJson(reflectionRecordJson(report));
+          break;
+        }
+        console.log(
+          `${pc.green(report.outcome)} reflection ${report.number} of floor ` +
+            `${pc.bold(String(report.floor))} — ${report.slug} ` +
+            pc.dim(`(${report.path}, commit ${report.commit} on ${report.branch})`) +
+            `\n  covers ${report.tasks} closed task${report.tasks === 1 ? '' : 's'} and ` +
+            `${report.sessions} session${report.sessions === 1 ? '' : 's'}` +
+            (report.unread.length === 0
+              ? ''
+              : `; ${report.unread.length} with no history readable here`) +
+            (report.changed.length === 0
+              ? '\n  proposes no change to the notes'
+              : `\n  proposes changes to ${report.changed.join(', ')}`),
+        );
+        renderReflectionActs(report.remaining);
         break;
       }
       case 'task-open': {
@@ -2864,14 +2979,95 @@ async function notePendingDispatches(root: string, floor: number | undefined): P
   );
 }
 
+/** A summary file, read relative to where the caller stands, refused legibly when absent. */
+async function readSummaryFile(path: string): Promise<string> {
+  const file = Bun.file(path);
+  if (!(await file.exists())) {
+    throw new WardError(`no file at '${path}' — pass the summary as a file, or - for stdin`);
+  }
+  return file.text();
+}
+
+function renderReflectionActs(acts: readonly ReflectionAct[]): void {
+  console.log('\nNext:');
+  for (const act of acts) {
+    console.log(`  ${pc.bold(act.step)} — ${act.detail}`);
+    if (act.command !== undefined) console.log(`    ${act.command}`);
+  }
+}
+
+function renderReflectionPacket(packet: ReflectionPacket): void {
+  const since =
+    packet.since === undefined
+      ? 'never reflected on'
+      : `since reflection ${packet.since.number} (${packet.since.through})`;
+  console.log(
+    `Floor ${pc.bold(String(packet.floor))} — ${packet.slug}: ${packet.tasks.length} closed ` +
+      `task${packet.tasks.length === 1 ? '' : 's'} to reflect on, ${since}` +
+      pc.dim(` — histories as ${packet.machine} sees them`),
+  );
+  if (packet.vehicle !== undefined) {
+    console.log(
+      `  reflection open: task ${pc.bold(packet.vehicle.task)}` +
+        (packet.vehicle.path === undefined
+          ? ''
+          : `, ${packet.vehicle.path} (branch ${packet.vehicle.branch})`),
+    );
+  }
+  if (packet.notes !== undefined) console.log(pc.dim(`  notes: ${packet.notes}`));
+  const session = (found: ReflectionPacket['floorSessions'][number]): string =>
+    `      ${found.id} [${found.state}] ${renderPacketHistory(found.history)} ` +
+    pc.dim(`— ${found.purpose}`);
+  for (const task of packet.tasks) {
+    console.log(
+      `\n  ${pc.bold(task.slug)} [${task.outcome ?? 'closed'}] ` +
+        pc.dim(`${task.dir}${task.closedAt === undefined ? '' : `, closed ${task.closedAt}`}`),
+    );
+    if (task.brief !== undefined) console.log(pc.dim(`      brief: ${task.brief}`));
+    for (const pr of task.prs) console.log(pc.dim(`      pr: ${pr}`));
+    for (const found of task.sessions) console.log(session(found));
+  }
+  if (packet.floorSessions.length > 0) {
+    console.log("\n  the floor's own sessions");
+    for (const found of packet.floorSessions) console.log(session(found));
+  }
+  if (packet.open.length > 0) {
+    console.log(
+      pc.dim(
+        `\n  still open, not covered: ${packet.open.map((task) => `${task.address} (${task.slug})`).join(', ')}`,
+      ),
+    );
+  }
+  if (packet.tasks.length > 0 && packet.vehicle === undefined) {
+    console.log(`\nOpen it with: ward reflection open ${packet.floor}`);
+  }
+}
+
+function renderPacketHistory(
+  history: ReflectionPacket['floorSessions'][number]['history'],
+): string {
+  switch (history.standing) {
+    case 'found':
+      return `${history.path} (${history.bytes} bytes)`;
+    case 'gone':
+      return pc.yellow('history gone');
+    case 'elsewhere':
+      return pc.yellow('history on another machine');
+    case 'unlocatable':
+      return pc.yellow('no handle to locate');
+  }
+}
+
 async function cmdTaskClose(
   code: string,
   outcome: 'delivered' | 'abandoned',
   json: boolean,
 ): Promise<void> {
-  const report = await closeTask(await requireMutableWorkspace(), code, outcome);
+  const root = await requireMutableWorkspace();
+  const report = await closeTask(root, code, outcome);
+  const hint = await closeHint(root, report);
   if (json) {
-    printJson(taskCloseJson(report));
+    printJson(taskCloseJson(report, hint));
     return;
   }
   console.log(`Closing task ${pc.bold(code)} — ${report.task.record.slug}\n`);
@@ -2880,6 +3076,30 @@ async function cmdTaskClose(
   }
   const verb = outcome === 'delivered' ? pc.green('delivered') : pc.yellow('abandoned');
   console.log(`\nTask ${pc.bold(code)} closed — ${verb}.`);
+  if (hint !== undefined) {
+    console.log(
+      pc.dim(
+        `floor ${hint.floor} has ${hint.unreflected} closed tasks no reflection has covered — ` +
+          `see: ${hint.command}`,
+      ),
+    );
+  }
+}
+
+/**
+ * The reflection hint for a close that has already happened
+ * (design/0069-floor-reflection/). It is advice about the floor, so nothing
+ * that goes wrong reading it may turn a completed close into a failed verb:
+ * any error is no hint. A reflection's own close carries none.
+ */
+async function closeHint(root: string, report: CloseReport): Promise<ReflectionHint | undefined> {
+  const record = report.task.record;
+  if (record.floor === undefined || record.stewardship === 'reflection') return undefined;
+  try {
+    return await reflectionHint(root, record.floor);
+  } catch {
+    return undefined;
+  }
 }
 
 async function cmdWorktreeRebase(root: string, code: string, json: boolean): Promise<void> {
@@ -3441,7 +3661,12 @@ async function cmdStatus(all: boolean, json: boolean): Promise<void> {
       `${pc.bold(`floor ${project.project.floor}`)} — ` +
         `${floorGlyph(project.project)}${project.project.slug}` +
         `${groundFloorNote(project.project)} [${renderState(project.derived)}]` +
-        floorColorCue(project.project),
+        floorColorCue(project.project) +
+        // Said only from the threshold the close hint uses
+        // (design/0069-floor-reflection/): below it, it is not yet worth a glance.
+        (project.unreflected >= REFLECTION_HINT_THRESHOLD
+          ? pc.dim(` · ${project.unreflected} closed tasks unreflected`)
+          : ''),
     );
     // The floor's own sessions lead its row (design/0051-floor-scope-sessions/):
     // whoever is responsible for the floor reads before the work on it.

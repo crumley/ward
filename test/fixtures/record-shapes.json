@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "shapes": {
     "baselines": {
       "type": "object",
@@ -224,6 +224,117 @@
       ],
       "additionalProperties": false
     },
+    "reflection": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "reflection"
+        },
+        "floor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "number": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "task": {
+          "type": "string",
+          "minLength": 1
+        },
+        "session": {
+          "type": "string",
+          "minLength": 1
+        },
+        "machine": {
+          "type": "string",
+          "minLength": 1
+        },
+        "from": {
+          "type": "string",
+          "minLength": 1
+        },
+        "through": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "dir": {
+                "type": "string",
+                "minLength": 1
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "delivered",
+                  "abandoned"
+                ]
+              },
+              "closedAt": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "dir"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "sessions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "closed"
+                ]
+              },
+              "history": {
+                "type": "string",
+                "enum": [
+                  "found",
+                  "gone",
+                  "elsewhere",
+                  "unlocatable"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "state",
+              "history"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "type",
+        "floor",
+        "number",
+        "task",
+        "machine",
+        "through",
+        "tasks",
+        "sessions"
+      ],
+      "additionalProperties": false
+    },
     "repository": {
       "type": "object",
       "properties": {
@@ -416,8 +527,14 @@
         "stewardship": {
           "type": "string",
           "enum": [
-            "upgrade"
+            "upgrade",
+            "reflection"
           ]
+        },
+        "reflects": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "repositories": {
           "type": "array",

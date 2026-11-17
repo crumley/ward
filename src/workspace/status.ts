@@ -7,6 +7,7 @@
 // answers: in-review means ≥1 OPEN PR (intent's exact rule) rather than the
 // has-linked-PRs approximation, and the report carries the derived `needs
 // you` items — nothing stored either way.
+
 import { resolve } from 'node:path';
 import { WardError } from '../errors.ts';
 import type { PrForgeState } from '../forge/gh.ts';
@@ -38,6 +39,7 @@ import {
 import { recordedWorkspaceId } from './identity.ts';
 import { type NextStep, nextStep, prAttention } from './next.ts';
 import { type FoundProject, readProjects } from './projects.ts';
+import { unreflectedCount } from './reflection.ts';
 import { listRepositories } from './repos.ts';
 import { ambiguous, type FoundTask, readTasks } from './scan.ts';
 import { readSessions } from './sessions.ts';
@@ -310,6 +312,12 @@ export interface ProjectStatus {
    */
   readonly sessions: readonly SessionStatus[];
   readonly tasks: readonly TaskStatus[];
+  /**
+   * Closed tasks on the floor no landed reflection has covered
+   * (design/0069-floor-reflection/) — counted over the floor's whole record,
+   * not the window: settled work drops off the glance and is still unread.
+   */
+  readonly unreflected: number;
 }
 
 /**
@@ -434,6 +442,7 @@ export async function statusReport(
       project: project.record,
       derived,
       sessions,
+      unreflected: await unreflectedCount(root, project, tasks),
       tasks: glanceOrder(
         await taskStatuses(root, shown, probe, tasks),
         (status) => status.task.state,

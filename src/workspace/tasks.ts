@@ -69,7 +69,9 @@ export interface OpenTaskOptions {
    * the marker means "Ward built this vehicle", and only Ward's own derivation
    * may say so.
    */
-  readonly stewardship?: 'upgrade';
+  readonly stewardship?: 'upgrade' | 'reflection';
+  /** The floor a reflection task reflects on (design/0069-floor-reflection/). */
+  readonly reflects?: number;
 }
 
 export async function openTask(
@@ -140,6 +142,7 @@ export async function writeOpenedTask(
     floor: options.floor,
     ...(options.purpose === undefined ? {} : { purpose: options.purpose }),
     ...(options.stewardship === undefined ? {} : { stewardship: options.stewardship }),
+    ...(options.reflects === undefined ? {} : { reflects: options.reflects }),
     ...(options.repositories === undefined || options.repositories.length === 0
       ? {}
       : { repositories: [...options.repositories] }),

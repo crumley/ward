@@ -247,6 +247,11 @@ export const statusShape = z.strictObject({
       /** The floor's OWN open sessions (0051) — project scope, not its tasks'. */
       sessions: z.array(statusSessionShape),
       tasks: z.array(statusTaskShape),
+      /**
+       * Closed tasks on the floor no landed reflection has covered (0069),
+       * counted over the floor's whole record, settled work included.
+       */
+      unreflected: z.number().int().nonnegative(),
     }),
   ),
   /** Legacy bare tasks under `tasks/` — read, never written again (0041). */
@@ -693,6 +698,134 @@ export const projectNoteShape = z.strictObject({
 });
 export type ProjectNoteShape = z.infer<typeof projectNoteShape>;
 
+// -- reflection (design/0069-floor-reflection/) ------------------------------
+
+const reflectionActShape = z.strictObject({
+  step: z.string(),
+  detail: z.string(),
+  /** The exact command, where the act has one. */
+  command: z.string().optional(),
+});
+
+const reflectionSessionShape = z.strictObject({
+  id: z.string(),
+  purpose: z.string(),
+  state: z.enum(['open', 'closed']),
+  machine: z.string().optional(),
+  openedAt: z.string(),
+  closedAt: z.string().optional(),
+  /** The session's lifecycle trail, as recorded. */
+  events: z.array(
+    z.strictObject({
+      event: z.string(),
+      at: z.string(),
+      cause: z.string().optional(),
+      host: z.string().optional(),
+    }),
+  ),
+  /**
+   * Where the harness history stands on the machine asked. `path` and
+   * `bytes` are present exactly when `found`: the size is what lets a reader
+   * plan its chunks before opening a file that may run to megabytes.
+   */
+  history: z.strictObject({
+    standing: z.enum(['found', 'gone', 'elsewhere', 'unlocatable']),
+    path: z.string().optional(),
+    bytes: z.number().int().nonnegative().optional(),
+  }),
+});
+
+/**
+ * `reflection packet`: what one floor's reflection would read. With the
+ * floor's reflection open (`vehicle`), `tasks` is exactly what `reflection
+ * record` will write down as covered.
+ */
+export const reflectionPacketShape = z.strictObject({
+  floor: z.number().int().nonnegative(),
+  slug: z.string(),
+  /** The machine asked: every `history` is its answer. */
+  machine: z.string(),
+  /** The floor's last reflection — absent before its first. */
+  since: z
+    .strictObject({ number: z.number().int(), through: z.string(), path: z.string() })
+    .optional(),
+  /** The floor's open reflection, when one is. */
+  vehicle: z
+    .strictObject({ task: z.string(), branch: z.string().optional(), path: z.string().optional() })
+    .optional(),
+  /** Workspace-relative; present while the floor carries a manifest. */
+  notes: z.string().optional(),
+  manifest: z.string().optional(),
+  /** The files a reflection of this floor may change on its branch. */
+  editable: z.array(z.string()),
+  /** Closed tasks no reflection has covered, oldest close first. */
+  tasks: z.array(
+    z.strictObject({
+      /** The task's record directory: what names a closed task for good. */
+      dir: z.string(),
+      slug: z.string(),
+      purpose: z.string().optional(),
+      outcome: z.enum(['delivered', 'abandoned']).optional(),
+      openedAt: z.string(),
+      closedAt: z.string().optional(),
+      prs: z.array(z.string()),
+      brief: z.string().optional(),
+      sessions: z.array(reflectionSessionShape),
+    }),
+  ),
+  /** The floor's own sessions not yet read to their close. */
+  floorSessions: z.array(reflectionSessionShape),
+  /** Tasks still open on the floor: context, not covered. */
+  open: z.array(
+    z.strictObject({
+      address: z.string(),
+      slug: z.string(),
+      state: z.enum(['active', 'paused']),
+      openedAt: z.string(),
+    }),
+  ),
+  /** Sessions in the window whose history is not readable here, by id. */
+  unread: z.array(z.string()),
+});
+export type ReflectionPacketShape = z.infer<typeof reflectionPacketShape>;
+
+/** `reflection open`: the vehicle, built or found. */
+export const reflectionOpenShape = z.strictObject({
+  floor: z.number().int().nonnegative(),
+  slug: z.string(),
+  outcome: z.enum(['opened', 'reused']),
+  /** The stewardship task's address. */
+  task: z.string(),
+  branch: z.string(),
+  /** Workspace-relative path of the stewardship worktree. */
+  path: z.string(),
+  /** Closed tasks the reflection will cover. */
+  tasks: z.number().int().nonnegative(),
+  editable: z.array(z.string()),
+  remaining: z.array(reflectionActShape),
+});
+export type ReflectionOpenShape = z.infer<typeof reflectionOpenShape>;
+
+/** `reflection record`: the record written and the commit that carries it. */
+export const reflectionRecordShape = z.strictObject({
+  floor: z.number().int().nonnegative(),
+  slug: z.string(),
+  number: z.number().int().positive(),
+  outcome: z.enum(['recorded', 'replaced']),
+  task: z.string(),
+  branch: z.string(),
+  /** The record's path, relative to the workspace and to the worktree. */
+  path: z.string(),
+  commit: z.string(),
+  tasks: z.number().int().nonnegative(),
+  sessions: z.number().int().nonnegative(),
+  unread: z.array(z.string()),
+  /** The proposal files the branch carries beside the record. */
+  changed: z.array(z.string()),
+  remaining: z.array(reflectionActShape),
+});
+export type ReflectionRecordShape = z.infer<typeof reflectionRecordShape>;
+
 /**
  * The task record as a mutation wrote it — shared by `task open`, `task
  * pause`, `task resume`, and `task pr`, and carried inside `task close`,
@@ -727,6 +860,18 @@ export const taskCloseShape = z.strictObject({
   task: taskMutationShape,
   outcome: z.enum(['delivered', 'abandoned']),
   steps: z.array(z.strictObject({ step: z.string(), detail: z.string() })),
+  /**
+   * Present when the closed task's floor holds enough closed tasks no
+   * reflection has covered to be worth saying (design/0069-floor-reflection/).
+   * Advice, never a gate: the close above has already happened.
+   */
+  reflection: z
+    .strictObject({
+      floor: z.number().int().nonnegative(),
+      unreflected: z.number().int().positive(),
+      command: z.string(),
+    })
+    .optional(),
 });
 export type TaskCloseShape = z.infer<typeof taskCloseShape>;
 
@@ -1203,6 +1348,7 @@ export const readVerbShapes: Readonly<Record<string, z.ZodType>> = {
 export const argumentReadVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'workspace path': workspacePathShape,
   'repo path': repoPathShape,
+  'reflection packet': reflectionPacketShape,
   'session locate': sessionLocateShape,
   'session show': sessionMutationShape,
   'task show': taskShowShape,
@@ -1224,6 +1370,8 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'project release': projectClaimShape,
   'project identity': projectIdentityShape,
   'project note': projectNoteShape,
+  'reflection open': reflectionOpenShape,
+  'reflection record': reflectionRecordShape,
   'task open': taskMutationShape,
   'task pause': taskMutationShape,
   'task resume': taskMutationShape,
