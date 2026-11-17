@@ -35,8 +35,8 @@ workspace's level is not written until the upgrade raises it.
   record**, and why reads are included — an older reader cannot tell a shape it misreads from one it
   reads — and name what must still answer: enough for a human to learn which Ward this is and that
   it is the thing to change.
-- **Status:** pending — ruled by Ryan 2026-11-16, awaiting the intent edit: an older CLI refuses to
-  read or write a newer record ([#146](https://github.com/crumley/ward/pull/146))
+- **Status:** adjudicated — [#146](https://github.com/crumley/ward/pull/146) (Ryan's ruling,
+  2026-11-16: an older CLI refuses to read or write a newer record)
 
 ## IF-002 — the step that locks older Wards out is journal, and the slice says migration is gated
 
@@ -65,9 +65,8 @@ workspace's level is not written until the upgrade raises it.
   records. Or: raising the level takes the human's own act — refused to a declared agent, or held on
   the stewardship branch — and the slice accepts that convergence must then hold back any shape
   above the workspace's level until that act lands.
-- **Status:** pending — ruled by Ryan 2026-11-16, awaiting the intent edit: raising what the record
-  requires of its reader is convergence, and is announced
-  ([#146](https://github.com/crumley/ward/pull/146))
+- **Status:** adjudicated — [#146](https://github.com/crumley/ward/pull/146) (Ryan's ruling,
+  2026-11-16: raising what the record requires of its reader is convergence, and is announced)
 
 ## IF-003 — "structural writes" by a newer CLI is undefined, and read broadly it stops all work
 
@@ -87,9 +86,8 @@ workspace's level is not written until the upgrade raises it.
 - **Proposed revision:** define the term in the slice in those words, and state the reason for the
   narrow reading beside it: what must wait is the shape the workspace's level does not describe, not
   the work.
-- **Status:** pending — ruled by Ryan 2026-11-16, awaiting the intent edit: a structural write is
-  one carrying a shape the workspace's level does not describe
-  ([#146](https://github.com/crumley/ward/pull/146))
+- **Status:** adjudicated — [#146](https://github.com/crumley/ward/pull/146) (Ryan's ruling,
+  2026-11-16: a structural write is one carrying a shape the workspace's level does not describe)
 
 ## IF-004 — the version stamp is the only thing the record says about its reader, and it cannot
 
