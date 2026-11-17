@@ -549,8 +549,10 @@ say what changed.
     (`link-window -k`), stamped `@ward_view`, `destroy-unattached on`, attached with
     `-f read-only,ignore-size` — read-only enforced by the tmux server, and `ignore-size` so the
     observer's terminal never resizes the agent's window. No neighbor is in the view, and destroying
-    the view only unlinks the window. The cost: the client-flags version floor, and one more
-    transient entry in `tmux ls` while someone watches.
+    the view only unlinks the window. (Since 2026-11-16 the placeholder stays, hidden, beside the
+    linked window, so the view can hand an observer's terminal back when that window goes — the
+    build log's follow-up block has the mechanism and why.) The cost: the client-flags version
+    floor, and one more transient entry in `tmux ls` while someone watches.
   - **Close kills the session's window, and only that. A host's lifetime is tmux's own rule. Nothing
     else ever kills.** The alternative — automatic healing, doctor reaping strays and recovery
     restarting the gone — loses on §18: a sweep spends teardown authority on a heuristic (IF-004

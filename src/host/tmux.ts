@@ -346,7 +346,15 @@ export function attachViewArgv(
   ];
 }
 
-/** An observe view: a tmux session of its own, holding a placeholder the link will replace. */
+/**
+ * An observe view: a tmux session of its own, holding a placeholder window
+ * the watched window is then linked in beside ({@link watchArgv}). The
+ * placeholder STAYS, hidden from the view's window list: it is what keeps
+ * the view standing for the instant after the watched window goes, so the
+ * view's own hook ({@link enterArgv}) can act on the observer while that
+ * client is still in the view it joined — rather than wherever tmux would
+ * have moved it once the view had ended under it.
+ */
 export function observeViewArgv(name: string, workspace: string, title: Titling): string[] {
   return [
     'new-session',
@@ -359,12 +367,47 @@ export function observeViewArgv(name: string, workspace: string, title: Titling)
     String(DETACHED_SIZE.rows),
     '-P',
     '-F',
-    '#{window_index}',
+    '#{window_id}',
     ...HOLD,
     ...setOption(['-t', windowTarget(name)], '@ward_view', workspace),
     ...titleOptions(name, title, 'observe'),
   ];
 }
+
+/**
+ * Show the watched window in an observe view, current, beside its
+ * placeholder — whose entry in the view's window list is emptied, so the
+ * observer's status line names the one window it asked for.
+ */
+export function watchArgv(view: string, placeholder: string, window: string): string[] {
+  return [
+    ...setOption(['-w', '-t', placeholder], 'window-status-format', '').slice(1),
+    ...setOption(['-w', '-t', placeholder], 'window-status-current-format', ''),
+    ';',
+    'link-window',
+    '-s',
+    window,
+    '-t',
+    windowTarget(view),
+    ';',
+    'select-window',
+    '-t',
+    windowTarget(view, window),
+  ];
+}
+
+/**
+ * What an observe view does when the window it watches goes: the view's
+ * current window changes (to the placeholder — the only other one, and no
+ * client of a read-only view can select it), and the hook detaches the
+ * OBSERVER'S OWN client, named by `#{client_name}` as the option is set
+ * (`set-option -F`, run by that client as it joins), then ends the view.
+ * Naming the one client is the point: tmux, ending a floor's host, may have
+ * just moved a participant into this view, and that client must not be
+ * detached with the observer — the view's `detach-on-destroy off` moves it
+ * on to a session still standing when the view ends.
+ */
+export const OBSERVER_LEAVES = 'detach-client -t "#{client_name}" ; kill-session';
 
 /**
  * Join a view. A caller already a client of this server is SWITCHED to it
@@ -381,6 +424,12 @@ export function observeViewArgv(name: string, workspace: string, title: Titling)
  * any — so a single view that detached its clients would drop to the shell
  * whoever had just been moved into it. Every view moving its clients on is
  * what makes the host's own promise hold.
+ *
+ * An OBSERVER is the exception, and it is made per client, not per view: it
+ * asked to watch one window, so when that window goes its terminal returns
+ * to the shell rather than landing, read-only, in a session it never asked
+ * to see. The observe view's hook ({@link OBSERVER_LEAVES}) detaches that
+ * one client by name; the view still moves on anyone else found in it.
  */
 export function enterArgv(view: View, inside: boolean): string[] {
   const target = sessionTarget(view.name);
@@ -398,6 +447,9 @@ export function enterArgv(view: View, inside: boolean): string[] {
     ...join,
     ...setOption(options, 'destroy-unattached', 'on'),
     ...setOption(options, 'detach-on-destroy', 'off'),
+    ...(view.mode === 'observe'
+      ? setOption(['-F', ...options], 'session-window-changed', OBSERVER_LEAVES)
+      : []),
   ];
 }
 
@@ -955,15 +1007,8 @@ export function tmuxHost(env: Env = process.env): SessionHost {
           if (/duplicate session/.test(made.stderr)) continue;
           break;
         }
-        const index = made.stdout.trim().split('\n')[0] ?? '';
-        const linked = call([
-          'link-window',
-          '-k',
-          '-s',
-          request.window,
-          '-t',
-          windowTarget(name, index),
-        ]);
+        const placeholder = made.stdout.trim().split('\n')[0] ?? '';
+        const linked = call(watchArgv(name, placeholder, request.window));
         if (linked.ok) return worn({ name, mode: 'observe' }, request);
         call(['kill-session', '-t', sessionTarget(name)]);
         last = linked.stderr;

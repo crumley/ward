@@ -299,7 +299,9 @@ export interface SessionHost {
    * Make a view for one client: for `attach`, a view of the whole group with
    * `window` current in it, so attaching never moves another client's current
    * window; for `observe`, a view holding that one window alone. The view
-   * ends by itself when its client leaves. Throws on failure.
+   * ends by itself when its client leaves. When what a view shows goes
+   * instead, a participant is moved to a group still standing, and an
+   * observer's terminal is handed back (`enter` returns). Throws on failure.
    */
   view(request: ViewRequest): View;
   /**

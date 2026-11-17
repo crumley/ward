@@ -33,6 +33,7 @@ import {
   tmuxHost,
   viewHosts,
   viewName,
+  watchArgv,
   windowTarget,
 } from '../../src/host/tmux.ts';
 
@@ -391,6 +392,41 @@ test.each([
     ['=v:', 'destroy-unattached', 'on'],
     // A view that ends under its client moves it on, as the host does — never to the shell.
     ['=v:', 'detach-on-destroy', 'off'],
+    // Only an observer leaves for the shell when its window goes — that one
+    // client by name, so nobody tmux moved into the view goes with it.
+    ...(mode === 'observe'
+      ? [['=v:', 'session-window-changed', 'detach-client -t "#{client_name}" ; kill-session']]
+      : []),
+  ]);
+  // The hook names the client by a format, expanded as the option is set.
+  expect(argv.includes('-F')).toBe(mode === 'observe');
+});
+
+test('the watched window joins an observe view beside its placeholder, which the window list hides', () => {
+  expect(watchArgv('ward-a-f3-o1', '@9', '@7')).toEqual([
+    'set-option',
+    '-w',
+    '-t',
+    '@9',
+    'window-status-format',
+    '',
+    ';',
+    'set-option',
+    '-w',
+    '-t',
+    '@9',
+    'window-status-current-format',
+    '',
+    ';',
+    'link-window', // no -k: the placeholder stays, so the view outlives the watched window
+    '-s',
+    '@7',
+    '-t',
+    '=ward-a-f3-o1:',
+    ';',
+    'select-window',
+    '-t',
+    '=ward-a-f3-o1:@7',
   ]);
 });
 

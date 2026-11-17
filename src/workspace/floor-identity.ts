@@ -348,6 +348,52 @@ export async function convergeIdentities(root: string): Promise<IdentityConverge
   return written;
 }
 
+/** What `ward doctor` finds among the open floors' identities, never changed by the finding. */
+export type IdentityClash =
+  /** Two or more open floors wear one emoji — lowest floor first, the one that keeps it. */
+  | { readonly kind: 'shared'; readonly emoji: string; readonly floors: readonly FoundProject[] }
+  /** A floor other than the ground floor wears a half of the ground floor's identity. */
+  | {
+      readonly kind: 'reserved';
+      readonly floor: FoundProject;
+      readonly halves: readonly ('emoji' | 'color')[];
+    };
+
+/**
+ * The identities among the open floors that the verbs would have refused: an
+ * emoji two open floors both wear, and the ground floor's emoji or color on
+ * any other floor. The verbs refuse both, so the records reach this state
+ * only from outside one machine's view — two machines that each opened a
+ * floor before their records synced each picked clear of what they could see
+ * — or from a record written before the rule. Read-only: convergence
+ * ({@link convergeIdentities}) and `ward project identity` are what change
+ * it. A floor wearing the ground floor's emoji is reported once, as
+ * `reserved`, never also as `shared` with the ground floor.
+ */
+export function identityClashes(projects: readonly FoundProject[]): IdentityClash[] {
+  const open = projects
+    .filter(({ record }) => record.state !== 'closed')
+    .sort((a, b) => a.record.floor - b.record.floor);
+  const clashes: IdentityClash[] = [];
+  const wearers = new Map<string, FoundProject[]>();
+  for (const project of open) {
+    const { floor, emoji, color } = project.record;
+    if (floor !== GROUND_FLOOR) {
+      const halves = [
+        ...(emoji === GROUND_IDENTITY.emoji ? (['emoji'] as const) : []),
+        ...(color === GROUND_IDENTITY.color ? (['color'] as const) : []),
+      ];
+      if (halves.length > 0) clashes.push({ kind: 'reserved', floor: project, halves });
+    }
+    if (emoji === undefined || emoji === GROUND_IDENTITY.emoji) continue;
+    wearers.set(emoji, [...(wearers.get(emoji) ?? []), project]);
+  }
+  for (const [emoji, floors] of wearers) {
+    if (floors.length > 1) clashes.push({ kind: 'shared', emoji, floors });
+  }
+  return clashes;
+}
+
 /** The halves of an identity a record holds, which may be neither or one. */
 function halves(record: ProjectRecord): Partial<FloorLook> {
   return {

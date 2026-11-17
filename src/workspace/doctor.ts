@@ -53,12 +53,14 @@ import {
   type WorktreeRecord,
   workspaceRecordType,
 } from '../store/types.ts';
+import { GROUND_IDENTITY } from '../theme/palette.ts';
 import { collidingRooms, distinctAddress, taskAddress, taskFloor } from './address.ts';
 import { claimsOf } from './affinity.ts';
 import { sha256OfFile } from './baselines.ts';
 import { readBrief } from './briefs.ts';
 import { checkoutLabel, resolveCheckout, unboundMessage } from './checkouts.ts';
 import { type CommandKind, unknownPlaceholders } from './commands.ts';
+import { identityClashes } from './floor-identity.ts';
 import { carriesManifest, floorManifestPaths } from './floor-manifest.ts';
 import { carriesView, floorViewDir, floorViewGaps } from './floor-views.ts';
 import { git, gitAvailable, gitIdentityConfigured, hasCommits } from './git.ts';
@@ -655,6 +657,7 @@ async function workspaceChecks(
   findings.push(...(await legacyBareTaskFinding(root)));
   findings.push(...(await roomCollisionFindings(root)));
   findings.push(...(await claimFindings(root)));
+  findings.push(...(await floorIdentityFindings(root)));
   findings.push(...(await floorManifestFindings(root)));
   findings.push(...(await floorViewFindings(root)));
   findings.push(...(await briefFindings(root)));
@@ -1264,6 +1267,64 @@ async function claimFindings(root: string): Promise<Finding[]> {
     return [{ check, severity: 'error', message: error.message }];
   }
   return findings;
+}
+
+/**
+ * Open floors that cannot be told apart by their emoji
+ * (design/0064-floor-identity-palette/): two wearing the same one, or an
+ * ordinary floor wearing a half of the ground floor's identity. The verbs
+ * refuse both, so this is what two machines leave behind when each opens a
+ * floor before their records sync, each picking clear of the floors it could
+ * see. Info, never more: nothing but the eye depends on a floor's emoji, the
+ * hosts and every address still work, and the next `ward workspace upgrade`
+ * gives a later duplicate another. The finding names the verb that settles it
+ * now and changes nothing itself — which emoji a floor wears is its opener's
+ * choice, not doctor's.
+ */
+async function floorIdentityFindings(root: string): Promise<Finding[]> {
+  const check = 'floor identities';
+  const name = ({ record }: { record: { floor: number; slug: string } }) =>
+    `${record.floor} (${record.slug})`;
+  try {
+    return identityClashes(await readProjects(root)).map((clash): Finding => {
+      if (clash.kind === 'reserved') {
+        const { floor } = clash.floor.record;
+        const wears = clash.halves
+          .map((half) => (half === 'emoji' ? GROUND_IDENTITY.emoji : GROUND_IDENTITY.color))
+          .join(' ');
+        const flags = clash.halves
+          .map((half) => (half === 'emoji' ? '--emoji EMOJI' : '--color COLOR'))
+          .join(' ');
+        return {
+          check,
+          severity: 'info',
+          message:
+            `floor ${name(clash.floor)} wears ${wears}, the ground floor's — floor ` +
+            `${GROUND_FLOOR} wears ${GROUND_IDENTITY.emoji} ${GROUND_IDENTITY.color} in every ` +
+            `workspace, so the two read alike. Give it its own: ward project identity ${floor} ` +
+            flags,
+        };
+      }
+      const [keeps, ...later] = clash.floors;
+      const all = clash.floors.map(name);
+      const listed = `${all.slice(0, -1).join(', ')} and ${all.at(-1)}`;
+      const remedies = later
+        .map(({ record }) => `ward project identity ${record.floor} --emoji EMOJI`)
+        .join('; ');
+      return {
+        check,
+        severity: 'info',
+        message:
+          `floors ${listed} ${clash.floors.length === 2 ? 'both' : 'all'} wear ${clash.emoji} ` +
+          '— as two machines leave them when each opens a floor before their records sync. ' +
+          `Tell them apart: ${remedies} (floor ${keeps?.record.floor} had it first; left alone, ` +
+          'the next ward workspace upgrade gives the later one another)',
+      };
+    });
+  } catch (error) {
+    if (!(error instanceof WardError)) throw error;
+    return [{ check, severity: 'error', message: error.message }];
+  }
 }
 
 /**
