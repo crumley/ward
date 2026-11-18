@@ -11,8 +11,8 @@ import {
   projectOpenShape,
   statusShape,
 } from '../../src/cli/schema.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { applyGitTestEnv, makeTempDir, NO_GH, removeDir, runWardEnv } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 test('status and project list name each floor by its emoji and its color', () => {
   ward(['project', 'open', 'alpha']);
@@ -183,5 +183,5 @@ afterAll(() => removeDir(scratch));
 beforeEach(async () => {
   counter += 1;
   ws = join(scratch, `case-${counter}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
 });

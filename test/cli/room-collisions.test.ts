@@ -9,7 +9,6 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { taskMutationShape } from '../../src/cli/schema.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { openProject } from '../../src/workspace/projects.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import {
@@ -22,6 +21,7 @@ import {
   removeDir,
   WARD_GLOBAL_ENV,
 } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 const URL = 'https://example.com/x/pull/58';
 const MAC = 'f1t2-weekly-rituals-design';
@@ -154,7 +154,7 @@ beforeEach(async () => {
   counter += 1;
   ws = join(scratch, `case-${counter}`);
   const vm = join(scratch, `case-${counter}-vm`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   await openProject(ws, 'ledger'); // floor 1
   await openTask(ws, 'ledger-setup', { floor: 1 }); // f1t1, before the machines diverge
   git(scratch, 'clone', '--quiet', ws, vm);

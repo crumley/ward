@@ -25,12 +25,12 @@ import {
   touchWorkspace,
   unregisterWorkspace,
 } from '../../src/global/registry.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { createWorkspaceWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, GIT_ENV, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 // -- registration ----------------------------------------------------------
 
@@ -80,7 +80,7 @@ test('a stewardship copy is not a second workspace, so it cannot be registered',
 test('names are labels: a second workspace with the same basename is suffixed, not refused', async () => {
   await registerWorkspace(alpha, state);
   const twin = join(scratch, 'twin', 'alpha');
-  await createWorkspace(twin);
+  await preparedWorkspace(twin);
   expect((await registerWorkspace(twin, state)).entry).toMatchObject({
     name: 'alpha-2',
     path: twin,
@@ -422,8 +422,8 @@ beforeEach(async () => {
   config = join(home, 'config');
   alpha = join(home, 'alpha');
   beta = join(home, 'beta');
-  await createWorkspace(alpha);
-  await createWorkspace(beta);
+  await preparedWorkspace(alpha);
+  await preparedWorkspace(beta);
 });
 
 afterAll(() => {

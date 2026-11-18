@@ -9,13 +9,13 @@ import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { mutationVerbShapes, workspaceRestoreShape } from '../../src/cli/schema.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { createWorkspaceWorktree, createWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 test('the fresh-clone flow: restore re-materializes, doctor reads clean', () => {
   const clone = join(scratch, 'clone-flow');
@@ -108,14 +108,7 @@ let lostWs: string;
 function makeRemote(name: string): string {
   const remote = join(scratch, `${name}.git`);
   mkdirSync(remote, { recursive: true });
-  gitOrThrow('.', 'init', '--bare', '--initial-branch=trunk', remote);
-  const seed = join(scratch, `seed-${name}`);
-  gitOrThrow('.', 'clone', remote, seed);
-  writeFileSync(join(seed, 'seed.txt'), 'seed\n');
-  gitOrThrow(seed, 'checkout', '-b', 'trunk');
-  gitOrThrow(seed, 'add', '-A');
-  gitOrThrow(seed, 'commit', '-m', 'seed');
-  gitOrThrow(seed, 'push', '-u', 'origin', 'trunk');
+  preparedRemote(remote, { branch: 'trunk', files: { 'seed.txt': 'seed\n' } });
   return remote;
 }
 
@@ -124,7 +117,7 @@ beforeAll(async () => {
   scratch = makeTempDir();
 
   ws = join(scratch, 'original');
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   await addRepository(ws, makeRemote('remote-main'), 'demo');
   await openTask(ws, 'feature-work', { floor: GROUND_FLOOR });
   await createWorktree(ws, 't1', 'demo');
@@ -141,7 +134,7 @@ beforeAll(async () => {
   gitOrThrow(copy, 'commit', '-m', 'Stewardship note');
 
   lostWs = join(scratch, 'original-lost');
-  await createWorkspace(lostWs);
+  await preparedWorkspace(lostWs);
   await addRepository(lostWs, makeRemote('remote-lost'), 'demo');
   await openTask(lostWs, 'doomed-work', { floor: GROUND_FLOOR });
   await createWorktree(lostWs, 't1', 'demo', 'unpushed');

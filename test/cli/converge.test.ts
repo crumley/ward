@@ -9,9 +9,10 @@ import { workspaceUpgradeShape } from '../../src/cli/schema.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR_DIR } from '../../src/workspace/projects.ts';
 import { applyGitTestEnv, makeTempDir, NO_GH, removeDir, runWard, runWardEnv } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
-test('create on an existing workspace: exit 1, stdout empty, the remedy names upgrade', () => {
-  const ws = workspace('refusal');
+test('create on an existing workspace: exit 1, stdout empty, the remedy names upgrade', async () => {
+  const ws = await workspace('refusal');
   const result = runWard(['workspace', 'create', ws], scratch);
   expect(result.exitCode).toBe(1);
   expect(result.stdout).toBe(''); // a refusal emits no document (0015)
@@ -22,8 +23,8 @@ test('create on an existing workspace: exit 1, stdout empty, the remedy names up
   expect(gitOrThrow(ws, 'status', '--porcelain').stdout).toBe('');
 });
 
-test('upgrade --json on a workspace behind on its record: converged rides the document', () => {
-  const ws = workspace('json');
+test('upgrade --json on a workspace behind on its record: converged rides the document', async () => {
+  const ws = await workspace('json');
   removeDir(join(ws, GROUND_FLOOR_DIR)); // the pre-0018 shape
   gitOrThrow(ws, 'commit', '-am', 'a workspace from before the standing project');
 
@@ -39,8 +40,8 @@ test('upgrade --json on a workspace behind on its record: converged rides the do
 
 // Converging something and finding the artifacts current is work done, and the
 // human rendering says so rather than "nothing to upgrade".
-test('a run that converged the record does not report nothing to do', () => {
-  const ws = workspace('not-nothing');
+test('a run that converged the record does not report nothing to do', async () => {
+  const ws = await workspace('not-nothing');
   removeDir(join(ws, GROUND_FLOOR_DIR));
   gitOrThrow(ws, 'commit', '-am', 'a workspace from before the standing project');
 
@@ -56,8 +57,8 @@ test('a run that converged the record does not report nothing to do', () => {
   expect(second.stdout).toContain('nothing to upgrade — everything already current');
 });
 
-test('the converge steps print before the artifact rows, in create step style', () => {
-  const ws = workspace('render');
+test('the converge steps print before the artifact rows, in create step style', async () => {
+  const ws = await workspace('render');
   const rendered = upgrade(ws, []);
   expect(rendered.exitCode).toBe(0);
   const stdout = rendered.stdout;
@@ -70,7 +71,7 @@ test('the converge steps print before the artifact rows, in create step style', 
 // verb that makes one. The two remedies for no workspace at all keep `create`,
 // and they are not doctor's.
 test('every doctor remedy for an existing workspace names the update verb', async () => {
-  const ws = workspace('remedies');
+  const ws = await workspace('remedies');
   removeDir(join(ws, GROUND_FLOOR_DIR));
   removeDir(join(ws, 'repositories'));
   await Bun.write(join(ws, '.gitignore'), '# mine\n');
@@ -105,11 +106,9 @@ beforeAll(() => {
 
 afterAll(() => removeDir(scratch));
 
-function workspace(name: string): string {
+async function workspace(name: string): Promise<string> {
   counter += 1;
-  const ws = join(scratch, `${name}-${counter}`);
-  expect(runWard(['workspace', 'create', ws], scratch).exitCode).toBe(0);
-  return ws;
+  return preparedWorkspace(join(scratch, `${name}-${counter}`));
 }
 
 /**

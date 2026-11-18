@@ -7,7 +7,6 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository, refreshRepositories } from '../../src/workspace/repos.ts';
@@ -15,6 +14,7 @@ import { statusReport } from '../../src/workspace/status.ts';
 import { closeTask, openTask } from '../../src/workspace/tasks.ts';
 import { createWorktree, worktreeStatuses } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 test('current after create; a moved remote counts only after the refresh — honest to the last refresh', async () => {
   const fresh = await worktreeStatuses(ws, taskDir);
@@ -146,16 +146,9 @@ beforeAll(() => {
 beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   remote = join(scratch, `remote-${caseId}.git`);
-  gitOrThrow('.', 'init', '--bare', '--initial-branch=main', remote);
-  const seed = join(scratch, `seed-${caseId}`);
-  gitOrThrow('.', 'clone', remote, seed);
-  await Bun.write(join(seed, 'src', 'lib.ts'), 'export {};\n');
-  gitOrThrow(seed, 'checkout', '-b', 'main');
-  gitOrThrow(seed, 'add', '-A');
-  gitOrThrow(seed, 'commit', '-m', 'seed');
-  gitOrThrow(seed, 'push', '-u', 'origin', 'main');
+  preparedRemote(remote, { branch: 'main', files: { 'src/lib.ts': 'export {};\n' } });
   await addRepository(ws, remote, 'demo');
   taskDir = (await openTask(ws, 'feature', { floor: GROUND_FLOOR })).dir;
   const { record } = await createWorktree(ws, 't1', 'demo');

@@ -10,7 +10,6 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import { git, gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
@@ -25,6 +24,7 @@ import {
 import { closeTask, openTask } from '../../src/workspace/tasks.ts';
 import { createWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 test('add clones a remote, reads its main line, and commits the record', async () => {
   const report = await addRepository(ws, remote);
@@ -315,14 +315,7 @@ function commitToRemote(file: string, content = '', target = remote): void {
 function seedRemote(name: string): string {
   const path = join(scratch, `remote-${caseId}`, `${name}.git`);
   mkdirSync(path, { recursive: true });
-  gitOrThrow('.', 'init', '--bare', '--initial-branch=trunk', path);
-  const seed = join(scratch, `seed-${caseId}-${name}`);
-  gitOrThrow('.', 'clone', path, seed);
-  writeFileSync(join(seed, 'seed.txt'), '');
-  gitOrThrow(seed, 'checkout', '-b', 'trunk');
-  gitOrThrow(seed, 'add', '-A');
-  gitOrThrow(seed, 'commit', '-m', 'seed');
-  gitOrThrow(seed, 'push', '-u', 'origin', 'trunk');
+  preparedRemote(path, { branch: 'trunk', files: { 'seed.txt': '' } });
   return path;
 }
 
@@ -352,17 +345,10 @@ beforeAll(() => {
 beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   remote = join(scratch, `remote-${caseId}`, 'origin-repo.git');
   mkdirSync(remote, { recursive: true });
-  gitOrThrow('.', 'init', '--bare', '--initial-branch=trunk', remote);
-  const seed = join(scratch, `seed-${caseId}`);
-  gitOrThrow('.', 'clone', remote, seed);
-  Bun.spawnSync(['touch', join(seed, 'seed.txt')]);
-  gitOrThrow(seed, 'checkout', '-b', 'trunk');
-  gitOrThrow(seed, 'add', '-A');
-  gitOrThrow(seed, 'commit', '-m', 'seed');
-  gitOrThrow(seed, 'push', '-u', 'origin', 'trunk');
+  preparedRemote(remote, { branch: 'trunk', files: { 'seed.txt': '' } });
 });
 
 afterAll(() => {

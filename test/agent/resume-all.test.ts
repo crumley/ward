@@ -20,7 +20,6 @@ import { sessionResumeAllShape } from '../../src/cli/schema.ts';
 import { mungeCwd } from '../../src/harness/claude.ts';
 import type { FoundWindow } from '../../src/host/host.ts';
 import type { SessionRecord } from '../../src/store/types.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { workspaceId } from '../../src/workspace/identity.ts';
 import { GROUND_FLOOR, openProject } from '../../src/workspace/projects.ts';
@@ -33,6 +32,7 @@ import {
 } from '../../src/workspace/sessions.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 import { type FakeHostOptions, fakeHost } from './fake-host.ts';
 
 // -- the plan: one step per open hosted session ------------------------------
@@ -388,7 +388,7 @@ beforeEach(async () => {
   ws = join(scratch, `ws-${caseId}`);
   claudeHome = join(scratch, `claude-home-${caseId}`);
   process.env.CLAUDE_CONFIG_DIR = claudeHome;
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   id = await workspaceId(ws);
 });
 

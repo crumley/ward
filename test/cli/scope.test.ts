@@ -6,8 +6,6 @@
 // `task close` always takes one. Proven through the spawned CLI.
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { createWorkspace } from '../../src/workspace/create.ts';
-import { gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { readSessions } from '../../src/workspace/sessions.ts';
@@ -21,6 +19,7 @@ import {
   runWardEnv,
   writeFakeClaude,
 } from '../helpers.ts';
+import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 const PR_URL = 'https://example.com/pr/6';
 
@@ -136,20 +135,13 @@ beforeAll(async () => {
   applyGitTestEnv();
   scratch = makeTempDir();
   remote = join(scratch, 'remote.git');
-  gitOrThrow('.', 'init', '--bare', '--initial-branch=main', remote);
-  const seed = join(scratch, 'seed');
-  gitOrThrow('.', 'clone', remote, seed);
-  await Bun.write(join(seed, 'src', 'lib.ts'), 'export {};\n');
-  gitOrThrow(seed, 'checkout', '-b', 'main');
-  gitOrThrow(seed, 'add', '-A');
-  gitOrThrow(seed, 'commit', '-m', 'seed');
-  gitOrThrow(seed, 'push', '-u', 'origin', 'main');
+  preparedRemote(remote, { branch: 'main', files: { 'src/lib.ts': 'export {};\n' } });
 });
 
 beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   await addRepository(ws, remote, 'demo');
   await openTask(ws, 'feature', { floor: GROUND_FLOOR });
   const { record } = await createWorktree(ws, 't1', 'demo');

@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { sessionMutationShape } from '../../src/cli/schema.ts';
 import { ambientHandle } from '../../src/harness/index.ts';
 import { applyGitTestEnv, makeTempDir, removeDir, runWard, runWardEnv } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 const RUN_ID = '0f8fad5b-d9cb-469f-a165-70867728950e';
 
@@ -117,12 +118,12 @@ let scratch: string;
 let ws: string;
 let caseId = 0;
 
-beforeEach(() => {
+beforeEach(async () => {
   applyGitTestEnv();
   caseId += 1;
   scratch ??= makeTempDir();
   ws = join(scratch, `ws-${caseId}`);
-  expect(runWard(['workspace', 'create', ws], scratch).exitCode).toBe(0);
+  await preparedWorkspace(ws);
   expect(runWard(['task', 'open', 'feature', '--project', '0'], ws).exitCode).toBe(0);
 });
 

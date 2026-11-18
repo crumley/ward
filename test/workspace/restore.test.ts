@@ -11,7 +11,6 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import { git, gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
@@ -21,6 +20,7 @@ import { openSession } from '../../src/workspace/sessions.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { createWorkspaceWorktree, createWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 // -- the fresh clone, end to end --------------------------------------------
 
@@ -246,14 +246,7 @@ let caseId = 0;
 async function buildRepoWorktree(options: { push: boolean }): Promise<void> {
   remote = join(scratch, `remote-${caseId}`, 'demo.git');
   mkdirSync(remote, { recursive: true });
-  gitOrThrow('.', 'init', '--bare', '--initial-branch=trunk', remote);
-  const seed = join(scratch, `seed-${caseId}`);
-  gitOrThrow('.', 'clone', remote, seed);
-  writeFileSync(join(seed, 'seed.txt'), 'seed\n');
-  gitOrThrow(seed, 'checkout', '-b', 'trunk');
-  gitOrThrow(seed, 'add', '-A');
-  gitOrThrow(seed, 'commit', '-m', 'seed');
-  gitOrThrow(seed, 'push', '-u', 'origin', 'trunk');
+  preparedRemote(remote, { branch: 'trunk', files: { 'seed.txt': 'seed\n' } });
 
   await addRepository(ws, remote, 'demo');
   await openTask(ws, 'feature-work', { floor: GROUND_FLOOR });
@@ -314,7 +307,7 @@ beforeAll(() => {
 beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `original-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
 });
 
 afterAll(() => {

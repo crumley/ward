@@ -12,8 +12,8 @@ import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { jsonVerbShapes, readVerbShapes } from '../../src/cli/schema.ts';
-import { gitOrThrow } from '../../src/workspace/git.ts';
 import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 const PR_URL = 'https://example.com/pr/1';
 
@@ -121,17 +121,10 @@ beforeAll(async () => {
   applyGitTestEnv();
   scratch = makeTempDir();
   ws = join(scratch, 'ws');
-  runWard(['workspace', 'create', ws], scratch);
+  await preparedWorkspace(ws);
 
   const remote = join(scratch, 'remote.git');
-  gitOrThrow('.', 'init', '--bare', '--initial-branch=main', remote);
-  const seed = join(scratch, 'seed');
-  gitOrThrow('.', 'clone', remote, seed);
-  await Bun.write(join(seed, 'README.md'), 'demo\n');
-  gitOrThrow(seed, 'checkout', '-b', 'main');
-  gitOrThrow(seed, 'add', '-A');
-  gitOrThrow(seed, 'commit', '-m', 'seed');
-  gitOrThrow(seed, 'push', '-u', 'origin', 'main');
+  preparedRemote(remote, { branch: 'main', files: { 'README.md': 'demo\n' } });
 
   runWard(['repo', 'add', remote, '--name', 'demo'], ws);
   runWard(['project', 'open', 'agent-output'], ws); // floor 2 — the standing project holds 1

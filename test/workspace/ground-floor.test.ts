@@ -16,7 +16,6 @@ import {
 } from '../../src/store/types.ts';
 import { taskAddress } from '../../src/workspace/address.ts';
 import { convergeWorkspace, type StepReport } from '../../src/workspace/converge.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import { git } from '../../src/workspace/git.ts';
 import {
@@ -32,6 +31,7 @@ import { statusReport } from '../../src/workspace/status.ts';
 import { closeTask, openTask } from '../../src/workspace/tasks.ts';
 import { createWorkspaceWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 // -- the reserved number ---------------------------------------------------
 
@@ -213,7 +213,7 @@ beforeEach(() => {
 /** A workspace as this build creates it: the ground floor already standing. */
 async function freshWorkspace(name: string): Promise<string> {
   const ws = join(scratch, `${name}-${counter}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   return ws;
 }
 

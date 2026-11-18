@@ -11,7 +11,6 @@ import { existsSync, lstatSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readDocument, writeDocument } from '../../src/store/document.ts';
 import { baselinesType, workspaceRecordType } from '../../src/store/types.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { sha256OfText } from '../../src/workspace/lineage.ts';
 import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
@@ -26,6 +25,7 @@ import { upgradeWorkspace } from '../../src/workspace/upgrade.ts';
 import { createWorkspaceWorktree } from '../../src/workspace/worktrees.ts';
 import { LEGACY_AGENTS_MD, LEGACY_WARD_README } from '../fixtures/legacy.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 /**
  * Regress a freshly created workspace to the live workspace's shape: stale
@@ -235,7 +235,7 @@ beforeAll(() => {
 beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   mainLine = workspaceMainLine(ws);
 });
 

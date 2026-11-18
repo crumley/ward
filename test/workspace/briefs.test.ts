@@ -10,7 +10,6 @@ import { taskBriefShape, taskShowShape } from '../../src/cli/schema.ts';
 import { readDocument } from '../../src/store/document.ts';
 import { briefRecordType } from '../../src/store/types.ts';
 import { readBrief, recordBrief } from '../../src/workspace/briefs.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import { git, gitOrThrow } from '../../src/workspace/git.ts';
 import { openProject } from '../../src/workspace/projects.ts';
@@ -26,6 +25,7 @@ import {
   runWard,
   WARD_GLOBAL_ENV,
 } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 // -- the brief: typed, one verb, lenient read --------------------------------
 
@@ -186,7 +186,7 @@ beforeAll(() => {
 beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   await openProject(ws, 'alpha');
   taskDir = (await openTask(ws, 'feature', { floor: 1 })).dir;
   expect((await readTasks(ws)).length).toBe(1);

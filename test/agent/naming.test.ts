@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { readNaming, refreshNames, standingViews } from '../../src/agent/naming.ts';
 import type { InventoryGroup, StandingView } from '../../src/host/host.ts';
 import type { SessionRecord } from '../../src/store/types.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { workspaceId } from '../../src/workspace/identity.ts';
 import { GROUND_FLOOR, openProject } from '../../src/workspace/projects.ts';
 import {
@@ -17,6 +16,7 @@ import {
 } from '../../src/workspace/sessions.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 import { fakeHost } from './fake-host.ts';
 
 test('every scope reads as what it is: coordinator, helper, floor, task', async () => {
@@ -242,7 +242,7 @@ beforeEach(async () => {
   scratch ??= makeTempDir();
   name = `ws-${caseId}`;
   ws = join(scratch, name);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
 });
 
 afterAll(() => {

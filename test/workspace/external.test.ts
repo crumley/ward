@@ -36,7 +36,6 @@ import { workspaceRecordType } from '../../src/store/types.ts';
 import { taskAddress } from '../../src/workspace/address.ts';
 import { checkoutPath, resolveCheckout } from '../../src/workspace/checkouts.ts';
 import { contextChain, contextTarget } from '../../src/workspace/context.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import { git, gitOrThrow } from '../../src/workspace/git.ts';
 import { openProject } from '../../src/workspace/projects.ts';
@@ -56,6 +55,7 @@ import {
   worktreeStatuses,
 } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 // -- an external canonical checkout -------------------------------------------
 
@@ -744,13 +744,11 @@ function commitToRemote(file: string): string {
 function seedRemote(name: string): string {
   const path = join(scratch, `remote-${caseId}`, `${name}.git`);
   mkdirSync(path, { recursive: true });
-  gitOrThrow('.', 'init', '--bare', '--initial-branch=trunk', path);
-  const seed = join(scratch, `seed-${caseId}-${name}`);
-  gitOrThrow('.', 'clone', path, seed);
-  gitOrThrow(seed, 'checkout', '-b', 'trunk');
-  commitIn(seed, 'seed.txt');
-  gitOrThrow(seed, 'push', '-u', 'origin', 'trunk');
-  return path;
+  return preparedRemote(path, {
+    branch: 'trunk',
+    files: { 'seed.txt': 'seed.txt\n' },
+    message: 'add seed.txt',
+  });
 }
 
 function cloneOf(source: string, name: string): string {
@@ -790,7 +788,7 @@ beforeEach(async () => {
   process.env.WARD_CONFIG_DIR = configDir;
   process.env.WARD_STATE_DIR = join(scratch, `state-${caseId}`);
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   await openProject(ws, 'main');
   remote = seedRemote('mono');
   // In a directory of its own, so the checkout is named `mono` in every case.

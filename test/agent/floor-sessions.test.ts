@@ -14,7 +14,6 @@ import { join } from 'node:path';
 import { sessionLocateShape, sessionMutationShape, statusShape } from '../../src/cli/schema.ts';
 import { mungeCwd } from '../../src/harness/claude.ts';
 import { sessionSchema } from '../../src/store/types.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { openProject } from '../../src/workspace/projects.ts';
 import { defaultFloorSessionPurpose, readSessions } from '../../src/workspace/sessions.ts';
 import {
@@ -24,6 +23,7 @@ import {
   removeDir,
   writeFakeClaude,
 } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 const FLOOR_DIR = 'projects/1-alpha';
 const DEFAULT_PURPOSE = /^Coordinating floor 1 · opened \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
@@ -297,7 +297,7 @@ beforeEach(async () => {
   claudeHome = join(scratch, `claude-home-${caseId}`);
   logFile = join(scratch, `runs-${caseId}.jsonl`);
   stub = writeFakeClaude(scratch, `claude-${caseId}`, { logFile });
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   await openProject(ws, 'alpha');
 });
 

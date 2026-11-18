@@ -20,11 +20,11 @@ import {
   taskAddress,
   taskFloor,
 } from '../../src/workspace/address.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { GROUND_FLOOR, openProject } from '../../src/workspace/projects.ts';
 import { resolveOpenTask } from '../../src/workspace/scan.ts';
 import { closeTask, openTask } from '../../src/workspace/tasks.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 // -- composing: containment answers, the record's field backs it up --------
 
@@ -326,7 +326,7 @@ let counter = 0;
 beforeEach(async () => {
   counter += 1;
   ws = join(scratch, `case-${counter}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
 });
 
 /**

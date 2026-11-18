@@ -17,6 +17,7 @@ import {
   runWardEnv,
   writeFakeGh,
 } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 const PR_OPEN = 'https://example.com/x/pull/10';
 const PR_MERGED = 'https://example.com/x/pull/11';
@@ -196,7 +197,7 @@ beforeAll(async () => {
   applyGitTestEnv();
   scratch = makeTempDir();
   ws = join(scratch, 'ws');
-  runWard(['workspace', 'create', ws], scratch);
+  await preparedWorkspace(ws);
 
   const remote = join(scratch, 'remote.git');
   runWard(['--version'], scratch); // no-op: keeps the spawn shape uniform below

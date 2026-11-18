@@ -12,7 +12,6 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { doctorShape, workspaceUpgradeShape } from '../../src/cli/schema.ts';
 import { FORMAT_LEVEL } from '../../src/store/format.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
@@ -28,6 +27,7 @@ import {
   runWardEnv,
   WARD_GLOBAL_ENV,
 } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 // Every verb that reads or writes the record. A verb is in exactly one of the
 // two tables below, and the last test in this group fails when the CLI gains
@@ -325,7 +325,7 @@ beforeAll(async () => {
   applyGitTestEnv();
   scratch = makeTempDir();
   current = join(scratch, 'current');
-  await createWorkspace(current);
+  await preparedWorkspace(current);
   await openTask(current, 'work', { floor: GROUND_FLOOR });
   expect(
     runWard(['session', 'open', '--purpose', 'coordinate', '--handle', 'claude:fixture'], current)

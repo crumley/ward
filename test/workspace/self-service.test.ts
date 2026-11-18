@@ -11,7 +11,6 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { readDocument } from '../../src/store/document.ts';
 import { taskRecordType } from '../../src/store/types.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { findStandingProject, GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { readTasks } from '../../src/workspace/scan.ts';
@@ -22,6 +21,7 @@ import { findOpenUpgradeTask, selfServiceUpgrade } from '../../src/workspace/upg
 import { readTaskWorktrees } from '../../src/workspace/worktrees.ts';
 import { LEGACY_AGENTS_MD } from '../fixtures/legacy.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 test('the bare path builds its own vehicle end to end, and ends by naming what remains', async () => {
   await regressGuidance(ws);
@@ -174,7 +174,7 @@ beforeAll(() => {
 beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   mainLine = workspaceMainLine(ws);
 });
 

@@ -16,7 +16,6 @@ import { type WorkspaceUpgradeShape, workspaceUpgradeShape } from '../../src/cli
 import { readDocument, writeDocument } from '../../src/store/document.ts';
 import { type TaskRecord, taskRecordType, worktreeRecordType } from '../../src/store/types.ts';
 import { convergeWorkspace } from '../../src/workspace/converge.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import { git, gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR, openProject } from '../../src/workspace/projects.ts';
@@ -31,6 +30,7 @@ import {
   readTaskWorktreeEntries,
 } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir, runWardEnv } from '../helpers.ts';
+import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 // -- placement at create ---------------------------------------------------------
 
@@ -442,16 +442,9 @@ beforeAll(() => {
 beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   const remote = join(scratch, `remote-${caseId}.git`);
-  gitOrThrow('.', 'init', '-q', '--bare', '--initial-branch=trunk', remote);
-  const seed = join(scratch, `seed-${caseId}`);
-  gitOrThrow('.', 'clone', '-q', remote, seed);
-  gitOrThrow(seed, 'checkout', '-q', '-b', 'trunk');
-  writeFileSync(join(seed, 'seed.txt'), 'seed\n');
-  gitOrThrow(seed, 'add', '-A');
-  gitOrThrow(seed, 'commit', '-qm', 'seed');
-  gitOrThrow(seed, 'push', '-q', '-u', 'origin', 'trunk');
+  preparedRemote(remote, { branch: 'trunk', files: { 'seed.txt': 'seed\n' } });
   await addRepository(ws, remote, 'demo');
 });
 

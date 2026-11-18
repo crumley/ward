@@ -13,8 +13,8 @@ import {
   type TaskRecord,
   taskRecordType,
 } from '../../src/store/types.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 test('status: the open task by address, the recent close by slug, the old close gone', () => {
   const result = runWard(['status'], ws);
@@ -108,7 +108,7 @@ beforeAll(async () => {
   applyGitTestEnv();
   scratch = makeTempDir();
   ws = join(scratch, 'ws');
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
 
   await seedProject(ws, 2, 'in-progress');
   await seedTask(ws, 2, 1, 'long-settled', { closedAt: daysAgo(30) });

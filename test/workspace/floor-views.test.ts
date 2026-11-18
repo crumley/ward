@@ -19,11 +19,11 @@ import { join } from 'node:path';
 import { readDocument, writeDocument } from '../../src/store/document.ts';
 import { projectRecordType } from '../../src/store/types.ts';
 import { convergeWorkspace } from '../../src/workspace/converge.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import { git, gitOrThrow } from '../../src/workspace/git.ts';
 import { openProject, readProjects } from '../../src/workspace/projects.ts';
 import { applyGitTestEnv, makeTempDir, removeDir, runWardEnv } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 // -- project open --------------------------------------------------------------
 
@@ -168,7 +168,7 @@ beforeAll(() => {
 beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
 });
 
 afterAll(() => removeDir(scratch));

@@ -9,7 +9,6 @@
 import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test';
 import { rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { type Finding, runDoctor } from '../../src/workspace/doctor.ts';
 import {
   applyGitTestEnv,
@@ -19,6 +18,7 @@ import {
   runWardEnv,
   writeFakeGh,
 } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 const rows: ReadonlyArray<{
   name: string;
@@ -132,7 +132,7 @@ for (const row of claudeRows) {
   test(`claude guidance — ${row.name}`, async () => {
     claudeCase += 1;
     const ws = join(scratch, `ws-claude-${claudeCase}`);
-    await createWorkspace(ws);
+    await preparedWorkspace(ws);
     row.arrange(ws);
     const report = await runDoctor(ws);
     const finding = report.workspace.find((f) => f.check === 'claude guidance');
@@ -150,7 +150,7 @@ for (const row of claudeRows) {
 
 test('standing project — fresh workspace: ok, naming the ground floor', async () => {
   const ws = join(scratch, 'ws-standing-ok');
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   const report = await runDoctor(ws);
   const finding = report.workspace.find((f) => f.check === 'standing project');
   expect(finding).toMatchObject({
@@ -162,7 +162,7 @@ test('standing project — fresh workspace: ok, naming the ground floor', async 
 
 test('standing project — absent (the pre-0018 shape): info carrying the update remedy', async () => {
   const ws = join(scratch, 'ws-standing-absent');
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   rmSync(join(ws, 'projects', '0-workspace'), { recursive: true });
   const report = await runDoctor(ws);
   const finding = report.workspace.find((f) => f.check === 'standing project');

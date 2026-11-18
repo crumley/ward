@@ -10,7 +10,6 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { storeLockPath } from '../../src/store/lock.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
@@ -28,6 +27,7 @@ import {
   runWardEnv,
   WARD_GLOBAL_ENV,
 } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 test('five concurrent task opens through the CLI: unique codes, every record, linear history', async () => {
   const results = await Promise.all(
@@ -184,7 +184,7 @@ beforeAll(() => {
 beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
 });
 
 afterAll(() => {

@@ -27,11 +27,12 @@ import {
   runWardEnv,
   writeFakeGh,
 } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 const PR_URL = 'https://github.com/example/ws-main/pull/7';
 
-test('bare and human: the derived vehicle, the pull request, and the four acts that remain', () => {
-  const ws = workspace('served', { forge: true });
+test('bare and human: the derived vehicle, the pull request, and the four acts that remain', async () => {
+  const ws = await workspace('served', { forge: true });
 
   const result = ward(ws, ['workspace', 'upgrade', '--json'], { WARD_GH: gh });
   expect(result.exitCode).toBe(0);
@@ -71,8 +72,8 @@ test('bare and human: the derived vehicle, the pull request, and the four acts t
   expect(report.derived?.map((step) => step.step)).toEqual(['task', 'worktree']);
 });
 
-test('the human rendering names the same acts, and the second run is refused, naming both ways out', () => {
-  const ws = workspace('rendered', { forge: true });
+test('the human rendering names the same acts, and the second run is refused, naming both ways out', async () => {
+  const ws = await workspace('rendered', { forge: true });
 
   const rendered = ward(ws, ['workspace', 'upgrade'], { WARD_GH: gh });
   expect(rendered.exitCode).toBe(0);
@@ -107,8 +108,8 @@ test('the human rendering names the same acts, and the second run is refused, na
   expect(steps.some((step) => step.detail.includes(`reaches ${mainLine}`))).toBe(true);
 });
 
-test('a declared agent is refused the derivation and told to pass the task, exactly as everywhere else', () => {
-  const ws = workspace('agent', { forge: true });
+test('a declared agent is refused the derivation and told to pass the task, exactly as everywhere else', async () => {
+  const ws = await workspace('agent', { forge: true });
 
   const result = ward(ws, ['workspace', 'upgrade', '--json'], { WARD_GH: gh, WARD_AGENT: '1' });
   expect(result.exitCode).toBe(1);
@@ -119,8 +120,8 @@ test('a declared agent is refused the derivation and told to pass the task, exac
   expect(JSON.parse(ward(ws, ['task', 'list', '--json'], {}).stdout).tasks).toEqual([]);
 });
 
-test('the no-op case manufactures nothing: no task, no worktree, no branch, no pull request', () => {
-  const ws = workspace('current', { forge: true, stale: false });
+test('the no-op case manufactures nothing: no task, no worktree, no branch, no pull request', async () => {
+  const ws = await workspace('current', { forge: true, stale: false });
 
   const result = ward(ws, ['workspace', 'upgrade', '--json'], { WARD_GH: gh });
   expect(result.exitCode).toBe(0);
@@ -140,8 +141,8 @@ test('the no-op case manufactures nothing: no task, no worktree, no branch, no p
   expect(localBranches(ws)).toEqual([mainLine]);
 });
 
-test('forge absent: the upgrade still lands on its branch, and the preview is the review surface', () => {
-  const ws = workspace('no-forge', { forge: false });
+test('forge absent: the upgrade still lands on its branch, and the preview is the review surface', async () => {
+  const ws = await workspace('no-forge', { forge: false });
 
   const result = ward(ws, ['workspace', 'upgrade', '--json'], { WARD_GH: NO_GH });
   expect(result.exitCode).toBe(0);
@@ -157,8 +158,8 @@ test('forge absent: the upgrade still lands on its branch, and the preview is th
   );
 });
 
-test('forge failure: the task, the worktree, and the commit stand, and the failure is named', () => {
-  const ws = workspace('forge-down', { forge: true });
+test('forge failure: the task, the worktree, and the commit stand, and the failure is named', async () => {
+  const ws = await workspace('forge-down', { forge: true });
 
   const result = ward(ws, ['workspace', 'upgrade', '--json'], { WARD_GH: ghBroken });
   expect(result.exitCode).toBe(0); // the upgrade did its act; the forge is optional (§20)
@@ -181,8 +182,8 @@ test('forge failure: the task, the worktree, and the commit stand, and the failu
   expect(tasks[0]?.prs).toEqual([]);
 });
 
-test('workspace upgrade TASK is unchanged: no push, no pull request, the task the caller named', () => {
-  const ws = workspace('explicit', { forge: true });
+test('workspace upgrade TASK is unchanged: no push, no pull request, the task the caller named', async () => {
+  const ws = await workspace('explicit', { forge: true });
   expect(ward(ws, ['task', 'open', 'adopt-defaults'], {}).exitCode).toBe(0);
   expect(ward(ws, ['worktree', 'create', 't1', '--workspace'], {}).exitCode).toBe(0);
 
@@ -230,10 +231,9 @@ interface WorkspaceShape {
   readonly stale?: boolean;
 }
 
-function workspace(name: string, shape: WorkspaceShape): string {
+async function workspace(name: string, shape: WorkspaceShape): Promise<string> {
   workspaceId += 1;
-  const root = join(scratch, `${workspaceId}-${name}`);
-  expect(ward(scratch, ['workspace', 'create', root], {}).exitCode).toBe(0);
+  const root = await preparedWorkspace(join(scratch, `${workspaceId}-${name}`));
   mainLine = gitOrThrow(root, 'symbolic-ref', '--short', 'HEAD').stdout.trim();
   if (shape.forge) {
     const bare = join(scratch, `${workspaceId}-${name}.git`);

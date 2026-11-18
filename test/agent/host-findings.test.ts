@@ -11,7 +11,6 @@ import { hostFindings } from '../../src/agent/host-findings.ts';
 import type { AgentHost, Resolved } from '../../src/agent/settings.ts';
 import type { FoundWindow, InventoryGroup } from '../../src/host/host.ts';
 import type { SessionRecord } from '../../src/store/types.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import type { Finding } from '../../src/workspace/doctor.ts';
 import { workspaceId } from '../../src/workspace/identity.ts';
 import { openProject } from '../../src/workspace/projects.ts';
@@ -21,6 +20,7 @@ import {
   openWorkspaceSession,
 } from '../../src/workspace/sessions.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 import { type FakeHostOptions, fakeHost } from './fake-host.ts';
 
 const unset: Resolved<AgentHost> = { provenance: 'default', value: 'foreground' };
@@ -292,7 +292,7 @@ beforeEach(async () => {
   caseId += 1;
   scratch ??= makeTempDir();
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   id = await workspaceId(ws);
 });
 
