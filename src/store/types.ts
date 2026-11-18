@@ -428,8 +428,10 @@ export const sessionEventSchema = z.object({
   /**
    * Why it failed — on `resume-failed`, per the intent's "with its cause". A
    * `resumed` event may carry one too (design/0031-detached-session-hosting/):
-   * how the previous hosted run ended, read from its host before the new run
-   * replaced it ("previous run exited 0").
+   * how the previous hosted run FAILED, read from the window its host kept
+   * for it before the new run replaced it ("previous run exited 3"). A run
+   * that exited cleanly leaves no window (design/0070-clean-exit-closes-window/),
+   * so a resume after one carries no cause.
    */
   cause: z.string().min(1).optional(),
   /**

@@ -133,8 +133,8 @@ test('attach renames a host and its windows in place, then joins through the new
         },
       ],
       windows: [
-        { window: '@1', label: 'coord' },
-        { window: '@2', label: 'alpha' },
+        { window: '@1', label: 'coord', running: true },
+        { window: '@2', label: 'alpha', running: true },
       ],
     },
   ]);

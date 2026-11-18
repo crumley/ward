@@ -1133,8 +1133,10 @@ export type WorkspaceRegistryShape = z.infer<typeof workspaceRegistryShape>;
 /**
  * Where a hosted run stands now (design/0031-detached-session-hosting/) —
  * DERIVED at read time from the host, never stored: `live` running, `exited`
- * with its window kept to show how, `gone`, or `unknown` when the host could
- * not answer (never read as gone).
+ * (it failed — a non-zero status or a signal) with its window kept to show
+ * how, `gone` (no window: it exited cleanly, which closes its window, or the
+ * window was ended — design/0070-clean-exit-closes-window/), or `unknown`
+ * when the host could not answer (never read as gone).
  */
 export const sessionLiveShape = z.strictObject({
   kind: z.enum(['tmux']),
@@ -1200,8 +1202,9 @@ export const sessionMutationShape = z.strictObject({
    * Where the run stands now (design/0031-detached-session-hosting/) — present
    * when the latest launch was placed in a detached host and the session is
    * open. DERIVED at read time from the host, never stored: `live` running,
-   * `exited` with its window kept to show how, `gone`, or `unknown` when the
-   * host could not answer (never read as gone).
+   * `exited` (failed) with its window kept to show how, `gone` (no window: a
+   * clean exit, or a window that was ended), or `unknown` when the host could
+   * not answer (never read as gone).
    */
   live: sessionLiveShape.optional(),
   /** What `session close` did to the live half (0031): present when the latest launch was hosted. */

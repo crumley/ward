@@ -10,9 +10,10 @@
 // duplicate floor host or window, and a host environment carrying a run's
 // identity are `warn`: something is live or inherited that nothing accounts
 // for. Gone, exited, misplaced, missing links, idle hosts, leftover views,
-// foreign hosts, and version skew are `info`: after any reboot "gone" is the
-// normal state of every detached session, and the rest are arrangements a
-// human may well have chosen. A host that cannot answer is `warn`, worded so
+// foreign hosts, and version skew are `info`: "gone" is the normal state of
+// every detached session after a reboot, and of any session whose run exited
+// cleanly (its window closes itself, design/0070-clean-exit-closes-window/),
+// and the rest are arrangements a human may well have chosen. A host that cannot answer is `warn`, worded so
 // it can never be read as a clean bill.
 import pkg from '../../package.json' with { type: 'json' };
 import { runIdentityVars } from '../harness/index.ts';
@@ -177,7 +178,8 @@ function inventoryFindings(
         severity: 'info',
         message:
           `session ${record.id} is not running (no ${kind} window) — attach re-creates it: ` +
-          `ward session attach ${record.id}`,
+          `ward session attach ${record.id}; if it is done, close it: ` +
+          `ward session close ${record.id}`,
       });
       continue;
     }
@@ -186,8 +188,8 @@ function inventoryFindings(
         check: WINDOWS,
         severity: 'info',
         message:
-          `session ${record.id} ${exitOf(window)}, its window ${window.window} kept to show ` +
-          `it — attach re-creates it: ward session attach ${record.id}`,
+          `session ${record.id}'s run ${exitOf(window)}, its window ${window.window} kept to ` +
+          `show it — attach re-creates it: ward session attach ${record.id}`,
       });
       continue;
     }

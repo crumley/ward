@@ -3463,9 +3463,11 @@ function describeEnded(id: string, ended: Ended): string {
     case 'closed':
       return `session ${id} was closed — the window you were watching ended with it`;
     case 'gone':
+      // The record is open and the window is not there: the run exited
+      // cleanly (which closes its window), or the window was ended under it.
       return (
-        `session ${id} ended — the window you were watching is gone ` +
-        `(where it stands: ward session show ${id})`
+        `session ${id}'s run ended — the window you were watching is gone, and the session ` +
+        `is still open (run it again: ward session attach ${id}; end it: ward session close ${id})`
       );
     case 'restarted':
       return (
@@ -3520,12 +3522,24 @@ function renderHosted(
   if (hosted.linkedInto.length > 0) {
     console.log(pc.dim(`linked into every floor host: ${hosted.linkedInto.join(', ')}`));
   }
-  if (hosted.live !== undefined && hosted.live.state !== 'live') {
+  if (hosted.live?.state === 'gone') {
+    // A run that exits cleanly closes its window, and its floor host goes with
+    // its last one: there may be nothing left to join, so the join command is
+    // not offered — the session is open, and resume is what runs it again.
     console.error(
-      pc.yellow(`the run is ${describeLive(hosted.live)} — see: ward session show ${record.id}`),
+      pc.yellow(
+        'the run has already ended and left no window — it exited cleanly, or its window ' +
+          `was ended. The session is still open; run it again: ward session resume ${record.id}`,
+      ),
     );
+  } else {
+    if (hosted.live !== undefined && hosted.live.state !== 'live') {
+      console.error(
+        pc.yellow(`the run is ${describeLive(hosted.live)} — see: ward session show ${record.id}`),
+      );
+    }
+    console.log(`join it: ${hosted.join}`);
   }
-  console.log(`join it: ${hosted.join}`);
   console.log(pc.dim(`end it: ward session close ${record.id}`));
 }
 
@@ -3540,7 +3554,13 @@ function describeLive(live: LiveState): string {
     case 'exited':
       return `${describeExit(live)}, window kept in ${where}${strangers}`;
     case 'gone':
-      return `not running (no ${live.kind} window, floor ${live.floor})${strangers}`;
+      // No window says only that there is none: a clean exit closes its own
+      // (design/0070-clean-exit-closes-window/), and so does anything that
+      // ends the window or its host. Which it was is not kept anywhere.
+      return (
+        `not running (no ${live.kind} window, floor ${live.floor} — it exited cleanly, ` +
+        `or its window was ended)${strangers}`
+      );
     case 'unknown':
       return `could not determine (${live.reason ?? 'no reason'})`;
   }

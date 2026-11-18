@@ -10,11 +10,14 @@ import {
   commandArgs,
   createGroupArgv,
   createWindowArgv,
+  EXIT_RULE,
   endViewArgv,
   enterArgv,
   eraseArgv,
+  exitRuleArgv,
   insideServer,
   linkWindowArgv,
+  MINIMUM_VERSION,
   mintGroupName,
   namedFor,
   observeViewArgv,
@@ -82,6 +85,16 @@ test("a title leads with the floor's emoji when it has one, and with no gap when
     ['=main-f7-x:', 'set-titles', 'on'],
     ['=main-f7-x:', 'set-titles-string', titleString('main f7', 'attach', '🌸')],
   ]);
+});
+
+test('the exit rule is one every supported tmux takes, and a standing window is told it by id', () => {
+  // `remain-on-exit failed` arrived in tmux 3.2 (CHANGES FROM 3.1c TO 3.2) —
+  // the version floor itself, so there is no older tmux to fall back for.
+  expect(EXIT_RULE).toBe('failed');
+  expect(MINIMUM_VERSION).toEqual({ major: 3, minor: 2 });
+  expect(belowFloor('tmux 3.1c')).toBe(true);
+  expect(belowFloor('tmux 3.2')).toBe(false);
+  expect(exitRuleArgv('@3')).toEqual(['set-option', '-w', '-t', '@3', 'remain-on-exit', 'failed']);
 });
 
 test('renaming is in place: a host by exact name, a window by its id, titles per tmux session', () => {
@@ -168,7 +181,7 @@ test("a host is created at the detached size, stamped, and holding nothing of a 
   ]);
 });
 
-test('the window is created holding, then tagged, kept, and only then started', () => {
+test('the window is created holding, then tagged, told to keep a failed exit, and only then started', () => {
   expect(createWindowArgv('ward-main-f0', 'workspace-1@mbp')).toEqual([
     'new-window',
     '-d',
@@ -192,7 +205,8 @@ test('the window is created holding, then tagged, kept, and only then started', 
     ['@7', '@ward_session', 'workspace-1@mbp'],
     ['@7', '@ward_epoch', '2026-11-08T10:00:00.000Z'],
     ['@7', '@ward_pane', '%9'],
-    ['@7', 'remain-on-exit', 'on'],
+    // A clean exit closes the window; a failed or signalled one is kept (0070).
+    ['@7', 'remain-on-exit', 'failed'],
     ['@7', 'automatic-rename', 'off'],
     ['@7', 'allow-rename', 'off'],
   ]);

@@ -10,7 +10,9 @@
 > **Status:** built — awaiting review · **Started:** 2026-08-24 · **Regrouped:** 2026-10-16 (floor
 > hosts) · **Reviewed:** 2026-11-06 · **Built:** 2026-11-15 · **Partly superseded:** the minted host
 > name and the window's label, by
-> [`0061-host-names-and-titles/`](../0061-host-names-and-titles/README.md)
+> [`0061-host-names-and-titles/`](../0061-host-names-and-titles/README.md); keeping the window of a
+> run that exited cleanly, by
+> [`0070-clean-exit-closes-window/`](../0070-clean-exit-closes-window/README.md)
 
 [0029](../0029-launched-sessions/README.md) made Ward launch agents — foreground, in the caller's
 terminal, dying with it — and its IF-002, since adjudicated into the
@@ -509,7 +511,10 @@ say what changed.
     ([amux](prior-art/amux-survey.md)). The cost is structural and owned: a dead window lingers in
     its floor host (and, for the coordinator, in every floor host) until a re-create or a close
     clears it, so liveness is layered (next decision) and close kills dead windows as readily as
-    live ones.
+    live ones. (Superseded in one clause by [0070](../0070-clean-exit-closes-window/README.md): the
+    option is `failed`, so only a run that failed or was killed is kept, and a clean exit closes its
+    window. The decision is not superseded as a whole — the host still keeps the exit, and there is
+    still no shim.)
   - **Liveness is layered, and a probe that fails answers "could not determine" — never "not
     running."** Three facts, each derived fresh at read time and never stored: the tagged window
     exists and verifies, its agent pane is alive (`#{pane_dead}` of `@ward_pane`), and the
