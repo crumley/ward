@@ -5,7 +5,7 @@
 // (intent/02-subsystems/07-human-shell.md).
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { callerIsAgent } from '../../src/cli/caller.ts';
-import { makeTempDir, removeDir, runWardEnv } from '../helpers.ts';
+import { callWardEnv, makeTempDir, removeDir } from '../helpers.ts';
 
 const rows: readonly { name: string; env: Record<string, string>; ansi: boolean }[] = [
   { name: 'a human under FORCE_COLOR gets color', env: { FORCE_COLOR: '1' }, ansi: true },
@@ -27,8 +27,8 @@ const rows: readonly { name: string; env: Record<string, string>; ansi: boolean 
 ];
 
 for (const row of rows) {
-  test(row.name, () => {
-    const result = runWardEnv([], dir, row.env);
+  test(row.name, async () => {
+    const result = await callWardEnv([], dir, row.env);
     expect(result.exitCode).toBe(0);
     expect(result.stdout.includes('\u001b[')).toBe(row.ansi);
   });

@@ -29,7 +29,7 @@ import {
   createWorktree,
   readTaskWorktreeEntries,
 } from '../../src/workspace/worktrees.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWardEnv } from '../helpers.ts';
+import { applyGitTestEnv, callWardEnv, makeTempDir, removeDir } from '../helpers.ts';
 import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 // -- placement at create ---------------------------------------------------------
@@ -78,7 +78,7 @@ test('upgrade moves a clean old-layout worktree: one commit per task, git agrees
   const stashes = stashCount(old);
   const before = commitCount();
 
-  const report = upgrade();
+  const report = await upgrade();
   expect(placementStep(report)).toMatchObject({ outcome: 'established' });
   expect(placementStep(report)?.detail).toStartWith('4 moved, 0 already placed');
   expect(placementStep(report)?.residue).toBeUndefined();
@@ -110,7 +110,7 @@ test('upgrade moves a clean old-layout worktree: one commit per task, git agrees
   expect(git(ws, 'status', '--porcelain').stdout).toBe('');
 
   const again = commitCount();
-  const second = upgrade();
+  const second = await upgrade();
   expect(placementStep(second)).toMatchObject({ outcome: 'satisfied' });
   expect(placementStep(second)?.detail).toBe('0 moved, 4 already placed');
   expect(commitCount()).toBe(again);
@@ -129,7 +129,7 @@ test('a dirty worktree, one with a session inside, and one git refuses each stay
   });
   gitOrThrow(checkoutPath(ws, 'demo'), 'worktree', 'lock', join(ws, 'worktrees/f1t3-locked'));
 
-  const report = upgrade();
+  const report = await upgrade();
   expect(placementStep(report)).toMatchObject({ outcome: 'satisfied' });
   const residue = placementStep(report)?.residue ?? [];
   expect(residue.map((item) => item.path)).toEqual([
@@ -157,7 +157,7 @@ test('a dirty worktree, one with a session inside, and one git refuses each stay
   gitOrThrow(join(ws, 'worktrees/f1t1-dirty'), 'clean', '-fdq');
   await closeSession(ws, session.id);
   gitOrThrow(checkoutPath(ws, 'demo'), 'worktree', 'unlock', join(ws, 'worktrees/f1t3-locked'));
-  const cleared = upgrade();
+  const cleared = await upgrade();
   expect(placementStep(cleared)?.detail).toStartWith('3 moved');
   expect(placementStep(cleared)?.residue).toBeUndefined();
   expect(await recordedPaths()).toEqual([
@@ -178,7 +178,7 @@ test('a clone whose record moved but whose checkout did not: upgrade and restore
   // The checkout stands at the old path; the record (moved elsewhere) says floors/.
   checkoutBack(placed, behind);
   const before = commitCount();
-  const report = upgrade();
+  const report = await upgrade();
   expect(placementStep(report)?.detail).toStartWith('1 moved');
   expect(subjectsSince(before)).toEqual([]); // the record already said floors/: nothing to journal
   expect(registered()).toEqual([`${ws}/${placed}`]);
@@ -208,7 +208,7 @@ test("a branch two open tasks record: its checkout stays the standing task's", a
   await toOldLayout();
   expect(existsSync(join(ws, 'worktrees/f1t1-shared'))).toBe(false); // never on disk
 
-  const report = upgrade();
+  const report = await upgrade();
   expect(placementStep(report)?.residue).toBeUndefined();
   expect(registered()).toEqual([`${ws}/floors/1-alpha/f1t2-shared`]); // the second task's, moved
   expect(await recordedPaths()).toEqual([
@@ -237,7 +237,7 @@ test("doctor's worktree placement names each misplaced worktree, and is silent o
       'refused: uncommitted changes — commit or clean them, then run it again',
   ]);
   gitOrThrow(join(ws, 'worktrees/f1t2-dirty'), 'clean', '-fdq');
-  upgrade();
+  await upgrade();
   expect(await placementFindings()).toEqual([]);
 });
 
@@ -248,14 +248,14 @@ test('retirement: an empty worktrees/ and its ignore line go in one commit, once
   oldIgnoreLine();
   const before = commitCount();
 
-  const report = upgrade();
+  const report = await upgrade();
   expect(retireStep(report)).toMatchObject({ outcome: 'established' });
   expect(existsSync(join(ws, 'worktrees'))).toBe(false);
   expect(readFileSync(join(ws, '.gitignore'), 'utf8').split('\n')).not.toContain('/worktrees/');
   expect(subjectsSince(before)).toEqual(['Retire worktrees/ (ward 0.1.0)']);
 
   const again = commitCount();
-  expect(retireStep(upgrade())).toMatchObject({ outcome: 'satisfied' });
+  expect(retireStep(await upgrade())).toMatchObject({ outcome: 'satisfied' });
   expect(commitCount()).toBe(again);
   // Converge does not bring the directory back, and doctor no longer expects its line.
   await convergeWorkspace(ws);
@@ -283,7 +283,7 @@ test('retirement waits on an open legacy task, a leftover checkout, and a stray 
   writeFileSync(join(ws, 'worktrees/.DS_Store'), '');
   const before = commitCount();
 
-  const report = upgrade();
+  const report = await upgrade();
   const retire = retireStep(report);
   expect(retire).toMatchObject({ outcome: 'satisfied' });
   expect(retire?.residue).toEqual([
@@ -321,8 +321,8 @@ let scratch: string;
 let ws: string;
 let caseId = 0;
 
-function upgrade(): WorkspaceUpgradeShape {
-  const result = runWardEnv(['workspace', 'upgrade', '--json'], ws, { NO_COLOR: '1' });
+async function upgrade(): Promise<WorkspaceUpgradeShape> {
+  const result = await callWardEnv(['workspace', 'upgrade', '--json'], ws, { NO_COLOR: '1' });
   if (result.exitCode !== 0) throw new Error(result.stderr);
   return workspaceUpgradeShape.parse(JSON.parse(result.stdout));
 }

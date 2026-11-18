@@ -31,7 +31,7 @@ import {
   openWorkspaceSession,
 } from '../../src/workspace/sessions.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { applyGitTestEnv, callWard, makeTempDir, removeDir } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
 import { type FakeHostOptions, fakeHost } from './fake-host.ts';
 
@@ -295,7 +295,7 @@ test.each<[string, string[], string]>([
 ])('ward session resume refuses %s, legibly, writing nothing', async (_, argv, says) => {
   const session = await hosted({});
   const before = head();
-  const result = runWard(['session', 'resume', ...argv, '--json'], ws);
+  const result = await callWard(['session', 'resume', ...argv, '--json'], ws);
   expect(result.exitCode).toBe(1);
   expect(result.stdout).toBe('');
   expect(result.stderr).toContain(says);
@@ -303,8 +303,8 @@ test.each<[string, string[], string]>([
   expect(await events(session.id)).toEqual(['opened']);
 });
 
-test('ward schema session resume: one session’s record, or the bulk document', () => {
-  const schema = JSON.parse(runWard(['schema', 'session', 'resume'], ws).stdout);
+test('ward schema session resume: one session’s record, or the bulk document', async () => {
+  const schema = JSON.parse((await callWard(['schema', 'session', 'resume'], ws)).stdout);
   expect(schema.anyOf).toHaveLength(2);
   expect(Object.keys(schema.anyOf[1].properties)).toEqual(Object.keys(sessionResumeAllShape.shape));
 });

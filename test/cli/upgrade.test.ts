@@ -14,7 +14,7 @@ import { gitOrThrow } from '../../src/workspace/git.ts';
 import { recordedWorkspaceMainLine, workspaceMainLine } from '../../src/workspace/steward.ts';
 import { AGENTS_MD, WARD_INTERNAL_README } from '../../src/workspace/templates.ts';
 import { LEGACY_AGENTS_MD, LEGACY_WARD_README } from '../fixtures/legacy.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { applyGitTestEnv, callWard, makeTempDir, removeDir } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
 
 test('workspace upgrade --json: one validating document; the fixture upgrades mechanically', async () => {
@@ -35,10 +35,12 @@ test('workspace upgrade --json: one validating document; the fixture upgrades me
   gitOrThrow(ws, 'add', '-A');
   gitOrThrow(ws, 'commit', '-m', 'Regress to the live workspace shape (test fixture)');
 
-  expect(runWard(['task', 'open', 'upgrade-ward', '--json'], ws).exitCode).toBe(0);
-  expect(runWard(['worktree', 'create', 't1', '--workspace', '--json'], ws).exitCode).toBe(0);
+  expect((await callWard(['task', 'open', 'upgrade-ward', '--json'], ws)).exitCode).toBe(0);
+  expect((await callWard(['worktree', 'create', 't1', '--workspace', '--json'], ws)).exitCode).toBe(
+    0,
+  );
 
-  const result = runWard(['workspace', 'upgrade', 't1', '--json'], ws);
+  const result = await callWard(['workspace', 'upgrade', 't1', '--json'], ws);
   expect(result.exitCode).toBe(0);
   const report = workspaceUpgradeShape.parse(JSON.parse(result.stdout));
   expect(report.outcome).toBe('upgraded');
@@ -56,8 +58,8 @@ test('workspace upgrade --json: one validating document; the fixture upgrades me
   ]);
 });
 
-test('a second run converges: outcome current, no commit field, byte-identical document shape', () => {
-  const again = runWard(['workspace', 'upgrade', 't1', '--json'], ws);
+test('a second run converges: outcome current, no commit field, byte-identical document shape', async () => {
+  const again = await callWard(['workspace', 'upgrade', 't1', '--json'], ws);
   expect(again.exitCode).toBe(0);
   const report = workspaceUpgradeShape.parse(JSON.parse(again.stdout));
   expect(report.outcome).toBe('current');
@@ -67,12 +69,12 @@ test('a second run converges: outcome current, no commit field, byte-identical d
 });
 
 test('the human rendering names the actions, and the 0019 rails land and close the task', async () => {
-  const rendered = runWard(['workspace', 'upgrade', 't1'], ws);
+  const rendered = await callWard(['workspace', 'upgrade', 't1'], ws);
   expect(rendered.exitCode).toBe(0);
   expect(rendered.stdout).toContain('current');
   expect(rendered.stdout).toContain('nothing to upgrade — everything already current');
 
-  const merged = runWard(['workspace', 'merge', 'steward/upgrade-ward'], ws);
+  const merged = await callWard(['workspace', 'merge', 'steward/upgrade-ward'], ws);
   expect(merged.exitCode).toBe(0);
   expect(merged.stdout).toContain('merged');
   // The root now stands mechanically upgraded: current defaults, backfilled
@@ -82,28 +84,30 @@ test('the human rendering names the actions, and the 0019 rails land and close t
   expect((await readDocument(ws, baselinesType)).data.artifacts.length).toBe(3);
   expect(recordedWorkspaceMainLine(ws)).toBe(mainLine);
 
-  const closed = runWard(['task', 'close', 't1', '--json'], ws);
+  const closed = await callWard(['task', 'close', 't1', '--json'], ws);
   expect(closed.exitCode).toBe(0);
   const steps = JSON.parse(closed.stdout).steps as { step: string; detail: string }[];
   expect(steps.find((s) => s.step === 'reachability')?.detail).toContain(`reaches ${mainLine}`);
 });
 
-test('a refusal emits no document: a task with no workspace worktree is exit 1, stdout empty', () => {
-  const opened = runWard(['task', 'open', 'no-worktree', '--json'], ws);
+test('a refusal emits no document: a task with no workspace worktree is exit 1, stdout empty', async () => {
+  const opened = await callWard(['task', 'open', 'no-worktree', '--json'], ws);
   expect(opened.exitCode).toBe(0);
   // Rooms run in opening order (0036) — the address is read from the record,
   // never assumed to be the smallest free room.
   const address = JSON.parse(opened.stdout).address as string;
-  const result = runWard(['workspace', 'upgrade', address, '--json'], ws);
+  const result = await callWard(['workspace', 'upgrade', address, '--json'], ws);
   expect(result.exitCode).toBe(1);
   expect(result.stdout).toBe('');
   expect(result.stderr).toContain(`ward worktree create ${address} --workspace`);
-  expect(runWard(['task', 'close', address, '--outcome', 'abandoned'], ws).exitCode).toBe(0);
+  expect((await callWard(['task', 'close', address, '--outcome', 'abandoned'], ws)).exitCode).toBe(
+    0,
+  );
 });
 
-test('the loud proceed: a journal commit off the recorded main line says so on stderr, and lands', () => {
+test('the loud proceed: a journal commit off the recorded main line says so on stderr, and lands', async () => {
   gitOrThrow(ws, 'switch', '-c', 'experiment');
-  const result = runWard(['task', 'open', 'loud-proceed'], ws);
+  const result = await callWard(['task', 'open', 'loud-proceed'], ws);
   expect(result.exitCode).toBe(0); // proceeds — refusing would wedge the bookkeeping
   expect(result.stdout).toContain('opened ');
   loudCode = /opened (\S+)/.exec(result.stdout)?.[1] ?? '';
@@ -114,24 +118,24 @@ test('the loud proceed: a journal commit off the recorded main line says so on s
   expect(gitOrThrow(ws, 'log', '-1', '--format=%s').stdout).toContain('Open task loud-proceed');
 
   // Under --json the note stays on stderr and stdout stays one document.
-  const json = runWard(['task', 'pause', loudCode, '--json'], ws);
+  const json = await callWard(['task', 'pause', loudCode, '--json'], ws);
   expect(json.exitCode).toBe(0);
   expect(JSON.parse(json.stdout).state).toBe('paused');
   expect(json.stderr).toContain('off the recorded main line');
 
   // And doctor names the drift with the way back.
-  const doctor = runWard(['doctor'], ws);
+  const doctor = await callWard(['doctor'], ws);
   expect(doctor.exitCode).toBe(0); // warn reports; nothing is an error
   expect(doctor.stdout).toContain('workspace main line');
   expect(doctor.stdout).toContain(`git switch ${mainLine}`);
   gitOrThrow(ws, 'switch', mainLine);
 });
 
-test('on the recorded main line the journal is quiet: no note on stderr', () => {
+test('on the recorded main line the journal is quiet: no note on stderr', async () => {
   // The loud-proceed task's records live on 'experiment' — the honest
   // consequence of a journal advancing on a chosen branch history. This case
   // opens a fresh task on the recorded main line and hears nothing.
-  const result = runWard(['task', 'open', 'quiet-check'], ws);
+  const result = await callWard(['task', 'open', 'quiet-check'], ws);
   expect(result.exitCode).toBe(0);
   expect(result.stderr).not.toContain('off the recorded main line');
 });

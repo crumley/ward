@@ -262,7 +262,7 @@ function machineNameFinding(name: MachineName): Finding {
  */
 function pickerFinding(): Finding {
   const check = 'picker';
-  return Bun.which('fzf') === null
+  return Bun.which('fzf', { PATH: process.env.PATH ?? '' }) === null
     ? {
         check,
         severity: 'info',

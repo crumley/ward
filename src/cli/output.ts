@@ -14,9 +14,11 @@
 // the last write on both streams before exiting. The stream's own
 // `writableLength` cannot stand in for the tracking: under Bun it reads 0
 // while a pipe write is still pending.
+//
+// The streams are the invocation's (design/0074-in-process-cli-tests/): a real
+// run's are the process's own, an in-process run's capture.
 import { format } from 'node:util';
-
-type Channel = 'stdout' | 'stderr';
+import { type Channel, invocation } from './invocation.ts';
 
 const pending: Record<Channel, Promise<void>> = {
   stdout: Promise.resolve(),
@@ -26,12 +28,7 @@ const pending: Record<Channel, Promise<void>> = {
 /** Write text to a channel; its completion joins what `flushed` waits for. */
 function emit(channel: Channel, text: string): void {
   if (text === '') return;
-  const stream = channel === 'stdout' ? process.stdout : process.stderr;
-  pending[channel] = new Promise<void>((resolve) => {
-    // Resolve on error too: a reader that went away (EPIPE) has nothing
-    // left to wait for, and the exit must not hang on it.
-    stream.write(text, () => resolve());
-  });
+  pending[channel] = invocation().write(channel, text);
 }
 
 export function writeOut(text: string): void {
@@ -53,10 +50,11 @@ export function flushed(): Promise<void> {
  * would at `process.exit()`.
  */
 export async function exitWhenFlushed(code: number): Promise<never> {
+  const leaving = invocation();
   // Recorded first, so a natural exit that wins a race still carries it.
-  process.exitCode = code;
+  leaving.setExitCode(code);
   await flushed();
-  process.exit(code);
+  return leaving.exit(code);
 }
 
 /**
@@ -74,14 +72,14 @@ export function installPipeSafeConsole(): void {
 
 /**
  * Stdout as a progress display's stream: writes tracked like every other,
- * the terminal's shape read live from the real stream.
+ * the terminal's shape read live from the invocation's stdout.
  */
 export const pipeSafeStdout = {
   write: writeOut,
   get isTTY(): boolean | undefined {
-    return process.stdout.isTTY;
+    return invocation().stdoutIsTTY;
   },
   get rows(): number | undefined {
-    return process.stdout.rows;
+    return invocation().stdoutRows;
   },
 };

@@ -21,10 +21,10 @@ import { LEGACY_AGENTS_MD } from '../fixtures/legacy.ts';
 import {
   applyGitTestEnv,
   type CliResult,
+  callWardEnv,
   makeTempDir,
   NO_GH,
   removeDir,
-  runWardEnv,
   writeFakeGh,
 } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
@@ -34,7 +34,7 @@ const PR_URL = 'https://github.com/example/ws-main/pull/7';
 test('bare and human: the derived vehicle, the pull request, and the four acts that remain', async () => {
   const ws = await workspace('served', { forge: true });
 
-  const result = ward(ws, ['workspace', 'upgrade', '--json'], { WARD_GH: gh });
+  const result = await ward(ws, ['workspace', 'upgrade', '--json'], { WARD_GH: gh });
   expect(result.exitCode).toBe(0);
   const report = workspaceUpgradeShape.parse(JSON.parse(result.stdout));
   expect(report.vehicle).toBe('derived');
@@ -50,7 +50,7 @@ test('bare and human: the derived vehicle, the pull request, and the four acts t
   expect(report.pullRequest?.base).toMatchObject({ ref: mainLine, outcome: 'published' });
   expect(remoteBranches(ws)).toContain('steward/workspace-upgrade');
   expect(remoteBranches(ws)).toContain(mainLine);
-  const listing = JSON.parse(ward(ws, ['task', 'list', '--json'], {}).stdout) as {
+  const listing = JSON.parse((await ward(ws, ['task', 'list', '--json'], {})).stdout) as {
     tasks: { address: string; prs: string[] }[];
   };
   expect(listing.tasks.find((task) => task.address === 'f0t1')?.prs).toEqual([PR_URL]);
@@ -75,7 +75,7 @@ test('bare and human: the derived vehicle, the pull request, and the four acts t
 test('the human rendering names the same acts, and the second run is refused, naming both ways out', async () => {
   const ws = await workspace('rendered', { forge: true });
 
-  const rendered = ward(ws, ['workspace', 'upgrade'], { WARD_GH: gh });
+  const rendered = await ward(ws, ['workspace', 'upgrade'], { WARD_GH: gh });
   expect(rendered.exitCode).toBe(0);
   expect(rendered.stdout).toContain('task f0t1 — opened for this upgrade');
   expect(rendered.stdout).toContain('upgraded  AGENTS.md');
@@ -86,7 +86,7 @@ test('the human rendering names the same acts, and the second run is refused, na
 
   // One open upgrade task per workspace: the second run refuses, exit 1 with
   // stdout empty, naming the task and the two ways out.
-  const again = ward(ws, ['workspace', 'upgrade'], { WARD_GH: gh });
+  const again = await ward(ws, ['workspace', 'upgrade'], { WARD_GH: gh });
   expect(again.exitCode).toBe(1);
   expect(again.stdout).toBe('');
   expect(again.stderr).toContain('already in flight');
@@ -95,11 +95,13 @@ test('the human rendering names the same acts, and the second run is refused, na
   expect(again.stderr).toContain('ward task close f0t1 --outcome abandoned');
 
   // And the acts it named land it: merge, then the delivered close.
-  expect(ward(ws, ['workspace', 'merge', 'steward/workspace-upgrade'], {}).exitCode).toBe(0);
+  expect((await ward(ws, ['workspace', 'merge', 'steward/workspace-upgrade'], {})).exitCode).toBe(
+    0,
+  );
   expect(readFileSync(join(ws, 'AGENTS.md'), 'utf8')).not.toBe(LEGACY_AGENTS_MD);
   // The PR is linked and the fake forge reports it merged, so the close gate
   // resolves the PR set and the reachability check verifies the branch.
-  const closed = ward(ws, ['task', 'close', 'f0t1', '--json'], { WARD_GH: ghMerged });
+  const closed = await ward(ws, ['task', 'close', 'f0t1', '--json'], { WARD_GH: ghMerged });
   expect(closed.exitCode).toBe(0);
   const steps = (JSON.parse(closed.stdout) as { steps: { step: string; detail: string }[] }).steps;
   // Two reachability steps here — the forge PR's and the workspace worktree's;
@@ -111,19 +113,22 @@ test('the human rendering names the same acts, and the second run is refused, na
 test('a declared agent is refused the derivation and told to pass the task, exactly as everywhere else', async () => {
   const ws = await workspace('agent', { forge: true });
 
-  const result = ward(ws, ['workspace', 'upgrade', '--json'], { WARD_GH: gh, WARD_AGENT: '1' });
+  const result = await ward(ws, ['workspace', 'upgrade', '--json'], {
+    WARD_GH: gh,
+    WARD_AGENT: '1',
+  });
   expect(result.exitCode).toBe(1);
   expect(result.stdout).toBe(''); // a refusal emits no document (0015)
   expect(result.stderr).toContain('a declared agent passes scope explicitly');
   expect(result.stderr).toContain('ward workspace upgrade TASK');
   // Nothing was manufactured on the agent's behalf.
-  expect(JSON.parse(ward(ws, ['task', 'list', '--json'], {}).stdout).tasks).toEqual([]);
+  expect(JSON.parse((await ward(ws, ['task', 'list', '--json'], {})).stdout).tasks).toEqual([]);
 });
 
 test('the no-op case manufactures nothing: no task, no worktree, no branch, no pull request', async () => {
   const ws = await workspace('current', { forge: true, stale: false });
 
-  const result = ward(ws, ['workspace', 'upgrade', '--json'], { WARD_GH: gh });
+  const result = await ward(ws, ['workspace', 'upgrade', '--json'], { WARD_GH: gh });
   expect(result.exitCode).toBe(0);
   const report = workspaceUpgradeShape.parse(JSON.parse(result.stdout));
   expect(report.vehicle).toBe('none');
@@ -131,7 +136,7 @@ test('the no-op case manufactures nothing: no task, no worktree, no branch, no p
   expect(report.task).toBeUndefined();
   expect(report.pullRequest).toBeUndefined();
   expect(report.remaining).toEqual([]);
-  expect(JSON.parse(ward(ws, ['task', 'list', '--json'], {}).stdout).tasks).toEqual([]);
+  expect(JSON.parse((await ward(ws, ['task', 'list', '--json'], {})).stdout).tasks).toEqual([]);
   // The ground floor's view holds its three links and no worktree (0057).
   expect(readdirSync(join(ws, 'floors/0-workspace')).sort()).toEqual([
     'AGENTS.md',
@@ -144,7 +149,7 @@ test('the no-op case manufactures nothing: no task, no worktree, no branch, no p
 test('forge absent: the upgrade still lands on its branch, and the preview is the review surface', async () => {
   const ws = await workspace('no-forge', { forge: false });
 
-  const result = ward(ws, ['workspace', 'upgrade', '--json'], { WARD_GH: NO_GH });
+  const result = await ward(ws, ['workspace', 'upgrade', '--json'], { WARD_GH: NO_GH });
   expect(result.exitCode).toBe(0);
   const report = workspaceUpgradeShape.parse(JSON.parse(result.stdout));
   expect(report.outcome).toBe('upgraded');
@@ -161,7 +166,7 @@ test('forge absent: the upgrade still lands on its branch, and the preview is th
 test('forge failure: the task, the worktree, and the commit stand, and the failure is named', async () => {
   const ws = await workspace('forge-down', { forge: true });
 
-  const result = ward(ws, ['workspace', 'upgrade', '--json'], { WARD_GH: ghBroken });
+  const result = await ward(ws, ['workspace', 'upgrade', '--json'], { WARD_GH: ghBroken });
   expect(result.exitCode).toBe(0); // the upgrade did its act; the forge is optional (§20)
   const report = workspaceUpgradeShape.parse(JSON.parse(result.stdout));
   expect(report.outcome).toBe('upgraded');
@@ -176,7 +181,7 @@ test('forge failure: the task, the worktree, and the commit stand, and the failu
   expect(report.remaining.map((act) => act.step)).toEqual(['review', 'merge', 'close']);
   expect(report.remaining[0]?.detail).toContain('the forge half failed');
   // Nothing was linked to the task, because there is nothing to link.
-  const tasks = JSON.parse(ward(ws, ['task', 'list', '--json'], {}).stdout).tasks as {
+  const tasks = JSON.parse((await ward(ws, ['task', 'list', '--json'], {})).stdout).tasks as {
     prs: string[];
   }[];
   expect(tasks[0]?.prs).toEqual([]);
@@ -184,10 +189,10 @@ test('forge failure: the task, the worktree, and the commit stand, and the failu
 
 test('workspace upgrade TASK is unchanged: no push, no pull request, the task the caller named', async () => {
   const ws = await workspace('explicit', { forge: true });
-  expect(ward(ws, ['task', 'open', 'adopt-defaults'], {}).exitCode).toBe(0);
-  expect(ward(ws, ['worktree', 'create', 't1', '--workspace'], {}).exitCode).toBe(0);
+  expect((await ward(ws, ['task', 'open', 'adopt-defaults'], {})).exitCode).toBe(0);
+  expect((await ward(ws, ['worktree', 'create', 't1', '--workspace'], {})).exitCode).toBe(0);
 
-  const result = ward(ws, ['workspace', 'upgrade', 't1', '--json'], { WARD_GH: gh });
+  const result = await ward(ws, ['workspace', 'upgrade', 't1', '--json'], { WARD_GH: gh });
   expect(result.exitCode).toBe(0);
   const report = workspaceUpgradeShape.parse(JSON.parse(result.stdout));
   expect(report.vehicle).toBe('given');
@@ -220,8 +225,8 @@ let ghBroken: string;
 let mainLine: string;
 let workspaceId = 0;
 
-function ward(cwd: string, argv: string[], env: Record<string, string>): CliResult {
-  return runWardEnv(argv, cwd, { NO_COLOR: '1', WARD_GH: NO_GH, ...env });
+async function ward(cwd: string, argv: string[], env: Record<string, string>): Promise<CliResult> {
+  return await callWardEnv(argv, cwd, { NO_COLOR: '1', WARD_GH: NO_GH, ...env });
 }
 
 interface WorkspaceShape {

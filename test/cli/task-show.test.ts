@@ -11,10 +11,10 @@ import { writeDocument } from '../../src/store/document.ts';
 import { type TaskRecord, taskRecordType } from '../../src/store/types.ts';
 import {
   applyGitTestEnv,
+  callWard,
+  callWardEnv,
   makeTempDir,
   removeDir,
-  runWard,
-  runWardEnv,
   writeFakeGh,
 } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
@@ -24,8 +24,11 @@ const PR_MERGED = 'https://example.com/x/pull/11';
 
 // -- the one-screen answer -------------------------------------------------
 
-test('task show: header, PR lines with live state, worktrees, sessions, and the next step', () => {
-  const result = runWardEnv(['task', 'show', 'f1t1'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
+test('task show: header, PR lines with live state, worktrees, sessions, and the next step', async () => {
+  const result = await callWardEnv(['task', 'show', 'f1t1'], ws, {
+    NO_COLOR: '1',
+    WARD_GH: fakeGh,
+  });
   expect(result.exitCode).toBe(0);
   const out = result.stdout;
   expect(out).toContain('f1t1 shipping [active · in-review]');
@@ -47,8 +50,8 @@ test('task show: header, PR lines with live state, worktrees, sessions, and the 
   expect(out).toContain(`next\n    fix checks on ${PR_OPEN}`);
 });
 
-test('task show --json: the documented shape, with the next step carrying its noun', () => {
-  const result = runWardEnv(['task', 'show', 'f1t1', '--json'], ws, {
+test('task show --json: the documented shape, with the next step carrying its noun', async () => {
+  const result = await callWardEnv(['task', 'show', 'f1t1', '--json'], ws, {
     NO_COLOR: '1',
     WARD_GH: fakeGh,
   });
@@ -75,15 +78,15 @@ test('task show --json: the documented shape, with the next step carrying its no
   });
 });
 
-test('task show: the same document twice, byte-identical — nothing is stored between reads', () => {
-  const first = runWardEnv(['task', 'show', 'f1t1', '--json'], ws, { WARD_GH: fakeGh });
-  const second = runWardEnv(['task', 'show', 'f1t1', '--json'], ws, { WARD_GH: fakeGh });
+test('task show: the same document twice, byte-identical — nothing is stored between reads', async () => {
+  const first = await callWardEnv(['task', 'show', 'f1t1', '--json'], ws, { WARD_GH: fakeGh });
+  const second = await callWardEnv(['task', 'show', 'f1t1', '--json'], ws, { WARD_GH: fakeGh });
   expect(first.stdout).toBe(second.stdout);
 });
 
-test('a declared agent gets the same text as a human, deterministic and without colour', () => {
-  const human = runWardEnv(['task', 'show', 'f1t1'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
-  const agent = runWardEnv(['task', 'show', 'f1t1'], ws, {
+test('a declared agent gets the same text as a human, deterministic and without colour', async () => {
+  const human = await callWardEnv(['task', 'show', 'f1t1'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
+  const agent = await callWardEnv(['task', 'show', 'f1t1'], ws, {
     WARD_AGENT: 'task-show-1',
     FORCE_COLOR: '1',
     WARD_GH: fakeGh,
@@ -94,8 +97,8 @@ test('a declared agent gets the same text as a human, deterministic and without 
 
 // -- deriving the address, and refusing to for an agent --------------------
 
-test('inside a task worktree the address is derived for a human, and echoed', () => {
-  const result = runWardEnv(['task', 'show'], join(ws, 'floors/1-delivery/f1t1-shipping'), {
+test('inside a task worktree the address is derived for a human, and echoed', async () => {
+  const result = await callWardEnv(['task', 'show'], join(ws, 'floors/1-delivery/f1t1-shipping'), {
     NO_COLOR: '1',
     WARD_GH: fakeGh,
   });
@@ -104,8 +107,8 @@ test('inside a task worktree the address is derived for a human, and echoed', ()
   expect(result.stdout).toContain('f1t1 shipping');
 });
 
-test('a declared agent is refused the derivation and told the form to pass', () => {
-  const result = runWardEnv(['task', 'show'], join(ws, 'floors/1-delivery/f1t1-shipping'), {
+test('a declared agent is refused the derivation and told the form to pass', async () => {
+  const result = await callWardEnv(['task', 'show'], join(ws, 'floors/1-delivery/f1t1-shipping'), {
     WARD_AGENT: 'task-show-2',
     WARD_GH: fakeGh,
   });
@@ -116,20 +119,20 @@ test('a declared agent is refused the derivation and told the form to pass', () 
 
 // -- the states other than active -----------------------------------------
 
-test('a paused task: the resume is the only next step, whatever else is true', () => {
-  const result = runWard(['task', 'show', 'f2t1'], ws);
+test('a paused task: the resume is the only next step, whatever else is true', async () => {
+  const result = await callWard(['task', 'show', 'f2t1'], ws);
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('f2t1 set-down [paused]');
   expect(result.stdout).toContain('next\n    ward task resume f2t1');
 });
 
-test('a task with no worktree names the repository its record already carries', () => {
-  const result = runWard(['task', 'show', 'f2t2'], ws);
+test('a task with no worktree names the repository its record already carries', async () => {
+  const result = await callWard(['task', 'show', 'f2t2'], ws);
   expect(result.stdout).toContain('next\n    ward worktree create f2t2 --repo demo');
 });
 
-test('a recently closed task shows as closed, with nothing to do and no worktrees block', () => {
-  const result = runWard(['task', 'show', 'f2t3'], ws);
+test('a recently closed task shows as closed, with nothing to do and no worktrees block', async () => {
+  const result = await callWard(['task', 'show', 'f2t3'], ws);
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('f2t3 just-landed [closed · delivered]');
   expect(result.stdout).toContain(`closed   ${closedRecently}`);
@@ -139,20 +142,20 @@ test('a recently closed task shows as closed, with nothing to do and no worktree
   );
 });
 
-test('a settled close is refused with --all named, never silently hidden', () => {
-  const refused = runWard(['task', 'show', 'f2t4'], ws);
+test('a settled close is refused with --all named, never silently hidden', async () => {
+  const refused = await callWard(['task', 'show', 'f2t4'], ws);
   expect(refused.exitCode).toBe(1);
   expect(refused.stdout).toBe('');
   expect(refused.stderr).toContain('closed and settled');
   expect(refused.stderr).toContain('ward task show f2t4 --all');
 
-  const shown = runWard(['task', 'show', 'f2t4', '--all'], ws);
+  const shown = await callWard(['task', 'show', 'f2t4', '--all'], ws);
   expect(shown.exitCode).toBe(0);
   expect(shown.stdout).toContain('f2t4 long-settled [closed · abandoned]');
 });
 
-test('an address no task holds refuses legibly, with nothing on stdout', () => {
-  const result = runWard(['task', 'show', 'f9t9'], ws);
+test('an address no task holds refuses legibly, with nothing on stdout', async () => {
+  const result = await callWard(['task', 'show', 'f9t9'], ws);
   expect(result.exitCode).toBe(1);
   expect(result.stdout).toBe('');
   expect(result.stderr).toContain('no task at f9t9');
@@ -160,8 +163,8 @@ test('an address no task holds refuses legibly, with nothing on stdout', () => {
 
 // -- the forge degrading ---------------------------------------------------
 
-test('without a forge the links still print, marked state unknown, and the step says so', () => {
-  const result = runWard(['task', 'show', 'f1t1'], ws); // runWard pins gh to an impossible path
+test('without a forge the links still print, marked state unknown, and the step says so', async () => {
+  const result = await callWard(['task', 'show', 'f1t1'], ws); // callWard pins gh to an impossible path
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain(`    ${PR_OPEN} — state unknown`);
   expect(result.stdout).toContain(`next\n    state unknown — check ${PR_MERGED}`);
@@ -170,8 +173,8 @@ test('without a forge the links still print, marked state unknown, and the step 
 
 // -- status's PR lines -----------------------------------------------------
 
-test('status: one line per PR under the task, in PR-set order, with live check state', () => {
-  const result = runWardEnv(['status'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
+test('status: one line per PR under the task, in PR-set order, with live check state', async () => {
+  const result = await callWardEnv(['status'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
   expect(result.exitCode).toBe(0);
   const lines = result.stdout.split('\n');
   const task = lines.findIndex((line) => line.includes('f1t1 shipping'));
@@ -200,7 +203,7 @@ beforeAll(async () => {
   await preparedWorkspace(ws);
 
   const remote = join(scratch, 'remote.git');
-  runWard(['--version'], scratch); // no-op: keeps the spawn shape uniform below
+  await callWard(['--version'], scratch); // no-op: keeps the spawn shape uniform below
   Bun.spawnSync(['git', 'init', '--bare', '--initial-branch=main', remote], { env: process.env });
   const seed = join(scratch, 'seed');
   Bun.spawnSync(['git', 'clone', remote, seed], { env: process.env });
@@ -214,15 +217,18 @@ beforeAll(async () => {
     Bun.spawnSync(['git', '-C', seed, ...argv], { env: process.env });
   }
 
-  runWard(['repo', 'add', remote, '--name', 'demo'], ws);
-  runWard(['project', 'open', 'delivery', '--repo', 'demo'], ws);
-  runWard(['task', 'open', 'shipping', '--repo', 'demo', '--purpose', 'ship the thing'], ws);
-  runWard(['worktree', 'create', 'f1t1', '--repo', 'demo'], ws);
-  runWard(['session', 'open', 'f1t1', '--purpose', 'drive it', '--handle', 'other:show-run'], ws);
-  runWard(['task', 'pr', 'f1t1', PR_MERGED], ws);
-  runWard(['task', 'pr', 'f1t1', PR_OPEN], ws);
+  await callWard(['repo', 'add', remote, '--name', 'demo'], ws);
+  await callWard(['project', 'open', 'delivery', '--repo', 'demo'], ws);
+  await callWard(['task', 'open', 'shipping', '--repo', 'demo', '--purpose', 'ship the thing'], ws);
+  await callWard(['worktree', 'create', 'f1t1', '--repo', 'demo'], ws);
+  await callWard(
+    ['session', 'open', 'f1t1', '--purpose', 'drive it', '--handle', 'other:show-run'],
+    ws,
+  );
+  await callWard(['task', 'pr', 'f1t1', PR_MERGED], ws);
+  await callWard(['task', 'pr', 'f1t1', PR_OPEN], ws);
 
-  runWard(['project', 'open', 'assorted'], ws);
+  await callWard(['project', 'open', 'assorted'], ws);
   await seedTask(2, 1, 'set-down', { state: 'paused' });
   await seedTask(2, 2, 'unstarted', { state: 'active', repositories: ['demo'] });
   await seedTask(2, 3, 'just-landed', {

@@ -114,10 +114,10 @@ export async function probeForge(urls: readonly string[]): Promise<ForgeProbe> {
 export function ghExecutable(): string | null {
   const override = process.env.WARD_GH;
   if (override !== undefined && override !== '') {
-    if (!override.includes('/')) return Bun.which(override);
+    if (!override.includes('/')) return Bun.which(override, { PATH: process.env.PATH ?? '' });
     return existsSync(override) ? override : null;
   }
-  return Bun.which('gh');
+  return Bun.which('gh', { PATH: process.env.PATH ?? '' });
 }
 
 function timeoutMs(fallback: number): number {

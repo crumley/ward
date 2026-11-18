@@ -14,12 +14,10 @@ import { openTask } from '../../src/workspace/tasks.ts';
 import {
   applyGitTestEnv,
   type CliResult,
-  cliPath,
+  callWard,
   GIT_ENV,
   makeTempDir,
-  NO_GH,
   removeDir,
-  WARD_GLOBAL_ENV,
 } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
 
@@ -28,12 +26,12 @@ const MAC = 'f1t2-weekly-rituals-design';
 const VM = 'f1t2-distill-2026-10-25';
 const AMBIGUOUS = `is ambiguous — ${VM}, ${MAC}; name one`;
 
-test('the sync left two open tasks in one room — the shape being repaired', () => {
-  const listed = taskList();
+test('the sync left two open tasks in one room — the shape being repaired', async () => {
+  const listed = await taskList();
   expect(listed.filter((task) => task.code === 't2' && task.state === 'active')).toHaveLength(2);
 });
 
-test('the room address and the shorthand refuse, naming each by the spelling that works', () => {
+test('the room address and the shorthand refuse, naming each by the spelling that works', async () => {
   for (const argv of [
     ['task', 'show', 'f1t2'],
     ['task', 'show', 't2'],
@@ -41,32 +39,32 @@ test('the room address and the shorthand refuse, naming each by the spelling tha
     ['task', 'pause', 't2'],
     ['task', 'close', 'f1t2', '--outcome', 'abandoned'],
   ]) {
-    const result = ward(argv);
+    const result = await ward(argv);
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain(`${argv[2]} ${AMBIGUOUS}`);
   }
 });
 
-test('show answers to each slug-qualified address, case-folded', () => {
+test('show answers to each slug-qualified address, case-folded', async () => {
   for (const [address, slug] of [
     [MAC, 'weekly-rituals-design'],
     [VM, 'distill-2026-10-25'],
     [VM.toUpperCase(), 'distill-2026-10-25'],
   ] as const) {
-    const result = ward(['task', 'show', address]);
+    const result = await ward(['task', 'show', address]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain(`${address.toLowerCase()} ${slug}`);
   }
 });
 
-test('a qualifier that names no task in the room is a miss, never a neighbour', () => {
-  const result = ward(['task', 'show', 'f1t2-statement-ingest']);
+test('a qualifier that names no task in the room is a miss, never a neighbour', async () => {
+  const result = await ward(['task', 'show', 'f1t2-statement-ingest']);
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toContain('no task at f1t2-statement-ingest');
 });
 
-test('pr, pr --unlink, pause and resume work through the qualified address', () => {
-  const linked = ward(['task', 'pr', MAC, URL, '--json']);
+test('pr, pr --unlink, pause and resume work through the qualified address', async () => {
+  const linked = await ward(['task', 'pr', MAC, URL, '--json']);
   expect(linked.exitCode).toBe(0);
   expect(taskMutationShape.parse(JSON.parse(linked.stdout))).toMatchObject({
     code: 't2',
@@ -74,61 +72,63 @@ test('pr, pr --unlink, pause and resume work through the qualified address', () 
     address: MAC,
     prs: [URL],
   });
-  expect(ward(['task', 'pr', '--unlink', MAC, URL]).stdout).toContain(
+  expect((await ward(['task', 'pr', '--unlink', MAC, URL])).stdout).toContain(
     `unlinked ${URL} from ${MAC}`,
   );
-  expect(ward(['task', 'pause', VM]).stdout).toContain(`paused ${VM}`);
-  expect(ward(['task', 'resume', VM]).stdout).toContain(`resumed ${VM}`);
+  expect((await ward(['task', 'pause', VM])).stdout).toContain(`paused ${VM}`);
+  expect((await ward(['task', 'resume', VM])).stdout).toContain(`resumed ${VM}`);
 });
 
-test('task list --json gives each holder its qualified address, and every address resolves', () => {
-  const listed = taskList();
+test('task list --json gives each holder its qualified address, and every address resolves', async () => {
+  const listed = await taskList();
   expect(listed.find((task) => task.slug === 'weekly-rituals-design')?.address).toBe(MAC);
   expect(listed.find((task) => task.slug === 'distill-2026-10-25')?.address).toBe(VM);
   // A room only one task holds keeps its short address.
   expect(listed.find((task) => task.slug === 'ledger-setup')?.address).toBe('f1t1');
   // A filter that leaves out one holder does not make the other's room unique.
-  const filtered = JSON.parse(ward(['task', 'list', '--slug', 'weekly', '--json']).stdout) as {
+  const filtered = JSON.parse(
+    (await ward(['task', 'list', '--slug', 'weekly', '--json'])).stdout,
+  ) as {
     tasks: { address: string }[];
   };
   expect(filtered.tasks.map((task) => task.address)).toEqual([MAC]);
   for (const { address, slug } of listed) {
-    const shown = ward(['task', 'show', address]);
+    const shown = await ward(['task', 'show', address]);
     expect(shown.exitCode).toBe(0);
     expect(shown.stdout).toContain(`${address} ${slug}`);
   }
 });
 
-test('doctor reports the room with both addresses and the remedy', () => {
-  const finding = collisionFindings()[0];
-  expect(collisionFindings()).toHaveLength(1);
+test('doctor reports the room with both addresses and the remedy', async () => {
+  const finding = (await collisionFindings())[0];
+  expect(await collisionFindings()).toHaveLength(1);
   expect(finding?.severity).toBe('warn');
   expect(finding?.message).toContain(`f1t2 is held by 2 open tasks: ${VM}, ${MAC}`);
   expect(finding?.message).toContain(`ward task show ${VM}`);
   expect(finding?.message).toContain('the room clears when all but one close');
 });
 
-test('closing one holder by its qualified address frees the room address for the other', () => {
-  const closed = ward(['task', 'close', VM, '--outcome', 'abandoned']);
+test('closing one holder by its qualified address frees the room address for the other', async () => {
+  const closed = await ward(['task', 'close', VM, '--outcome', 'abandoned']);
   expect(closed.exitCode).toBe(0);
   expect(closed.stdout).toContain(`Task ${VM} closed — abandoned.`);
 
-  expect(collisionFindings()).toEqual([]);
-  const open = ward(['task', 'pause', 'f1t2']);
+  expect(await collisionFindings()).toEqual([]);
+  const open = await ward(['task', 'pause', 'f1t2']);
   expect(open.exitCode).toBe(0);
   expect(open.stdout).toContain('paused f1t2 — weekly-rituals-design');
   // The closed holder is still readable by its qualified address, and the
   // listing spells it that way: the room address now names the open task.
-  expect(ward(['task', 'show', VM]).stdout).toContain(
+  expect((await ward(['task', 'show', VM])).stdout).toContain(
     `${VM} distill-2026-10-25 [closed · abandoned]`,
   );
-  const listed = taskList();
+  const listed = await taskList();
   expect(listed.find((task) => task.slug === 'distill-2026-10-25')?.address).toBe(VM);
   expect(listed.find((task) => task.slug === 'weekly-rituals-design')?.address).toBe('f1t2');
 });
 
-test('the next task on either machine takes a room neither holder has', () => {
-  const result = ward(['task', 'open', 'week-start-job', '--project', '1', '--json']);
+test('the next task on either machine takes a room neither holder has', async () => {
+  const result = await ward(['task', 'open', 'week-start-job', '--project', '1', '--json']);
   expect(result.exitCode).toBe(0);
   expect(JSON.parse(result.stdout)).toMatchObject({ code: 't3', address: 'f1t3' });
 });
@@ -163,26 +163,19 @@ beforeEach(async () => {
   git(ws, 'pull', '--quiet', '--rebase', vm, 'HEAD');
 });
 
-/** The CLI, bounded: spawnSync blocks the runner, so a stalled child must time out itself. */
-function ward(argv: string[]): CliResult {
-  const result = Bun.spawnSync(['bun', cliPath, ...argv], {
-    cwd: ws,
-    env: { ...process.env, NO_COLOR: '1', WARD_GH: NO_GH, ...GIT_ENV, ...WARD_GLOBAL_ENV },
-    timeout: 30_000,
-  });
-  return {
-    exitCode: result.exitCode,
-    stdout: result.stdout.toString(),
-    stderr: result.stderr.toString(),
-  };
+/** The CLI, in-process (design/0074-in-process-cli-tests/), standing in the workspace. */
+function ward(argv: string[]): Promise<CliResult> {
+  return callWard(argv, ws);
 }
 
-function taskList(): { address: string; code: string; slug: string; state: string }[] {
-  return JSON.parse(ward(['task', 'list', '--all', '--json']).stdout).tasks;
+async function taskList(): Promise<
+  { address: string; code: string; slug: string; state: string }[]
+> {
+  return JSON.parse((await ward(['task', 'list', '--all', '--json'])).stdout).tasks;
 }
 
-function collisionFindings(): { severity: string; message: string }[] {
-  const doctor = JSON.parse(ward(['doctor', '--json']).stdout) as {
+async function collisionFindings(): Promise<{ severity: string; message: string }[]> {
+  const doctor = JSON.parse((await ward(['doctor', '--json'])).stdout) as {
     workspace: { check: string; severity: string; message: string }[];
   };
   return doctor.workspace.filter((finding) => finding.check === 'room collisions');

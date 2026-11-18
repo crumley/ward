@@ -61,6 +61,7 @@ import type { CloseReport } from '../workspace/tasks.ts';
 import type { UpgradeReport } from '../workspace/upgrade.ts';
 import type { RebaseReport, WorktreeListing, WorktreeStatus } from '../workspace/worktrees.ts';
 import { callerIsAgent } from './caller.ts';
+import { invocation } from './invocation.ts';
 import { writeOut } from './output.ts';
 import type {
   ContextShape,
@@ -125,7 +126,7 @@ import {
  * inside so the decision is testable without allocating a terminal.
  */
 export function jsonSpacing(
-  isTTY: boolean = process.stdout.isTTY === true,
+  isTTY: boolean = invocation().stdoutIsTTY,
   isAgent: boolean = callerIsAgent(),
 ): 0 | 2 {
   return isTTY && !isAgent ? 2 : 0;

@@ -11,7 +11,7 @@ import { writeDocument } from '../../src/store/document.ts';
 import { type TaskRecord, taskRecordType } from '../../src/store/types.ts';
 import { openProject } from '../../src/workspace/projects.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
-import { applyGitTestEnv, GIT_ENV, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { applyGitTestEnv, callWard, GIT_ENV, makeTempDir, removeDir } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
 
 const URL = 'https://example.com/x/pull/67';
@@ -19,29 +19,29 @@ const AMBIGUOUS =
   't2 is ambiguous — f1t2 (statement-ingest), f2t2 (intent-extraction), ' +
   'legacy-t2 (multiplexer-seam-design); name one';
 
-test('the shorthand refuses, naming the legacy candidate by the spelling that works', () => {
+test('the shorthand refuses, naming the legacy candidate by the spelling that works', async () => {
   for (const argv of [
     ['task', 'show', 't2'],
     ['task', 'pr', 't2', URL],
     ['task', 'close', 't2', '--outcome', 'abandoned'],
   ]) {
-    const result = runWard(argv, ws);
+    const result = await callWard(argv, ws);
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain(AMBIGUOUS);
   }
 });
 
-test('show answers to the legacy address, case-folded', () => {
+test('show answers to the legacy address, case-folded', async () => {
   for (const address of ['legacy-t2', 'LEGACY-T2']) {
-    const result = runWard(['task', 'show', address], ws);
+    const result = await callWard(['task', 'show', address], ws);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('legacy-t2 multiplexer-seam-design');
     expect(result.stdout).toContain('legacy bare task (no floor)');
   }
 });
 
-test('pr links and unlinks through the legacy address, and the journal names it', () => {
-  const linked = runWard(['task', 'pr', 'legacy-t2', URL, '--json'], ws);
+test('pr links and unlinks through the legacy address, and the journal names it', async () => {
+  const linked = await callWard(['task', 'pr', 'legacy-t2', URL, '--json'], ws);
   expect(linked.exitCode).toBe(0);
   expect(taskMutationShape.parse(JSON.parse(linked.stdout))).toMatchObject({
     code: 't2',
@@ -50,45 +50,45 @@ test('pr links and unlinks through the legacy address, and the journal names it'
   });
   expect(lastSubject()).toBe('Link PR to task legacy-t2 (ward 0.1.0)');
 
-  const unlinked = runWard(['task', 'pr', '--unlink', 'legacy-t2', URL], ws);
+  const unlinked = await callWard(['task', 'pr', '--unlink', 'legacy-t2', URL], ws);
   expect(unlinked.exitCode).toBe(0);
   expect(unlinked.stdout).toContain(`unlinked ${URL} from legacy-t2`);
 });
 
-test('task list --json speaks the legacy address, and every address it gives resolves', () => {
-  const listed = JSON.parse(runWard(['task', 'list', '--json'], ws).stdout) as {
+test('task list --json speaks the legacy address, and every address it gives resolves', async () => {
+  const listed = JSON.parse((await callWard(['task', 'list', '--json'], ws)).stdout) as {
     tasks: { address: string; slug: string }[];
   };
   expect(listed.tasks.find((task) => task.slug === 'multiplexer-seam-design')?.address).toBe(
     'legacy-t2',
   );
   for (const { address, slug } of listed.tasks) {
-    const shown = runWard(['task', 'show', address], ws);
+    const shown = await callWard(['task', 'show', address], ws);
     expect(shown.exitCode).toBe(0);
     expect(shown.stdout).toContain(`${address} ${slug}`);
   }
 });
 
-test('close takes the legacy address; closed, it is unaddressable by either form', () => {
-  const closed = runWard(['task', 'close', 'legacy-t2', '--outcome', 'abandoned'], ws);
+test('close takes the legacy address; closed, it is unaddressable by either form', async () => {
+  const closed = await callWard(['task', 'close', 'legacy-t2', '--outcome', 'abandoned'], ws);
   expect(closed.exitCode).toBe(0);
   expect(closed.stdout).toContain('Task legacy-t2 closed — abandoned.');
 
-  const again = runWard(['task', 'close', 'legacy-t2', '--outcome', 'abandoned'], ws);
+  const again = await callWard(['task', 'close', 'legacy-t2', '--outcome', 'abandoned'], ws);
   expect(again.exitCode).toBe(1);
   expect(again.stderr).toContain(
     'no open task at legacy-t2 — the legacy pool (tasks/) holds no open task in room 2',
   );
-  expect(runWard(['task', 'pause', 'legacy-t2'], ws).exitCode).toBe(1);
+  expect((await callWard(['task', 'pause', 'legacy-t2'], ws)).exitCode).toBe(1);
   // The shorthand no longer counts it: only the two floors' rooms are candidates.
-  const bare = runWard(['task', 'pause', 't2'], ws);
+  const bare = await callWard(['task', 'pause', 't2'], ws);
   expect(bare.stderr).toContain(
     't2 is ambiguous — f1t2 (statement-ingest), f2t2 (intent-extraction); name one',
   );
 });
 
-test('a room the legacy pool never held is refused as the legacy pool, not a floor', () => {
-  const result = runWard(['task', 'pr', 'legacy-t9', URL], ws);
+test('a room the legacy pool never held is refused as the legacy pool, not a floor', async () => {
+  const result = await callWard(['task', 'pr', 'legacy-t9', URL], ws);
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toContain(
     'no open task at legacy-t9 — the legacy pool (tasks/) holds no open task in room 9',

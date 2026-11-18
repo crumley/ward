@@ -7,16 +7,17 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { runCli } from '../../src/cli/in-process.ts';
 import { verbPath } from '../../src/cli/telemetry.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { defaultWorkspaceSessionPurpose, readSessions } from '../../src/workspace/sessions.ts';
-import { applyGitTestEnv, makeTempDir, NO_GH, removeDir } from '../helpers.ts';
+import { applyGitTestEnv, type CliResult, makeTempDir, NO_GH, removeDir } from '../helpers.ts';
 import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 // -- the emitted script ----------------------------------------------------
 
-test('`ward shell init fish` emits the shorthands, the picker seam, and their completions', () => {
-  const result = ward(['shell', 'init', 'fish'], alpha);
+test('`ward shell init fish` emits the shorthands, the picker seam, and their completions', async () => {
+  const result = await ward(['shell', 'init', 'fish'], alpha);
   expect(result.exitCode).toBe(0);
   const script = result.stdout;
 
@@ -72,18 +73,18 @@ test('`ward shell init fish` emits the shorthands, the picker seam, and their co
   expect(script).toContain("complete -c ws -w 'ward status'");
 });
 
-test('the emitted script is valid fish — checked by fish itself', () => {
+test('the emitted script is valid fish — checked by fish itself', async () => {
   if (!existsSync(FISH)) return; // hermetic: no fish on this machine, no claim
   const script = join(scratch, 'emitted.fish');
-  writeFileSync(script, ward(['shell', 'init', 'fish'], alpha).stdout);
+  writeFileSync(script, (await ward(['shell', 'init', 'fish'], alpha)).stdout);
   const parsed = Bun.spawnSync([FISH, '--no-execute', script]);
   expect(parsed.stderr.toString()).toBe('');
   expect(parsed.exitCode).toBe(0);
 });
 
-test('an unknown shell is refused with the list of what exists, exit 1', () => {
+test('an unknown shell is refused with the list of what exists, exit 1', async () => {
   for (const shell of ['bash', 'zsh', 'csh', 'pwsh']) {
-    const result = ward(['shell', 'init', shell], alpha);
+    const result = await ward(['shell', 'init', shell], alpha);
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain(`no shell layer for '${shell}'`);
     expect(result.stderr).toContain('available: fish');
@@ -92,67 +93,69 @@ test('an unknown shell is refused with the list of what exists, exit 1', () => {
 
 // -- the candidate feed ----------------------------------------------------
 
-test('`shell candidates repos` unions the workspaces `repo path` searches, cued by the answerer', () => {
-  register(beta); // beta first, so it is the default
-  register(alpha);
+test('`shell candidates repos` unions the workspaces `repo path` searches, cued by the answerer', async () => {
+  await register(beta); // beta first, so it is the default
+  await register(alpha);
   // From inside alpha: alpha answers `shared`, beta contributes `beta-only`.
-  expect(rows(ward(['shell', 'candidates', 'repos'], alpha))).toEqual([
+  expect(rows(await ward(['shell', 'candidates', 'repos'], alpha))).toEqual([
     ['shared', 'alpha'],
     ['beta-only', 'beta'],
   ]);
   // From nowhere: the registry alone decides, and only beta is reachable.
-  expect(rows(ward(['shell', 'candidates', 'repos'], scratch)).map((row) => row[1])).toEqual([
+  expect(rows(await ward(['shell', 'candidates', 'repos'], scratch)).map((row) => row[1])).toEqual([
     'beta',
     'beta',
   ]);
   expect(
-    rows(ward(['shell', 'candidates', 'repos'], scratch))
+    rows(await ward(['shell', 'candidates', 'repos'], scratch))
       .map((row) => row[0])
       .sort(),
   ).toEqual(['beta-only', 'shared']);
 });
 
-test('`shell candidates workspaces` lists the registered ones, most recently used first', () => {
-  register(alpha);
-  register(beta);
-  expect(rows(ward(['shell', 'candidates', 'workspaces'], scratch))).toEqual([
+test('`shell candidates workspaces` lists the registered ones, most recently used first', async () => {
+  await register(alpha);
+  await register(beta);
+  expect(rows(await ward(['shell', 'candidates', 'workspaces'], scratch))).toEqual([
     ['beta', beta],
     ['alpha', alpha],
   ]);
 });
 
-test('a stale entry is never offered as somewhere to cd', () => {
-  register(alpha);
-  register(beta);
+test('a stale entry is never offered as somewhere to cd', async () => {
+  await register(alpha);
+  await register(beta);
   removeDir(beta);
-  expect(rows(ward(['shell', 'candidates', 'workspaces'], scratch))).toEqual([['alpha', alpha]]);
+  expect(rows(await ward(['shell', 'candidates', 'workspaces'], scratch))).toEqual([
+    ['alpha', alpha],
+  ]);
 });
 
-test('nothing to offer is exit 0 and silence — never an error in the shell', () => {
+test('nothing to offer is exit 0 and silence — never an error in the shell', async () => {
   for (const kind of ['repos', 'workspaces', 'coordinators']) {
-    const result = ward(['shell', 'candidates', kind], scratch);
+    const result = await ward(['shell', 'candidates', kind], scratch);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe('');
     expect(result.stderr).toBe('');
   }
 });
 
-test('a registry that will not parse degrades to no candidates, never to shell noise', () => {
-  register(alpha);
+test('a registry that will not parse degrades to no candidates, never to shell noise', async () => {
+  await register(alpha);
   writeFileSync(join(state, 'workspaces.md'), 'not a document at all\n');
   for (const kind of ['repos', 'workspaces', 'coordinators']) {
-    const result = ward(['shell', 'candidates', kind], scratch);
+    const result = await ward(['shell', 'candidates', kind], scratch);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe('');
     expect(result.stderr).toBe('');
   }
 });
 
-test('`shell candidates coordinators` offers the floating sessions this machine can join', () => {
-  register(beta); // beta first, so it is the default
-  register(alpha);
-  const open = (cwd: string, purpose: string, env: Record<string, string> = {}) => {
-    const result = ward(
+test('`shell candidates coordinators` offers the floating sessions this machine can join', async () => {
+  await register(beta); // beta first, so it is the default
+  await register(alpha);
+  const open = async (cwd: string, purpose: string, env: Record<string, string> = {}) => {
+    const result = await ward(
       ['session', 'open', '--purpose', purpose, '--handle', `test:${purpose}`],
       cwd,
       env,
@@ -161,40 +164,46 @@ test('`shell candidates coordinators` offers the floating sessions this machine 
   };
   // Two coordinators here, one helper one of them started, one coordinator
   // whose history is on another computer, a floor session, and a closed one.
-  open(alpha, 'first');
-  open(alpha, 'second');
-  open(alpha, 'helper', { WARD_AGENT: 'workspace-1@test' });
-  open(alpha, 'elsewhere', { WARD_MACHINE: 'other' });
+  await open(alpha, 'first');
+  await open(alpha, 'second');
+  await open(alpha, 'helper', { WARD_AGENT: 'workspace-1@test' });
+  await open(alpha, 'elsewhere', { WARD_MACHINE: 'other' });
   expect(
-    ward(['session', 'open', '--floor', '0', '--purpose', 'f0', '--handle', 'test:f0'], alpha)
-      .exitCode,
+    (
+      await ward(
+        ['session', 'open', '--floor', '0', '--purpose', 'f0', '--handle', 'test:f0'],
+        alpha,
+      )
+    ).exitCode,
   ).toBe(0);
-  open(alpha, 'done');
-  expect(ward(['session', 'close', 'workspace-4@test'], alpha).exitCode).toBe(0);
-  open(beta, 'beta coordinator');
+  await open(alpha, 'done');
+  expect((await ward(['session', 'close', 'workspace-4@test'], alpha)).exitCode).toBe(0);
+  await open(beta, 'beta coordinator');
 
   // From inside alpha: its two coordinators, oldest first, cued by purpose —
   // not the helper (it has a parent), not the floor's, not the closed one,
   // and not the one another machine would have to re-create.
-  expect(rows(ward(['shell', 'candidates', 'coordinators'], alpha))).toEqual([
+  expect(rows(await ward(['shell', 'candidates', 'coordinators'], alpha))).toEqual([
     ['workspace-1@test', 'first'],
     ['workspace-2@test', 'second'],
   ]);
   // With a floor: that floor's own sessions instead, and nothing for a floor
   // that has none.
-  expect(rows(ward(['shell', 'candidates', 'coordinators', '--floor', '0'], alpha))).toEqual([
+  expect(rows(await ward(['shell', 'candidates', 'coordinators', '--floor', '0'], alpha))).toEqual([
     ['f0-1@test', 'f0'],
   ]);
-  expect(ward(['shell', 'candidates', 'coordinators', '--floor', '3'], alpha).stdout).toBe('');
+  expect((await ward(['shell', 'candidates', 'coordinators', '--floor', '3'], alpha)).stdout).toBe(
+    '',
+  );
   // From nowhere: the workspace a human-run `ward session attach` would act
   // on, which is the registry's default.
-  expect(rows(ward(['shell', 'candidates', 'coordinators'], scratch))).toEqual([
+  expect(rows(await ward(['shell', 'candidates', 'coordinators'], scratch))).toEqual([
     ['workspace-1@test', 'beta coordinator'],
   ]);
 });
 
-test('an unknown candidate kind is refused by the parser, naming both', () => {
-  const result = ward(['shell', 'candidates', 'bogus'], alpha);
+test('an unknown candidate kind is refused by the parser, naming both', async () => {
+  const result = await ward(['shell', 'candidates', 'bogus'], alpha);
   expect(result.exitCode).not.toBe(0);
   expect(result.stderr).toContain('repos');
   expect(result.stderr).toContain('workspaces');
@@ -202,7 +211,7 @@ test('an unknown candidate kind is refused by the parser, naming both', () => {
 
 // -- the shorthand ladder in `repo path` -----------------------------------
 
-test('a human reaches a repository by exact name, unique prefix, or unique substring', () => {
+test('a human reaches a repository by exact name, unique prefix, or unique substring', async () => {
   const table: ReadonlyArray<readonly [string, string, string]> = [
     ['shared', 'shared', 'exact'],
     ['sha', 'shared', 'prefix'],
@@ -210,7 +219,7 @@ test('a human reaches a repository by exact name, unique prefix, or unique subst
     ['are', 'shared', 'substring'],
   ];
   for (const [typed, expected, how] of table) {
-    const result = ward(['repo', 'path', typed], alpha);
+    const result = await ward(['repo', 'path', typed], alpha);
     expect(result.exitCode).toBe(0);
     expect(result.stdout.trim()).toBe(join(alpha, 'repos', expected));
     // An inexact match is an implicit input, echoed on stderr — stdout stays
@@ -225,43 +234,43 @@ test('exact beats a shorthand, even one in a workspace searched earlier', async 
   // `shared-extra` in alpha (underfoot) and `shared` in beta: typing `shared`
   // must reach the repository actually named that, not the longer neighbour.
   await addRepository(alpha, remote, 'shared-extra');
-  register(beta);
+  await register(beta);
   const only = join(alpha, 'repos', 'shared');
-  expect(ward(['repo', 'path', 'shared'], alpha).stdout.trim()).toBe(only);
+  expect((await ward(['repo', 'path', 'shared'], alpha)).stdout.trim()).toBe(only);
 });
 
 test('an ambiguous shorthand is refused, naming every repository it could have meant', async () => {
   await addRepository(alpha, remote, 'shared-extra');
-  const result = ward(['repo', 'path', 'share'], alpha);
+  const result = await ward(['repo', 'path', 'share'], alpha);
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toContain("'share' matches 2 repositories in workspace 'alpha'");
   expect(result.stderr).toContain('shared, shared-extra');
   expect(result.stderr).toContain('name one exactly');
 });
 
-test('a declared agent resolves names exactly — and is told what the shorthand meant', () => {
-  const exact = ward(['repo', 'path', 'shared'], alpha, { WARD_AGENT: 'agent-1' });
+test('a declared agent resolves names exactly — and is told what the shorthand meant', async () => {
+  const exact = await ward(['repo', 'path', 'shared'], alpha, { WARD_AGENT: 'agent-1' });
   expect(exact.exitCode).toBe(0);
   expect(exact.stdout.trim()).toBe(join(alpha, 'repos', 'shared'));
 
-  const shorthand = ward(['repo', 'path', 'sha'], alpha, { WARD_AGENT: 'agent-1' });
+  const shorthand = await ward(['repo', 'path', 'sha'], alpha, { WARD_AGENT: 'agent-1' });
   expect(shorthand.exitCode).toBe(1);
   expect(shorthand.stderr).toContain('no repository named');
   expect(shorthand.stderr).toContain("did you mean 'shared'?");
   expect(shorthand.stderr).toContain('a declared agent resolves names exactly');
 });
 
-test('a name nothing resembles is refused without a near-miss to chase', () => {
-  const result = ward(['repo', 'path', 'zzz'], alpha, { WARD_AGENT: 'agent-1' });
+test('a name nothing resembles is refused without a near-miss to chase', async () => {
+  const result = await ward(['repo', 'path', 'zzz'], alpha, { WARD_AGENT: 'agent-1' });
   expect(result.exitCode).toBe(1);
   expect(result.stderr).not.toContain('did you mean');
 });
 
 // -- machinery is not usage -------------------------------------------------
 
-test('a candidate feed writes no telemetry row and never churns the MRU; `shell init` does both', () => {
-  register(alpha);
-  register(beta); // beta is now most recently used
+test('a candidate feed writes no telemetry row and never churns the MRU; `shell init` does both', async () => {
+  await register(alpha);
+  await register(beta); // beta is now most recently used
   const usage = () => {
     const dir = join(alpha, '.ward', 'telemetry');
     return Bun.spawnSync(['ls', dir]).exitCode === 0
@@ -269,17 +278,17 @@ test('a candidate feed writes no telemetry row and never churns the MRU; `shell 
       : [];
   };
 
-  ward(['shell', 'candidates', 'repos'], alpha);
-  ward(['shell', 'candidates', 'workspaces'], alpha);
+  await ward(['shell', 'candidates', 'repos'], alpha);
+  await ward(['shell', 'candidates', 'workspaces'], alpha);
   expect(usage()).toEqual([]);
   // The MRU is untouched: alpha was invoked in, twice, and beta still leads.
-  expect(rows(ward(['shell', 'candidates', 'workspaces'], scratch))[0]?.[0]).toBe('beta');
+  expect(rows(await ward(['shell', 'candidates', 'workspaces'], scratch))[0]?.[0]).toBe('beta');
 
   // Generating the layer is the deliberate once-per-install act, and is.
-  ward(['shell', 'init', 'fish'], alpha);
+  await ward(['shell', 'init', 'fish'], alpha);
   const rowsWritten = usage().map((line) => JSON.parse(line) as { verb: string; exit: number });
   expect(rowsWritten).toEqual([expect.objectContaining({ verb: 'shell init', exit: 0 })]);
-  expect(rows(ward(['shell', 'candidates', 'workspaces'], scratch))[0]?.[0]).toBe('alpha');
+  expect(rows(await ward(['shell', 'candidates', 'workspaces'], scratch))[0]?.[0]).toBe('alpha');
 });
 
 test('the verb path splits `shell` into its two sub-verbs and nothing else', () => {
@@ -290,11 +299,11 @@ test('the verb path splits `shell` into its two sub-verbs and nothing else', () 
 
 // -- doctor closes the degradation loop -------------------------------------
 
-test('doctor names the picker either way — the condition the layer degrades on (§20)', () => {
-  const withFzf = ward(['doctor'], alpha, { PATH: `${fakeBin}:${toolBin}` });
+test('doctor names the picker either way — the condition the layer degrades on (§20)', async () => {
+  const withFzf = await ward(['doctor'], alpha, { PATH: `${fakeBin}:${toolBin}` });
   expect(withFzf.stdout).toContain('picker — fzf available');
 
-  const without = ward(['doctor'], alpha, { PATH: toolBin });
+  const without = await ward(['doctor'], alpha, { PATH: toolBin });
   expect(without.stdout).toContain('picker — fzf not found');
   expect(without.stdout).toContain('wrcd/wwcd list the candidates');
   // Never an error: not installing a fuzzy finder is a choice, not a fault.
@@ -303,11 +312,11 @@ test('doctor names the picker either way — the condition the layer degrades on
 
 // -- the shorthands, run by a real fish -------------------------------------
 
-test('wrcd and wwcd cd where ward says, and degrade to a listing without a picker', () => {
+test('wrcd and wwcd cd where ward says, and degrade to a listing without a picker', async () => {
   if (!existsSync(FISH)) return;
-  register(alpha);
+  await register(alpha);
   const script = join(scratch, 'layer.fish');
-  writeFileSync(script, ward(['shell', 'init', 'fish'], alpha).stdout);
+  writeFileSync(script, (await ward(['shell', 'init', 'fish'], alpha)).stdout);
 
   // wrcd by exact name and by shorthand; wwcd by name — with a picker on PATH
   // that is never reached, because ward resolved the name.
@@ -335,11 +344,11 @@ test('wrcd and wwcd cd where ward says, and degrade to a listing without a picke
   expect(home.stdout.trim()).toBe(alpha);
 });
 
-test('a picked candidate yields its NAME alone — the CUE never reaches the verb', () => {
+test('a picked candidate yields its NAME alone — the CUE never reaches the verb', async () => {
   if (!existsSync(FISH)) return;
-  register(alpha);
+  await register(alpha);
   const script = join(scratch, 'layer.fish');
-  writeFileSync(script, ward(['shell', 'init', 'fish'], alpha).stdout);
+  writeFileSync(script, (await ward(['shell', 'init', 'fish'], alpha)).stdout);
 
   // A picker that SELECTS, the half the exit-1 fake never exercises: real fzf
   // prints the chosen input line in full — NAME, tab, CUE and all. `--with-nth`
@@ -363,9 +372,9 @@ test('a picked candidate yields its NAME alone — the CUE never reaches the ver
 
 test('wws lands in a workspace and opens a session there; the rest of argv reaches `ward session open`', async () => {
   if (!existsSync(FISH)) return;
-  register(alpha);
+  await register(alpha);
   const script = join(scratch, 'layer.fish');
-  writeFileSync(script, ward(['shell', 'init', 'fish'], alpha).stdout);
+  writeFileSync(script, (await ward(['shell', 'init', 'fish'], alpha)).stdout);
 
   // Named, with a purpose: cd to alpha, then `ward session open` runs THERE
   // with everything after the name — `--handle` records without launching,
@@ -409,10 +418,10 @@ test('wws lands in a workspace and opens a session there; the rest of argv reach
   expect((await readSessions(alpha, '')).length).toBe(2);
 });
 
-test('wsa joins the coordinator — opening it detached first when none is open — or a named session', () => {
+test('wsa joins the coordinator — opening it detached first when none is open — or a named session', async () => {
   if (!existsSync(FISH)) return;
   const script = join(scratch, 'layer.fish');
-  writeFileSync(script, ward(['shell', 'init', 'fish'], alpha).stdout);
+  writeFileSync(script, (await ward(['shell', 'init', 'fish'], alpha)).stdout);
 
   // A stub `ward` that records every call and answers the coordinator feed
   // from a file — so what wsa DECIDES is observable without a tmux server
@@ -515,10 +524,10 @@ test('wsa joins the coordinator — opening it detached first when none is open 
   expect(calls()).toEqual(['shell candidates coordinators --floor 7', 'session attach f7-1@test']);
 });
 
-test('wso, wsr, wsc, and ws forward everything to their verb', () => {
+test('wso, wsr, wsc, and ws forward everything to their verb', async () => {
   if (!existsSync(FISH)) return;
   const script = join(scratch, 'layer.fish');
-  writeFileSync(script, ward(['shell', 'init', 'fish'], alpha).stdout);
+  writeFileSync(script, (await ward(['shell', 'init', 'fish'], alpha)).stdout);
   const stub = join(scratch, `stub-ward-${caseId}`);
   const log = join(stub, 'calls.log');
   mkdirSync(stub, { recursive: true });
@@ -538,11 +547,11 @@ test('wso, wsr, wsc, and ws forward everything to their verb', () => {
   ]);
 });
 
-test('wrr forwards its arguments to `ward repo refresh`, from outside any workspace', () => {
+test('wrr forwards its arguments to `ward repo refresh`, from outside any workspace', async () => {
   if (!existsSync(FISH)) return;
-  register(alpha);
+  await register(alpha);
   const script = join(scratch, 'layer.fish');
-  writeFileSync(script, ward(['shell', 'init', 'fish'], alpha).stdout);
+  writeFileSync(script, (await ward(['shell', 'init', 'fish'], alpha)).stdout);
   const run = fish(`source ${script}; cd /; wrr --json`, `${wardBin}:${toolBin}`);
   expect(run.exitCode).toBe(0);
   // The registry fallback answered, and said so — and the flag reached ward.
@@ -569,9 +578,18 @@ let fakeBin: string;
 let toolBin: string;
 let caseId = 0;
 
-/** The CLI, with this case's global directories and a hermetic environment. */
-function ward(argv: string[], cwd: string, env: Record<string, string | undefined> = {}) {
-  const result = Bun.spawnSync([process.execPath, cliPath, ...argv], {
+/**
+ * The CLI, in-process (design/0074-in-process-cli-tests/), with this case's
+ * global directories and a hermetic environment. The shorthands below run the
+ * real binary, through fish.
+ */
+function ward(
+  argv: string[],
+  cwd: string,
+  env: Record<string, string | undefined> = {},
+): Promise<CliResult> {
+  return runCli({
+    argv,
     cwd,
     env: {
       ...process.env,
@@ -583,11 +601,6 @@ function ward(argv: string[], cwd: string, env: Record<string, string | undefine
       ...env,
     },
   });
-  return {
-    exitCode: result.exitCode,
-    stdout: result.stdout.toString(),
-    stderr: result.stderr.toString(),
-  };
 }
 
 /** A fish one-liner with a chosen PATH — how "is fzf installed?" is varied. */
@@ -619,8 +632,8 @@ function rows(result: { stdout: string }): string[][] {
     .map((line) => line.split('\t'));
 }
 
-function register(path: string): void {
-  ward(['workspace', 'register', path], scratch);
+async function register(path: string): Promise<void> {
+  await ward(['workspace', 'register', path], scratch);
 }
 
 function monthFile(): string {

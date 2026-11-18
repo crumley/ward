@@ -12,10 +12,10 @@ import { join } from 'node:path';
 import { type Finding, runDoctor } from '../../src/workspace/doctor.ts';
 import {
   applyGitTestEnv,
+  callWardEnv,
   makeTempDir,
   NO_GH,
   removeDir,
-  runWardEnv,
   writeFakeGh,
 } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
@@ -74,9 +74,9 @@ test('a hung auth check is cut at the deadline and reads cannot-verify, never br
   expect(report.healthy).toBe(true);
 });
 
-test('the human rendering carries the warn mark and the remedy', () => {
+test('the human rendering carries the warn mark and the remedy', async () => {
   const fake = writeFakeGh(scratch, 'gh-auth-broken-cli', { responses: {}, auth: 'error' });
-  const result = runWardEnv(['doctor'], scratch, { WARD_GH: fake, NO_COLOR: '1' });
+  const result = await callWardEnv(['doctor'], scratch, { WARD_GH: fake, NO_COLOR: '1' });
   expect(result.exitCode).toBe(0); // warn reports; it never fails the run
   expect(result.stdout).toContain('✓ gh — GitHub CLI available');
   expect(result.stdout).toContain('! gh auth — installed but cannot reach the forge');

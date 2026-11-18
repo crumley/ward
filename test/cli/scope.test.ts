@@ -13,10 +13,10 @@ import { openTask } from '../../src/workspace/tasks.ts';
 import { createWorktree } from '../../src/workspace/worktrees.ts';
 import {
   applyGitTestEnv,
+  callWard,
+  callWardEnv,
   makeTempDir,
   removeDir,
-  runWard,
-  runWardEnv,
   writeFakeClaude,
 } from '../helpers.ts';
 import { preparedRemote, preparedWorkspace } from '../prepared.ts';
@@ -29,7 +29,7 @@ const PR_URL = 'https://example.com/pr/6';
 // standing in" and "the workspace". The rest of 0006's inference is untouched,
 // which the cases below still prove.
 test('session open with no TASK is workspace scope, even inside a worktree (0029)', async () => {
-  const result = runWardEnv(['session', 'open', '--purpose', 'drive the workspace'], wtDir, {
+  const result = await callWardEnv(['session', 'open', '--purpose', 'drive the workspace'], wtDir, {
     NO_COLOR: '1',
     WARD_CLAUDE_BIN: writeFakeClaude(scratch, `claude-scope-${caseId}`),
   });
@@ -42,81 +42,84 @@ test('session open with no TASK is workspace scope, even inside a worktree (0029
 });
 
 test('session open TASK records the task session at the root, wherever it is typed (0057)', async () => {
-  const result = runWard(['session', 'open', 't1', '--purpose', 'drive the feature'], wtDir);
+  const result = await callWard(['session', 'open', 't1', '--purpose', 'drive the feature'], wtDir);
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('opened session feature-1@test');
   const sessions = await readSessions(ws, 'projects/0-workspace/tasks/t1-feature');
   expect(sessions[0]?.workingDirectory).toBe('.');
 });
 
-test('task pr, inferred: one argument is the URL, the task comes from the location', () => {
-  const result = runWard(['task', 'pr', PR_URL], join(wtDir, 'src'));
+test('task pr, inferred: one argument is the URL, the task comes from the location', async () => {
+  const result = await callWard(['task', 'pr', PR_URL], join(wtDir, 'src'));
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('task f0t1 — from the working directory');
   expect(result.stdout).toContain(`linked ${PR_URL}`);
-  const tasks = JSON.parse(runWard(['task', 'list', '--json'], ws).stdout).tasks;
+  const tasks = JSON.parse((await callWard(['task', 'list', '--json'], ws)).stdout).tasks;
   expect(tasks[0].prs).toEqual([PR_URL]);
 });
 
-test('task pr keeps its explicit two-argument form', () => {
-  const result = runWard(['task', 'pr', 't1', PR_URL], ws);
+test('task pr keeps its explicit two-argument form', async () => {
+  const result = await callWard(['task', 'pr', 't1', PR_URL], ws);
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain(`linked ${PR_URL}`);
   expect(result.stdout).not.toContain('from the working directory');
 });
 
-test('pause and resume, inferred from inside the worktree', () => {
-  const paused = runWard(['task', 'pause'], wtDir);
+test('pause and resume, inferred from inside the worktree', async () => {
+  const paused = await callWard(['task', 'pause'], wtDir);
   expect(paused.exitCode).toBe(0);
   expect(paused.stdout).toContain('paused f0t1 — feature');
-  const resumed = runWard(['task', 'resume'], wtDir);
+  const resumed = await callWard(['task', 'resume'], wtDir);
   expect(resumed.exitCode).toBe(0);
   expect(resumed.stdout).toContain('resumed f0t1 — feature');
 });
 
-test('worktree create, inferred: a second worktree for the task the caller stands in', () => {
-  const result = runWard(['worktree', 'create', '--repo', 'demo', '--branch', 'second'], wtDir);
+test('worktree create, inferred: a second worktree for the task the caller stands in', async () => {
+  const result = await callWard(
+    ['worktree', 'create', '--repo', 'demo', '--branch', 'second'],
+    wtDir,
+  );
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('task f0t1 — from the working directory');
   expect(result.stdout).toContain('created floors/0-workspace/f0t1-second');
-  const worktrees = JSON.parse(runWard(['worktree', 'list', '--json'], ws).stdout);
+  const worktrees = JSON.parse((await callWard(['worktree', 'list', '--json'], ws)).stdout);
   expect(worktrees.map((w: { task: string; branch: string }) => `${w.task}:${w.branch}`)).toEqual([
     't1:feature',
     't1:second',
   ]);
 });
 
-test('outside any claimed worktree, the missing code is a legible error naming the fix', () => {
-  const result = runWard(['task', 'pause'], ws);
+test('outside any claimed worktree, the missing code is a legible error naming the fix', async () => {
+  const result = await callWard(['task', 'pause'], ws);
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toContain('no task worktree encloses this directory');
   expect(result.stderr).toContain('ward task pause ADDRESS');
 });
 
-test('a declared agent is refused the inference, even standing inside the worktree', () => {
-  const result = runWardEnv(['task', 'pause'], wtDir, { WARD_AGENT: '1' });
+test('a declared agent is refused the inference, even standing inside the worktree', async () => {
+  const result = await callWardEnv(['task', 'pause'], wtDir, { WARD_AGENT: '1' });
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toContain('a declared agent passes scope explicitly');
   expect(result.stderr).toContain('ward task pause ADDRESS');
 });
 
-test('a declared agent with an explicit code proceeds as ever', () => {
-  const result = runWardEnv(['task', 'pause', 't1'], wtDir, { WARD_AGENT: '1' });
+test('a declared agent with an explicit code proceeds as ever', async () => {
+  const result = await callWardEnv(['task', 'pause', 't1'], wtDir, { WARD_AGENT: '1' });
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('paused f0t1 — feature');
 });
 
-test('an explicit code wins from anywhere, with nothing echoed', () => {
-  const result = runWard(['task', 'pause', 't1'], ws);
+test('an explicit code wins from anywhere, with nothing echoed', async () => {
+  const result = await callWard(['task', 'pause', 't1'], ws);
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('paused f0t1 — feature');
   expect(result.stdout).not.toContain('from the working directory');
 });
 
-test('task close always takes its code: without one it fails and mutates nothing', () => {
-  const result = runWard(['task', 'close'], wtDir);
+test('task close always takes its code: without one it fails and mutates nothing', async () => {
+  const result = await callWard(['task', 'close'], wtDir);
   expect(result.exitCode).not.toBe(0);
-  const tasks = JSON.parse(runWard(['task', 'list', '--json'], ws).stdout).tasks;
+  const tasks = JSON.parse((await callWard(['task', 'list', '--json'], ws)).stdout).tasks;
   expect(tasks[0].state).toBe('active');
 });
 

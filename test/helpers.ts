@@ -92,17 +92,13 @@ export interface CliResult {
  * Spawn the CLI as a subprocess. NO_COLOR pins the output to plain text:
  * picocolors would otherwise enable ANSI wherever CI=true is set, making the
  * same assertion pass locally and fail in CI (design/0001-dev-foundation/).
+ *
+ * Spawning is for tests whose subject is the process boundary
+ * (design/0074-in-process-cli-tests/); a test of the CLI's behaviour calls it
+ * in-process with {@link callWard}, which answers the same.
  */
-export function runWard(argv: string[], cwd: string): CliResult {
-  const result = Bun.spawnSync(['bun', cliPath, ...argv], {
-    cwd,
-    env: { ...process.env, NO_COLOR: '1', WARD_GH: NO_GH, ...GIT_ENV, ...WARD_GLOBAL_ENV },
-  });
-  return {
-    exitCode: result.exitCode,
-    stdout: result.stdout.toString(),
-    stderr: result.stderr.toString(),
-  };
+export function runWard(argv: string[], cwd: string, options: SpawnOptions = {}): CliResult {
+  return spawnCli(argv, cwd, wardEnv(), options);
 }
 
 /**
@@ -113,8 +109,60 @@ export function runWard(argv: string[], cwd: string): CliResult {
  * (design/0005-agent-audience/) and the forge tests need gh to be genuinely
  * absent or faked (design/0009-live-forge-state/).
  */
-export function runWardEnv(argv: string[], cwd: string, env: Record<string, string>): CliResult {
-  const merged: Record<string, string | undefined> = {
+export function runWardEnv(
+  argv: string[],
+  cwd: string,
+  env: Record<string, string>,
+  options: SpawnOptions = {},
+): CliResult {
+  return spawnCli(argv, cwd, wardEnvWith(env), options);
+}
+
+/** What a spawned run may add: stdin's text, piped in (a `-` argument reads it). */
+export interface SpawnOptions {
+  readonly stdin?: string;
+}
+
+/** What a call in-process may add to an invocation (design/0074-in-process-cli-tests/). */
+export interface CallOptions extends SpawnOptions {
+  /** Answer as if stdout were a terminal (no spawned run can: it has no terminal). */
+  readonly tty?: boolean;
+}
+
+/**
+ * runWard, in-process (design/0074-in-process-cli-tests/): the same
+ * environment, the same directory, the same result — the parity suite holds
+ * the two to byte-identical output — without spawning a runtime per call.
+ * Calls in one process take turns, so it is safe from concurrent tests.
+ */
+export function callWard(
+  argv: string[],
+  cwd: string,
+  options: CallOptions = {},
+): Promise<CliResult> {
+  return callCli(argv, cwd, wardEnv(), options);
+}
+
+/** runWardEnv, in-process: the caller's env decides color, caller and forge. */
+export function callWardEnv(
+  argv: string[],
+  cwd: string,
+  env: Record<string, string>,
+  options: CallOptions = {},
+): Promise<CliResult> {
+  return callCli(argv, cwd, wardEnvWith(env), options);
+}
+
+type CliEnv = Record<string, string | undefined>;
+
+/** runWard's environment: the test process's, made hermetic and colorless. */
+function wardEnv(): CliEnv {
+  return { ...process.env, NO_COLOR: '1', WARD_GH: NO_GH, ...GIT_ENV, ...WARD_GLOBAL_ENV };
+}
+
+/** runWardEnv's: hermetic, with the caller's own row deciding the rest. */
+function wardEnvWith(env: Record<string, string>): CliEnv {
+  const merged: CliEnv = {
     ...process.env,
     ...GIT_ENV,
     ...WARD_GLOBAL_ENV,
@@ -126,12 +174,37 @@ export function runWardEnv(argv: string[], cwd: string, env: Record<string, stri
   delete merged.WARD_GH;
   delete merged.WARD_GH_TIMEOUT_MS;
   Object.assign(merged, env);
-  const result = Bun.spawnSync(['bun', cliPath, ...argv], { cwd, env: merged });
+  return merged;
+}
+
+function spawnCli(argv: string[], cwd: string, env: CliEnv, options: SpawnOptions): CliResult {
+  const result = Bun.spawnSync(['bun', cliPath, ...argv], {
+    cwd,
+    env,
+    ...(options.stdin === undefined ? {} : { stdin: Buffer.from(options.stdin) }),
+  });
   return {
     exitCode: result.exitCode,
     stdout: result.stdout.toString(),
     stderr: result.stderr.toString(),
   };
+}
+
+async function callCli(
+  argv: string[],
+  cwd: string,
+  env: CliEnv,
+  options: CallOptions,
+): Promise<CliResult> {
+  // Imported on first use, so a file that only spawns never loads the CLI.
+  const { runCli } = await import('../src/cli/in-process.ts');
+  return runCli({
+    argv,
+    cwd,
+    env,
+    ...(options.stdin === undefined ? {} : { stdin: options.stdin }),
+    ...(options.tty === undefined ? {} : { stdoutIsTTY: options.tty }),
+  });
 }
 
 export interface FakeClaudeBehavior {

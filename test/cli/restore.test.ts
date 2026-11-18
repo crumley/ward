@@ -14,17 +14,17 @@ import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { createWorkspaceWorktree, createWorktree } from '../../src/workspace/worktrees.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { applyGitTestEnv, callWard, makeTempDir, removeDir } from '../helpers.ts';
 import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
-test('the fresh-clone flow: restore re-materializes, doctor reads clean', () => {
+test('the fresh-clone flow: restore re-materializes, doctor reads clean', async () => {
   const clone = join(scratch, 'clone-flow');
   gitOrThrow('.', 'clone', ws, clone);
 
-  const before = runWard(['doctor'], clone);
+  const before = await callWard(['doctor'], clone);
   expect(before.stdout).toContain('ward workspace restore'); // the named remedy
 
-  const result = runWard(['workspace', 'restore'], clone);
+  const result = await callWard(['workspace', 'restore'], clone);
   expect(result.exitCode).toBe(0);
   // The spawned CLI stands at the clone's real path (macOS /var → /private/var).
   expect(result.stdout).toContain(`Restoring workspace at ${realpathSync(clone)}`);
@@ -35,22 +35,22 @@ test('the fresh-clone flow: restore re-materializes, doctor reads clean', () => 
   expect(result.stdout).toContain('Workspace restored — 3 restored, 0 already satisfied.');
   expect(existsSync(join(clone, 'repos/demo/seed.txt'))).toBe(true);
 
-  const after = runWard(['doctor'], clone);
+  const after = await callWard(['doctor'], clone);
   expect(after.exitCode).toBe(0);
   expect(after.stdout).toContain('healthy');
   expect(after.stdout).not.toContain('missing');
 
   // Idempotence through the CLI: the re-run is all satisfied.
-  const again = runWard(['workspace', 'restore'], clone);
+  const again = await callWard(['workspace', 'restore'], clone);
   expect(again.exitCode).toBe(0);
   expect(again.stdout).toContain('Workspace restored — 0 restored, 3 already satisfied.');
 });
 
-test('restore --json: one document alone on stdout, valid under the registered shape', () => {
+test('restore --json: one document alone on stdout, valid under the registered shape', async () => {
   const clone = join(scratch, 'clone-json');
   gitOrThrow('.', 'clone', ws, clone);
 
-  const result = runWard(['workspace', 'restore', '--json'], clone);
+  const result = await callWard(['workspace', 'restore', '--json'], clone);
   expect(result.exitCode).toBe(0);
   expect(mutationVerbShapes['workspace restore']).toBe(workspaceRestoreShape);
   const report = workspaceRestoreShape.parse(JSON.parse(result.stdout));
@@ -65,11 +65,11 @@ test('restore --json: one document alone on stdout, valid under the registered s
   expect(report.sessions).toEqual({ open: 0, detail: 'no open session records' });
 });
 
-test('a lost branch: the document names it, the record survives, the exit is 1', () => {
+test('a lost branch: the document names it, the record survives, the exit is 1', async () => {
   const clone = join(scratch, 'clone-lost');
   gitOrThrow('.', 'clone', lostWs, clone);
 
-  const result = runWard(['workspace', 'restore', '--json'], clone);
+  const result = await callWard(['workspace', 'restore', '--json'], clone);
   expect(result.exitCode).toBe(1); // the verb completed and reported; the verdict is $?
   const report = workspaceRestoreShape.parse(JSON.parse(result.stdout));
   expect(report.worktrees).toMatchObject([{ task: 'f0t1', branch: 'unpushed', outcome: 'lost' }]);
@@ -80,16 +80,16 @@ test('a lost branch: the document names it, the record survives, the exit is 1',
     ),
   ).toBe(true);
 
-  const human = runWard(['workspace', 'restore'], clone);
+  const human = await callWard(['workspace', 'restore'], clone);
   expect(human.exitCode).toBe(1);
   expect(human.stdout).toContain('lost');
   expect(human.stdout).toContain('Restore incomplete');
   expect(human.stdout).toContain('--outcome abandoned');
 });
 
-test('restore refuses inside a stewardship copy, naming the enclosing workspace', () => {
+test('restore refuses inside a stewardship copy, naming the enclosing workspace', async () => {
   const copy = join(ws, 'floors/0-workspace/f0t2-steward-steward-work');
-  const result = runWard(['workspace', 'restore'], copy);
+  const result = await callWard(['workspace', 'restore'], copy);
   expect(result.exitCode).toBe(1);
   expect(result.stdout).toBe('');
   expect(result.stderr).toContain('stewardship copy');

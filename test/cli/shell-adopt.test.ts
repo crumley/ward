@@ -14,12 +14,12 @@ import { unifiedDiff } from '../../src/shell/diff.ts';
 import { emitShellLayer } from '../../src/shell/layer.ts';
 import { FISH_HELPERS, FISH_SHORTHANDS } from '../../src/shell/shorthands.ts';
 import { type Finding, runDoctor } from '../../src/workspace/doctor.ts';
-import { applyGitTestEnv, makeTempDir, NO_GH, removeDir, runWardEnv } from '../helpers.ts';
+import { applyGitTestEnv, callWardEnv, makeTempDir, NO_GH, removeDir } from '../helpers.ts';
 
 // -- the offering: naming nothing writes nothing ----------------------------
 
-test('no names lists every shorthand with its standing, and writes not one byte', () => {
-  const result = adopt([]);
+test('no names lists every shorthand with its standing, and writes not one byte', async () => {
+  const result = await adopt([]);
   expect(result.exitCode).toBe(0);
   for (const shorthand of FISH_SHORTHANDS) {
     expect(result.stdout).toContain(`available  ${shorthand.name}`);
@@ -95,8 +95,8 @@ const fileSets: ReadonlyArray<{ name: string; files: readonly string[] }> = [
 ];
 
 for (const row of fileSets) {
-  test(`adopting ${row.name} writes its function, its completion, and exactly the helpers it needs`, () => {
-    const result = adopt([row.name]);
+  test(`adopting ${row.name} writes its function, its completion, and exactly the helpers it needs`, async () => {
+    const result = await adopt([row.name]);
     expect(result.exitCode).toBe(0);
     expect(written()).toEqual([...row.files].sort());
     for (const file of row.files) expect(result.stdout).toContain(`written    ${file}`);
@@ -110,8 +110,8 @@ for (const row of fileSets) {
   });
 }
 
-test('the adopted file holds the real definition — not a trampoline back into ward', () => {
-  adopt(['wrcd']);
+test('the adopted file holds the real definition — not a trampoline back into ward', async () => {
+  await adopt(['wrcd']);
   const body = readFileSync(join(fishDir(), 'functions', 'wrcd.fish'), 'utf8');
   // The whole point: the bytes are a snapshot, so "wrcd has changed" is diffable.
   expect(body).toContain("function wrcd --description 'cd to a repository checkout");
@@ -122,8 +122,8 @@ test('the adopted file holds the real definition — not a trampoline back into 
   expect(body).toContain('Yours now');
 });
 
-test('--all adopts every shorthand ward offers, in one convergent pass', () => {
-  const result = adopt(['--all']);
+test('--all adopts every shorthand ward offers, in one convergent pass', async () => {
+  const result = await adopt(['--all']);
   expect(result.exitCode).toBe(0);
   for (const shorthand of FISH_SHORTHANDS)
     expect(result.stdout).toContain(`current    ${shorthand.name}`);
@@ -132,10 +132,10 @@ test('--all adopts every shorthand ward offers, in one convergent pass', () => {
   expect(files.length).toBe(FISH_SHORTHANDS.length * 2 + FISH_HELPERS.length);
 });
 
-test('re-adopting a current shorthand is a visible no-op — every file unchanged, nothing rewritten', () => {
-  adopt(['wrcd']);
+test('re-adopting a current shorthand is a visible no-op — every file unchanged, nothing rewritten', async () => {
+  await adopt(['wrcd']);
   const stamps = written().map((file) => Bun.file(join(fishDir(), file)).lastModified);
-  const again = adopt(['wrcd']);
+  const again = await adopt(['wrcd']);
   expect(again.exitCode).toBe(0);
   expect(again.stdout).not.toContain('written');
   for (const file of written()) expect(again.stdout).toContain(`unchanged  ${file}`);
@@ -146,21 +146,25 @@ test('re-adopting a current shorthand is a visible no-op — every file unchange
 
 // -- the four words the offering speaks -------------------------------------
 
-const statuses: ReadonlyArray<{ name: string; stage: () => void; status: string }> = [
+const statuses: ReadonlyArray<{ name: string; stage: () => unknown; status: string }> = [
   { name: 'available — nothing adopted at this name', stage: () => {}, status: 'available' },
-  { name: 'current — adopted and byte-identical', stage: () => adopt(['wrr']), status: 'current' },
+  {
+    name: 'current — adopted and byte-identical',
+    stage: async () => await adopt(['wrr']),
+    status: 'current',
+  },
   {
     name: "changed — ward's own file, from a ward that defined wrr differently",
-    stage: () => {
-      adopt(['wrr']);
+    stage: async () => {
+      await adopt(['wrr']);
       append('functions/wrr.fish', '\n# an older ward wrote this\n');
     },
     status: 'changed',
   },
   {
     name: 'changed — a shared helper drifted under an otherwise current shorthand',
-    stage: () => {
-      adopt(['wrr']);
+    stage: async () => {
+      await adopt(['wrr']);
       append('completions/wrr.fish', '\ncomplete -c wrr -f\n');
     },
     status: 'changed',
@@ -179,9 +183,9 @@ const statuses: ReadonlyArray<{ name: string; stage: () => void; status: string 
 ];
 
 for (const row of statuses) {
-  test(`the offering classifies from bytes alone — ${row.name}`, () => {
-    row.stage();
-    const listing = adopt([]);
+  test(`the offering classifies from bytes alone — ${row.name}`, async () => {
+    await row.stage();
+    const listing = await adopt([]);
     expect(listing.exitCode).toBe(0);
     expect(listing.stdout).toContain(`${row.status.padEnd(9)}  wrr`);
   });
@@ -189,10 +193,10 @@ for (const row of statuses) {
 
 // -- a file ward did not write is never overwritten -------------------------
 
-test('a `yours` file is kept, and adopting says so rather than claiming it landed', () => {
+test('a `yours` file is kept, and adopting says so rather than claiming it landed', async () => {
   const mine = 'function wrr; command ward repo refresh --stash; end\n';
   write('functions/wrr.fish', mine);
-  const result = adopt(['wrr']);
+  const result = await adopt(['wrr']);
   expect(result.exitCode).toBe(0); // declining to overwrite is not a failure
   expect(result.stdout).toContain('kept       functions/wrr.fish');
   expect(result.stdout).toContain('yours      wrr');
@@ -202,9 +206,9 @@ test('a `yours` file is kept, and adopting says so rather than claiming it lande
   expect(result.stdout).toContain('written    completions/wrr.fish');
 });
 
-test('--force replaces a file ward did not write, and only when asked', () => {
+test('--force replaces a file ward did not write, and only when asked', async () => {
   write('functions/wrr.fish', 'function wrr; end\n');
-  const forced = adopt(['wrr', '--force']);
+  const forced = await adopt(['wrr', '--force']);
   expect(forced.exitCode).toBe(0);
   expect(forced.stdout).toContain('replaced   functions/wrr.fish');
   expect(forced.stdout).toContain('current    wrr');
@@ -215,11 +219,15 @@ test('--force replaces a file ward did not write, and only when asked', () => {
 
 // -- --dir: the same files, somewhere else ----------------------------------
 
-test('--dir writes the same bytes into an arbitrary fish root, naming its own location nowhere', () => {
+test('--dir writes the same bytes into an arbitrary fish root, naming its own location nowhere', async () => {
   const stow = join(scratch, `stow-${caseId}`);
-  const there = runWardEnv(['shell', 'adopt', 'fish', '--all', '--dir', stow], scratch, env());
+  const there = await callWardEnv(
+    ['shell', 'adopt', 'fish', '--all', '--dir', stow],
+    scratch,
+    env(),
+  );
   expect(there.exitCode).toBe(0);
-  adopt(['--all']);
+  await adopt(['--all']);
 
   // The tree is a fish configuration root, not a flat dump — which is exactly
   // what a stow package or a dotfiles repo wants to symlink into place.
@@ -238,23 +246,23 @@ test('--dir writes the same bytes into an arbitrary fish root, naming its own lo
   expect(existsSync(join(stow, 'conf.d'))).toBe(false);
 });
 
-test('--dir is honored by the diff too, so a dotfiles repo can ask the same question', () => {
+test('--dir is honored by the diff too, so a dotfiles repo can ask the same question', async () => {
   const stow = join(scratch, `stow-diff-${caseId}`);
-  runWardEnv(['shell', 'adopt', 'fish', 'wrr', '--dir', stow], scratch, env());
+  await callWardEnv(['shell', 'adopt', 'fish', 'wrr', '--dir', stow], scratch, env());
   const path = join(stow, 'functions', 'wrr.fish');
   writeFileSync(path, `${readFileSync(path, 'utf8')}\n# a tweak in the dotfiles repo\n`);
-  const diff = runWardEnv(['shell', 'diff', 'fish', 'wrr', '--dir', stow], scratch, env());
+  const diff = await callWardEnv(['shell', 'diff', 'fish', 'wrr', '--dir', stow], scratch, env());
   expect(diff.exitCode).toBe(0);
   expect(diff.stdout).toContain('--- functions/wrr.fish (adopted)');
 });
 
 // -- the diff: see it, without taking it ------------------------------------
 
-test('`shell diff` prints a unified diff of what changed, writes nothing, and exits 0', () => {
-  adopt(['wrr']);
+test('`shell diff` prints a unified diff of what changed, writes nothing, and exits 0', async () => {
+  await adopt(['wrr']);
   append('functions/wrr.fish', '\n# my own tweak\n');
   const before = readFileSync(join(fishDir(), 'functions', 'wrr.fish'), 'utf8');
-  const diff = runWardEnv(['shell', 'diff', 'fish', 'wrr'], scratch, env());
+  const diff = await callWardEnv(['shell', 'diff', 'fish', 'wrr'], scratch, env());
   expect(diff.exitCode).toBe(0);
   expect(diff.stdout).toContain('--- functions/wrr.fish (adopted)');
   expect(diff.stdout).toContain('+++ functions/wrr.fish (this ward)');
@@ -265,16 +273,16 @@ test('`shell diff` prints a unified diff of what changed, writes nothing, and ex
   expect(readFileSync(join(fishDir(), 'functions', 'wrr.fish'), 'utf8')).toBe(before);
 });
 
-test("nothing to show is silence — a current shorthand, and one that is not ward's at all", () => {
-  adopt(['wrr']);
-  expect(runWardEnv(['shell', 'diff', 'fish', 'wrr'], scratch, env()).stdout).toBe('');
+test("nothing to show is silence — a current shorthand, and one that is not ward's at all", async () => {
+  await adopt(['wrr']);
+  expect((await callWardEnv(['shell', 'diff', 'fish', 'wrr'], scratch, env())).stdout).toBe('');
   // Ward has no claim on a file it did not write, so it is not diffed against
   // ward's definition — that would frame somebody's arrangement as a deviation.
   write('functions/wwcd.fish', 'function wwcd; cd /tmp; end\n');
-  expect(runWardEnv(['shell', 'diff', 'fish', 'wwcd'], scratch, env()).stdout).toBe('');
+  expect((await callWardEnv(['shell', 'diff', 'fish', 'wwcd'], scratch, env())).stdout).toBe('');
   // With no names it asks about every shorthand at once.
   append('functions/wrr.fish', '\n# drift\n');
-  const all = runWardEnv(['shell', 'diff', 'fish'], scratch, env());
+  const all = await callWardEnv(['shell', 'diff', 'fish'], scratch, env());
   expect(all.stdout).toContain('functions/wrr.fish');
   expect(all.stdout).not.toContain('wwcd');
 });
@@ -326,7 +334,7 @@ test('the diff agrees with `diff -u` line for line, on the shape of edit these f
 
 const findings: ReadonlyArray<{
   name: string;
-  stage: () => void;
+  stage: () => unknown;
   expected: () => ReadonlyArray<Record<string, unknown>>;
 }> = [
   {
@@ -349,7 +357,7 @@ const findings: ReadonlyArray<{
   },
   {
     name: 'adopted and current: an ok naming the file, and the rest still one dim line',
-    stage: () => adopt(['wrr']),
+    stage: async () => await adopt(['wrr']),
     expected: () => [
       {
         check: 'fish shorthand wrr',
@@ -361,8 +369,8 @@ const findings: ReadonlyArray<{
   },
   {
     name: 'changed: the needs-you warning naming the alias, the file, the diff, and the re-adopt',
-    stage: () => {
-      adopt(['wrr']);
+    stage: async () => {
+      await adopt(['wrr']);
       append('functions/wrr.fish', '\n# an older ward\n');
     },
     expected: () => [
@@ -400,7 +408,7 @@ const findings: ReadonlyArray<{
   },
   {
     name: 'every shorthand adopted: one ok each and no remainder line at all',
-    stage: () => adopt(['--all']),
+    stage: async () => await adopt(['--all']),
     expected: () =>
       FISH_SHORTHANDS.map((shorthand) => ({
         check: `fish shorthand ${shorthand.name}`,
@@ -411,7 +419,7 @@ const findings: ReadonlyArray<{
 
 for (const row of findings) {
   test(`doctor — ${row.name}`, async () => {
-    row.stage();
+    await row.stage();
     const report = await runDoctor(scratch);
     expect(adoptionFindings(report.machine)).toMatchObject([...row.expected()]);
     // A convenience can never make a machine unhealthy (0024's posture, kept).
@@ -420,7 +428,7 @@ for (const row of findings) {
 }
 
 test('doctor names the one condition only two install styles can produce: the layer shadows them', async () => {
-  adopt(['wrr']);
+  await adopt(['wrr']);
   write(join('conf.d', 'ward.fish'), emitShellLayer('fish'));
   const report = await runDoctor(scratch);
   const shadow = report.machine.find((finding) => finding.check === 'fish shorthands shadowed');
@@ -436,10 +444,10 @@ test('doctor names the one condition only two install styles can produce: the la
   expect(alone.machine.some((finding) => finding.check === 'fish shorthands shadowed')).toBe(false);
 });
 
-test('the human rendering marks a changed shorthand and carries both choices; the run exits 0', () => {
-  adopt(['wrr']);
+test('the human rendering marks a changed shorthand and carries both choices; the run exits 0', async () => {
+  await adopt(['wrr']);
   append('functions/wrr.fish', '\n# an older ward\n');
-  const result = runWardEnv(['doctor'], scratch, env());
+  const result = await callWardEnv(['doctor'], scratch, env());
   expect(result.exitCode).toBe(0); // report-only: drift never fails the run
   expect(result.stdout).toContain('! fish shorthand wrr — wrr has changed');
   expect(result.stdout).toContain('See it: ward shell diff fish wrr');
@@ -449,9 +457,9 @@ test('the human rendering marks a changed shorthand and carries both choices; th
 
 // -- one source of truth ----------------------------------------------------
 
-test('both assemblies are built from the same units — the layer holds every adopted definition verbatim', () => {
+test('both assemblies are built from the same units — the layer holds every adopted definition verbatim', async () => {
   const layer = emitShellLayer('fish');
-  adopt(['--all']);
+  await adopt(['--all']);
   for (const shorthand of FISH_SHORTHANDS) {
     // What `shell init` emits and what `shell adopt` writes are the same fish,
     // framed differently. If these ever diverge the shorthands have forked.
@@ -474,15 +482,15 @@ test('both assemblies are built from the same units — the layer holds every ad
 
 // -- both audiences ---------------------------------------------------------
 
-test('--json carries the offering and the write report in the shape ward schema documents', () => {
-  const offering = shellAdoptShape.parse(JSON.parse(adopt(['--json']).stdout));
+test('--json carries the offering and the write report in the shape ward schema documents', async () => {
+  const offering = shellAdoptShape.parse(JSON.parse((await adopt(['--json'])).stdout));
   expect(offering.offeredOnly).toBe(true);
   expect(offering.dir).toBe(fishDir());
   expect(offering.shorthands).toMatchObject(
     FISH_SHORTHANDS.map((shorthand) => ({ name: shorthand.name, status: 'available', files: [] })),
   );
 
-  const written = shellAdoptShape.parse(JSON.parse(adopt(['wrr', '--json']).stdout));
+  const written = shellAdoptShape.parse(JSON.parse((await adopt(['wrr', '--json'])).stdout));
   expect(written.offeredOnly).toBe(false);
   expect(written.shorthands).toEqual([
     {
@@ -496,7 +504,7 @@ test('--json carries the offering and the write report in the shape ward schema 
     },
   ]);
   // The status is the standing AFTER the run, so a re-run reports the truth.
-  const again = shellAdoptShape.parse(JSON.parse(adopt(['wrr', '--json']).stdout));
+  const again = shellAdoptShape.parse(JSON.parse((await adopt(['wrr', '--json'])).stdout));
   expect(again.shorthands[0]?.files.every((file) => file.outcome === 'unchanged')).toBe(true);
 });
 
@@ -509,20 +517,20 @@ test('the verb path splits `shell` into its four sub-verbs and nothing else', ()
 
 // -- refusals name the fix --------------------------------------------------
 
-test('an unbuilt shell, an unoffered name, and two contradicting selections are each refused legibly', () => {
-  const bash = runWardEnv(['shell', 'adopt', 'bash'], scratch, env());
+test('an unbuilt shell, an unoffered name, and two contradicting selections are each refused legibly', async () => {
+  const bash = await callWardEnv(['shell', 'adopt', 'bash'], scratch, env());
   expect(bash.exitCode).toBe(1);
   expect(bash.stderr).toContain("no shell adoption for 'bash' — available: fish");
   expect(bash.stderr).toContain('unbuilt, not unsupported');
 
   // The parser holds the offered set, so an unknown name is refused before
   // anything is read or written — and the refusal lists what exists.
-  const unknown = runWardEnv(['shell', 'adopt', 'fish', 'wxx'], scratch, env());
+  const unknown = await callWardEnv(['shell', 'adopt', 'fish', 'wxx'], scratch, env());
   expect(unknown.exitCode).toBe(1);
   expect(unknown.stderr).toContain('"wrr"');
   expect(unknown.stderr).toContain('"wwcd"');
 
-  const both = runWardEnv(['shell', 'adopt', 'fish', 'wrr', '--all'], scratch, env());
+  const both = await callWardEnv(['shell', 'adopt', 'fish', 'wrr', '--all'], scratch, env());
   expect(both.exitCode).toBe(1);
   expect(both.stderr).toContain('--all adopts every shorthand');
   expect(written()).toEqual([]);
@@ -530,9 +538,9 @@ test('an unbuilt shell, an unoffered name, and two contradicting selections are 
 
 // -- the real proof: fish runs what was adopted -----------------------------
 
-test('an adopted shorthand parses, autoloads, and runs under a real fish', () => {
+test('an adopted shorthand parses, autoloads, and runs under a real fish', async () => {
   if (!existsSync(FISH)) return; // hermetic: no fish on this machine, no claim
-  adopt(['--all']);
+  await adopt(['--all']);
   for (const file of written()) {
     const parsed = Bun.spawnSync([FISH, '--no-execute', join(fishDir(), file)]);
     expect(parsed.stderr.toString()).toBe('');
@@ -588,8 +596,8 @@ function env(): Record<string, string> {
 }
 
 /** `ward shell adopt fish …` with this case's environment. */
-function adopt(args: readonly string[]) {
-  return runWardEnv(['shell', 'adopt', 'fish', ...args], scratch, env());
+async function adopt(args: readonly string[]) {
+  return await callWardEnv(['shell', 'adopt', 'fish', ...args], scratch, env());
 }
 
 /** A fish one-liner with a PATH holding `ward` and `git` — and deliberately no fzf. */
@@ -644,13 +652,13 @@ beforeAll(async () => {
   Bun.spawnSync(['chmod', '+x', join(toolBin, 'git'), join(wardBin, 'ward')]);
 });
 
-beforeEach(() => {
+beforeEach(async () => {
   caseId += 1;
   fishHome = mkdtempSync(join(scratch, 'xdg-'));
   process.env.XDG_CONFIG_HOME = fishHome;
   // A registry per case, so registering the workspace cannot leak between them.
   state = join(scratch, `state-${caseId}`);
-  runWardEnv(['workspace', 'register', workspace], scratch, env());
+  await callWardEnv(['workspace', 'register', workspace], scratch, env());
 });
 
 afterAll(() => removeDir(scratch));

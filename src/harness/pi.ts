@@ -12,8 +12,8 @@
 // tail map straight across, which is why parity is reached without pi-shaped
 // concepts leaking upward.
 import { readdirSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { homeDir } from '../global/paths.ts';
 import {
   type Env,
   flag,
@@ -89,7 +89,7 @@ export function piResumeArgv(nativeId: string, args: readonly string[]): string[
 export function piSessionDir(cwd: string, env: Env = process.env): string {
   const flat = env.PI_CODING_AGENT_SESSION_DIR;
   if (flat !== undefined && flat !== '') return resolve(flat);
-  const agentDir = env.PI_CODING_AGENT_DIR ?? join(homedir(), '.pi', 'agent');
+  const agentDir = env.PI_CODING_AGENT_DIR ?? join(homeDir(env), '.pi', 'agent');
   return join(resolve(agentDir), 'sessions', piSessionDirName(cwd));
 }
 

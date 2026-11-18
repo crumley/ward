@@ -12,9 +12,10 @@ import type { SessionRecord } from '../../src/store/types.ts';
 import { type OpenSessionListing, parentOf } from '../../src/workspace/sessions.ts';
 import {
   applyGitTestEnv,
+  callWard,
+  callWardEnv,
   makeTempDir,
   removeDir,
-  runWard,
   runWardEnv,
   writeFakeClaude,
 } from '../helpers.ts';
@@ -43,30 +44,40 @@ test.each([
 
 // -- every open path records it -------------------------------------------------
 
-test('a task session opened from inside a session records it as parent, and show says so', () => {
-  const opened = openChild(['session', 'open', 'f0t1', '--purpose', 'build it', '--json']);
+test('a task session opened from inside a session records it as parent, and show says so', async () => {
+  const opened = await openChild(['session', 'open', 'f0t1', '--purpose', 'build it', '--json']);
   expect(opened.parent).toBe(COORDINATOR);
   expect(opened.id).toBe('feature-1@test');
 
-  const shown = runWard(['session', 'show', 'feature-1@test'], ws);
+  const shown = await callWard(['session', 'show', 'feature-1@test'], ws);
   expect(shown.exitCode).toBe(0);
   expect(shown.stdout).toContain(`parent   ${COORDINATOR}`);
-  const json = runWard(['session', 'show', 'feature-1@test', '--json'], ws);
+  const json = await callWard(['session', 'show', 'feature-1@test', '--json'], ws);
   expect(sessionMutationShape.parse(JSON.parse(json.stdout)).parent).toBe(COORDINATOR);
 });
 
-test('a record-only workspace session records its parent too', () => {
-  const opened = openChild(['session', 'open', '--handle', 'pi:sub', '--json']);
+test('a record-only workspace session records its parent too', async () => {
+  const opened = await openChild(['session', 'open', '--handle', 'pi:sub', '--json']);
   expect(opened).toMatchObject({ id: 'workspace-2@test', scope: 'workspace', parent: COORDINATOR });
 });
 
-test('a floor session records its parent too', () => {
-  const opened = openChild(['session', 'open', '--floor', '0', '--handle', 'pi:floor', '--json']);
+test('a floor session records its parent too', async () => {
+  const opened = await openChild([
+    'session',
+    'open',
+    '--floor',
+    '0',
+    '--handle',
+    'pi:floor',
+    '--json',
+  ]);
   expect(opened).toMatchObject({ id: 'f0-1@test', scope: 'project', parent: COORDINATOR });
 });
 
-test('a launched session records its parent, and its own run is declared as itself', () => {
+test('a launched session records its parent, and its own run is declared as itself', async () => {
   const stub = writeFakeClaude(scratch, `claude-${caseId}`, { logFile });
+  // Spawned: the launched run is a child of the ward PROCESS, and what it
+  // inherits from that process is the subject (design/0074-in-process-cli-tests/).
   const result = runWardEnv(['session', 'open', '--purpose', 'a child', '--json'], ws, {
     WARD_AGENT: COORDINATOR,
     WARD_CLAUDE_BIN: stub,
@@ -83,10 +94,10 @@ test('a launched session records its parent, and its own run is declared as itse
   expect(run.wardAgent).toBe('workspace-2@test');
 });
 
-test('grandchildren chain: each open names the session it was opened from', () => {
-  openChild(['session', 'open', 'f0t1', '--purpose', 'child', '--json']);
+test('grandchildren chain: each open names the session it was opened from', async () => {
+  await openChild(['session', 'open', 'f0t1', '--purpose', 'child', '--json']);
   const grandchild = parse(
-    runWardEnv(['session', 'open', 'f0t1', '--purpose', 'grandchild', '--json'], ws, {
+    await callWardEnv(['session', 'open', 'f0t1', '--purpose', 'grandchild', '--json'], ws, {
       WARD_AGENT: 'feature-1@test',
     }),
   );
@@ -99,18 +110,27 @@ test.each([
   ['no WARD_AGENT at all', {}],
   ['WARD_AGENT=1', { WARD_AGENT: '1' }],
   ['an id this workspace never allocated', { WARD_AGENT: 'workspace-9@elsewhere' }],
-] as const)('no parent when the caller declares %s — and the open still succeeds', (_what, env) => {
-  const result = runWardEnv(['session', 'open', 'f0t1', '--purpose', 'p', '--json'], ws, env);
-  expect(result.exitCode).toBe(0);
-  expect(parse(result).parent).toBeUndefined();
-  expect(runWard(['session', 'show', 'feature-1@test'], ws).stdout).not.toContain('parent');
-});
+] as const)(
+  'no parent when the caller declares %s — and the open still succeeds',
+  async (_what, env) => {
+    const result = await callWardEnv(
+      ['session', 'open', 'f0t1', '--purpose', 'p', '--json'],
+      ws,
+      env,
+    );
+    expect(result.exitCode).toBe(0);
+    expect(parse(result).parent).toBeUndefined();
+    expect((await callWard(['session', 'show', 'feature-1@test'], ws)).stdout).not.toContain(
+      'parent',
+    );
+  },
+);
 
-test('a closed session still names the sessions it opened', () => {
-  expect(runWard(['session', 'close', COORDINATOR], ws).exitCode).toBe(0);
-  expect(openChild(['session', 'open', 'f0t1', '--purpose', 'after', '--json']).parent).toBe(
-    COORDINATOR,
-  );
+test('a closed session still names the sessions it opened', async () => {
+  expect((await callWard(['session', 'close', COORDINATOR], ws)).exitCode).toBe(0);
+  expect(
+    (await openChild(['session', 'open', 'f0t1', '--purpose', 'after', '--json'])).parent,
+  ).toBe(COORDINATOR);
 });
 
 // -- scaffolding ------------------------------------------------------------------
@@ -138,8 +158,8 @@ function session(id: string, state: 'open' | 'closed', handle?: string): Session
 }
 
 /** Open a session from inside the coordinator, returning its document. */
-function openChild(argv: string[]): SessionMutationShape {
-  return parse(runWardEnv(argv, ws, { WARD_AGENT: COORDINATOR }));
+async function openChild(argv: string[]): Promise<SessionMutationShape> {
+  return parse(await callWardEnv(argv, ws, { WARD_AGENT: COORDINATOR }));
 }
 
 function parse(result: { exitCode: number; stdout: string; stderr: string }): SessionMutationShape {
@@ -161,9 +181,9 @@ beforeEach(async () => {
   logFile = join(scratch, `runs-${caseId}.jsonl`);
   expect(existsSync(logFile)).toBe(false);
   await preparedWorkspace(ws);
-  expect(runWard(['task', 'open', 'feature', '--project', '0'], ws).exitCode).toBe(0);
+  expect((await callWard(['task', 'open', 'feature', '--project', '0'], ws)).exitCode).toBe(0);
   // The coordinating session every case opens from: recorded, not launched.
-  const coordinator = runWard(
+  const coordinator = await callWard(
     ['session', 'open', '--purpose', 'coordinate', '--handle', 'claude:coordinator'],
     ws,
   );

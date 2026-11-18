@@ -14,9 +14,20 @@ import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { createWorktree } from '../../src/workspace/worktrees.ts';
-import { applyGitTestEnv, makeTempDir, NO_GH, removeDir, runWard, runWardEnv } from '../helpers.ts';
+import {
+  applyGitTestEnv,
+  callWard,
+  callWardEnv,
+  makeTempDir,
+  NO_GH,
+  removeDir,
+  runWard,
+} from '../helpers.ts';
 import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
+// The two cases below spawn: the row is written by the PROCESS's exit event,
+// and these hold that a real exit — natural, and through process.exit —
+// writes it (design/0074-in-process-cli-tests/). The rest run in-process.
 test('a human invocation appends one row: verb, caller, cwd, outcome, duration', () => {
   const result = runWard(['status'], ws);
   expect(result.exitCode).toBe(0);
@@ -34,8 +45,8 @@ test('a human invocation appends one row: verb, caller, cwd, outcome, duration',
   expect(row.ward).toBe(pkg.version);
 });
 
-test('a declared agent is recorded as one, with its declared value', () => {
-  const result = runWardEnv(['task', 'list'], ws, { WARD_AGENT: 'sess-42', WARD_GH: NO_GH });
+test('a declared agent is recorded as one, with its declared value', async () => {
+  const result = await callWardEnv(['task', 'list'], ws, { WARD_AGENT: 'sess-42', WARD_GH: NO_GH });
   expect(result.exitCode).toBe(0);
   const row = telemetryRows(ws)[0] as Record<string, unknown>;
   expect(row.verb).toBe('task list');
@@ -87,7 +98,7 @@ test('the row records the invocation scope, anchor-shaped: task, repo, workspace
     [join(ws, 'repos', 'demo'), 'repo:demo'],
   ];
   for (const [dir, expected] of table) {
-    expect(runWard(['task', 'list'], dir).exitCode).toBe(0);
+    expect((await callWard(['task', 'list'], dir)).exitCode).toBe(0);
     const row = telemetryRows(ws).at(-1) as Record<string, unknown>;
     expect(row.scope).toBe(expected);
   }
@@ -96,16 +107,16 @@ test('the row records the invocation scope, anchor-shaped: task, repo, workspace
 test('a telemetry failure never fails or noisies the command it records', async () => {
   // Blocked at the root: a file where the telemetry directory must go.
   writeFileSync(join(ws, '.ward', 'telemetry'), 'not a directory\n');
-  const blocked = runWard(['status'], ws);
-  const healthy = runWard(['status'], await freshWorkspace());
+  const blocked = await callWard(['status'], ws);
+  const healthy = await callWard(['status'], await freshWorkspace());
   expect(blocked.exitCode).toBe(0);
   expect(blocked.stdout).toBe(healthy.stdout); // the command's work is the work
   expect(blocked.stderr).toBe(healthy.stderr); // and no complaint rides along
 });
 
 test('nothing telemetry-related ever shows in the store git status', async () => {
-  runWard(['status'], ws);
-  runWard(['task', 'open', 'tracked-check'], ws);
+  await callWard(['status'], ws);
+  await callWard(['task', 'open', 'tracked-check'], ws);
   expect(existsSync(join(ws, '.ward', 'telemetry'))).toBe(true);
   expect(gitOrThrow(ws, 'status', '--porcelain').stdout.trim()).toBe('');
 
@@ -121,21 +132,21 @@ test('nothing telemetry-related ever shows in the store git status', async () =>
   gitOrThrow(old, 'add', '--', '.gitignore');
   gitOrThrow(old, 'commit', '-m', 'simulate a pre-0013 ignore policy');
 
-  runWard(['status'], old);
+  await callWard(['status'], old);
   expect(existsSync(join(old, '.ward', 'telemetry', '.gitignore'))).toBe(true);
   expect(gitOrThrow(old, 'status', '--porcelain').stdout).not.toContain('telemetry');
 });
 
-test('outside any workspace, nothing is recorded and nothing is created', () => {
+test('outside any workspace, nothing is recorded and nothing is created', async () => {
   const nowhere = makeTempDir();
-  const result = runWard(['doctor'], nowhere);
+  const result = await callWard(['doctor'], nowhere);
   expect(result.exitCode).toBe(0);
   expect(existsSync(join(nowhere, '.ward'))).toBe(false);
   removeDir(nowhere);
 });
 
 test('doctor guards the boundary: tracked telemetry is a warning, local is ok', async () => {
-  runWard(['status'], ws); // produce a telemetry file
+  await callWard(['status'], ws); // produce a telemetry file
   expect(telemetryFinding(await runDoctor(ws))?.severity).toBe('ok');
 
   const shard = readdirSync(join(ws, '.ward', 'telemetry')).find((f) => f.endsWith('.jsonl'));

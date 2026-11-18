@@ -18,11 +18,11 @@ import { openSession } from '../../src/workspace/sessions.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import {
   applyGitTestEnv,
+  callWard,
   cliPath,
   GIT_ENV,
   makeTempDir,
   removeDir,
-  runWard,
   WARD_GLOBAL_ENV,
 } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
@@ -96,7 +96,7 @@ test('an untyped brief still counts, doctor names it, and the verb types it in p
     },
   ]);
 
-  const typed = runWard(['task', 'brief', 'f1t1', path, '--json'], ws);
+  const typed = await callWard(['task', 'brief', 'f1t1', path, '--json'], ws);
   expect(typed.exitCode).toBe(0);
   const doc = taskBriefShape.parse(JSON.parse(typed.stdout));
   expect(doc).toMatchObject({ address: 'f1t1', path, for: 'f1t1', replaced: true });
@@ -112,7 +112,7 @@ test('front matter that claims the type but fails it is a warning', async () => 
   expect(briefFindings(await runDoctor(ws)).map((finding) => finding.severity)).toEqual(['warn']);
 });
 
-test('the CLI reads the brief from stdin with -, and refuses a missing file', () => {
+test('the CLI reads the brief from stdin with -, and refuses a missing file', async () => {
   const piped = Bun.spawnSync(['bun', cliPath, 'task', 'brief', 'f1t1', '-'], {
     cwd: ws,
     stdin: new TextEncoder().encode('# From a pipe\n'),
@@ -125,7 +125,7 @@ test('the CLI reads the brief from stdin with -, and refuses a missing file', ()
   expect(piped.stdout.toString()).toContain('recorded the brief for f1t1');
   expect(readFileSync(join(ws, taskDir, 'brief.md'), 'utf8')).toEndWith('\n# From a pipe\n');
 
-  const missing = runWard(['task', 'brief', 'f1t1', 'nowhere.md'], ws);
+  const missing = await callWard(['task', 'brief', 'f1t1', 'nowhere.md'], ws);
   expect(missing.exitCode).toBe(1);
   expect(missing.stderr).toContain("no file at 'nowhere.md'");
 }, 60_000);
@@ -155,14 +155,14 @@ const standings: readonly {
   },
 ];
 for (const { standing, file, line } of standings) {
-  test(`task show reports a ${standing} brief, in --json and on screen`, () => {
+  test(`task show reports a ${standing} brief, in --json and on screen`, async () => {
     const path = `${taskDir}/brief.md`;
     if (file !== undefined) writeFileSync(join(ws, path), file);
-    const json = runWard(['task', 'show', 'f1t1', '--json'], ws);
+    const json = await callWard(['task', 'show', 'f1t1', '--json'], ws);
     expect(json.exitCode).toBe(0);
     const doc = taskShowShape.parse(JSON.parse(json.stdout));
     expect(doc.brief).toEqual({ path, standing });
-    const human = runWard(['task', 'show', 'f1t1'], ws);
+    const human = await callWard(['task', 'show', 'f1t1'], ws);
     expect(human.exitCode).toBe(0);
     const shown = human.stdout.split('\n').find((row) => row.trimStart().startsWith('brief '));
     expect(shown?.trim().replace(/^brief\s+/, '')).toBe(line.replaceAll('BRIEF', path));

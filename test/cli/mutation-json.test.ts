@@ -26,11 +26,11 @@ import {
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import {
   applyGitTestEnv,
+  callWard,
+  callWardEnv,
   makeTempDir,
   NO_GH,
   removeDir,
-  runWard,
-  runWardEnv,
   writeFakeGh,
 } from '../helpers.ts';
 import { preparedRemote, preparedWorkspace } from '../prepared.ts';
@@ -49,8 +49,8 @@ function validated<T extends z.ZodType>(verb: string, shape: T, stdout: string):
 
 // -- the spine, verb by verb ------------------------------------------------
 
-test('workspace create --json: the establishment report, one document alone on stdout', () => {
-  const result = runWard(['workspace', 'create', ws, '--json'], scratch);
+test('workspace create --json: the establishment report, one document alone on stdout', async () => {
+  const result = await callWard(['workspace', 'create', ws, '--json'], scratch);
   expect(result.exitCode).toBe(0);
   const report = validated('workspace create', workspaceCreateShape, result.stdout);
   expect(report.root).toBe(ws);
@@ -61,10 +61,10 @@ test('workspace create --json: the establishment report, one document alone on s
   expect(report.steps.slice(-2).map((step) => step.outcome)).toEqual(['satisfied', 'satisfied']);
 });
 
-test('workspace upgrade --json: the converge steps ride the document, satisfied and legible', () => {
+test('workspace upgrade --json: the converge steps ride the document, satisfied and legible', async () => {
   // Pinned caller environment: the bare form is the human's, and the suite's
   // own WARD_AGENT would otherwise turn this into the agent refusal (0005).
-  const result = runWardEnv(['workspace', 'upgrade', '--json'], ws, {
+  const result = await callWardEnv(['workspace', 'upgrade', '--json'], ws, {
     NO_COLOR: '1',
     WARD_GH: NO_GH,
   });
@@ -77,49 +77,49 @@ test('workspace upgrade --json: the converge steps ride the document, satisfied 
   expect(report.converged.map((step) => step.step)).toContain('standing project');
 });
 
-test('repo add --json: the record as written plus how the run converged', () => {
-  const first = runWard(['repo', 'add', remote, '--name', 'demo', '--json'], ws);
+test('repo add --json: the record as written plus how the run converged', async () => {
+  const first = await callWard(['repo', 'add', remote, '--name', 'demo', '--json'], ws);
   expect(first.exitCode).toBe(0);
   const added = validated('repo add', repoAddShape, first.stdout);
   expect(added).toMatchObject({ name: 'demo', outcome: 'registered', mainLine: 'main' });
   expect(added.remote).toBe(remote);
 
-  const again = runWard(['repo', 'add', remote, '--name', 'demo', '--json'], ws);
+  const again = await callWard(['repo', 'add', remote, '--name', 'demo', '--json'], ws);
   expect(validated('repo add', repoAddShape, again.stdout).outcome).toBe('satisfied');
 });
 
-test('repo refresh --json: one row per repository; the empty set is []', () => {
-  const result = runWard(['repo', 'refresh', '--json'], ws);
+test('repo refresh --json: one row per repository; the empty set is []', async () => {
+  const result = await callWard(['repo', 'refresh', '--json'], ws);
   expect(result.exitCode).toBe(0);
   const rows = validated('repo refresh', repoRefreshShape, result.stdout);
   expect(rows).toMatchObject([{ name: 'demo', outcome: 'current' }]);
 
-  const empty = runWard(['repo', 'refresh', '--json'], emptyWs);
+  const empty = await callWard(['repo', 'refresh', '--json'], emptyWs);
   expect(empty.exitCode).toBe(0);
   expect(JSON.parse(empty.stdout)).toEqual([]);
 });
 
-test('repo remove --json: the record as it stood, the remote carried as the undo', () => {
-  const added = runWard(['repo', 'add', remote, '--name', 'doomed', '--json'], ws);
+test('repo remove --json: the record as it stood, the remote carried as the undo', async () => {
+  const added = await callWard(['repo', 'add', remote, '--name', 'doomed', '--json'], ws);
   expect(added.exitCode).toBe(0);
-  const result = runWard(['repo', 'remove', 'doomed', '--json'], ws);
+  const result = await callWard(['repo', 'remove', 'doomed', '--json'], ws);
   expect(result.exitCode).toBe(0);
   const removed = validated('repo remove', repoRemoveShape, result.stdout);
   expect(removed).toMatchObject({ name: 'doomed', mainLine: 'main', checkout: 'deleted' });
   expect(removed.remote).toBe(remote);
 });
 
-test('project open --json: the opened floor', () => {
+test('project open --json: the opened floor', async () => {
   // Floor 0 is the ground floor, outside the ordinary sequence (0018, 0041).
-  const result = runWard(['project', 'open', 'agent-output', '--json'], ws);
+  const result = await callWard(['project', 'open', 'agent-output', '--json'], ws);
   expect(result.exitCode).toBe(0);
   const project = validated('project open', projectOpenShape, result.stdout);
   expect(project).toMatchObject({ floor: 1, slug: 'agent-output', state: 'active' });
   expect(typeof project.openedAt).toBe('string');
 });
 
-test('task open --json: the record as written, optional fields omitted', () => {
-  const result = runWard(
+test('task open --json: the record as written, optional fields omitted', async () => {
+  const result = await callWard(
     ['task', 'open', 'json-output', '--project', '1', '--purpose', 'mutation reports', '--json'],
     ws,
   );
@@ -138,8 +138,8 @@ test('task open --json: the record as written, optional fields omitted', () => {
   expect(task.closedAt).toBeUndefined();
 });
 
-test('worktree create --json: identity flat, like the worktree list rows', () => {
-  const result = runWard(['worktree', 'create', 't1', '--repo', 'demo', '--json'], ws);
+test('worktree create --json: identity flat, like the worktree list rows', async () => {
+  const result = await callWard(['worktree', 'create', 't1', '--repo', 'demo', '--json'], ws);
   expect(result.exitCode).toBe(0);
   expect(validated('worktree create', worktreeCreateShape, result.stdout)).toMatchObject({
     task: 't1',
@@ -151,8 +151,8 @@ test('worktree create --json: identity flat, like the worktree list rows', () =>
   });
 });
 
-test('session open --json: the session record, handle included', () => {
-  const result = runWard(
+test('session open --json: the session record, handle included', async () => {
+  const result = await callWard(
     ['session', 'open', 't1', '--purpose', 'drive the feature', '--handle', 'claude:run', '--json'],
     ws,
   );
@@ -167,37 +167,37 @@ test('session open --json: the session record, handle included', () => {
   });
 });
 
-test('task pr --json: the grown PR set; repeating converges byte-identically (§6)', () => {
-  const first = runWard(['task', 'pr', 't1', PR_URL, '--json'], ws);
+test('task pr --json: the grown PR set; repeating converges byte-identically (§6)', async () => {
+  const first = await callWard(['task', 'pr', 't1', PR_URL, '--json'], ws);
   expect(first.exitCode).toBe(0);
   expect(validated('task pr', taskMutationShape, first.stdout).prs).toEqual([PR_URL]);
 
-  const again = runWard(['task', 'pr', 't1', PR_URL, '--json'], ws);
+  const again = await callWard(['task', 'pr', 't1', PR_URL, '--json'], ws);
   expect(again.stdout).toBe(first.stdout);
 });
 
-test('task pause / resume --json: the state transition as recorded', () => {
-  const paused = runWard(['task', 'pause', 't1', '--json'], ws);
+test('task pause / resume --json: the state transition as recorded', async () => {
+  const paused = await callWard(['task', 'pause', 't1', '--json'], ws);
   expect(paused.exitCode).toBe(0);
   expect(validated('task pause', taskMutationShape, paused.stdout).state).toBe('paused');
 
-  const resumed = runWard(['task', 'resume', 't1', '--json'], ws);
+  const resumed = await callWard(['task', 'resume', 't1', '--json'], ws);
   expect(resumed.exitCode).toBe(0);
   expect(validated('task resume', taskMutationShape, resumed.stdout).state).toBe('active');
 });
 
-test('the human renderings are byte-identical without the flag (pause, resume)', () => {
-  const paused = runWard(['task', 'pause', 't1'], ws);
+test('the human renderings are byte-identical without the flag (pause, resume)', async () => {
+  const paused = await callWard(['task', 'pause', 't1'], ws);
   expect(paused.exitCode).toBe(0);
   expect(paused.stdout).toBe('paused f1t1 — json-output\n');
 
-  const resumed = runWard(['task', 'resume', 't1'], ws);
+  const resumed = await callWard(['task', 'resume', 't1'], ws);
   expect(resumed.exitCode).toBe(0);
   expect(resumed.stdout).toBe('resumed f1t1 — json-output\n');
 });
 
-test('worktree rebase --json: per-worktree rows; current when already atop', () => {
-  const result = runWard(['worktree', 'rebase', 't1', '--json'], ws);
+test('worktree rebase --json: per-worktree rows; current when already atop', async () => {
+  const result = await callWard(['worktree', 'rebase', 't1', '--json'], ws);
   expect(result.exitCode).toBe(0);
   const report = validated('worktree rebase', worktreeRebaseShape, result.stdout);
   expect(report.task).toBe('t1');
@@ -212,9 +212,9 @@ test('worktree rebase --json: per-worktree rows; current when already atop', () 
   ]);
 });
 
-test('the derivation echo moves to stderr under --json — stdout stays one document', () => {
+test('the derivation echo moves to stderr under --json — stdout stays one document', async () => {
   const wtDir = join(ws, 'floors/1-agent-output/f1t1-json-output');
-  const result = runWard(['task', 'pr', 'https://example.com/pr/2', '--json'], wtDir);
+  const result = await callWard(['task', 'pr', 'https://example.com/pr/2', '--json'], wtDir);
   expect(result.exitCode).toBe(0);
   expect(result.stderr).toContain('task f1t1 — from the working directory');
   expect(validated('task pr', taskMutationShape, result.stdout).prs).toEqual([
@@ -223,18 +223,18 @@ test('the derivation echo moves to stderr under --json — stdout stays one docu
   ]);
 });
 
-test('session close --json: closed, with closedAt recorded', () => {
-  const result = runWard(['session', 'close', 'json-output-1@test', '--json'], ws);
+test('session close --json: closed, with closedAt recorded', async () => {
+  const result = await callWard(['session', 'close', 'json-output-1@test', '--json'], ws);
   expect(result.exitCode).toBe(0);
   const session = validated('session close', sessionMutationShape, result.stdout);
   expect(session).toMatchObject({ id: 'json-output-1@test', state: 'closed' });
   expect(typeof session.closedAt).toBe('string');
 });
 
-test('task close --json, forge unavailable: the named trust survives in the steps', () => {
-  // runWard pins WARD_GH at an impossible executable, so the probe cannot
+test('task close --json, forge unavailable: the named trust survives in the steps', async () => {
+  // callWard pins WARD_GH at an impossible executable, so the probe cannot
   // answer — the degraded close trusts the stated outcome and says so (0012).
-  const result = runWard(['task', 'close', 't1', '--json'], ws);
+  const result = await callWard(['task', 'close', 't1', '--json'], ws);
   expect(result.exitCode).toBe(0);
   const report = validated('task close', taskCloseShape, result.stdout);
   expect(report.outcome).toBe('delivered');
@@ -248,15 +248,15 @@ test('task close --json, forge unavailable: the named trust survives in the step
 
 // -- the error posture ------------------------------------------------------
 
-test('a refused close emits no document: stderr + exit 1, stdout empty', () => {
-  const opened = runWard(['task', 'open', 'refused', '--json'], ws);
+test('a refused close emits no document: stderr + exit 1, stdout empty', async () => {
+  const opened = await callWard(['task', 'open', 'refused', '--json'], ws);
   refusedCode = validated('task open', taskMutationShape, opened.stdout).address;
   const pr = 'https://example.com/pr/3';
-  runWard(['task', 'pr', refusedCode, pr, '--json'], ws);
+  await callWard(['task', 'pr', refusedCode, pr, '--json'], ws);
   const fakeGh = writeFakeGh(scratch, 'gh-open-pr', {
     responses: { [pr]: { state: 'OPEN', reviewDecision: 'REVIEW_REQUIRED' } },
   });
-  const result = runWardEnv(['task', 'close', refusedCode, '--json'], ws, {
+  const result = await callWardEnv(['task', 'close', refusedCode, '--json'], ws, {
     NO_COLOR: '1',
     WARD_GH: fakeGh,
   });
@@ -265,15 +265,15 @@ test('a refused close emits no document: stderr + exit 1, stdout empty', () => {
   expect(result.stderr).toContain('a linked PR is still open');
 });
 
-test('a rebase conflict under --json: the outcome in the document, the verdict in $?', () => {
-  runWard(['worktree', 'create', refusedCode, '--repo', 'demo', '--json'], ws);
+test('a rebase conflict under --json: the outcome in the document, the verdict in $?', async () => {
+  await callWard(['worktree', 'create', refusedCode, '--repo', 'demo', '--json'], ws);
   const wtDir = join(ws, 'floors/0-workspace', `${refusedCode}-refused`);
   writeFileSync(join(wtDir, 'README.md'), 'ours\n');
   gitOrThrow(wtDir, 'add', '-A');
   gitOrThrow(wtDir, 'commit', '-m', 'ours');
   advanceRemote('README.md', 'theirs\n');
 
-  const result = runWard(['worktree', 'rebase', refusedCode, '--json'], ws);
+  const result = await callWard(['worktree', 'rebase', refusedCode, '--json'], ws);
   expect(result.exitCode).toBe(1);
   const report = validated('worktree rebase', worktreeRebaseShape, result.stdout);
   expect(report.reports).toMatchObject([{ branch: 'refused', outcome: 'conflict' }]);
@@ -282,10 +282,10 @@ test('a rebase conflict under --json: the outcome in the document, the verdict i
   expect(detail).toContain('exactly as it was');
 });
 
-test('worktree rebase --json on a task with no worktrees: reports is []', () => {
-  const opened = runWard(['task', 'open', 'bare', '--json'], ws);
+test('worktree rebase --json on a task with no worktrees: reports is []', async () => {
+  const opened = await callWard(['task', 'open', 'bare', '--json'], ws);
   const address = validated('task open', taskMutationShape, opened.stdout).address;
-  const result = runWard(['worktree', 'rebase', address, '--json'], ws);
+  const result = await callWard(['worktree', 'rebase', address, '--json'], ws);
   expect(result.exitCode).toBe(0);
   expect(validated('worktree rebase', worktreeRebaseShape, result.stdout)).toEqual({
     task: address.replace(/^f\d+/, ''),
@@ -299,8 +299,8 @@ test('worktree rebase --json on a task with no worktrees: reports is []', () => 
 // registry growth the read verbs got in 0008.
 
 for (const [verb, shape] of Object.entries(mutationVerbShapes)) {
-  test(`ward schema ${verb}: emits exactly the JSON Schema of the verb's shape`, () => {
-    const result = runWard(['schema', ...verb.split(' ')], scratch);
+  test(`ward schema ${verb}: emits exactly the JSON Schema of the verb's shape`, async () => {
+    const result = await callWard(['schema', ...verb.split(' ')], scratch);
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual(JSON.parse(JSON.stringify(z.toJSONSchema(shape))));
   });

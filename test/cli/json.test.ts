@@ -5,13 +5,13 @@
 // module that produced it.
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { applyGitTestEnv, callWard, makeTempDir, removeDir } from '../helpers.ts';
 import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 const PR_URL = 'https://example.com/pr/1';
 
-test('status --json: one parseable document carrying the derived rollup', () => {
-  const result = runWard(['status', '--json'], ws);
+test('status --json: one parseable document carrying the derived rollup', async () => {
+  const result = await callWard(['status', '--json'], ws);
   expect(result.exitCode).toBe(0);
   const status = JSON.parse(result.stdout);
   expect(status.workspace).toBe('active');
@@ -42,14 +42,14 @@ test('status --json: one parseable document carrying the derived rollup', () => 
   expect(task.outcome).toBeUndefined(); // optional fields are omitted, never null
 });
 
-test('status --json is byte-identical across runs on the same state', () => {
-  const first = runWard(['status', '--json'], ws);
-  const second = runWard(['status', '--json'], ws);
+test('status --json is byte-identical across runs on the same state', async () => {
+  const first = await callWard(['status', '--json'], ws);
+  const second = await callWard(['status', '--json'], ws);
   expect(first.stdout).toBe(second.stdout);
 });
 
-test('task list --json: the record plus the derived in-review overlay', () => {
-  const listing = JSON.parse(runWard(['task', 'list', '--json'], ws).stdout);
+test('task list --json: the record plus the derived in-review overlay', async () => {
+  const listing = JSON.parse((await callWard(['task', 'list', '--json'], ws)).stdout);
   const tasks = listing.tasks;
   expect(tasks.length).toBe(1);
   expect(tasks[0].code).toBe('t1');
@@ -61,16 +61,16 @@ test('task list --json: the record plus the derived in-review overlay', () => {
   expect(typeof tasks[0].openedAt).toBe('string');
 });
 
-test('project list --json: stored state, derived status, task count', () => {
-  const projects = JSON.parse(runWard(['project', 'list', '--json'], ws).stdout).projects;
+test('project list --json: stored state, derived status, task count', async () => {
+  const projects = JSON.parse((await callWard(['project', 'list', '--json'], ws)).stdout).projects;
   expect(projects).toMatchObject([
     { floor: 0, slug: 'workspace', state: 'active', derived: 'active', taskCount: 0 },
     { floor: 1, slug: 'agent-output', state: 'active', derived: 'active', taskCount: 1 },
   ]);
 });
 
-test('worktree list --json: identity, disposition, and presence on disk', () => {
-  const worktrees = JSON.parse(runWard(['worktree', 'list', '--json'], ws).stdout);
+test('worktree list --json: identity, disposition, and presence on disk', async () => {
+  const worktrees = JSON.parse((await callWard(['worktree', 'list', '--json'], ws)).stdout);
   expect(worktrees).toMatchObject([
     {
       task: 't1',
@@ -84,16 +84,16 @@ test('worktree list --json: identity, disposition, and presence on disk', () => 
   ]);
 });
 
-test('repo list --json: the registered set with remote and main line', () => {
-  const repos = JSON.parse(runWard(['repo', 'list', '--json'], ws).stdout);
+test('repo list --json: the registered set with remote and main line', async () => {
+  const repos = JSON.parse((await callWard(['repo', 'list', '--json'], ws)).stdout);
   expect(repos.length).toBe(1);
   expect(repos[0].name).toBe('demo');
   expect(repos[0].remote).toBe(remote);
   expect(repos[0].mainLine).toBe('main');
 });
 
-test('doctor --json: findings as data, healthy as the verdict, exit code kept', () => {
-  const result = runWard(['doctor', '--json'], ws);
+test('doctor --json: findings as data, healthy as the verdict, exit code kept', async () => {
+  const result = await callWard(['doctor', '--json'], ws);
   expect(result.exitCode).toBe(0);
   const report = JSON.parse(result.stdout);
   expect(report.healthy).toBe(true);
@@ -109,26 +109,26 @@ test('doctor --json: findings as data, healthy as the verdict, exit code kept', 
   expect(checks).toContain('standing project');
 });
 
-test('the human rendering is unchanged by the flag existing', () => {
-  const result = runWard(['status'], ws);
+test('the human rendering is unchanged by the flag existing', async () => {
+  const result = await callWard(['status'], ws);
   expect(result.stdout).toContain('Workspace: active');
   expect(result.stdout).toContain('floor 0 — 🔧 workspace (ground floor)');
   expect(result.stdout).toContain('floor 1 — 🌊 agent-output');
   expect(result.stdout).not.toContain('{');
 });
 
-test('empty sets are empty arrays, not prose', () => {
+test('empty sets are empty arrays, not prose', async () => {
   for (const argv of [
     ['worktree', 'list', '--json'],
     ['repo', 'list', '--json'],
   ]) {
-    const result = runWard(argv, emptyWs);
+    const result = await callWard(argv, emptyWs);
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual([]);
   }
   // `task list` is windowed (0036), so its document is an object that can say
   // what it left out — the array is inside it, and still an array when empty.
-  const tasks = runWard(['task', 'list', '--json'], emptyWs);
+  const tasks = await callWard(['task', 'list', '--json'], emptyWs);
   expect(tasks.exitCode).toBe(0);
   expect(JSON.parse(tasks.stdout)).toEqual({
     tasks: [],
@@ -136,8 +136,8 @@ test('empty sets are empty arrays, not prose', () => {
   });
 });
 
-test('a fresh workspace already lists its standing project — never an empty set', () => {
-  const result = runWard(['project', 'list', '--json'], emptyWs);
+test('a fresh workspace already lists its standing project — never an empty set', async () => {
+  const result = await callWard(['project', 'list', '--json'], emptyWs);
   expect(result.exitCode).toBe(0);
   expect(JSON.parse(result.stdout)).toMatchObject({
     projects: [{ floor: 0, slug: 'workspace', state: 'active', derived: 'active', taskCount: 0 }],
@@ -165,18 +165,18 @@ beforeAll(async () => {
   remote = join(scratch, 'remote.git');
   preparedRemote(remote, { branch: 'main', files: { 'README.md': 'demo\n' } });
 
-  runWard(['repo', 'add', remote, '--name', 'demo'], ws);
-  runWard(['project', 'open', 'agent-output'], ws); // floor 1 — the ground floor is 0
-  runWard(
+  await callWard(['repo', 'add', remote, '--name', 'demo'], ws);
+  await callWard(['project', 'open', 'agent-output'], ws); // floor 1 — the ground floor is 0
+  await callWard(
     ['task', 'open', 'json-output', '--project', '1', '--purpose', 'machine-readable output'],
     ws,
   );
-  runWard(['worktree', 'create', 't1', '--repo', 'demo'], ws);
-  runWard(
+  await callWard(['worktree', 'create', 't1', '--repo', 'demo'], ws);
+  await callWard(
     ['session', 'open', 't1', '--purpose', 'drive the feature', '--handle', 'claude:run'],
     ws,
   );
-  runWard(['task', 'pr', 't1', PR_URL], ws);
+  await callWard(['task', 'pr', 't1', PR_URL], ws);
 });
 
 afterAll(() => {

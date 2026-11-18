@@ -25,10 +25,10 @@ import { addTaskPr, closeTask, openTask } from '../../src/workspace/tasks.ts';
 import { createWorktree } from '../../src/workspace/worktrees.ts';
 import {
   applyGitTestEnv,
+  callWardEnv,
   makeTempDir,
   NO_GH,
   removeDir,
-  runWardEnv,
   writeFakeGh,
 } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
@@ -175,7 +175,7 @@ test('the refusal reaches the CLI as an error exit, like every gate', async () =
   const fakeGh = writeFakeGh(scratch, `gh-${caseId}`, {
     responses: { [PR]: { state: 'MERGED', mergeCommit: oid } },
   });
-  const result = runWardEnv(['task', 'close', 't1'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
+  const result = await callWardEnv(['task', 'close', 't1'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toContain('not reachable from origin/main in repos/demo');
   expect(result.stderr).toContain('Re-land it first');

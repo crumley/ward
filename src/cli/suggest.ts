@@ -36,6 +36,7 @@ import { listRepositories } from '../workspace/repos.ts';
 import { readTasks } from '../workspace/scan.ts';
 import { describeScope, readAllSessions, readOpenSessions } from '../workspace/sessions.ts';
 import { resolveWorkspaceMainLine } from '../workspace/steward.ts';
+import { invocation } from './invocation.ts';
 import { jsonVerbShapes } from './schema.ts';
 
 /** One completion candidate: the word the shell inserts, plus the cue beside it. */
@@ -325,7 +326,7 @@ export function schemaVerb(): ValueParser<'async', string> {
  * an empty answer degrades them to prefix-only, never to a wrong one.
  */
 function completionWords(): readonly string[] {
-  const argv = process.argv.slice(2);
+  const argv = invocation().argv;
   if (!isCompletionCallback(argv)) return [];
   return argv.slice(2, -1);
 }

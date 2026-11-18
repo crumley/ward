@@ -22,7 +22,7 @@ import { convergeWorkspace } from '../../src/workspace/converge.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import { git, gitOrThrow } from '../../src/workspace/git.ts';
 import { openProject, readProjects } from '../../src/workspace/projects.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWardEnv } from '../helpers.ts';
+import { applyGitTestEnv, callWardEnv, makeTempDir, removeDir } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
 
 // -- project open --------------------------------------------------------------
@@ -113,7 +113,7 @@ test('doctor names a missing and a dangling view; ward workspace upgrade clears 
     },
   ]);
 
-  const upgrade = runWardEnv(['workspace', 'upgrade', '--json'], ws, { NO_COLOR: '1' });
+  const upgrade = await callWardEnv(['workspace', 'upgrade', '--json'], ws, { NO_COLOR: '1' });
   expect(upgrade.exitCode).toBe(0);
   expect(viewFindings(await runDoctor(ws))).toEqual([
     { severity: 'ok', message: '3 open floors viewed under floors/' },

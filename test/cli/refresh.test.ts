@@ -19,14 +19,14 @@ import {
   type RefreshRow,
   refreshRepositories,
 } from '../../src/workspace/repos.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard, runWardEnv } from '../helpers.ts';
+import { applyGitTestEnv, callWard, callWardEnv, makeTempDir, removeDir } from '../helpers.ts';
 import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 // -- the streamed report (not a terminal) ---------------------------------
 
-test('the rows stream in the registered order, plain, and the same way every run', () => {
+test('the rows stream in the registered order, plain, and the same way every run', async () => {
   advance('alpha', 'moved.txt');
-  const first = runWard(['repo', 'refresh'], ws);
+  const first = await callWard(['repo', 'refresh'], ws);
   expect(first.exitCode).toBe(0);
   expect(verbsAndNames(first.stdout)).toEqual([
     ['refreshed', 'alpha'],
@@ -35,7 +35,7 @@ test('the rows stream in the registered order, plain, and the same way every run
   ]);
   expect(first.stdout).not.toContain(ESC); // no cursor moves in a pipe or a log
 
-  const second = runWard(['repo', 'refresh'], ws);
+  const second = await callWard(['repo', 'refresh'], ws);
   expect(verbsAndNames(second.stdout)).toEqual([
     ['current', 'alpha'],
     ['current', 'beta'],
@@ -46,7 +46,7 @@ test('the rows stream in the registered order, plain, and the same way every run
 test('a conflicted repository is reported and skipped; the rest of the set still refreshes', async () => {
   await conflict('alpha');
   advance('beta', 'moved.txt');
-  const result = runWard(['repo', 'refresh'], ws);
+  const result = await callWard(['repo', 'refresh'], ws);
   expect(verbsAndNames(result.stdout)).toEqual([
     ['conflicted', 'alpha'],
     ['refreshed', 'beta'],
@@ -61,14 +61,14 @@ test('a conflicted repository is reported and skipped; the rest of the set still
 test('dirty and conflicted exit 0; a failed row exits 1 with every row still rendered', async () => {
   await conflict('alpha');
   writeFileSync(join(checkoutPath(ws, 'beta'), 'seed.txt'), 'unrecorded work\n');
-  expect(verbsOf(runWard(['repo', 'refresh'], ws))).toEqual({
+  expect(verbsOf(await callWard(['repo', 'refresh'], ws))).toEqual({
     exit: 0,
     verbs: ['conflicted', 'dirty', 'current'],
   });
 
   const gamma = remotes.gamma ?? '';
   renameSync(gamma, `${gamma}.offline`); // fetch cannot answer
-  expect(verbsOf(runWard(['repo', 'refresh'], ws))).toEqual({
+  expect(verbsOf(await callWard(['repo', 'refresh'], ws))).toEqual({
     exit: 1,
     verbs: ['conflicted', 'dirty', 'failed'],
   });
@@ -78,7 +78,7 @@ test('dirty and conflicted exit 0; a failed row exits 1 with every row still ren
 
 test('--json: one document alone on stdout, carrying conflicted, and no display bleeds into it', async () => {
   await conflict('alpha');
-  const result = runWard(['repo', 'refresh', '--json'], ws);
+  const result = await callWard(['repo', 'refresh', '--json'], ws);
   expect(result.exitCode).toBe(0);
   const rows = repoRefreshShape.parse(JSON.parse(result.stdout));
   expect(rows.map((row) => [row.name, row.outcome])).toEqual([
@@ -90,8 +90,8 @@ test('--json: one document alone on stdout, carrying conflicted, and no display 
   expect(result.stdout).not.toContain(ESC);
 });
 
-test('ward schema stays truthful about the new outcome', () => {
-  const schema = JSON.parse(runWard(['schema', 'repo', 'refresh'], ws).stdout);
+test('ward schema stays truthful about the new outcome', async () => {
+  const schema = JSON.parse((await callWard(['schema', 'repo', 'refresh'], ws)).stdout);
   expect(schema.items.properties.outcome.enum).toEqual([
     'refreshed',
     'current',
@@ -103,24 +103,24 @@ test('ward schema stays truthful about the new outcome', () => {
 
 // -- --stash, the explicit exception ---------------------------------------
 
-test('--stash refreshes a dirty checkout end to end; without it the checkout is untouched', () => {
+test('--stash refreshes a dirty checkout end to end; without it the checkout is untouched', async () => {
   const checkout = checkoutPath(ws, 'alpha');
   writeFileSync(join(checkout, 'notes.txt'), 'unrecorded work\n');
   advance('alpha', 'moved.txt');
 
-  const refused = runWard(['repo', 'refresh', 'alpha'], ws);
+  const refused = await callWard(['repo', 'refresh', 'alpha'], ws);
   expect(verbsAndNames(refused.stdout)).toEqual([['dirty', 'alpha']]);
 
-  const stashed = runWard(['repo', 'refresh', 'alpha', '--stash'], ws);
+  const stashed = await callWard(['repo', 'refresh', 'alpha', '--stash'], ws);
   expect(verbsAndNames(stashed.stdout)).toEqual([['refreshed', 'alpha']]);
   expect(stashed.stdout).toContain('stashed and restored');
   expect(git(checkout, 'stash', 'list').stdout.trim()).toBe('');
-  expect(runWard(['status'], ws).exitCode).toBe(0);
+  expect((await callWard(['status'], ws)).exitCode).toBe(0);
 });
 
 // -- the `repo.refresh.stash` preference -----------------------------------
 
-test('the preference answers for a human who left the flag off; an agent is read from the flag alone', () => {
+test('the preference answers for a human who left the flag off; an agent is read from the flag alone', async () => {
   const confDir = join(scratch, `config-${caseId}`);
   mkdirSync(confDir, { recursive: true });
   writeFileSync(
@@ -133,7 +133,7 @@ test('the preference answers for a human who left the flag off; an agent is read
 
   // A declared agent's invocation means the same thing on every machine: the
   // preference is a human affordance, so no flag means no stash.
-  const agent = runWardEnv(['repo', 'refresh', 'alpha'], ws, {
+  const agent = await callWardEnv(['repo', 'refresh', 'alpha'], ws, {
     NO_COLOR: '1',
     WARD_AGENT: '1',
     WARD_CONFIG_DIR: confDir,
@@ -141,7 +141,7 @@ test('the preference answers for a human who left the flag off; an agent is read
   expect(verbsAndNames(agent.stdout)).toEqual([['dirty', 'alpha']]);
 
   // The human's standing preference supplies the default they asked for.
-  const human = runWardEnv(['repo', 'refresh', 'alpha'], ws, {
+  const human = await callWardEnv(['repo', 'refresh', 'alpha'], ws, {
     NO_COLOR: '1',
     WARD_CONFIG_DIR: confDir,
   });

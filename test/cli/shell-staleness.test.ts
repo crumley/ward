@@ -12,7 +12,7 @@ import { doctorShape } from '../../src/cli/schema.ts';
 import { renderCompletionScript } from '../../src/shell/completion.ts';
 import { emitShellLayer } from '../../src/shell/layer.ts';
 import { type Finding, runDoctor } from '../../src/workspace/doctor.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWardEnv } from '../helpers.ts';
+import { applyGitTestEnv, callWardEnv, makeTempDir, removeDir } from '../helpers.ts';
 
 const LAYER = 'fish shell layer';
 const COMPLETIONS = 'fish completions';
@@ -155,29 +155,32 @@ for (const row of rows) {
   });
 }
 
-test('the comparison is against the real emission — `ward shell init fish`, byte for byte', () => {
-  const emitted = runWardEnv(['shell', 'init', 'fish'], scratch, { NO_COLOR: '1' });
+test('the comparison is against the real emission — `ward shell init fish`, byte for byte', async () => {
+  const emitted = await callWardEnv(['shell', 'init', 'fish'], scratch, { NO_COLOR: '1' });
   expect(emitted.exitCode).toBe(0);
   expect(emitted.stdout).toBe(emitShellLayer('fish'));
 });
 
-test('the comparison is against the real emission — `ward completion fish`, byte for byte', () => {
-  const emitted = runWardEnv(['completion', 'fish'], scratch, { NO_COLOR: '1' });
+test('the comparison is against the real emission — `ward completion fish`, byte for byte', async () => {
+  const emitted = await callWardEnv(['completion', 'fish'], scratch, { NO_COLOR: '1' });
   expect(emitted.exitCode).toBe(0);
   expect(emitted.stdout).toBe(renderCompletionScript('fish'));
 });
 
-test('the human rendering marks a stale layer and carries the re-run; the run still exits 0', () => {
+test('the human rendering marks a stale layer and carries the re-run; the run still exits 0', async () => {
   installLayer(`${emitShellLayer('fish')}# an older ward wrote this\n`);
-  const result = runWardEnv(['doctor'], scratch, { XDG_CONFIG_HOME: fishHome, NO_COLOR: '1' });
+  const result = await callWardEnv(['doctor'], scratch, {
+    XDG_CONFIG_HOME: fishHome,
+    NO_COLOR: '1',
+  });
   expect(result.exitCode).toBe(0); // report-only: staleness never fails the run
   expect(result.stdout).toContain(`! ${LAYER} — ${layerPath()} differs from what this ward emits`);
   expect(result.stdout).toContain(`ward shell init fish > ${layerPath()}`);
 });
 
-test('--json carries the findings in the shape ward schema documents', () => {
+test('--json carries the findings in the shape ward schema documents', async () => {
   installLayer(`${emitShellLayer('fish')}# an older ward wrote this\n`);
-  const result = runWardEnv(['doctor', '--json'], scratch, {
+  const result = await callWardEnv(['doctor', '--json'], scratch, {
     XDG_CONFIG_HOME: fishHome,
     NO_COLOR: '1',
   });
