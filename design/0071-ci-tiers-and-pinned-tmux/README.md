@@ -11,12 +11,13 @@ that ran a parallel pool of every file but one, then the real-tmux file
 ([0031](../0031-detached-session-hosting/README.md)) alone. Its wall time was the sum of everything
 in it, and tests were 95% of that — on the last green main before this entry, 194 s of a 204 s
 Ubuntu job and 364 s of a 400 s macOS job. A failure in it read as "check failed" whichever part
-failed. Over 61 recorded runs every CI flake (6 of 119 jobs) was in the live tmux file, and each was
-a tmux or runner behavior rather than a Ward bug — while the tmux under test was whatever the runner
-image held that week: Ubuntu's moved from 3.4 to 3.6 in three days, macOS took Homebrew's 3.8. A
-gate that can turn red because an image moved proves something other than the change in front of it.
-And the suite had grown without a stated rule for what a test should cost: one run spawned the CLI
-1,376 times and git about 18,000 times, most of them to build fresh workspaces.
+failed. Every job that failed in the 61 runs before this entry whose logs were kept (8 of them)
+failed in the live tmux file, and the causes that were diagnosed lay outside Ward — a tmux server
+segfault, a runner's pseudo-terminal limit — while the tmux under test was whatever the runner image
+held that week: Ubuntu's went from 3.4 to 3.6 between 15 and 16 November, macOS took Homebrew's 3.8.
+A gate that can turn red because an image moved proves something other than the change in front of
+it. And the suite had grown without a stated rule for what a test should cost: one run spawned the
+CLI 1,376 times and git about 18,000 times, most of them to build fresh workspaces.
 
 This entry splits the gate along the lines its failures already fall on, pins the tmux the live tier
 proves, moves the drift that pinning hides to a nightly that blocks nothing, and writes the doctrine
@@ -156,17 +157,20 @@ cases leave the live tier), 0074 (running the CLI in-process).
     prepends that `bin/` to PATH when it exists, unless `WARD_TMUX_PIN=native`, so Ward and the
     suites' own tmux calls both resolve the pinned binary with no further wiring. The task sets
     `WARD_TMUX_PIN` from `[vars]` unless the caller set it.
-  - _Measured._ Wall time per job, last green main before this entry (run 44321921646) against this
-    entry's first run (44410052208, a cache miss) and a run with the cache warm (see the pull
-    request):
+  - _Measured._ Wall time per job, from the job's start to its end, on GitHub-hosted runners.
+    Before: the last two green runs of main before this entry (44321921646, 44317029349). After:
+    this entry's first run, a cache miss that built tmux (44410052208), and its second, with the
+    cache warm (44411021325).
 
-    | Job                | Ubuntu before | Ubuntu after                               | macOS before | macOS after |
-    | ------------------ | ------------- | ------------------------------------------ | ------------ | ----------- |
-    | one `check` job    | 204 s         | —                                          | 400 s        | —           |
-    | static             | —             | 13 s                                       | —            | 26 s        |
-    | fast tests         | —             | 144 s                                      | —            | 256 s       |
-    | live tmux (miss)   | —             | 116 s                                      | —            | 213 s       |
-    | run, push to green | 3 m 24 s      | 4 m 24 s for the whole run, both platforms |              |             |
+    | Job                        | Ubuntu before | Ubuntu after (warm, miss) | macOS before | macOS after (warm, miss) |
+    | -------------------------- | ------------- | ------------------------- | ------------ | ------------------------ |
+    | one `check` job            | 204 s, 168 s  | —                         | 400 s, 418 s | —                        |
+    | static                     | —             | 14 s, 13 s                | —            | 17 s, 26 s               |
+    | fast tests                 | —             | 140 s, 144 s              | —            | 180 s, 256 s             |
+    | live tmux                  | —             | 83 s, 116 s               | —            | 94 s, 213 s              |
+    | the whole run, push to end | 405 s         | 215 s, 264 s              | (same run)   | (same run)               |
 
-    The fast tier's test time (130 s Ubuntu, 237 s macOS) is the old pool's less one file; the live
-    tier's (69 s, 112 s) is the old live batch plus the nudge file.
+    The tmux build on a miss took 34 s on Ubuntu and 75 s on macOS. The fast tier's tests alone ran
+    130 s and 237 s on the miss run — the old pool's time less one file — and the live tier's 69 s
+    and 112 s, the old live batch plus the nudge file. The longest job is now the macOS fast tier,
+    which is where 0072 and 0074 cut.
