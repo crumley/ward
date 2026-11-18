@@ -71,10 +71,11 @@ case its own copy. It changes how tests obtain a workspace and nothing in `src/`
 - **Acceptance:**
   1. `bun test test/prepared.test.ts` — a copy holds the same files as a real create, byte for byte
      once times and the id are blanked; its record names its own directory, has an id no sibling
-     has, and was created now; one commit, a clean tree, `git fsck --strict` clean, doctor reports
-     no warning or error; a commit and `gc` in one copy leave a sibling untouched; no file in a copy
-     mentions the scratch tree; a non-empty destination is refused; a prepared remote is bare, on
-     its branch, holds the seed, and a push to it leaves a sibling where it was.
+     has, and was created now; one commit, a clean tree, `git fsck --strict` clean, doctor gives the
+     same verdicts as on a real create, none an error; a commit and `gc` in one copy leave a sibling
+     untouched; no file in a copy mentions the scratch tree; a non-empty destination is refused; a
+     prepared remote is bare, on its branch, holds the seed, and a push to it leaves a sibling where
+     it was.
   2. `env -u WARD_AGENT mise run check` passes on macOS and Ubuntu.
   3. The fast batch spawns at least a quarter fewer git processes than before (Mechanisms,
      _Measured_).

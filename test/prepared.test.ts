@@ -33,20 +33,22 @@ test('its record is the one creation would write at that path: name, a fresh id,
   expect((await readDocument(other, workspaceRecordType)).data.id).not.toBe(data.id);
 });
 
-test('one commit, a clean tree, a sound repository, and a doctor with nothing to say', async () => {
+test('one commit, a clean tree, a sound repository, and the doctor a real create gets', async () => {
   const ws = await preparedWorkspace(join(scratch, 'sound'));
+  const real = join(scratch, 'sound-real');
+  await createWorkspace(real);
   expect(gitOrThrow(ws, 'rev-list', '--count', 'HEAD').stdout.trim()).toBe('1');
   expect(gitOrThrow(ws, 'log', '-1', '--format=%s').stdout.trim()).toBe(
     'Initialize Ward workspace (ward 0.1.0)',
   );
   expect(gitOrThrow(ws, 'status', '--porcelain', '--ignored=no').stdout).toBe('');
   expect(git(ws, 'fsck', '--strict').exitCode).toBe(0);
-  const report = await runDoctor(ws);
-  expect(
-    report.workspace.filter(
-      (finding) => finding.severity === 'error' || finding.severity === 'warn',
-    ),
-  ).toEqual([]);
+  // The same checks at the same severities; machine-level ones (an agent
+  // command missing from PATH on a runner) read the same for both.
+  const verdicts = async (root: string) =>
+    (await runDoctor(root)).workspace.map((finding) => `${finding.check}: ${finding.severity}`);
+  expect(await verdicts(ws)).toEqual(await verdicts(real));
+  expect((await verdicts(ws)).filter((line) => line.endsWith(': error'))).toEqual([]);
 });
 
 test('copies are independent: one test rewriting its copy reaches no other', async () => {
