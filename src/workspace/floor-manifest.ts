@@ -80,8 +80,15 @@ export const FLOOR_AGENTS_MD_HISTORY: readonly DefaultVersion[] = [
     sha256: 'b86cab9ade1cfa0528d144fe03f5a02a79ba1fdb2fd10b5c4d0f6bfb792b4e59',
     era: 'design 0056 (typed brief)',
   },
-  // Current since design 0057: the floor's view, `floors/<N>-<slug>/`, holds
-  // its task worktrees and links onto this directory's files.
+  // design 0057 — the floor's view, `floors/<N>-<slug>/`, holds its task
+  // worktrees and links onto this directory's files. The notes had one write
+  // path, the append.
+  {
+    sha256: '13957e84d33b1b1d328d53a84d99a47f948e568660872dc947ab7fbe17dbcae7',
+    era: 'design 0057 (context from the root)',
+  },
+  // Current since design 0069: a reflection's worktree is where the notes
+  // are rewritten.
 ];
 
 /**

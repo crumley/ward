@@ -40,6 +40,12 @@ import type { DispatchReport, DispatchStanding } from '../workspace/dispatch.ts'
 import type { DoctorReport } from '../workspace/doctor.ts';
 import { type IdentityReport, identityOf } from '../workspace/floor-identity.ts';
 import type { FloorNoteReport } from '../workspace/projects.ts';
+import type {
+  ReflectionHint,
+  ReflectionOpenReport,
+  ReflectionPacket,
+  ReflectionRecordReport,
+} from '../workspace/reflection.ts';
 import type { AddReport, RefreshReport, RemoveReport } from '../workspace/repos.ts';
 import type { RestoreReport } from '../workspace/restore.ts';
 import type {
@@ -96,6 +102,14 @@ import type {
   WorktreeCreateShape,
   WorktreeListShape,
   WorktreeRebaseShape,
+} from './schema.ts';
+import {
+  type ReflectionOpenShape,
+  type ReflectionPacketShape,
+  type ReflectionRecordShape,
+  reflectionOpenShape,
+  reflectionPacketShape,
+  reflectionRecordShape,
 } from './schema.ts';
 
 /**
@@ -264,6 +278,7 @@ export function statusJson(report: StatusReport): StatusShape {
         : { repositories: project.project.repositories }),
       sessions: project.sessions.map(statusSessionJson),
       tasks: project.tasks.map(statusTaskJson),
+      unreflected: project.unreflected,
     })),
     bareTasks: report.bareTasks.map(statusTaskJson),
     hidden: {
@@ -620,12 +635,38 @@ export function taskMutationJson(record: TaskRecord, address: string): TaskMutat
 }
 
 /** The close report: steps verbatim — the trust language lives in `detail`. */
-export function taskCloseJson(report: CloseReport): TaskCloseShape {
+export function taskCloseJson(report: CloseReport, hint?: ReflectionHint): TaskCloseShape {
   return {
     task: taskMutationJson(report.task.record, taskAddress(report.task)),
     outcome: report.outcome,
     steps: report.steps.map((step) => ({ step: step.step, detail: step.detail })),
+    ...(hint === undefined
+      ? {}
+      : {
+          reflection: {
+            floor: hint.floor,
+            unreflected: hint.unreflected,
+            command: hint.command,
+          },
+        }),
   };
+}
+
+/**
+ * `reflection packet` (design/0069-floor-reflection/). The packet is already
+ * the wire shape; this is the boundary where it is checked as one, so a field
+ * added to the report and not to the schema fails here and not in a reader.
+ */
+export function reflectionPacketJson(packet: ReflectionPacket): ReflectionPacketShape {
+  return reflectionPacketShape.parse(packet);
+}
+
+export function reflectionOpenJson(report: ReflectionOpenReport): ReflectionOpenShape {
+  return reflectionOpenShape.parse(report);
+}
+
+export function reflectionRecordJson(report: ReflectionRecordReport): ReflectionRecordShape {
+  return reflectionRecordShape.parse(report);
 }
 
 export function worktreeCreateJson(

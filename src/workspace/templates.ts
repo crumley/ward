@@ -260,6 +260,17 @@ record of the work wherever you go below it. Drive it with \`ward\`:
   brief, and who handed it over) and act on that, never on the line. A floor's session asks what
   waits when it starts or resumes: \`ward task dispatches --to FLOOR --state pending\`. Opening a
   session on the task is what marks it picked up.
+- **Reflect on a floor's finished work.** \`ward reflection packet FLOOR\` lists the tasks closed
+  since the floor's last reflection, their sessions, and where each session's history stands on
+  this machine, with its size (\`--json\` for the document). \`ward reflection open FLOOR\` opens the
+  reflection: a ground-floor task and a worktree of the workspace's own repository. Read what the
+  packet names, a chunk at a time when it is large. Then, in that worktree and nowhere else, edit
+  the floor's \`notes.md\` (and the ground floor's, for what holds across the workspace): rewrite,
+  merge and prune as well as add. \`ward reflection record FLOOR FILE\` takes your summary, writes
+  the reflection record, and commits the branch. The summary is committed to the record: say what
+  you could not read, and quote no transcript in it. Landing is the human's act —
+  \`ward workspace merge BRANCH --preview\`, then the merge. Left unmerged, nothing has changed, and
+  the floor's next reflection covers the same work.
 - **Name the task explicitly.** Deriving the task from the working directory is a human
   affordance; a declared agent is refused it and passes the **full address** (\`f3t22\`) on every
   task-addressed verb, read from \`address\` in \`--json\` (\`ward task list --json\` says what
@@ -343,6 +354,9 @@ the task's sessions, commits, and pull requests, which already carry it.
 - **Add to them before you finish**, when you learned something the next session needs:
   \`ward project note FLOOR TEXT\` appends one dated bullet and commits it. An agent never edits
   the file directly: it sits in the record tree, where every write goes through \`ward\`.
+- **A reflection is how the notes are rewritten.** \`ward reflection open FLOOR\` gives a worktree
+  of the workspace's own repository; the copy of this floor's notes in it is a proposal, edited
+  directly, and reaches this file only when the human merges it.
 
 The notes follow. A harness that expands imports loads them from the next line; any other harness
 reads that line as a pointer to \`notes.md\` beside this file.

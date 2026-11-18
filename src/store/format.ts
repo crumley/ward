@@ -68,6 +68,20 @@ export const FORMAT_LEVELS: readonly FormatLevel[] = [
       'by it — update ward on every machine that shares this workspace; from this level on, a ' +
       'ward that reads less than the workspace needs refuses before it reads anything',
   },
+  {
+    level: 2,
+    entry: '0069-floor-reflection',
+    introduces:
+      'reflection: a task marked `stewardship: reflection` with the floor it `reflects`, and ' +
+      "a floor's `reflections/` records",
+    older:
+      'a ward that reads only format 1 refuses this workspace until it is updated; a ward from ' +
+      'before the guard (design 0066) is not stopped, and fails on a reflection task record ' +
+      'wherever it lists tasks — update ward on every machine that shares this workspace',
+    needs: (type, data) =>
+      type === 'reflection' ||
+      (type === 'task' && (data as { stewardship?: unknown }).stewardship === 'reflection'),
+  },
 ];
 
 /** The highest level this Ward reads and writes. */

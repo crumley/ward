@@ -237,8 +237,21 @@ export const taskSchema = z.object({
    * spell any way, and matching one would both miss a renamed upgrade task
    * and collide with unrelated work that happens to say "upgrade". Optional,
    * so every record written before this entry stays valid unchanged.
+   *
+   * `reflection` (design/0069-floor-reflection/) marks the task Ward opened to
+   * carry one floor's reflection to the gated merge. A Ward from before that
+   * entry rejects the value, which is why the workspace format moved with it
+   * (src/store/format.ts, level 2).
    */
-  stewardship: z.enum(['upgrade']).optional(),
+  stewardship: z.enum(['upgrade', 'reflection']).optional(),
+  /**
+   * The floor a reflection task reflects on (design/0069-floor-reflection/):
+   * written with `stewardship: reflection` and only with it. The task itself
+   * sits on the ground floor, like all stewardship, so its own `floor` cannot
+   * say which floor's work it reads; this field does, and it is what makes
+   * "is a reflection of floor N already open?" a question the record answers.
+   */
+  reflects: z.number().int().nonnegative().optional(),
   /**
    * The registered repositories this task touches
    * (design/0037-repo-floor-affinity/), recorded at open from `--repo NAME`.
@@ -524,6 +537,77 @@ export function sessionScopeOf(record: SessionRecord): SessionScope {
 export function sessionRecordType(scopeDir: string, id: string): DocumentType<SessionRecord> {
   const dir = scopeDir === '' ? 'sessions' : `${scopeDir}/sessions`;
   return { name: 'session', relPath: `${dir}/${id}.md`, schema: sessionSchema };
+}
+
+/** Where a session's harness history stood, on the machine a reflection ran on. */
+export const reflectionHistorySchema = z.enum(['found', 'gone', 'elsewhere', 'unlocatable']);
+export type ReflectionHistory = z.infer<typeof reflectionHistorySchema>;
+
+/**
+ * One reflection of one floor (design/0069-floor-reflection/): what it
+ * covered, what could not be read where it ran, and — as the body — the
+ * reflecting agent's summary. Written by `ward reflection record` into the
+ * reflection's stewardship worktree, so it reaches the main line only with
+ * the gated merge.
+ *
+ * The record is also the floor's reflection cursor. A closed task listed
+ * under `tasks` in a reflection on the main line has been reflected on; one
+ * listed nowhere has not. There is no second copy of that fact to drift, and
+ * a reflection that is never merged leaves the cursor exactly where it was.
+ *
+ * It holds identifiers and standings, never a transcript path and never
+ * transcript text: a path names one machine's home directory, and the text is
+ * the harness's to keep.
+ */
+export const reflectionSchema = z.object({
+  type: z.literal('reflection'),
+  /** The floor reflected on. */
+  floor: z.number().int().nonnegative(),
+  /** This floor's Nth reflection, from 1: the file's name. */
+  number: z.number().int().positive(),
+  /** The stewardship task that carried it, by its record directory. */
+  task: z.string().min(1),
+  /** The recorded session that wrote it, when the caller declared one. */
+  session: z.string().min(1).optional(),
+  /** The machine it ran on: every `history` below is that machine's answer. */
+  machine: z.string().min(1),
+  /** When the floor's previous reflection was recorded; absent on its first. */
+  from: z.string().min(1).optional(),
+  /** When this one was recorded. */
+  through: z.string().min(1),
+  /** The closed tasks covered, by record directory. Never covered again. */
+  tasks: z.array(
+    z.object({
+      dir: z.string().min(1),
+      outcome: z.enum(['delivered', 'abandoned']).optional(),
+      closedAt: z.string().min(1).optional(),
+    }),
+  ),
+  /**
+   * The sessions in the interval: every covered task's, and the floor's own.
+   * A session recorded here as `closed` is not offered again; one recorded
+   * `open` — a floor's session still running — is, from `through` on.
+   */
+  sessions: z.array(
+    z.object({
+      id: z.string().min(1),
+      state: z.enum(['open', 'closed']),
+      history: reflectionHistorySchema,
+    }),
+  ),
+});
+export type ReflectionRecord = z.infer<typeof reflectionSchema>;
+
+/** A floor's reflections live beside its project record: `<project dir>/reflections/<n>.md`. */
+export function reflectionRecordType(
+  projectDir: string,
+  number: number,
+): DocumentType<ReflectionRecord> {
+  return {
+    name: 'reflection',
+    relPath: `${projectDir}/reflections/${number}.md`,
+    schema: reflectionSchema,
+  };
 }
 
 export const baselinesSchema = z.object({

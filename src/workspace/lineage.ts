@@ -347,8 +347,15 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: 'c2ae1b11f1471424c7fa085b87482412d5cdb17d48706b4ddf0f46ced3c173df',
         era: "design 0031's observer follow-up (where a terminal lands when a host ends)",
       },
-      // Current since design 0067: `ward task dispatch` hands a task to
-      // another floor, and a floor reads what it was handed from the record.
+      // design 0067 — `ward task dispatch` hands a task to another floor, and
+      // a floor reads what it was handed from the record. The manifest did not
+      // yet name reflection.
+      {
+        sha256: '177c1d742011b8f78525a4a4cd8a2bdca64a602f2366763557906c5642eb3363',
+        era: 'design 0067 (handing a task to another floor)',
+      },
+      // Current since design 0069: the three reflection verbs, and that a
+      // floor's notes are edited directly in a reflection's worktree.
     ],
   },
 ];
