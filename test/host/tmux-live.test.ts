@@ -22,8 +22,10 @@ import { join } from 'node:path';
 import {
   doctorShape,
   type SessionMutationShape,
+  type SessionResumeAllShape,
   sessionLocateShape,
   sessionMutationShape,
+  sessionResumeAllShape,
 } from '../../src/cli/schema.ts';
 import { mungeCwd } from '../../src/harness/claude.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
@@ -1292,6 +1294,134 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
       killServer(fresh);
     }
   });
+
+  // -- resume --all (design/0068-bulk-session-resume/) -------------------------
+
+  test('after the server dies, resume --all plans without writing, brings back the coordinator and both floors, and a second run starts nothing', async () => {
+    await openProject(ws, 'alpha');
+    await openProject(ws, 'beta');
+    const open = (...at: string[]) =>
+      session(ward(['session', 'open', ...at, '--detach', '--json']));
+    const coordinator = open();
+    const alpha = open('--floor', '1');
+    const alphaTwo = open('--floor', '1');
+    const beta = open('--floor', '2');
+    const lost = open('--floor', '2'); // the harness kept no history of this one
+    const back = [coordinator, alpha, alphaTwo, beta];
+    for (const each of back) fabricateTranscript(each.handle?.replace('claude:', '') ?? '');
+    expect(await runsSoon(5)).toHaveLength(5);
+
+    // The reboot: every floor host and window goes with the server; the records stay.
+    killServer(SOCKET);
+    const before = headOf(ws);
+
+    // The plan, twice: a read. Nothing is started, written, or recorded as failed.
+    for (let i = 0; i < 2; i++) {
+      const plan = bulk(ward(['session', 'resume', '--all', '--json']));
+      expect(plan).toMatchObject({ enacted: false, notHosted: 0, outside: 0 });
+      expect(plan.sessions.map((s) => [s.id, s.floor, s.step])).toEqual([
+        [coordinator.id, 0, 'resume'],
+        [alpha.id, 1, 'resume'],
+        [alphaTwo.id, 1, 'resume'],
+        [beta.id, 2, 'resume'],
+        [lost.id, 2, 'gone'],
+      ]);
+    }
+    expect(headOf(ws)).toBe(before);
+    expect(readLines(runLog)).toHaveLength(5);
+    const said = ward(['session', 'resume', '--all']);
+    expect(said.stdout).toContain('plan — nothing was started');
+    expect(said.stdout).toContain('4 to resume, 1 with no history here.');
+    expect(said.stdout).toContain('start them: ward session resume --all --go');
+    expect(said.stdout).toContain('Ward does not store whether a run was going');
+    expect(headOf(ws)).toBe(before);
+
+    // Enacted: each resumed through the single verb's own path, coordinator first.
+    const went = ward(['session', 'resume', '--all', '--go', '--json']);
+    expect(went.exitCode).toBe(0);
+    const enacted = bulk(went);
+    expect(enacted.enacted).toBe(true);
+    expect(enacted.sessions.map((s) => [s.id, s.outcome ?? s.step])).toEqual([
+      [coordinator.id, 'resumed'],
+      [alpha.id, 'resumed'],
+      [alphaTwo.id, 'resumed'],
+      [beta.id, 'resumed'],
+      [lost.id, 'gone'],
+    ]);
+    expect(enacted.summary).toMatchObject({ resumed: 4, failed: 0, exited: 0, gone: 1 });
+
+    // The floors reassemble as they stood: one host each, the coordinator in all three.
+    const f0 = `${name}-f0-workspace`;
+    const f1 = `${name}-f1-alpha`;
+    const f2 = `${name}-f2-beta`;
+    expect(hostsOf(await workspaceId(ws)).map((host) => host.name)).toEqual([f0, f1, f2]);
+    expect(windowsIn(f0)).toEqual([coordinator.id]);
+    expect(windowsIn(f1)).toEqual([coordinator.id, alpha.id, alphaTwo.id]);
+    expect(windowsIn(f2)).toEqual([coordinator.id, beta.id]);
+    expect(enacted.sessions[1]?.live).toMatchObject({ state: 'live', host: f1 });
+    expect(enacted.sessions[1]?.live.join).toBe(`tmux -L ${SOCKET} attach -t =${f1}`);
+    // Four runs started, each declared as its own session, in the plan's order.
+    expect((await runsSoon(9)).slice(5)).toEqual(back.map((s) => `agent=${s.id} seen=yes`));
+    // The events are the record: one `resumed` each, and nothing on the one never attempted.
+    for (const each of back) expect(eventsOf(each.id)).toEqual(['opened', 'resumed']);
+    expect(eventsOf(lost.id)).toEqual(['opened']);
+
+    // A second run finds them running: nothing started, nothing recorded, exit 0.
+    const after = headOf(ws);
+    const again = ward(['session', 'resume', '--all', '--go', '--json']);
+    expect(again.exitCode).toBe(0);
+    expect(bulk(again).sessions.map((s) => [s.step, s.outcome])).toEqual([
+      ['live', undefined],
+      ['live', undefined],
+      ['live', undefined],
+      ['live', undefined],
+      ['gone', undefined],
+    ]);
+    expect(headOf(ws)).toBe(after);
+    expect(readLines(runLog)).toHaveLength(9);
+    expect(windowsIn(f1)).toEqual([coordinator.id, alpha.id, alphaTwo.id]);
+    expect(ward(['session', 'resume', '--all', '--go']).stdout).toContain('nothing to resume on');
+  });
+
+  test('resume --all: a floor that cannot be placed fails alone — the next floor still comes back, and a rerun picks up only what is left', async () => {
+    await openProject(ws, 'alpha');
+    await openProject(ws, 'beta');
+    const alpha = session(ward(['session', 'open', '--floor', '1', '--detach', '--json']));
+    const beta = session(ward(['session', 'open', '--floor', '2', '--detach', '--json']));
+    for (const each of [alpha, beta]) {
+      fabricateTranscript(each.handle?.replace('claude:', '') ?? '');
+    }
+    killServer(SOCKET);
+    // Someone else's session now wears floor 1's name: Ward never joins it.
+    const f1 = `${name}-f1-alpha`;
+    tmux('-f', '/dev/null', 'new-session', '-d', '-s', f1, 'sleep 600');
+
+    const went = ward(['session', 'resume', '--all', '--go', '--json']);
+    expect(went.exitCode).toBe(1); // the verb ran and reported; the verdict is the exit code's
+    const enacted = bulk(went);
+    expect(enacted.sessions.map((s) => [s.id, s.outcome])).toEqual([
+      [alpha.id, 'failed'],
+      [beta.id, 'resumed'],
+    ]);
+    expect(enacted.sessions[0]?.cause).toContain(`a tmux session named '${f1}' already exists`);
+    expect(eventsOf(alpha.id)).toEqual(['opened', 'resumed', 'resume-failed']);
+    expect(windowsIn(`${name}-f2-beta`)).toEqual([beta.id]);
+    const told = ward(['session', 'resume', '--all', '--go', '--floor', '1']);
+    expect(told.exitCode).toBe(1);
+    expect(told.stdout).toContain('Not everything came back');
+    expect(told.stdout).toContain('1 more hosted on other floors');
+
+    // The stranger gone, the rerun brings back floor 1 and leaves floor 2 alone.
+    tmux('kill-session', '-t', `=${f1}`);
+    const again = ward(['session', 'resume', '--all', '--go', '--json']);
+    expect(again.exitCode).toBe(0);
+    expect(bulk(again).sessions.map((s) => [s.id, s.outcome ?? s.step])).toEqual([
+      [alpha.id, 'resumed'],
+      [beta.id, 'live'],
+    ]);
+    expect(windowsIn(f1)).toEqual([alpha.id]);
+    expect(eventsOf(beta.id)).toEqual(['opened', 'resumed']);
+  });
 });
 
 // -- scaffolding ------------------------------------------------------------------
@@ -1578,6 +1708,21 @@ function ward(
   };
 }
 
+/** The bulk-resume document, whatever the exit code: the verb reports, then gives its verdict. */
+function bulk(result: CliResult): SessionResumeAllShape {
+  if (result.stdout === '')
+    throw new Error(`ward said nothing (${result.exitCode}): ${result.stderr}`);
+  return sessionResumeAllShape.parse(JSON.parse(result.stdout));
+}
+
+function eventsOf(id: string): string[] {
+  return (session(ward(['session', 'show', id, '--json'])).events ?? []).map((e) => e.event);
+}
+
+function headOf(root: string): string {
+  return Bun.spawnSync(['git', '-C', root, 'rev-parse', 'HEAD']).stdout.toString().trim();
+}
+
 function session(result: CliResult): SessionMutationShape {
   if (result.exitCode !== 0) throw new Error(`ward failed (${result.exitCode}): ${result.stderr}`);
   return sessionMutationShape.parse(JSON.parse(result.stdout));
@@ -1742,6 +1887,13 @@ beforeEach(async () => {
 afterEach(() => {
   for (const client of clients.splice(0)) {
     if (client.proc.exitCode === null) client.proc.kill();
+    // The pseudo-terminal is this process's to give back: Bun keeps a spawned
+    // terminal's master open until it is closed, whatever became of the child.
+    // Left open, every client of every case held one for the life of the
+    // suite — 28 of them by the last cases — and on a freshly booted macOS
+    // runner the first pty past the 32nd fails once ("fork failed: Device not
+    // configured"), under whichever case happens to ask for it.
+    client.proc.terminal?.close();
   }
   if (TMUX !== null) killServer(SOCKET);
 });

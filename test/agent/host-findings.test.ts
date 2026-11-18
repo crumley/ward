@@ -85,6 +85,19 @@ const rows: Row[] = [
     expected: [info('host windows', 'is not running', 'attach re-creates it: ward session attach')],
   },
   {
+    name: 'several gone at once — what a reboot leaves: each named, and one line for the bulk resume',
+    arrange: async () => {
+      await hosted();
+      await hosted();
+      return {};
+    },
+    expected: [
+      info('host windows', 'workspace-1@test is not running', 'ward session attach'),
+      info('host windows', 'workspace-2@test is not running', 'ward session attach'),
+      info('host windows', '2 sessions are not running', 'ward session resume --all'),
+    ],
+  },
+  {
     name: 'an exited run, with how it ended',
     arrange: async () => {
       const s = await hosted();

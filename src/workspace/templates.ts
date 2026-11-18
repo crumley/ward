@@ -171,6 +171,15 @@ instead of in the foreground.
   moves the window another terminal is looking at. It re-creates a run that has ended or gone,
   from its record, and relinks a missing coordinator. Leave with the tmux prefix, then \`d\`. Two
   attaches to one session share its one keyboard.
+- **After a reboot every floor host is gone, and every record is still open.**
+  \`ward session resume --all\` prints the plan and starts nothing: each open hosted session,
+  coordinator first, then floor by floor, marked \`resume\`, \`live\`, \`gone\` (its history is no
+  longer on this machine), \`elsewhere\` (another machine's) or \`unknown\`. Add \`--go\` to start
+  the ones marked \`resume\`, detached, one after another; \`--floor N\` narrows either form to one
+  floor. Ward does not store whether a run was going, so a session whose run had ended but
+  that was never closed comes back too: close what should not. A second run finds them
+  running and starts nothing. An agent runs the bare plan freely, and \`--go\` only when asked
+  to bring the workspace back.
 - \`ward session observe ID\` watches instead: a read-only view of that one window alone
   (\`<host>-o<n>\`) — your keys go nowhere, and observe never starts or re-creates anything.
 - **Sizing.** A window has one size, set by the most recently active client
