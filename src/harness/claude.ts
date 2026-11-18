@@ -177,6 +177,55 @@ export function locateClaudeRun(
 }
 
 /** Claude Code as a harness adapter — the seam's surface, over the functions above. */
+/** A full-width rule, as Claude Code draws above and below its input line. */
+const INPUT_RULE = /^[─━]{8,}$/;
+
+/** The most rows an input line is read across — a typed notice wraps onto a few. */
+const INPUT_ROWS_MAX = 8;
+
+/** The most rows Claude Code's own status area takes below its input line. */
+const BELOW_INPUT_MAX = 6;
+
+/**
+ * What Claude Code's input line holds, from a screenful of it
+ * (design/0067-floor-dispatch/): the rows between the last two full-width
+ * rules on the screen, when the first of them opens with the prompt mark, any
+ * further ones are its indented continuation, and only a few status rows
+ * follow. Wrapped rows are joined with one space. An
+ * empty line reads as whatever placeholder Claude Code shows in it — this
+ * says where the line is, not whether it is empty; a caller that needs to
+ * know types into it and reads again.
+ *
+ * Null for every screen that is not that one. A permission question is drawn
+ * under ONE rule with its options beneath — no second rule, no prompt mark at
+ * the left edge — and so are the trust question at startup and the pickers:
+ * each is a screen where Enter answers a question rather than sending a
+ * message. Measured against Claude Code 2.1.325; a later layout that draws
+ * the line differently reads as null, which withholds a notice and loses
+ * nothing.
+ */
+export function claudeInputLine(screen: string): string | null {
+  const rows = screen.split('\n').map((row) => row.replace(/\s+$/u, ''));
+  const lower = rows.findLastIndex((row) => INPUT_RULE.test(row));
+  if (lower < 2) return null;
+  const upper = rows.slice(0, lower).findLastIndex((row) => INPUT_RULE.test(row));
+  if (upper === -1) return null;
+  const box = rows.slice(upper + 1, lower);
+  if (box.length === 0 || box.length > INPUT_ROWS_MAX) return null;
+  if (!/^❯(?:\s|$)/u.test(box[0] ?? '')) return null;
+  // A wrapped line continues indented, with no gap: anything else between
+  // the rules is a transcript that happens to sit between two of them.
+  if (box.slice(1).some((row) => !/^ {2}\S/u.test(row))) return null;
+  const below = rows.slice(lower + 1).filter((row) => row !== '');
+  // Beneath the line is the status area and nothing else: a question's
+  // options are longer, and carry the mark that says which one Enter takes.
+  if (below.length > BELOW_INPUT_MAX || below.some((row) => row.includes('❯'))) return null;
+  return box
+    .map((row, index) => (index === 0 ? row.slice(1) : row).trim())
+    .filter((row) => row !== '')
+    .join(' ');
+}
+
 export const claudeAdapter: HarnessAdapter = {
   name: CLAUDE_HARNESS,
   defaultCommand: DEFAULT_CLAUDE_COMMAND,
@@ -191,4 +240,5 @@ export const claudeAdapter: HarnessAdapter = {
   startArgv,
   resumeArgv,
   locate: locateClaudeRun,
+  inputLine: claudeInputLine,
 };

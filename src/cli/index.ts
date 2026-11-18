@@ -21,6 +21,7 @@ import {
   liveStateOf,
 } from '../agent/host.ts';
 import { type Dressed, dressFloor } from '../agent/naming.ts';
+import { dispatchNotice, type Nudge, nudgeFloor } from '../agent/nudge.ts';
 import { type HostedRun, launchSession, locateSession, resumeSession } from '../agent/run.ts';
 import { WardError } from '../errors.ts';
 import { type PrForgeState, probeForge } from '../forge/gh.ts';
@@ -69,6 +70,13 @@ import { resolveCheckout } from '../workspace/checkouts.ts';
 import { contextChain, contextTarget } from '../workspace/context.ts';
 import type { StepReport } from '../workspace/converge.ts';
 import { createWorkspace } from '../workspace/create.ts';
+import {
+  type DispatchFilter,
+  type DispatchStanding,
+  describeSender,
+  dispatchTask,
+  ownDispatchFilter,
+} from '../workspace/dispatch.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
 import { type IdentityReport, setFloorIdentity } from '../workspace/floor-identity.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
@@ -104,6 +112,7 @@ import {
   glanceOrder,
   type HiddenSummary,
   inReview,
+  listDispatches,
   matchesTaskFilter,
   type NeedsYouEntry,
   openPrUrls,
@@ -157,6 +166,8 @@ import {
   statusJson,
   taskBriefJson,
   taskCloseJson,
+  taskDispatchesJson,
+  taskDispatchJson,
   taskListJson,
   taskMutationJson,
   taskShowJson,
@@ -792,6 +803,58 @@ const task = command(
         brief: message`Record a task's brief from FILE (- for stdin), replacing any brief it had.`,
       },
     ),
+    // The hand-off (design/0067-floor-dispatch/): `task open` with a
+    // recipient. It opens the task on the floor named, records the brief with
+    // it, and records who handed it over — then tells that floor's session,
+    // when one is running where Ward can type to it.
+    command(
+      'dispatch',
+      object({
+        action: constant('task-dispatch'),
+        slug: argument(string({ metavar: 'SLUG' })),
+        to: option('--to', floorNumber(), {
+          description: message`The floor the work is handed to.`,
+        }),
+        brief: option('--brief', string({ metavar: 'FILE' }), {
+          description: message`The task's brief (- for stdin): what the receiving floor reads.`,
+        }),
+        repo: multiple(option('--repo', repoName())),
+        purpose: optional(option('--purpose', string({ metavar: 'TEXT' }))),
+        json: jsonFlag(),
+      }),
+      {
+        brief: message`Hand a task to another floor: open it there with its brief, record who sent it, tell that floor.`,
+      },
+    ),
+    command(
+      'dispatches',
+      object({
+        action: constant('task-dispatches'),
+        from: optional(
+          option('--from', floorNumber('any'), {
+            description: message`Only hand-offs sent from this floor.`,
+          }),
+        ),
+        to: optional(
+          option('--to', floorNumber('any'), {
+            description: message`Only hand-offs sent to this floor.`,
+          }),
+        ),
+        state: optional(
+          option('--state', choice(['pending', 'picked-up', 'closed'], { metavar: 'STATE' }), {
+            description: message`Only hand-offs standing here — closed reaches all settled history.`,
+          }),
+        ),
+        mine: option('--mine', {
+          description: message`Only the hand-offs your own floor (or session) sent.`,
+        }),
+        all: allFlag(),
+        json: jsonFlag(),
+      }),
+      {
+        brief: message`Where hand-offs between floors stand: pending, picked up, or closed and how.`,
+      },
+    ),
     command(
       'close',
       object({
@@ -1287,6 +1350,28 @@ try {
         );
         break;
       }
+      case 'task-dispatch':
+        await cmdTaskDispatch(
+          result.slug,
+          result.to,
+          result.brief,
+          result.repo,
+          result.purpose,
+          result.json,
+        );
+        break;
+      case 'task-dispatches':
+        await cmdTaskDispatches(
+          {
+            ...(result.from === undefined ? {} : { from: result.from }),
+            ...(result.to === undefined ? {} : { to: result.to }),
+            ...(result.state === undefined ? {} : { state: result.state }),
+          },
+          result.mine,
+          result.all,
+          result.json,
+        );
+        break;
       case 'task-close':
         await cmdTaskClose(result.code, result.outcome, result.json);
         break;
@@ -2582,6 +2667,13 @@ async function cmdTaskShow(root: string, code: string, all: boolean, json: boole
   renderField('opened', record.openedAt);
   if (record.closedAt !== undefined) renderField('closed', record.closedAt);
   renderField('brief', renderBrief(detail.brief, status.address));
+  if (detail.dispatch !== undefined) {
+    renderField(
+      'handed',
+      `over by ${describeSender(detail.dispatch.record)} at ${detail.dispatch.record.sentAt} ` +
+        `[${renderDispatchState(detail.dispatch)}]`,
+    );
+  }
 
   if (record.prs.length > 0) {
     console.log(`\n${pc.bold('pull requests')}`);
@@ -2626,6 +2718,150 @@ function renderBrief(brief: TaskDetail['brief'], address: string): string {
 /** A header field: an aligned dim label, the value plain. */
 function renderField(label: string, value: string): void {
   console.log(`  ${pc.dim(label.padEnd(8))} ${value}`);
+}
+
+/**
+ * `task dispatch` (design/0067-floor-dispatch/): the record, then the nudge.
+ * The hand-off is committed before a key is typed anywhere, and the nudge is
+ * reported whatever became of it — it is never the reason the verb fails.
+ */
+async function cmdTaskDispatch(
+  slug: string,
+  to: number,
+  briefFile: string,
+  repos: readonly string[],
+  purpose: string | undefined,
+  json: boolean,
+): Promise<void> {
+  const root = await requireMutableWorkspace();
+  for (const name of repos) requireRegistered(root, name);
+  const text = briefFile === '-' ? await Bun.stdin.text() : await readBriefFile(briefFile);
+  const declared = declaredSession();
+  const report = await dispatchTask(root, slug, {
+    to,
+    brief: text,
+    ...(purpose === undefined ? {} : { purpose }),
+    ...(repos.length === 0 ? {} : { repositories: repos }),
+    ...(declared === undefined ? {} : { declared }),
+  });
+  let nudges: Nudge[];
+  try {
+    nudges = await nudgeFloor(root, to, dispatchNotice(report.record, report.task.record.slug));
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    nudges = [{ session: '?', outcome: 'unknown', detail: reason }];
+  }
+  if (json) {
+    printJson(taskDispatchJson(report, nudges));
+    return;
+  }
+  console.log(
+    `${pc.green('handed')} ${pc.bold(report.address)} — ${report.task.record.slug} to floor ` +
+      `${pc.bold(String(to))} ${pc.dim(`(brief ${report.brief}; from ${describeSender(report.record)})`)}`,
+  );
+  if (nudges.length === 0) {
+    console.log(
+      pc.dim(
+        `floor ${to} has no open session — the hand-off waits in the record, and shows in ` +
+          'ward status',
+      ),
+    );
+  }
+  for (const nudge of nudges) {
+    const line = `${nudge.session}: ${nudge.detail}`;
+    console.log(
+      nudge.outcome === 'typed'
+        ? `${pc.green('told')} ${line}`
+        : `${pc.yellow('not told')} ${line} ${pc.dim('— the hand-off waits in the record')}`,
+    );
+  }
+  console.log(pc.dim(`where it stands: ward task dispatches --to ${to}`));
+}
+
+async function cmdTaskDispatches(
+  given: DispatchFilter,
+  mine: boolean,
+  all: boolean,
+  json: boolean,
+): Promise<void> {
+  const root = await requireWorkspace();
+  const filter = mine ? { ...given, ...(await ownDispatchFilter(root, declaredSession())) } : given;
+  const listing = await listDispatches(root, filter, { all });
+  if (json) {
+    printJson(taskDispatchesJson(listing.dispatches, listing.hidden));
+    return;
+  }
+  if (listing.dispatches.length === 0 && listing.hidden === 0) {
+    console.log(pc.dim('no hand-offs — hand a task to a floor with: ward task dispatch'));
+    return;
+  }
+  for (const standing of listing.dispatches) console.log(`  ${renderDispatch(standing)}`);
+  if (listing.hidden > 0) {
+    console.log(
+      pc.dim(
+        `${listing.hidden} settled hand-off${listing.hidden === 1 ? '' : 's'} hidden ` +
+          `(closed more than ${SETTLED_AFTER_DAYS} days ago) — show with --all`,
+      ),
+    );
+  }
+}
+
+/** One hand-off's line: the task, the two floors, and where it stands. */
+function renderDispatch(standing: DispatchStanding): string {
+  const { record, task } = standing;
+  const from =
+    record.fromFloor !== undefined
+      ? `floor ${record.fromFloor}`
+      : (record.fromSession ?? 'a human');
+  return (
+    `${pc.bold(standing.address)} ${task.record.slug} ${pc.dim(`${from} → floor ${record.to}`)} ` +
+    `[${renderDispatchState(standing)}]`
+  );
+}
+
+function renderDispatchState(standing: DispatchStanding): string {
+  switch (standing.state) {
+    case 'pending':
+      return pc.yellow('pending');
+    case 'picked-up':
+      return (
+        pc.green('picked up') +
+        (standing.pickedUp === undefined ? '' : pc.dim(` by ${standing.pickedUp.session}`))
+      );
+    case 'closed':
+      return pc.dim(
+        `closed${standing.task.record.outcome === undefined ? '' : ` · ${standing.task.record.outcome}`}`,
+      );
+  }
+}
+
+/** The floor a session is responsible for — undefined for any but a floor's own, or an unknown id. */
+async function floorOfSession(root: string, id: string): Promise<number | undefined> {
+  try {
+    const { record } = await findSession(root, id);
+    return record.state === 'open' ? record.floor : undefined;
+  } catch (error) {
+    if (error instanceof WardError) return undefined; // resume refuses it, in its own words
+    throw error;
+  }
+}
+
+/**
+ * The hand-offs waiting on a floor, said to whoever opens or resumes that
+ * floor's session (design/0067-floor-dispatch/) — on stderr, so a `--json`
+ * document stays alone on stdout. Silent when nothing waits.
+ */
+async function notePendingDispatches(root: string, floor: number | undefined): Promise<void> {
+  if (floor === undefined) return;
+  const waiting = (await listDispatches(root, { to: floor, state: 'pending' })).dispatches;
+  if (waiting.length === 0) return;
+  console.error(
+    pc.yellow(
+      `floor ${floor} has ${waiting.length} hand-off${waiting.length === 1 ? '' : 's'} waiting ` +
+        `(${waiting.map((standing) => standing.address).join(', ')}) — ` +
+        `see: ward task dispatches --to ${floor} --state pending`,
+    ),
+  );
 }
 
 async function cmdTaskClose(
@@ -2789,6 +3025,7 @@ async function cmdSessionOpen(
   // session. Reading the ambient run here would turn every such launch into a
   // record of the caller itself.
   if (handle !== undefined) {
+    await notePendingDispatches(root, floor);
     const options = { handle, ...at, ...started };
     renderSessionOpened(
       floor === undefined
@@ -2803,6 +3040,7 @@ async function cmdSessionOpen(
   // any process existed — the ordering the whole design rests on, made
   // visible rather than merely promised.
   const scope = floor === undefined ? {} : { floor };
+  await notePendingDispatches(root, floor);
   const launched = await launchSession(
     root,
     scope,
@@ -2857,6 +3095,7 @@ async function cmdSessionResume(
   json: boolean,
 ): Promise<void> {
   const root = await requireMutableWorkspace();
+  await notePendingDispatches(root, await floorOfSession(root, id));
   const launched = await resumeSession(
     root,
     id,
@@ -3196,6 +3435,7 @@ async function cmdStatus(all: boolean, json: boolean): Promise<void> {
     renderHidden(report.hidden, 'ward status --all');
     return;
   }
+  const handed = new Map(report.dispatches.map((standing) => [standing.address, standing]));
   for (const project of report.projects) {
     console.log(
       `${pc.bold(`floor ${project.project.floor}`)} — ` +
@@ -3209,7 +3449,14 @@ async function cmdStatus(all: boolean, json: boolean): Promise<void> {
       console.log(`  ${pc.dim('session')} ${renderSessionRow(report.machine, session)}`);
     }
     for (const task of project.tasks) {
-      console.log(renderTaskStatus(task));
+      console.log(renderTaskStatus(task, handed.get(task.address)));
+    }
+    // What this floor handed to others (design/0067-floor-dispatch/): the
+    // sender's view, on the sender's row, so asking where a hand-off stands
+    // is reading one's own floor.
+    for (const standing of report.dispatches) {
+      if (standing.record.fromFloor !== project.project.floor) continue;
+      console.log(`  ${pc.dim('handed off')} ${renderDispatch(standing)}`);
     }
   }
   if (report.bareTasks.length > 0) {
@@ -3219,6 +3466,13 @@ async function cmdStatus(all: boolean, json: boolean): Promise<void> {
     }
   }
   renderSessions(report);
+  // Hand-offs sent from above the floors — a workspace-scope session, a human
+  // — have no floor row to sit on.
+  const unfloored = report.dispatches.filter((standing) => standing.record.fromFloor === undefined);
+  if (unfloored.length > 0) {
+    console.log(`\n${pc.bold('handed off')}`);
+    for (const standing of unfloored) console.log(`  ${renderDispatch(standing)}`);
+  }
   const allTasks = [
     ...report.projects.flatMap((project) => project.tasks),
     ...report.bareTasks,
@@ -3274,7 +3528,7 @@ function sessionNote(here: string, session: SessionStatus): string {
  * CLOSED task keeps its one-line form: its PR set was resolved at the close,
  * and there is nothing left to open.
  */
-function renderTaskStatus(status: TaskStatus): string {
+function renderTaskStatus(status: TaskStatus, dispatch?: DispatchStanding): string {
   const sessions =
     status.openSessions.length === 0
       ? ''
@@ -3282,6 +3536,14 @@ function renderTaskStatus(status: TaskStatus): string {
   const lines = [
     `  ${renderTaskIdentity(status.task, status.address, status.inReview)}${sessions}`,
   ];
+  // A task another floor handed over says so, and says while it waits: the
+  // receiving floor reads its row and sees what nobody has picked up yet.
+  if (dispatch !== undefined && status.task.state !== 'closed') {
+    lines.push(
+      `    ${pc.dim(`handed over by ${describeSender(dispatch.record)}`)} ` +
+        `[${renderDispatchState(dispatch)}]`,
+    );
+  }
   if (status.task.state !== 'closed') {
     for (const line of renderPrLines(status.task.prs, status.forge)) lines.push(line);
   }

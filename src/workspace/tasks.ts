@@ -82,65 +82,80 @@ export async function openTask(
   // section (§17): two concurrent opens must not both read the same free
   // code, and their commits must not race (design/0013-telemetry-and-serialized-writes/).
   return withStoreLock(root, `task open ${slug}`, async () => {
-    const container = await taskContainer(root, options.floor);
-    // Rooms run as a per-container sequence in opening order
-    // (design/0036-floor-addressed-tasks/): every floor has its own, and so
-    // does the legacy bare pool, which is read but never written again
-    // (design/0041-ground-floor/). The cursor is the container's most recently opened
-    // task — open or closed, because the sequence is about the order rooms
-    // were HANDED OUT, not about what is in flight — and it is read from the
-    // records, never stored (§17).
-    const own = (await readTasks(root)).filter((task) => task.dir.startsWith(`${container}/`));
-    const cursor = mostRecentRoom(own);
-    const room = nextRoom(
-      {
-        ...(cursor === undefined ? {} : { mostRecentRoom: cursor }),
-        occupied: own
-          .filter((task) => task.record.state !== 'closed')
-          .flatMap((task) => taskRoom(task) ?? []),
-      },
-      // A closed task's records SURVIVE at `<code>-<slug>/`, so a free room
-      // can still name a directory that is occupied, and writing there would
-      // overwrite a closed task's record with a new one (§17, and the record
-      // is the truth, §16). Only ever reachable when the same slug comes round
-      // again, which is exactly what a DERIVED slug does
-      // (design/0030-upgrade-self-service/).
-      (candidate) => existsSync(join(root, `${container}/t${candidate}-${slug}`)),
-    );
-    if (room === 0) {
-      throw new WardError(
-        `floor ${options.floor} has no free room — every one of the ` +
-          `${ROOMS_PER_FLOOR} rooms is held by an open task; close or pause one first`,
-      );
-    }
-    const code = `t${room}`;
-    const dir = `${container}/${code}-${slug}`;
-    const record: TaskRecord = {
-      type: 'task',
-      code,
-      slug,
-      state: 'active',
-      floor: options.floor,
-      ...(options.purpose === undefined ? {} : { purpose: options.purpose }),
-      ...(options.stewardship === undefined ? {} : { stewardship: options.stewardship }),
-      ...(options.repositories === undefined || options.repositories.length === 0
-        ? {}
-        : { repositories: [...options.repositories] }),
-      prs: [],
-      openedAt: new Date().toISOString(),
-    };
-    const address = taskAddress({ dir, record });
-    await writeDocument(root, taskRecordType(dir), {
-      data: record,
-      body:
-        `The \`${slug}\` task, addressed \`${address}\` while open — room \`${code}\` on ` +
-        `floor ${options.floor}. ` +
-        'Its worktree and session records nest beside this document; its status is stored here, ' +
-        'at the leaf.',
-    });
-    commitRecords(root, `Open task ${slug} (${address})`, dir);
-    return { dir, record };
+    const task = await writeOpenedTask(root, slug, options);
+    commitRecords(root, `Open task ${slug} (${taskAddress(task)})`, task.dir);
+    return task;
   });
+}
+
+/**
+ * Allocate a room and write the task record, without the commit: the caller
+ * holds the store lock and commits what it wrote. `ward task open` commits
+ * the record alone; a hand-off (design/0067-floor-dispatch/) commits it with
+ * its brief and its hand-off record, so no commit holds one without the others.
+ */
+export async function writeOpenedTask(
+  root: string,
+  slug: string,
+  options: OpenTaskOptions,
+): Promise<FoundTask> {
+  const container = await taskContainer(root, options.floor);
+  // Rooms run as a per-container sequence in opening order
+  // (design/0036-floor-addressed-tasks/): every floor has its own, and so
+  // does the legacy bare pool, which is read but never written again
+  // (design/0041-ground-floor/). The cursor is the container's most recently opened
+  // task — open or closed, because the sequence is about the order rooms
+  // were HANDED OUT, not about what is in flight — and it is read from the
+  // records, never stored (§17).
+  const own = (await readTasks(root)).filter((task) => task.dir.startsWith(`${container}/`));
+  const cursor = mostRecentRoom(own);
+  const room = nextRoom(
+    {
+      ...(cursor === undefined ? {} : { mostRecentRoom: cursor }),
+      occupied: own
+        .filter((task) => task.record.state !== 'closed')
+        .flatMap((task) => taskRoom(task) ?? []),
+    },
+    // A closed task's records SURVIVE at `<code>-<slug>/`, so a free room
+    // can still name a directory that is occupied, and writing there would
+    // overwrite a closed task's record with a new one (§17, and the record
+    // is the truth, §16). Only ever reachable when the same slug comes round
+    // again, which is exactly what a DERIVED slug does
+    // (design/0030-upgrade-self-service/).
+    (candidate) => existsSync(join(root, `${container}/t${candidate}-${slug}`)),
+  );
+  if (room === 0) {
+    throw new WardError(
+      `floor ${options.floor} has no free room — every one of the ` +
+        `${ROOMS_PER_FLOOR} rooms is held by an open task; close or pause one first`,
+    );
+  }
+  const code = `t${room}`;
+  const dir = `${container}/${code}-${slug}`;
+  const record: TaskRecord = {
+    type: 'task',
+    code,
+    slug,
+    state: 'active',
+    floor: options.floor,
+    ...(options.purpose === undefined ? {} : { purpose: options.purpose }),
+    ...(options.stewardship === undefined ? {} : { stewardship: options.stewardship }),
+    ...(options.repositories === undefined || options.repositories.length === 0
+      ? {}
+      : { repositories: [...options.repositories] }),
+    prs: [],
+    openedAt: new Date().toISOString(),
+  };
+  const address = taskAddress({ dir, record });
+  await writeDocument(root, taskRecordType(dir), {
+    data: record,
+    body:
+      `The \`${slug}\` task, addressed \`${address}\` while open — room \`${code}\` on ` +
+      `floor ${options.floor}. ` +
+      'Its worktree and session records nest beside this document; its status is stored here, ' +
+      'at the leaf.',
+  });
+  return { dir, record };
 }
 
 /**

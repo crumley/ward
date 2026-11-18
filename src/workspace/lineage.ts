@@ -340,9 +340,15 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '716116cdadb2f40e8803aa7ee572bf9c4b079f53fc99b1516a9529fd6139774a',
         era: 'design 0064 (floor identity palette)',
       },
-      // Current since design 0031's observer follow-up: a participant whose
-      // host ends is moved to a session still standing, and an observer's
-      // terminal returns to the shell.
+      // design 0031's observer follow-up — a participant whose host ends is
+      // moved to a session still standing, and an observer's terminal returns
+      // to the shell. The manifest said nothing of handing work to a floor.
+      {
+        sha256: 'c2ae1b11f1471424c7fa085b87482412d5cdb17d48706b4ddf0f46ced3c173df',
+        era: "design 0031's observer follow-up (where a terminal lands when a host ends)",
+      },
+      // Current since design 0067: `ward task dispatch` hands a task to
+      // another floor, and a floor reads what it was handed from the record.
     ],
   },
 ];

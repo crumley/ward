@@ -6,16 +6,19 @@ import { expect, test } from 'bun:test';
 import {
   attachViewArgv,
   belowFloor,
+  captureArgv,
   commandArgs,
   createGroupArgv,
   createWindowArgv,
   endViewArgv,
   enterArgv,
+  eraseArgv,
   insideServer,
   linkWindowArgv,
   mintGroupName,
   namedFor,
   observeViewArgv,
+  paneStateArgv,
   parseEnvironmentNames,
   parseGroups,
   parseInventoryWindows,
@@ -26,15 +29,20 @@ import {
   renameWindowArgv,
   sessionTarget,
   shellQuote,
+  squash,
   startRunArgv,
   statusText,
+  submitArgv,
+  TYPEABLE,
   themeArgv,
   titleGroupArgv,
   titleString,
   tmuxHost,
+  typeArgv,
   viewHosts,
   viewName,
   watchArgv,
+  windowRunArgv,
   windowTarget,
 } from '../../src/host/tmux.ts';
 
@@ -595,3 +603,58 @@ function options(argv: readonly string[]): string[][] {
   });
   return found;
 }
+
+// -- typing into a run (design/0067-floor-dispatch/) ---------------------------
+
+test('a line is typed literally, by pane id, and never carries the submitting key', () => {
+  // `-l` keeps a word like `Enter` or `C-c` from being read as a key, and
+  // `--` keeps a line that opens with `-` from being read as a flag.
+  expect(typeArgv('%7', '[ward] Enter C-c -x')).toEqual([
+    'send-keys',
+    '-t',
+    '%7',
+    '-l',
+    '--',
+    '[ward] Enter C-c -x',
+  ]);
+  expect(submitArgv('%7')).toEqual(['send-keys', '-t', '%7', 'Enter']);
+  expect(eraseArgv('%7', 12)).toEqual(['send-keys', '-t', '%7', '-N', '12', 'BSpace']);
+  expect(captureArgv('%7')).toEqual(['capture-pane', '-p', '-t', '%7']);
+  expect(windowRunArgv('@3')).toEqual([
+    'display-message',
+    '-p',
+    '-t',
+    '@3',
+    '#{@ward_session}\t#{@ward_pane}',
+  ]);
+  expect(paneStateArgv('%7')).toEqual([
+    'display-message',
+    '-p',
+    '-t',
+    '%7',
+    '#{window_id}\t#{pane_dead}\t#{pane_in_mode}',
+  ]);
+});
+
+test.each<[string, boolean]>([
+  ['[ward] hand-off to floor 3: task f3t4 (fix-login). Read it: ward task show f3t4', true],
+  ['', false],
+  ['two\nlines', false],
+  ['a tab\tin it', false],
+  ['an escape \u001b[2J', false],
+  ['not ASCII — a dash', false],
+  ['x'.repeat(201), false],
+])('typeable: %p is %p', (line, expected) => {
+  expect(TYPEABLE.test(line)).toBe(expected);
+});
+
+test('a line that is not typeable is withheld before tmux is asked anything', () => {
+  const host = tmuxHost({ WARD_TMUX_BIN: '/nonexistent/tmux' });
+  expect(
+    host.typeLine({ window: '@1', session: 's', text: 'two\nlines', inputLine: () => '' }),
+  ).toEqual({ outcome: 'withheld', reason: 'the line is not one line of printable ASCII' });
+});
+
+test('a typed line compares across a wrap: whitespace is not part of it', () => {
+  expect(squash('[ward] hand-off  to\n  floor 3')).toBe('[ward]hand-offtofloor3');
+});

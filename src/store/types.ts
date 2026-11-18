@@ -342,6 +342,44 @@ export function briefRecordType(taskDir: string): DocumentType<BriefRecord> {
 }
 
 /**
+ * A hand-off (design/0067-floor-dispatch/): the record that a task was opened
+ * on a floor by someone handing work to it, written in the same commit as the
+ * task and its brief. It says who sent the work and when, and nothing about
+ * where the work stands: whether it has been picked up, and how it ended, are
+ * read from the task's sessions and the task record at the leaves
+ * (intent/01-concepts/00-domain-model.md, Status). A document of its own
+ * rather than fields on the task record, so a Ward from before it, which
+ * rewrites a task record without the fields it does not know, cannot drop it.
+ */
+export const dispatchSchema = z.object({
+  type: z.literal('dispatch'),
+  /** The task handed over: its full address when it was sent, as a brief's `for` is. */
+  task: z.string().min(1),
+  /** The floor the work was handed to. */
+  to: z.number().int().nonnegative(),
+  /**
+   * The recorded session that sent it, present exactly when the sender
+   * declared one that exists here: absent for a human at a terminal, never
+   * guessed.
+   */
+  fromSession: z.string().min(1).optional(),
+  /**
+   * The floor the sender is responsible for or works on, present exactly when
+   * `fromSession` names a floor's own session or a session of a task on a
+   * floor. Recorded beside the session because the floor is who asks where
+   * its hand-offs stand, long after that one session has closed.
+   */
+  fromFloor: z.number().int().nonnegative().optional(),
+  sentAt: z.string().min(1),
+});
+export type DispatchRecord = z.infer<typeof dispatchSchema>;
+
+/** A task's hand-off: `<task dir>/dispatch.md`, beside the task record and the brief. */
+export function dispatchRecordType(taskDir: string): DocumentType<DispatchRecord> {
+  return { name: 'dispatch', relPath: `${taskDir}/dispatch.md`, schema: dispatchSchema };
+}
+
+/**
  * The level a session is responsible for (design/0029-launched-sessions/;
  * intent/01-concepts/00-domain-model.md — a session's scope is workspace /
  * project / task / room). Every session recorded before 0029 is a task

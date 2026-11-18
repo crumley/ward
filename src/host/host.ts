@@ -262,6 +262,35 @@ export type InheritedEnv =
   | { readonly outcome: 'answered'; readonly names: readonly string[] }
   | { readonly outcome: 'unknown'; readonly reason: string };
 
+/**
+ * One line to type into a session's run and submit
+ * (design/0067-floor-dispatch/).
+ */
+export interface TypeRequest {
+  readonly window: string;
+  /** The session the window must still be tagged with, as `close` requires. */
+  readonly session: string;
+  /** One line of printable ASCII — a host refuses anything else. */
+  readonly text: string;
+  /**
+   * Reads the run's screen: what its input line holds, or null when the
+   * screen shows none. Handed in by the Ward side, which knows which harness
+   * the run is; the host knows only that it must see the line it typed,
+   * alone, before it submits it.
+   */
+  readonly inputLine: (screen: string) => string | null;
+}
+
+export type TypeResult =
+  /** Typed, seen alone on the input line, and submitted. */
+  | { readonly outcome: 'typed' }
+  /** Not typed, or typed and taken back: the run is as it was. */
+  | { readonly outcome: 'withheld'; readonly reason: string }
+  /** No such window, or no server: nothing to type into. */
+  | { readonly outcome: 'absent' }
+  /** The host could not say what happened; `reason` says what may be left behind. */
+  | { readonly outcome: 'unknown'; readonly reason: string };
+
 /** A detached host, in host terms. */
 export interface SessionHost {
   readonly kind: HostedKind;
@@ -281,6 +310,15 @@ export interface SessionHost {
    * group: a group lives exactly as long as the host's own rule keeps it.
    */
   close(window: string, session: string): CloseResult;
+  /**
+   * Type one line into a session's run and submit it — only into a window
+   * still tagged with `session`, whose run is alive, that nobody is scrolling,
+   * and whose screen shows an input line. The line is typed, READ BACK, and
+   * submitted only when the input line holds exactly it: a line that already
+   * held someone's words is put back as it was, and a screen that stopped
+   * showing an input line is never sent the submitting key. Never throws.
+   */
+  typeLine(request: TypeRequest): TypeResult;
   /**
    * Show a window in a further group as well — additive, never destructive.
    * A window already in the group is left as it is.

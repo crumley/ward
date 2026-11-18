@@ -131,6 +131,11 @@ test('the AGENTS.md 0029 supersedes is in history — every workspace still on i
   expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
     '716116cdadb2f40e8803aa7ee572bf9c4b079f53fc99b1516a9529fd6139774a', // design 0064
   );
+  // …and that manifest, superseded by design/0067-floor-dispatch/'s two
+  // bullets on handing work to a floor and reading what one was handed.
+  expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
+    'c2ae1b11f1471424c7fa085b87482412d5cdb17d48706b4ddf0f46ced3c173df', // 0031's observer follow-up
+  );
 });
 
 // The maintenance guard-rail: the lineage's history is maintained by hand, so
@@ -140,7 +145,7 @@ test('the AGENTS.md 0029 supersedes is in history — every workspace still on i
 // exactly the bookkeeping that keeps every shipped default recognizable.
 test('the current defaults are pinned; changing one must move its old hash into history', () => {
   expect(sha256OfText(AGENTS_MD)).toBe(
-    'c2ae1b11f1471424c7fa085b87482412d5cdb17d48706b4ddf0f46ced3c173df', // since 0031's observer follow-up (where a terminal lands when a host ends)
+    '177c1d742011b8f78525a4a4cd8a2bdca64a602f2366763557906c5642eb3363', // since design 0067 (handing a task to another floor)
   );
   expect(sha256OfText(WARD_INTERNAL_README)).toBe(
     '6f10845611635508f006727f83bdc2222d840a9da972393781662c9f6ff04ac4', // since 65f1e8b (0013)

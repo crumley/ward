@@ -103,6 +103,16 @@ export interface HarnessAdapter {
    * the first one's identity (design/0031-detached-session-hosting/).
    */
   readonly runEnvVars?: readonly string[];
+  /**
+   * What this harness's input line holds, read off a screenful of its run —
+   * or null when the screen does not show one (a dialog is up, the harness is
+   * still starting, the layout is one this build does not know). It is what
+   * lets Ward type a notice into a hosted run and submit it only where a
+   * typed line is a message (design/0067-floor-dispatch/): anywhere else the
+   * same keys answer whatever is asking. Absent for a harness whose screen
+   * this build cannot read, and such a run is never typed into.
+   */
+  inputLine?(screen: string): string | null;
   /** The handle recorded for a run: the name, then its native id. */
   handle(nativeId: string): string;
   /** The native id inside one of THIS adapter's handles — null for any other. */
