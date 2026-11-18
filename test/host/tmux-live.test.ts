@@ -1887,6 +1887,13 @@ beforeEach(async () => {
 afterEach(() => {
   for (const client of clients.splice(0)) {
     if (client.proc.exitCode === null) client.proc.kill();
+    // The pseudo-terminal is this process's to give back: Bun keeps a spawned
+    // terminal's master open until it is closed, whatever became of the child.
+    // Left open, every client of every case held one for the life of the
+    // suite — 28 of them by the last cases — and on a freshly booted macOS
+    // runner the first pty past the 32nd fails once ("fork failed: Device not
+    // configured"), under whichever case happens to ask for it.
+    client.proc.terminal?.close();
   }
   if (TMUX !== null) killServer(SOCKET);
 });
