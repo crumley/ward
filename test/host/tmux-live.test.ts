@@ -635,8 +635,10 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     const byKill = (await exitedSoon(killed.id)).live;
     const byTerm = (await exitedSoon(hung.id)).live;
     expect(byKill).toMatchObject({ state: 'exited', window: killed.live?.window });
-    expect(byKill?.exitSignal?.toLowerCase()).toContain('kill');
-    expect(byTerm?.exitSignal?.toLowerCase()).toContain('term');
+    // tmux names the signal where the platform can (macOS: `kill`), and
+    // gives its number where it cannot (Linux: `9`).
+    expect(byKill?.exitSignal).toMatch(/^(9|.*kill.*)$/i);
+    expect(byTerm?.exitSignal).toMatch(/^(15|.*term.*)$/i);
     // All three windows stand, dead, in the host — which therefore stands too.
     expect(windowsIn(`${name}-f0-workspace`).sort()).toEqual(
       [failed.id, killed.id, hung.id].sort(),
