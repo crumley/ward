@@ -114,7 +114,13 @@ export interface FoundWindow {
   /** Every group the window appears in — several when it is linked. */
   readonly groups: readonly FoundGroup[];
   readonly tags: WindowTags;
-  /** Whether the session's own run has ended (the window kept to show it). */
+  /**
+   * Whether the session's own run has ended with its window kept to show how:
+   * a host keeps the window of a run that FAILED — a non-zero exit, or a
+   * signal — and closes the window of one that exited cleanly
+   * (design/0070-clean-exit-closes-window/), so a clean exit is not found at
+   * all.
+   */
   readonly dead: boolean;
   readonly exitStatus?: number;
   readonly exitSignal?: string;
@@ -171,6 +177,9 @@ export interface ViewRequest {
  * Names to bring up to date on what the host already holds
  * (design/0061-host-names-and-titles/): each group by the name it wears now,
  * each window by its host-assigned id. Nothing is created, moved, or ended.
+ * A window whose run is still going is also brought to the host's current
+ * rule for what its window does when the run ends
+ * (design/0070-clean-exit-closes-window/).
  */
 export interface RenameRequest {
   readonly groups: readonly {
@@ -183,7 +192,16 @@ export interface RenameRequest {
      */
     readonly views?: readonly StandingView[];
   }[];
-  readonly windows: readonly { readonly window: string; readonly label: string }[];
+  readonly windows: readonly {
+    readonly window: string;
+    readonly label: string;
+    /**
+     * Whether the window's run is still going. Only a running window's exit
+     * rule is brought up to date: an ended one was kept by the rule it ended
+     * under, and is left exactly as it stands.
+     */
+    readonly running: boolean;
+  }[];
 }
 
 /** A view that already stands: the name it wears, and how its client joined. */
@@ -301,7 +319,11 @@ export interface SessionHost {
    * the critical section spends only the placement itself.
    */
   prepare(): void;
-  /** Find or create the floor's group, then create the tagged window in it. Throws on failure. */
+  /**
+   * Find or create the floor's group, then create the tagged window in it.
+   * The window closes by itself when its run exits cleanly, and is kept —
+   * ended, with how — when the run fails or is killed. Throws on failure.
+   */
   place(request: PlaceRequest): Placement;
   /** Every window carrying this session's tag, in any group. */
   find(session: string): FindResult;
@@ -328,9 +350,10 @@ export interface SessionHost {
    * Bring names and titles up to date in place: rename each group to the name
    * wanted (left as it is when another group already wears that name), title
    * it, dress it in the identity given, bring each view named with it after
-   * it — renamed, titled, dressed — and relabel each window. Touches those
-   * groups and views only, never the host's own defaults, and moves no
-   * client. Never throws: what it could not do is in the answer.
+   * it — renamed, titled, dressed — relabel each window, and bring each
+   * running window to the current exit rule. Touches those groups, views, and
+   * windows only, never the host's own defaults, and moves no client. Never
+   * throws: what it could not do is in the answer.
    */
   rename(request: RenameRequest): Renamed;
   /**

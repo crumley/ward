@@ -178,11 +178,15 @@ instead of in the foreground.
   from two floor hosts, say — take turns resizing it, and the agent reflows, looking padded or
   clipped to the other until it acts. An observer never resizes a window someone is attached to;
   watching alone, it does, until a participant returns.
+- **A run that exits cleanly closes its own window**; the session stays open, and \`attach\` or
+  \`resume\` runs it again. A run that fails — a non-zero exit, or a signal — keeps its window,
+  dead, to show how it ended, until a resume or a close clears it.
 - \`ward session close ID\` ends the session's window and nothing else: Ward never ends a floor
   host — tmux does, when its last window goes. \`ward session show ID\` and
-  \`ward session locate ID\` say where a hosted run stands (live, exited, gone, or could not
-  determine), and \`ward doctor\` reports stray windows, duplicate hosts, leftover views, and gone
-  sessions, each with the command that would end it — ending none itself.
+  \`ward session locate ID\` say where a hosted run stands: live; exited (it failed, and its
+  window is kept); gone (no window — it exited cleanly, or its window or host was ended); or
+  could not determine. \`ward doctor\` reports stray windows, duplicate hosts, leftover views, and
+  gone sessions, each with the command that would end it — ending none itself.
 - **When a host ends under a terminal.** A terminal sitting in a floor host, or attached through
   a view, is moved to another tmux session still standing on that server — tmux picks the most
   recently used, which may be one of your own — and returns to the shell only when none is

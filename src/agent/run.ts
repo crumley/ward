@@ -66,11 +66,14 @@ export type LaunchedSession =
 export interface HostedRun extends PlacedRun {
   /**
    * The window as ONE read found it, a beat after it was placed: `exited`
-   * (with how it ended) when the run had already ended by then, otherwise
-   * `live`. A report, not a guarantee — `live` says the run was going when
-   * read, and a run that ends a moment later is told by every later read
-   * (`ward session show`), from the window kept for it. Callers that need
-   * "has it ended" ask again; they never treat this `live` as settled.
+   * (with how it ended) when the run had already failed by then, `gone` when
+   * it had already exited cleanly and closed its window
+   * (design/0070-clean-exit-closes-window/), otherwise `live`. A report, not
+   * a guarantee — `live` says the run was going when read, and a run that
+   * ends a moment later is told by every later read (`ward session show`):
+   * from the window kept for it when it failed, as no window when it did
+   * not. Callers that need "has it ended" ask again; they never treat this
+   * `live` as settled.
    */
   readonly live: LiveState | undefined;
 }

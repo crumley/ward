@@ -354,8 +354,15 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '177c1d742011b8f78525a4a4cd8a2bdca64a602f2366763557906c5642eb3363',
         era: 'design 0067 (handing a task to another floor)',
       },
-      // Current since design 0069: the three reflection verbs, and that a
-      // floor's notes are edited directly in a reflection's worktree.
+      // design 0069 — the three reflection verbs, and that a floor's notes are
+      // edited directly in a reflection's worktree. Every hosted run's window
+      // was still kept when the run ended, a clean exit included.
+      {
+        sha256: '7aed6ca799564ee829e8e80b5efacd03d5c262eb28e6fa3095a73b007a9d650d',
+        era: 'design 0069 (floor reflection)',
+      },
+      // Current since design 0070: a run that exits cleanly closes its own
+      // window, and only a failed or killed one is kept.
     ],
   },
 ];

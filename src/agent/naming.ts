@@ -190,7 +190,10 @@ export interface Refreshed {
 
 /**
  * Bring every host, view, and window this workspace has in `host` up to its
- * current name and title, in place. A host is taken by its stamps, a view by
+ * current name and title, in place — and every window whose run is still
+ * going to the current exit rule (design/0070-clean-exit-closes-window/), so
+ * a run an older Ward started closes its window on a clean exit too. A host
+ * is taken by its stamps, a view by
  * its stamp and the host it looks at, and a window by its verified tags, so
  * only what is this workspace's own is ever renamed; a window that fails
  * verification is a stranger and keeps the name it has.
@@ -237,7 +240,11 @@ export async function refreshNames(
       const listing = open.get(window.tags.session);
       if (listing === undefined || latestLaunch(listing.record)?.at !== window.tags.epoch) continue;
       if (!window.groups.some((name) => ours.has(name))) continue;
-      windows.push({ window: window.window, label: naming.label(listing) });
+      windows.push({
+        window: window.window,
+        label: naming.label(listing),
+        running: !window.dead,
+      });
     }
     if (groups.length === 0 && windows.length === 0) {
       return { renamed: [], failed: [], themed: [] };

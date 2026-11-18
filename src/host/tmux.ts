@@ -71,20 +71,35 @@ const CALL_TIMEOUT_MS = 5000;
 
 /**
  * The version floor: per-window user options and `-e` on respawn arrived by
- * tmux 3.0, and the client flags observe attaches with (`-f
- * read-only,ignore-size`) in 3.2.
+ * tmux 3.0, and in 3.2 both the client flags observe attaches with (`-f
+ * read-only,ignore-size`) and the `failed` value of `remain-on-exit`
+ * ({@link EXIT_RULE}).
  */
 export const MINIMUM_VERSION = { major: 3, minor: 2 } as const;
+
+/**
+ * What a session's window does when its run ends
+ * (design/0070-clean-exit-closes-window/): tmux's `remain-on-exit failed` — a
+ * run that exits 0 closes its window, and one that exits with any other
+ * status, or is ended by a signal, leaves its pane behind, dead, with how it
+ * ended readable on it. A failure is kept because nothing else would say it
+ * happened; a clean exit leaves nothing to say, and a window kept for it
+ * only lingers in its floor host (the coordinator's, in every one).
+ */
+export const EXIT_RULE = 'failed';
 
 /**
  * What holds a freshly created window or host until it is filled: a process
  * that waits and does nothing. The agent never starts here — it starts by a
  * respawn once the window's tags and `remain-on-exit` are already set, so even
- * a run that exits at once leaves its window, and its exit status, behind.
+ * a run that fails at once leaves its window, and its exit status, behind.
  */
 const HOLD = ['cat'];
 
 const FIELD = '\t';
+
+/** tmux's answer for a window id it no longer holds. */
+const GONE_WINDOW = /can't find window|no such window/;
 
 // -- names and targets -------------------------------------------------------
 
@@ -158,6 +173,19 @@ export function renameWindowArgv(window: string, label: string): string[] {
   return ['rename-window', '-t', window, label];
 }
 
+/**
+ * Bring a window whose run is still going to today's exit rule
+ * ({@link EXIT_RULE}) — a window an older Ward made keeps every exit, a clean
+ * one included, until this is said to it. Only ever sent for a RUNNING
+ * window: one already dead was kept under the rule it died by, and stays
+ * until a resume or a close clears it. (tmux applies the option when a pane
+ * dies and never looks at it again, so one that died in the instant before
+ * this arrives is left standing as well — measured on 3.7c.)
+ */
+export function exitRuleArgv(window: string): string[] {
+  return ['set-option', '-w', '-t', window, 'remain-on-exit', EXIT_RULE];
+}
+
 /** Every character outside `[A-Za-z0-9_-]` becomes `-`. */
 export function munge(name: string): string {
   return name.replace(/[^A-Za-z0-9_-]/g, '-');
@@ -228,9 +256,9 @@ export function createWindowArgv(group: string, label: string): string[] {
 }
 
 /**
- * Tag the window, make it keep its exit, keep its name, then start the run in
- * its pane — in that order, in one invocation, so a run that ends at once
- * still leaves a tagged, dead window to read.
+ * Tag the window, make it keep a failed exit ({@link EXIT_RULE}), keep its
+ * name, then start the run in its pane — in that order, in one invocation,
+ * so a run that fails at once still leaves a tagged, dead window to read.
  */
 export function startRunArgv(
   window: string,
@@ -242,7 +270,7 @@ export function startRunArgv(
     ...setOption(target, '@ward_session', request.tags.session).slice(1),
     ...setOption(target, '@ward_epoch', request.tags.epoch),
     ...setOption(target, '@ward_pane', pane),
-    ...setOption(target, 'remain-on-exit', 'on'),
+    ...setOption(target, 'remain-on-exit', EXIT_RULE),
     ...setOption(target, 'automatic-rename', 'off'),
     ...setOption(target, 'allow-rename', 'off'),
     ';',
@@ -965,7 +993,17 @@ export function tmuxHost(env: Env = process.env): SessionHost {
       if (request.floats) {
         for (const other of ours(groups(), workspace)) {
           if (other.name === group) continue;
-          must(linkWindowArgv(window, other.name), `link ${window} into ${other.name}`);
+          const linked = call(linkWindowArgv(window, other.name));
+          // A run that has already exited cleanly took its window with it
+          // (EXIT_RULE): there is nothing left to link anywhere, and the
+          // launch is reported as it stands — gone — rather than failed.
+          if (!linked.ok && GONE_WINDOW.test(linked.stderr)) break;
+          if (!linked.ok) {
+            throw new WardError(
+              `tmux could not link ${window} into ${other.name}: ` +
+                `${linked.stderr || 'no reason given'}`,
+            );
+          }
           linkedInto.push(other.name);
         }
       }
@@ -975,7 +1013,7 @@ export function tmuxHost(env: Env = process.env): SessionHost {
     close(window: string, session: string): CloseResult {
       const tag = call(windowTagArgv(window));
       if (!tag.ok) {
-        if (tag.noServer || /can't find window|no such window/.test(tag.stderr)) {
+        if (tag.noServer || GONE_WINDOW.test(tag.stderr)) {
           return { outcome: 'absent' };
         }
         return { outcome: 'unknown', reason: tag.stderr };
@@ -989,7 +1027,7 @@ export function tmuxHost(env: Env = process.env): SessionHost {
       }
       const killed = call(killWindowArgv(window));
       if (killed.ok) return { outcome: 'closed' };
-      if (/can't find window|no such window/.test(killed.stderr)) return { outcome: 'absent' };
+      if (GONE_WINDOW.test(killed.stderr)) return { outcome: 'absent' };
       return { outcome: 'unknown', reason: killed.stderr };
     },
     link(window: string, group: string): void {
@@ -1157,8 +1195,11 @@ export function tmuxHost(env: Env = process.env): SessionHost {
         }
         if (dressed) themed.push({ group: current, views: worn });
       }
-      for (const { window, label } of request.windows) {
-        const relabelled = call(renameWindowArgv(window, label));
+      for (const { window, label, running } of request.windows) {
+        const relabelled = call([
+          ...renameWindowArgv(window, label),
+          ...(running ? [';', ...exitRuleArgv(window)] : []),
+        ]);
         if (!relabelled.ok) failed.push(`${window}: ${why(relabelled)}`);
       }
       return { groups: renamed, views: moved, failed, themed };

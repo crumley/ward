@@ -188,7 +188,14 @@ export function floatingTags(all: readonly OpenSessionListing[], kind: HostedKin
 
 // -- the live half, read -------------------------------------------------------
 
-/** Where a hosted session's run stands now — derived per read, never stored. */
+/**
+ * Where a hosted session's run stands now — derived per read, never stored.
+ * `exited` is a run that FAILED (a non-zero status, or a signal), its window
+ * kept to say how. `gone` is no window at all, and covers two things that
+ * cannot be told apart from here: a run that exited cleanly, which closes
+ * its own window (design/0070-clean-exit-closes-window/), and a window or
+ * host that was ended under the run — a reboot, a `kill-window`.
+ */
 export interface LiveState {
   readonly kind: HostedKind;
   readonly state: 'live' | 'exited' | 'gone' | 'unknown';
@@ -282,7 +289,7 @@ export async function liveStateOf(
   return classify(listing.record, using.find(listing.record.id), workspace, floor, kind).live;
 }
 
-/** "exited 3" / "killed by SIGKILL" — how a dead pane's run ended, for a human. */
+/** "exited 3" / "killed by SIGKILL" — how a kept, dead pane's run ended, for a human. */
 export function describeExit(live: Pick<LiveState, 'exitStatus' | 'exitSignal'>): string {
   if (live.exitSignal !== undefined && live.exitSignal !== '')
     return `killed by ${live.exitSignal}`;
@@ -309,9 +316,11 @@ export interface ResumeGate {
 /**
  * The gate a resume passes under the store lock when the latest launch was
  * hosted: refuse over a LIVE window (two processes on one conversation), and
- * over a host that cannot answer; over a dead window of this session's own,
- * hand back how it ended and the means to clear it; proceed when there is
- * nothing. The gate itself ends nothing — the dead window was verified here,
+ * over a host that cannot answer; over a dead window of this session's own
+ * (a run that failed), hand back how it ended and the means to clear it;
+ * proceed when there is nothing — which is also how a run that exited
+ * cleanly reads, so its `resumed` event carries no cause. The gate itself
+ * ends nothing — the dead window was verified here,
  * against the launch it belongs to, and is cleared by the id it had then,
  * because the `resumed` event about to be written makes it another life's.
  * A stranger is never touched.

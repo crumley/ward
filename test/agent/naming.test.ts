@@ -118,7 +118,7 @@ test('a refresh renames only what is verifiably this workspace’s own, and neve
           views: [{ name: 'ward-old-f0-v1', mode: 'attach' }],
         },
       ],
-      windows: [{ window: '@1', label: 'coord' }],
+      windows: [{ window: '@1', label: 'coord', running: true }],
     },
   ]);
   // A host that cannot answer is passed over: a name is never why a launch stops.
@@ -129,6 +129,34 @@ test('a refresh renames only what is verifiably this workspace’s own, and neve
     themed: [],
   });
   expect(silent.renames).toEqual([]);
+});
+
+test('a refresh says which windows still run: only those are brought to the current exit rule', async () => {
+  // design/0070-clean-exit-closes-window/ — a window an older Ward made keeps
+  // every exit until told otherwise; one already dead is never told.
+  const running = await openWorkspaceSession(ws, undefined, HOSTED);
+  const failed = await openWorkspaceSession(ws, undefined, hosted('2'));
+  const id = await workspaceId(ws);
+  const groups = [{ name: `${name}-f0-workspace`, stamp: { workspace: id, floor: 0 } }];
+  const host = fakeHost({
+    windows: [
+      { window: '@1', groups, tags: { session: running.id, epoch: running.openedAt }, dead: false },
+      {
+        window: '@2',
+        groups,
+        tags: { session: failed.id, epoch: failed.openedAt },
+        dead: true,
+        exitStatus: 3,
+      },
+    ],
+  });
+  await refreshNames(ws, host, id, 'tmux');
+  expect(host.renames.map((request) => request.windows)).toEqual([
+    [
+      { window: '@1', label: 'coord 1', running: true },
+      { window: '@2', label: 'coord 2', running: false },
+    ],
+  ]);
 });
 
 test.each<[string, InventoryGroup[], string[][], Record<string, StandingView[]>]>([

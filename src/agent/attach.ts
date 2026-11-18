@@ -63,8 +63,10 @@ export interface Joined extends Prepared {
 
 /**
  * Why a watched window is no longer there: its session was `closed`; the
- * window is `gone` with the session still open; or the run was `restarted`
- * in another window (a resume cleared the one being watched).
+ * window is `gone` with the session still open — the run exited cleanly,
+ * which closes its window (design/0070-clean-exit-closes-window/), or the
+ * window was ended under it; or the run was `restarted` in another window (a
+ * resume cleared the one being watched).
  */
 export type Ended = 'closed' | 'gone' | 'restarted';
 
@@ -90,7 +92,8 @@ export async function attachSession(root: string, id: string, options: JoinOptio
   refuseUnknownOrStranger(id, live, own, host);
   let recreated = false;
   if (live.state !== 'live') {
-    // Gone, or ended with its window kept: the record says what to rebuild,
+    // Gone (a clean exit closes its own window), or failed with its window
+    // kept: the record says what to rebuild,
     // so attach rebuilds it — a hosted resume, the same path that opened it,
     // which also refuses (with locate's answer) when the history is gone.
     const resumed = await resumeSession(root, id, () => {}, { hostFlag: 'detach' });
@@ -98,7 +101,10 @@ export async function attachSession(root: string, id: string, options: JoinOptio
     open = await requireOpenSession(root, id);
     ({ live, own } = await readLive(root, open, host, workspace, kind));
     if (live.state !== 'live' || own === undefined) {
-      const ended = live.state === 'exited' ? `, then ${describeExit(live)}` : '';
+      // A re-created run that fails at once is kept to say how; one that
+      // exits cleanly at once leaves no window, which is all that is known.
+      const ended =
+        live.state === 'exited' ? `, then ${describeExit(live)}` : ', then left no window';
       throw new WardError(
         `session ${id} was re-created${ended}, and is not running now — ` +
           `see: ward session show ${id}` +
@@ -145,7 +151,7 @@ export async function observeSession(root: string, id: string, options: JoinOpti
   const { live, own } = await readLive(root, open, host, workspace, kind);
   refuseUnknownOrStranger(id, live, own, host);
   if (live.state !== 'live' || own === undefined || live.window === undefined) {
-    const why = live.state === 'exited' ? describeExit(live) : 'has no window';
+    const why = live.state === 'exited' ? describeExit(live) : 'it has no window';
     throw new WardError(
       `session ${id} is not running (${why}) — observe watches a live run. ` +
         `Re-create it with ward session attach ${id}, or read its history with ` +
