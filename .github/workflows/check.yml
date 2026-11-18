@@ -1,15 +1,18 @@
-# CI runs the same gate a developer runs locally: `mise run check`.
+# CI runs the gate a developer runs locally, `mise run check`, as its three
+# tiers in parallel: one job per tier per platform, each running that tier's
+# own mise task — the same command a human runs to reproduce it. The tiers and
+# what belongs in each are in CONTRIBUTING.md (Tests: three tiers);
+# design/0071-ci-tiers-and-pinned-tmux/ says why the gate is split this way.
 #
 # mise-action installs mise, reads mise.toml, and provisions the exact pinned
 # toolchain (bun, dprint, lychee, actionlint) that `mise install` provisions on
-# a laptop. The `check` task self-provisions its JS dependencies (bun install,
-# frozen lockfile), so the single source of truth for "is this green?" is one
-# command, byte-for-byte identical locally and here. See mise.toml /
-# CONTRIBUTING.md.
+# a laptop; the tasks self-provision their JS dependencies (bun install,
+# frozen lockfile).
 #
-# Ward is a Bun-native CLI developed on macOS and run on Linux, so the gate runs
-# on both. `fail-fast: false` keeps one platform's failure from hiding the
-# other's — an OS-specific break is exactly what this matrix exists to catch.
+# Ward is a Bun-native CLI developed on macOS and run on Linux, so every tier
+# runs on both. `fail-fast: false` keeps one leg's failure from cancelling the
+# others — an OS-specific break, or a tier-specific one, is exactly what this
+# matrix exists to show.
 name: check
 
 on:
@@ -17,11 +20,28 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  check:
-    name: check (${{ matrix.os }})
+  static:
+    name: static (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    # A hung test worker must fail the run, not hold it: the gate takes a few
+    # Lint, typecheck, links, actions: well under a minute when healthy.
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+      - run: mise run static
+
+  fast:
+    name: fast tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    # A hung test worker must fail the run, not hold it: the tier takes a few
     # minutes, so anything near this bound is stuck, not slow.
     timeout-minutes: 15
     strategy:
@@ -30,21 +50,87 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+      # No tmux is installed here on purpose: the fast tier must not need one.
+      - run: mise run test:fast
 
+  live:
+    name: live tmux (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v5
 
-      # The real-tmux suite (test/host/tmux-live.test.ts,
-      # design/0031-detached-session-hosting/) needs a tmux binary; it skips
-      # itself without one, so installing it here is what makes CI run it.
-      # The suite only ever talks to a private server of its own (-L).
-      - name: Install tmux
-        run: |
-          if command -v tmux >/dev/null; then
-            tmux -V
-          elif [ "$RUNNER_OS" = "Linux" ]; then
-            sudo apt-get update -qq && sudo apt-get install -y -qq tmux
-          else
-            brew install tmux
-          fi
+      # The pinned tmux (mise.toml [vars] tmux_version), built from source by
+      # `mise run tmux:pinned` into ~/.cache/ward/tmux/<version>, where
+      # test:live puts it first on PATH. The key is mise.toml's hash, so any
+      # change to the pin or its recipe rebuilds; a hit costs seconds.
+      - name: Restore the pinned tmux
+        id: tmux-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ward/tmux
+          key: tmux-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('mise.toml') }}
 
-      - run: mise run check
+      - name: Build the pinned tmux
+        if: steps.tmux-cache.outputs.cache-hit != 'true'
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq libncurses-dev pkg-config
+          fi
+          mise run tmux:pinned
+
+      # The preload (test/live-tier.ts) fails the tier at once if the tmux on
+      # PATH is not the pin: CI sets CI=true.
+      - run: mise run test:live
+        env:
+          WARD_LIVE_EVIDENCE: ${{ runner.temp }}/live-evidence
+
+      # What the tier saw, for a failure that does not reproduce: each pty
+      # client's output and a JUnit report (WARD_LIVE_EVIDENCE), plus the
+      # kernel's word on a crashed tmux.
+      - name: Gather crash evidence
+        if: failure()
+        env:
+          WARD_LIVE_EVIDENCE: ${{ runner.temp }}/live-evidence
+        run: |
+          mkdir -p "$WARD_LIVE_EVIDENCE"
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo dmesg | tail -n 200 > "$WARD_LIVE_EVIDENCE/dmesg.txt" || true
+          else
+            cp ~/Library/Logs/DiagnosticReports/tmux* "$WARD_LIVE_EVIDENCE/" 2>/dev/null || true
+          fi
+      - name: Upload live-tier evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: live-evidence-${{ matrix.os }}
+          path: ${{ runner.temp }}/live-evidence
+          retention-days: 14
+
+  # The ruleset on main requires `check (ubuntu-latest)` and
+  # `check (macos-latest)`, the names of the single job this workflow used to
+  # run. These two legs keep those names, and pass only when every tier on
+  # both platforms passed: `needs` waits on a whole matrix, so neither leg can
+  # wait on its own platform alone.
+  check:
+    name: check (${{ matrix.os }})
+    if: always()
+    needs: [static, fast, live]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Every tier passed
+        env:
+          RESULTS: ${{ needs.static.result }} ${{ needs.fast.result }} ${{ needs.live.result }}
+        run: |
+          echo "static, fast, live: $RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || exit 1; done

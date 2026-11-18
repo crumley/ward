@@ -29,5 +29,33 @@ Two kinds of test are expected, and the distinction matters because of the four-
 
 `test` moves with `design` and `src`; all three reconcile back to `intent` when they diverge.
 
+## Three kinds, three tiers
+
+Cutting across those two, every test is one of three kinds by **mechanism** — a unit test (Ward's
+code in-process, its collaborators faked), a CLI test (`ward` as a caller runs it), or a live test
+(a real tmux on a private server, usually through a real pseudo-terminal) — and runs in one of three
+**tiers**. What each kind is for, the default (no real tmux, no spawned process, no fresh workspace
+unless that is what is under test), and when a test earns the live tier are in
+[`../CONTRIBUTING.md`](../CONTRIBUTING.md#tests-three-kinds-three-tiers); that text governs. Here is
+where they are:
+
+- **The tier is the file name.** A file ending in `-live.test.ts` is the live tier; every other
+  `*.test.ts` is the fast tier. Both mise tasks read that one rule, so a file cannot fall between
+  them. Today the live tier is [`host/tmux-live.test.ts`](host/tmux-live.test.ts) (detached hosting,
+  attach, observe, titles) and [`host/tmux-nudge-live.test.ts`](host/tmux-nudge-live.test.ts)
+  (typing a hand-off into a stand-in harness).
+- **The fast tier** (`mise run test:fast`) runs in parallel, isolated workers, so a file cannot see
+  another's leftovers and must not depend on running alone. It must pass with no tmux installed. Its
+  fakes are here to reuse: [`agent/fake-host.ts`](agent/fake-host.ts) stands in for a session host,
+  and [`helpers.ts`](helpers.ts) has the workspace, CLI, fake-`claude` and fake-`gh` helpers.
+- **The live tier** (`mise run test:live`) runs its files one after another, each in a fresh global,
+  after a preload, [`live-tier.ts`](live-tier.ts), that checks the tmux on PATH is the pinned one
+  (failing in CI, warning locally; `WARD_TMUX_PIN=native` skips the check) and, with
+  `WARD_LIVE_EVIDENCE=DIR`, keeps every pseudo-terminal client's output there. A live file starts
+  its own server (`tmux -L <unique>`, through `WARD_TMUX_SOCKET`, with no configuration file), kills
+  it when it is done, closes every pseudo-terminal it opened, and skips itself, saying so, when no
+  tmux is installed. A plain `bun test` with no arguments runs both tiers in one process, live files
+  among the rest: use the mise tasks, or name a file.
+
 **How we write tests** — high assertion density, cases first and setup at the bottom, table-driven
 where it fits, and a fast write→fail→fix loop — is in [`../CONTRIBUTING.md`](../CONTRIBUTING.md).

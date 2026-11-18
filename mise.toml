@@ -3,8 +3,14 @@
 #
 #   mise install         # provision the pinned toolchain (bun, dprint, lychee, actionlint)
 #   mise run fmt         # format/fix everything in place as you write
-#   mise run check       # the full no-writes gate — exactly what CI runs
+#   mise run check       # the full no-writes gate: every tier below, exactly what CI runs
+#   mise run static      # tier 1: lint + typecheck + links + actions (no tests)
+#   mise run test:fast   # tier 2: every test file but the live ones, in parallel workers
+#   mise run test:live   # tier 3: the *-live.test.ts files, serially, against a real tmux
+#   mise run tmux:pinned # build the pinned tmux (once) where test:live will find it
 #   mise run link-status # show which checkout the global `ward` resolves to
+#
+# The tiers, what belongs in each and why, are in CONTRIBUTING.md (Tests: three tiers).
 #
 # JS dependencies (optique, picocolors) and JS dev tools (Biome, TypeScript) are
 # pinned in package.json + bun.lock and installed by the `deps` task; every task
@@ -17,6 +23,22 @@ lychee = "0.24.2"
 # One YAML file in the tree (the CI workflow), but that file is the thing that
 # runs the gate — worth linting. No shell scripts, so no shellcheck/shfmt.
 actionlint = "1.7.12"
+
+# The tmux the live tier runs against, on every CI runner and (after
+# `mise run tmux:pinned`) on a laptop: one version, built from its release
+# tarball with libevent and utf8proc linked in statically, so the binary is the
+# same program on macOS and Linux and needs nothing installed beside it. To bump:
+# change the version and its sha256 (and a dependency's, if it moves too), then
+# run `mise run tmux:pinned` and `mise run test:live` locally; CI's cache key is
+# this file's hash, so the next run rebuilds. Ward's own floor is tmux 3.2
+# (design/0031): the pin is what the suite proves, not what Ward requires.
+[vars]
+tmux_version = "3.8"
+tmux_sha256 = "e79c699c7e949dccd0a4a125e17b8d1261e311b16979dbc8eb34542f3966d82e"
+libevent_version = "2.1.13-stable"
+libevent_sha256 = "f7e9383b8c0baa81b687e5b5eecc01beefaf1b19b64151d95ed61647fe7a315c"
+utf8proc_version = "2.12.0"
+utf8proc_sha256 = "a393fbef160835fb315bc3e91ba8d86f7a73a7cec9e6198b6c60b848b498bfeb"
 
 [tasks.deps]
 description = "Install JS dependencies exactly as locked (bun.lock)"
@@ -72,20 +94,94 @@ description = "TypeScript strict type check (tsc --noEmit)"
 depends = ["deps"]
 run = "bun x tsc --noEmit"
 
+# The test suite is two tiers by file name: a file ending in -live.test.ts
+# drives a real tmux (private servers, real pseudo-terminals) and is the live
+# tier; every other file is the fast tier. One rule, read by both tasks below,
+# so a file cannot belong to neither or both.
 [tasks.test]
-description = "Run the test suite (bun test): files across isolated parallel workers, then the real-tmux suite alone"
+description = "Run the whole test suite: the fast tier, then the live tier"
+run = [{ task = "test:fast" }, { task = "test:live" }]
+
+[tasks."test:fast"]
+description = "Every test file but the live ones, across isolated parallel workers"
 depends = ["deps"]
 # --parallel runs test files in separate worker processes (one per core by
 # default; --isolate is implied), so no file can see another's leftovers:
 # roughly 3x faster than one process running all files in turn. Workers share
 # the cores, so a case that spawns the CLI several times runs slower than it
-# would alone: --timeout gives each case 30s instead of Bun's 5s. The real-tmux
-# suite (design/0031) drives live tmux servers and ptys, which misbehave under
-# that contention, so it runs afterwards on its own.
-run = [
-  "bun test --parallel --timeout=30000 --path-ignore-patterns='test/host/tmux-live.test.ts'",
-  "bun test --timeout=30000 test/host/tmux-live.test.ts",
-]
+# would alone: --timeout gives each case 30s instead of Bun's 5s.
+run = "bun test --parallel --timeout=30000 --path-ignore-patterns='**/*-live.test.ts'"
+
+[tasks."test:live"]
+description = "The live tier: every *-live.test.ts file, one at a time, against the pinned tmux"
+depends = ["deps"]
+# Live tmux servers and ptys misbehave under the parallel pool's contention, so
+# these files run serially, each in a fresh global (--isolate). The preload
+# checks the tmux under test against the pin before any case runs: in CI a
+# mismatch (or no tmux at all) fails the tier at once; on a laptop it warns.
+# WARD_TMUX_PIN=native runs against whatever tmux is on PATH, unchecked (the
+# nightly workflow does). WARD_LIVE_EVIDENCE=DIR keeps each pty client's output
+# and a JUnit report there, for CI to upload when the tier fails.
+env = { WARD_TMUX_PIN = "{{ get_env(name='WARD_TMUX_PIN', default=vars.tmux_version) }}" }
+run = """
+set -eu
+pinned="${WARD_TMUX_CACHE:-$HOME/.cache/ward/tmux}/{{vars.tmux_version}}/bin"
+if [ "$WARD_TMUX_PIN" != native ] && [ -x "$pinned/tmux" ]; then PATH="$pinned:$PATH"; export PATH; fi
+if [ -n "${WARD_LIVE_EVIDENCE:-}" ]; then
+  mkdir -p "$WARD_LIVE_EVIDENCE"
+  set -- --reporter=junit --reporter-outfile="$WARD_LIVE_EVIDENCE/junit.xml"
+fi
+exec bun test --isolate --timeout=30000 --preload ./test/live-tier.ts "$@" -- -live.test.ts
+"""
+
+[tasks."tmux:pinned"]
+description = "Build the pinned tmux into ~/.cache/ward/tmux/<version> (no-op when it is there)"
+# Plain POSIX tools only (curl, cc, make): the dependencies are built static
+# into a scratch prefix and only tmux is installed, so the result is one
+# binary that links nothing but libc and the system's curses. The options are
+# the same on both platforms: utf8proc on (tmux's own advice off Linux, and it
+# makes character widths one table everywhere), jemalloc off (tmux 3.8 asks for
+# it on macOS only, which would make the two builds different programs). A CI
+# cache holds the installed tree; on a miss this takes about a minute.
+run = """
+set -eu
+v={{vars.tmux_version}}
+dest="${WARD_TMUX_CACHE:-$HOME/.cache/ward/tmux}/$v"
+if [ -x "$dest/bin/tmux" ] && [ "$("$dest/bin/tmux" -V)" = "tmux $v" ]; then
+  echo "tmux $v is already built: $dest/bin/tmux"; exit 0
+fi
+work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
+deps="$work/deps"
+log="$work/build.log"
+quiet() { "$@" >>"$log" 2>&1 || { tail -n 60 "$log" >&2; echo "tmux:pinned failed: $*" >&2; exit 1; }; }
+fetch() { # url sha256 file
+  curl -fsSL --retry 3 -o "$work/$3" "$1"
+  if command -v sha256sum >/dev/null; then sum=$(sha256sum "$work/$3"); else sum=$(shasum -a 256 "$work/$3"); fi
+  [ "${sum%% *}" = "$2" ] || { echo "sha256 mismatch for $3: ${sum%% *}" >&2; exit 1; }
+  tar -xzf "$work/$3" -C "$work"
+}
+jobs=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
+fetch "https://github.com/libevent/libevent/releases/download/release-{{vars.libevent_version}}/libevent-{{vars.libevent_version}}.tar.gz" {{vars.libevent_sha256}} libevent.tar.gz
+cd "$work/libevent-{{vars.libevent_version}}"
+quiet ./configure --prefix="$deps" --disable-shared --disable-openssl --disable-samples --disable-libevent-regress --disable-debug-mode
+quiet make -j"$jobs"
+quiet make install
+fetch "https://github.com/JuliaStrings/utf8proc/releases/download/v{{vars.utf8proc_version}}/utf8proc-{{vars.utf8proc_version}}.tar.gz" {{vars.utf8proc_sha256}} utf8proc.tar.gz
+cd "$work/utf8proc-{{vars.utf8proc_version}}"
+quiet make -j"$jobs" libutf8proc.a
+cp utf8proc.h "$deps/include/"
+cp libutf8proc.a "$deps/lib/"
+fetch "https://github.com/tmux/tmux/releases/download/$v/tmux-$v.tar.gz" {{vars.tmux_sha256}} tmux.tar.gz
+cd "$work/tmux-$v"
+quiet env CPPFLAGS="-I$deps/include" LDFLAGS="-L$deps/lib" \
+  LIBEVENT_CORE_CFLAGS="-I$deps/include" LIBEVENT_CORE_LIBS="$deps/lib/libevent_core.a" \
+  LIBUTF8PROC_CFLAGS="-I$deps/include" LIBUTF8PROC_LIBS="$deps/lib/libutf8proc.a" \
+  ./configure --prefix="$dest" --enable-utf8proc --disable-jemalloc
+quiet make -j"$jobs"
+quiet make install
+"$dest/bin/tmux" -V
+echo "built: $dest/bin/tmux"
+"""
 
 [tasks.links]
 description = "Check Markdown links offline (lychee)"
@@ -97,6 +193,13 @@ run = "lychee ."
 description = "Lint the GitHub Actions workflows (actionlint)"
 run = "actionlint"
 
+# CI runs these three tiers as three parallel jobs per platform
+# (.github/workflows/check.yml); `check` runs them all, so the local gate is
+# still one command and still everything CI runs.
+[tasks.static]
+description = "The static tier, no writes: lint + typecheck + links + actions"
+depends = ["lint", "typecheck", "links", "actions"]
+
 [tasks.check]
-description = "The full gate, no writes: lint + typecheck + test + links + actions (CI runs exactly this)"
-depends = ["lint", "typecheck", "test", "links", "actions"]
+description = "The full gate, no writes: the static tier, then the fast and live test tiers"
+depends = ["static", "test"]
