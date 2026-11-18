@@ -151,10 +151,10 @@ The one place the change leans on a reading of intent is recorded in
 - **Mechanisms:**
   - _What tmux does._ Measured on 3.7c, per window, the option set and then the pane respawned:
     `exit 0` → window gone; `exit 3` → pane kept, status 3; a command that cannot be executed →
-    kept, status 126; SIGKILL, SIGTERM, SIGHUP, SIGINT → kept, signal readable. Setting `failed` on
-    a window whose pane is already dead (status 0, kept under `on`) leaves it standing: tmux
-    consults the option when the pane dies and not again. Setting it on a window whose run is going
-    takes effect at that run's exit.
+    kept, status 126; SIGKILL, SIGTERM, SIGHUP, SIGINT → kept, signal readable (by name on macOS,
+    `kill`; by number on Linux with 3.6, `9`). Setting `failed` on a window whose pane is already
+    dead (status 0, kept under `on`) leaves it standing: tmux consults the option when the pane dies
+    and not again. Setting it on a window whose run is going takes effect at that run's exit.
   - _What the harnesses return._ Measured on a private server, each run in a throwaway configuration
     directory with no working credential, idle at an empty prompt, the exit code written by the
     wrapper that started it. Claude Code 2.1.325: `/exit` → 0; Ctrl-C twice → 0; Ctrl-D twice → 0;
