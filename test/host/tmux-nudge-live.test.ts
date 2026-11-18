@@ -1,14 +1,19 @@
 // The nudge against a REAL tmux (design/0067-floor-dispatch/), end to end
 // through the spawned CLI: a hand-off is recorded, and its notice is typed
 // into the window of the target floor's own session — read back first, and
-// submitted only at an input line that holds it alone. A question on the
-// screen is never typed into, words already on the line are put back, and
-// nobody but the target floor's session receives a key.
+// submitted only at an input line that holds it alone — and nobody but the
+// target floor's session receives a key.
 //
-// The runs are stand-ins that DRAW what the typing reads: a line between two
-// rules that echoes what is typed and logs each line submitted to it, or a
-// question with options that logs anything it is sent. What the real harness
-// does with the same keys was measured by hand and is in the entry.
+// The run is a stand-in that DRAWS what the typing reads: a line between two
+// rules that echoes what is typed and logs each line submitted to it. What
+// the real harness does with the same keys was measured by hand and is in
+// design/0067-floor-dispatch/. How the host reads a screen and decides —
+// a question on it, words already on the line, a window someone is
+// scrolling, a run that ended — is proved at the host's own level, on a real
+// tmux and from its transcript (test/host/tmux-scenarios.ts, typing-a-line;
+// design/0073-scripted-tmux-runner/); which sessions a hand-off is typed to,
+// and how each answer is reported, against a fake host
+// (test/agent/nudge.test.ts).
 //
 // Every call goes to a PRIVATE server (`tmux -L <unique>`, through
 // WARD_TMUX_SOCKET), started with no configuration file and killed after each
@@ -28,7 +33,6 @@ import {
   type SessionMutationShape,
   sessionMutationShape,
   type TaskDispatchShape,
-  taskDispatchesShape,
   taskDispatchShape,
 } from '../../src/cli/schema.ts';
 import { claudeInputLine } from '../../src/harness/claude.ts';
@@ -75,74 +79,6 @@ describe.skipIf(TMUX === null)('a hand-off, on a real tmux', () => {
     expect(inputLine(coordinator)).toBe('');
     expect(inputLine(sender)).toBe('');
   });
-
-  test('a question on the screen is never typed into: the hand-off waits in the record', async () => {
-    const target = open(['session', 'open', '--floor', '2', '--detach', '--json'], question);
-    await shownSoon(target, 'Do you want to proceed?');
-    const before = screen(target);
-
-    const sent = dispatch(['fix-login']);
-    expect(sent.nudges).toEqual([
-      {
-        session: target.id,
-        outcome: 'withheld',
-        detail: 'its screen does not show an input line',
-      },
-    ]);
-    // Not one key reached it: the screen is as it was, and nothing was read.
-    expect(screen(target)).toBe(before);
-    await Bun.sleep(300);
-    expect(typed()).toEqual([]);
-    // The hand-off is no less recorded for it.
-    expect(pending(2)).toEqual(['f2t1']);
-  });
-
-  test("words already on the line are put back, and the line's owner sends them", async () => {
-    const target = open(['session', 'open', '--floor', '2', '--detach', '--json']);
-    await lineSoon(target);
-    tmux('send-keys', '-t', pane(target), '-l', '--', 'half a thought');
-    await lineSoon(target, 'half a thought');
-
-    const sent = dispatch(['fix-login']);
-    expect(sent.nudges).toEqual([
-      {
-        session: target.id,
-        outcome: 'withheld',
-        detail: 'its input line already held text — put back as it was',
-      },
-    ]);
-    expect(inputLine(target)).toBe('half a thought');
-    expect(typed()).toEqual([]);
-    // What the human then sends is what the human typed, and nothing of Ward's.
-    tmux('send-keys', '-t', pane(target), 'Enter');
-    expect(await typedSoon(1)).toEqual([`${target.id}: half a thought`]);
-  });
-
-  test('a window someone is scrolling, a run that ended, a floor with no session: each an answer', async () => {
-    const scrolling = open(['session', 'open', '--floor', '2', '--detach', '--json']);
-    await lineSoon(scrolling);
-    tmux('copy-mode', '-t', pane(scrolling));
-    expect(dispatch(['one']).nudges).toEqual([
-      {
-        session: scrolling.id,
-        outcome: 'withheld',
-        detail: 'someone is scrolling its window (copy mode)',
-      },
-    ]);
-    tmux('send-keys', '-t', pane(scrolling), '-X', 'cancel');
-    ward(['session', 'close', scrolling.id]);
-
-    const ended = open(['session', 'open', '--floor', '2', '--detach', '--json'], exiting);
-    await exitedSoon(ended.id);
-    expect(dispatch(['two']).nudges).toEqual([
-      { session: ended.id, outcome: 'not-running', detail: 'its run exited 3' },
-    ]);
-    ward(['session', 'close', ended.id]);
-
-    expect(dispatch(['three']).nudges).toEqual([]);
-    expect(typed()).toEqual([]);
-    expect(pending(2)).toEqual(['f2t1', 'f2t2', 'f2t3']);
-  });
 });
 
 // -- scaffolding ------------------------------------------------------------------
@@ -153,8 +89,6 @@ let configHome: string;
 let claudeHome: string;
 let typedLog: string;
 let asking: string;
-let question: string;
-let exiting: string;
 let brief: string;
 let caseId = 0;
 
@@ -172,12 +106,6 @@ draw
 while IFS= read -r line; do
   echo "$WARD_AGENT: $line" >> "$WARD_TEST_TYPED"
   draw
-done`;
-
-/** A stand-in run that is asking a question: anything it is sent, it logs. */
-const QUESTION = `printf '\\033[2J\\033[H${RULE}\\n Bash command\\n Do you want to proceed?\\n ❯ 1. Yes\\n   2. No\\n'
-while IFS= read -r line; do
-  echo "$WARD_AGENT: $line" >> "$WARD_TEST_TYPED"
 done`;
 
 function writeStub(file: string, body: string): string {
@@ -232,21 +160,6 @@ function dispatch(argv: string[], agent?: string): TaskDispatchShape {
   return taskDispatchShape.parse(JSON.parse(result.stdout));
 }
 
-function pending(floor: number): string[] {
-  const result = ward([
-    'task',
-    'dispatches',
-    '--to',
-    String(floor),
-    '--state',
-    'pending',
-    '--json',
-  ]);
-  return taskDispatchesShape
-    .parse(JSON.parse(result.stdout))
-    .dispatches.map((each) => each.address);
-}
-
 function tmux(...args: string[]): string {
   const result = Bun.spawnSync([TMUX ?? 'tmux', '-L', SOCKET, ...args]);
   if (result.exitCode !== 0) throw new Error(`tmux ${args.join(' ')}: ${result.stderr}`);
@@ -272,10 +185,6 @@ async function lineSoon(session: SessionMutationShape, wanted = ''): Promise<str
   return inputLine(session);
 }
 
-async function shownSoon(session: SessionMutationShape, text: string): Promise<void> {
-  for (let i = 0; i < 100 && !screen(session).includes(text); i++) await Bun.sleep(50);
-}
-
 function typed(): string[] {
   try {
     return readFileSync(typedLog, 'utf8')
@@ -291,14 +200,6 @@ async function typedSoon(count: number): Promise<string[]> {
   return typed();
 }
 
-async function exitedSoon(id: string): Promise<void> {
-  const state = () =>
-    sessionMutationShape.parse(JSON.parse(ward(['session', 'show', id, '--json']).stdout)).live
-      ?.state;
-  for (let i = 0; i < 100 && state() !== 'exited'; i++) await Bun.sleep(100);
-  if (state() !== 'exited') throw new Error(`session ${id} never read as exited`);
-}
-
 beforeEach(async () => {
   applyGitTestEnv();
   caseId += 1;
@@ -310,8 +211,6 @@ beforeEach(async () => {
   brief = join(scratch, 'brief.md');
   writeFileSync(brief, '# Fix the login page\n\nIt rejects every password.\n');
   asking = writeStub(`asking-${caseId}.sh`, ASKING);
-  question = writeStub(`question-${caseId}.sh`, QUESTION);
-  exiting = writeStub(`exit3-${caseId}.sh`, 'exit 3');
   if (TMUX !== null) {
     const env: Record<string, string | undefined> = { ...process.env };
     delete env.WARD_AGENT;

@@ -8,9 +8,11 @@ import { afterAll, beforeEach, expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  chooseHost,
   classify,
   guardResume,
   type HostChoice,
+  type HostFlag,
   type LiveState,
   latestLaunch,
   placeLaunch,
@@ -18,17 +20,23 @@ import {
   teardownSession,
 } from '../../src/agent/host.ts';
 import { floats, placementFloor } from '../../src/agent/placement.ts';
+import { locateSession } from '../../src/agent/run.ts';
+import type { AgentHost, Resolved } from '../../src/agent/settings.ts';
+import { sessionLocateJson } from '../../src/cli/json.ts';
 import { claudeAdapter } from '../../src/harness/claude.ts';
 import type { FindResult, FoundWindow } from '../../src/host/host.ts';
 import type { SessionRecord } from '../../src/store/types.ts';
 import { workspaceId } from '../../src/workspace/identity.ts';
-import { openProject } from '../../src/workspace/projects.ts';
+import { GROUND_FLOOR, openProject } from '../../src/workspace/projects.ts';
 import {
   type OpenSessionListing,
   openFloorSession,
+  openSession,
   openWorkspaceSession,
   readAllSessions,
+  recordResume,
 } from '../../src/workspace/sessions.ts';
+import { closeTask, openTask } from '../../src/workspace/tasks.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
 import { fakeHost } from './fake-host.ts';
@@ -315,6 +323,88 @@ test('a window whose tag changed under the close is left standing and reported',
   const teardown = await teardownSession(ws, open, {}, host);
   expect(teardown).toMatchObject({ outcome: 'refused', window: '@1' });
   expect(teardown?.detail).toContain('left window @1 standing');
+});
+
+test("a task's close sweeps its hosted session and ends that session's own window", async () => {
+  await openTask(ws, 'feature', { floor: GROUND_FLOOR });
+  const opened = await openSession(ws, 'f0t1', 'work', { handle: 'claude:t' });
+  const resumed = await recordResume(ws, opened.id, { host: 'tmux' });
+  const at = latestLaunch(resumed)?.at ?? '';
+  const host = fakeHost({
+    windows: [
+      win('@4', { session: opened.id, epoch: at, workspace: await workspaceId(ws) }),
+      win('@5', { session: opened.id, epoch: 'an earlier life', workspace: await workspaceId(ws) }),
+    ],
+  });
+  const report = await closeTask(ws, 'f0t1', 'abandoned', host);
+  expect(report.steps).toContainEqual({
+    step: 'live windows',
+    detail: `${opened.id}: ended window @4; left standing, not this run's: @5`,
+  });
+  expect(host.closed).toEqual(['@4']);
+});
+
+// -- choosing the host (the explicit flag, the configured default) ------------
+
+const unset: Resolved<AgentHost> = { provenance: 'absent' };
+const tmuxConfigured: Resolved<AgentHost> = { provenance: 'global', value: 'tmux' };
+
+test.each<[string, HostFlag | undefined, Resolved<AgentHost>, string | undefined, string]>([
+  ['--foreground, whatever is configured', 'foreground', tmuxConfigured, undefined, 'foreground'],
+  ['nothing asked and nothing configured', undefined, unset, undefined, 'foreground'],
+  ['--detach with nothing configured: tmux', 'detach', unset, undefined, 'tmux'],
+  ['a configured tmux', undefined, tmuxConfigured, undefined, 'tmux'],
+  [
+    'a configured tmux that cannot be had: the foreground, saying so',
+    undefined,
+    tmuxConfigured,
+    'tmux missing',
+    'foreground: host tmux unavailable (tmux missing) — running in the foreground; ' +
+      'this session ends with this terminal',
+  ],
+])('choosing a host: %s', async (_, flag, configured, unusable, expected) => {
+  const host = fakeHost(unusable === undefined ? {} : { unusable });
+  const choice = await chooseHost(ws, flag, configured, {}, host);
+  const said =
+    choice.kind === 'foreground'
+      ? ['foreground', ...(choice.notice === undefined ? [] : [choice.notice])].join(': ')
+      : choice.kind;
+  expect(said).toBe(expected);
+  if (choice.kind === 'tmux') expect(choice.workspace).toBe(await workspaceId(ws));
+});
+
+test('--detach with no usable host is refused before anything is recorded', async () => {
+  const host = fakeHost({ unusable: 'tmux missing' });
+  await expect(chooseHost(ws, 'detach', tmuxConfigured, {}, host)).rejects.toThrow(
+    'cannot detach: tmux missing. Nothing was recorded; run in the foreground with ' +
+      'ward session open --foreground, or see: ward doctor',
+  );
+  expect(await readAllSessions(ws)).toEqual([]);
+});
+
+// -- locate carries the live half ------------------------------------------------
+
+test("locate --json carries the host block: the live half beside the transcript's answer", async () => {
+  const open = await hostedOpen();
+  const window = win('@3', {
+    session: open.record.id,
+    epoch: open.record.openedAt,
+    workspace: await workspaceId(ws),
+    groups: ['ward-a-f0'],
+  });
+  const live = sessionLocateJson(
+    await locateSession(ws, open.record.id, fakeHost({ windows: [window] })),
+  );
+  expect(live.host).toEqual({
+    kind: 'tmux',
+    state: 'live',
+    floor: 0,
+    host: 'ward-a-f0',
+    window: '@3',
+    strangers: [],
+  });
+  const gone = sessionLocateJson(await locateSession(ws, open.record.id, fakeHost()));
+  expect(gone.host).toEqual({ kind: 'tmux', state: 'gone', floor: 0, strangers: [] });
 });
 
 // -- scaffolding ------------------------------------------------------------------

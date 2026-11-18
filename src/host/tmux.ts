@@ -833,6 +833,75 @@ function realOrSame(path: string): string {
   }
 }
 
+// -- the runner (design/0073-scripted-tmux-runner/) ---------------------------
+
+/** What one tmux invocation answered. */
+export interface TmuxReply {
+  /** The exit status — null when the program was ended before it gave one. */
+  readonly exitCode: number | null;
+  readonly stdout: string;
+  readonly stderr: string;
+  /** The call was ended at the per-call ceiling, unanswered. */
+  readonly timedOut: boolean;
+}
+
+/** The client a view is joined through, running on the caller's own terminal. */
+export interface TmuxClient {
+  readonly exited: Promise<number>;
+  kill(signal: NodeJS.Signals): void;
+}
+
+/**
+ * How the host reaches tmux: run one command line and read its answer, start
+ * the client that joins a view, and wait between two reads of a screen. Each
+ * `argv` is everything after the program and its server (`-L NAME`), so the
+ * same conversation reads the same on any server. Production runs the real
+ * program ({@link spawnRunner}); a test hands in a runner that plays back what
+ * a real tmux once answered (test/host/scripted-tmux.ts). Everything Ward
+ * decides from an answer — what counts as no server, a gone window, a
+ * timeout — stays in {@link tmuxHost}, above this line.
+ */
+export interface TmuxRunner {
+  /** Run one command line and wait for it. Throws when the program cannot be started. */
+  run(argv: readonly string[]): TmuxReply;
+  /**
+   * Start a client on the caller's terminal. `tmuxVar` is the `$TMUX` it is
+   * handed — given only when it switches the caller's own client.
+   */
+  client(argv: readonly string[], tmuxVar?: string): TmuxClient;
+  /** Wait between two reads of a pane's screen. */
+  pause(ms: number): void;
+}
+
+/** The real tmux: `program`, on the server `prefix` names, from `env`. */
+export function spawnRunner(program: string, prefix: readonly string[], env: Env): TmuxRunner {
+  return {
+    run(argv) {
+      const result = Bun.spawnSync([program, ...prefix, ...argv], {
+        env,
+        timeout: CALL_TIMEOUT_MS,
+        stdin: 'ignore',
+      });
+      return {
+        exitCode: result.exitCode,
+        stdout: result.stdout.toString(),
+        stderr: result.stderr.toString(),
+        timedOut: result.exitedDueToTimeout === true,
+      };
+    },
+    client(argv, tmuxVar) {
+      const child = Bun.spawn([program, ...prefix, ...argv], {
+        // Switching needs the caller's own client named by $TMUX; a fresh
+        // attach must not see it, or tmux refuses to nest.
+        env: tmuxVar === undefined ? env : { ...env, TMUX: tmuxVar },
+        stdio: ['inherit', 'inherit', 'inherit'],
+      });
+      return { exited: child.exited, kill: (signal) => child.kill(signal) };
+    },
+    pause: (ms) => Bun.sleepSync(ms),
+  };
+}
+
 // -- the host ----------------------------------------------------------------
 
 interface CallResult {
@@ -843,8 +912,11 @@ interface CallResult {
   readonly noServer: boolean;
 }
 
-/** The tmux host, over the program and server the environment names. */
-export function tmuxHost(env: Env = process.env): SessionHost {
+/**
+ * The tmux host, over the program and server the environment names — or over
+ * the runner given, which then stands for both (a test's scripted tmux).
+ */
+export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHost {
   const program =
     env.WARD_TMUX_BIN === undefined || env.WARD_TMUX_BIN === '' ? 'tmux' : env.WARD_TMUX_BIN;
   const socket =
@@ -854,16 +926,13 @@ export function tmuxHost(env: Env = process.env): SessionHost {
   const prefix = socket === undefined ? [] : ['-L', socket];
   const clientEnv: Env = { ...env };
   for (const key of ['TMUX', 'TMUX_PANE', 'WARD_AGENT']) delete clientEnv[key];
+  const tmux = runner ?? spawnRunner(program, prefix, clientEnv);
 
   const call = (args: readonly string[], flags: readonly string[] = []): CallResult => {
     try {
-      const result = Bun.spawnSync([program, ...flags, ...prefix, ...args], {
-        env: clientEnv,
-        timeout: CALL_TIMEOUT_MS,
-        stdin: 'ignore',
-      });
-      const stderr = result.stderr.toString().trim();
-      if (result.exitedDueToTimeout === true) {
+      const result = tmux.run([...flags, ...args]);
+      const stderr = result.stderr.trim();
+      if (result.timedOut) {
         return {
           ok: false,
           stdout: '',
@@ -873,7 +942,7 @@ export function tmuxHost(env: Env = process.env): SessionHost {
       }
       return {
         ok: result.exitCode === 0,
-        stdout: result.stdout.toString(),
+        stdout: result.stdout,
         stderr,
         noServer: /no server running|error connecting to/.test(stderr),
       };
@@ -1085,7 +1154,7 @@ export function tmuxHost(env: Env = process.env): SessionHost {
       const until = (done: (seen: string | null) => boolean): string | null => {
         let seen = line();
         for (let waited = 0; !done(seen) && waited < TYPE_WAIT_MS; waited += TYPE_POLL_MS) {
-          Bun.sleepSync(TYPE_POLL_MS);
+          tmux.pause(TYPE_POLL_MS);
           seen = line();
         }
         return seen;
@@ -1245,12 +1314,7 @@ export function tmuxHost(env: Env = process.env): SessionHost {
       ]);
       const [socketPath = '', sessionId = ''] = where.ok ? where.stdout.trim().split(FIELD) : [];
       const inside = insideServer(env.TMUX, socketPath);
-      const child = Bun.spawn([program, ...prefix, ...enterArgv(view, inside)], {
-        // Switching needs the caller's own client named by $TMUX; a fresh
-        // attach must not see it, or tmux refuses to nest.
-        env: inside ? { ...clientEnv, TMUX: env.TMUX } : clientEnv,
-        stdio: ['inherit', 'inherit', 'inherit'],
-      });
+      const child = tmux.client(enterArgv(view, inside), inside ? env.TMUX : undefined);
       if (switches(view, inside)) return await child.exited;
       // Ward ends this view, so it has to outlive the client: a terminal that
       // closes hangs up both, and a Ward that died of it would leave the view

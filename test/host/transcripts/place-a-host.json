@@ -1,0 +1,539 @@
+{
+  "scenario": "place-a-host",
+  "recordedWith": "tmux 3.7c",
+  "steps": [
+    {
+      "kind": "run",
+      "argv": [
+        "-V"
+      ],
+      "exit": 0,
+      "stdout": "tmux <version>\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "start-server",
+        ";",
+        "set-option",
+        "-s",
+        "exit-empty",
+        "off"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
+        "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "new-session",
+        "-d",
+        "-s",
+        "main-f0-workspace",
+        "-x",
+        "120",
+        "-y",
+        "40",
+        "-P",
+        "-F",
+        "#{window_id}\t#{window_index}",
+        "cat",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "@ward_workspace",
+        "ws-conformance",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "@ward_floor",
+        "0",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "@ward_version",
+        "0.1.0",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "detach-on-destroy",
+        "off",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "set-titles",
+        "on",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "set-titles-string",
+        "🔧 #{window_name} · main f0#{?#{||:#{==:#{pane_title},},#{||:#{==:#{pane_title},#{host}},#{==:#{pane_title},#{host_short}}}},, · #{pane_title}}"
+      ],
+      "exit": 0,
+      "stdout": "@1\t0\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "new-window",
+        "-d",
+        "-P",
+        "-F",
+        "#{window_id}\t#{pane_id}",
+        "-t",
+        "=main-f0-workspace:",
+        "-n",
+        "coord",
+        "cat"
+      ],
+      "exit": 0,
+      "stdout": "@2\t%1\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "set-option",
+        "-w",
+        "-t",
+        "@2",
+        "@ward_session",
+        "coord",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@2",
+        "@ward_epoch",
+        "2026-11-18T00:00:55.000Z",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@2",
+        "@ward_pane",
+        "%1",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@2",
+        "remain-on-exit",
+        "failed",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@2",
+        "automatic-rename",
+        "off",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@2",
+        "allow-rename",
+        "off",
+        ";",
+        "respawn-pane",
+        "-k",
+        "-t",
+        "%1",
+        "-c",
+        "<scratch>",
+        "-e",
+        "WARD_AGENT=coord",
+        "sleep",
+        "600"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "kill-window",
+        "-t",
+        "@1"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "status-style",
+        "bg=colour250,fg=colour16",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "status-left",
+        "#[bold] 🔧 f0 workspace #[nobold] ",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "status-left-length",
+        "19",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "@ward_color",
+        "silver",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "@ward_emoji",
+        "🔧"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
+        "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
+      ],
+      "exit": 0,
+      "stdout": "main-f0-workspace\tws-conformance\t0\t\t1\t0\t0.1.0\t1\t\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "show-options",
+        "-v",
+        "-t",
+        "=main-f0-workspace:",
+        "@ward_workspace"
+      ],
+      "exit": 0,
+      "stdout": "ws-conformance\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "show-options",
+        "-v",
+        "-t",
+        "=main-f0-workspace:",
+        "@ward_floor"
+      ],
+      "exit": 0,
+      "stdout": "0\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "show-options",
+        "-v",
+        "-t",
+        "=main-f0-workspace:",
+        "@ward_version"
+      ],
+      "exit": 0,
+      "stdout": "0.1.0\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "show-options",
+        "-v",
+        "-t",
+        "=main-f0-workspace:",
+        "detach-on-destroy"
+      ],
+      "exit": 0,
+      "stdout": "off\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "show-options",
+        "-v",
+        "-t",
+        "=main-f0-workspace:",
+        "set-titles"
+      ],
+      "exit": 0,
+      "stdout": "on\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "show-options",
+        "-v",
+        "-t",
+        "=main-f0-workspace:",
+        "status-style"
+      ],
+      "exit": 0,
+      "stdout": "bg=colour250,fg=colour16\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "show-options",
+        "-v",
+        "-t",
+        "=main-f0-workspace:",
+        "@ward_emoji"
+      ],
+      "exit": 0,
+      "stdout": "🔧\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "show-options",
+        "-gv",
+        "set-titles"
+      ],
+      "exit": 0,
+      "stdout": "off\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "show-options",
+        "-wv",
+        "-t",
+        "@2",
+        "@ward_session"
+      ],
+      "exit": 0,
+      "stdout": "coord\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "show-options",
+        "-wv",
+        "-t",
+        "@2",
+        "@ward_epoch"
+      ],
+      "exit": 0,
+      "stdout": "2026-11-18T00:00:55.000Z\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "show-options",
+        "-wv",
+        "-t",
+        "@2",
+        "remain-on-exit"
+      ],
+      "exit": 0,
+      "stdout": "failed\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "show-options",
+        "-wv",
+        "-t",
+        "@2",
+        "automatic-rename"
+      ],
+      "exit": 0,
+      "stdout": "off\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "list-windows",
+        "-t",
+        "=main-f0-workspace:",
+        "-F",
+        "#{@ward_session}"
+      ],
+      "exit": 0,
+      "stdout": "coord\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
+        "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
+      ],
+      "exit": 0,
+      "stdout": "main-f0-workspace\tws-conformance\t0\t\t1\t0\t0.1.0\t1\t\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "new-window",
+        "-d",
+        "-P",
+        "-F",
+        "#{window_id}\t#{pane_id}",
+        "-t",
+        "=main-f0-workspace:",
+        "-n",
+        "helper",
+        "cat"
+      ],
+      "exit": 0,
+      "stdout": "@3\t%2\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "set-option",
+        "-w",
+        "-t",
+        "@3",
+        "@ward_session",
+        "helper",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@3",
+        "@ward_epoch",
+        "2026-11-18T00:00:40.000Z",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@3",
+        "@ward_pane",
+        "%2",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@3",
+        "remain-on-exit",
+        "failed",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@3",
+        "automatic-rename",
+        "off",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@3",
+        "allow-rename",
+        "off",
+        ";",
+        "respawn-pane",
+        "-k",
+        "-t",
+        "%2",
+        "-c",
+        "<scratch>",
+        "-e",
+        "WARD_AGENT=helper",
+        "sleep",
+        "600"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "list-windows",
+        "-t",
+        "=main-f0-workspace:",
+        "-F",
+        "#{@ward_session}"
+      ],
+      "exit": 0,
+      "stdout": "helper\ncoord\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "list-windows",
+        "-t",
+        "=main-f0-workspace:",
+        "-F",
+        "#{window_name}"
+      ],
+      "exit": 0,
+      "stdout": "helper\ncoord\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-panes",
+        "-a",
+        "-F",
+        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}"
+      ],
+      "exit": 0,
+      "stdout": "main-f0-workspace\t@3\t%2\t0\t\t\thelper\t2026-11-18T00:00:40.000Z\t%2\tws-conformance\t0\nmain-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-panes",
+        "-a",
+        "-F",
+        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}"
+      ],
+      "exit": 0,
+      "stdout": "main-f0-workspace\t@3\t%2\t0\t\t\thelper\t2026-11-18T00:00:40.000Z\t%2\tws-conformance\t0\nmain-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\n",
+      "stderr": ""
+    }
+  ]
+}

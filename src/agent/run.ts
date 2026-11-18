@@ -26,6 +26,7 @@ import {
   runHarness,
 } from '../harness/adapter.ts';
 import { adapterForHandle, adapterNamed } from '../harness/index.ts';
+import type { SessionHost } from '../host/host.ts';
 import type { SessionRecord } from '../store/types.ts';
 import {
   appendSessionEvent,
@@ -368,7 +369,11 @@ export interface SessionLocation extends LocateResult {
  * directory it stood in — not wherever the caller is asking from — and the
  * RECORDED handle's adapter, because the run is the harness it was born under.
  */
-export async function locateSession(root: string, id: string): Promise<SessionLocation> {
+export async function locateSession(
+  root: string,
+  id: string,
+  host?: SessionHost,
+): Promise<SessionLocation> {
   // Closed sessions locate too: reflection reads finished work, and refusing
   // a closed id would put the harness history of everything that ever
   // completed out of reach.
@@ -380,7 +385,7 @@ export async function locateSession(root: string, id: string): Promise<SessionLo
     harness: adapter.name,
     nativeId,
     ...adapter.locate(nativeId, resolve(root, found.record.workingDirectory)),
-    live: await liveStateOf(root, found),
+    live: await liveStateOf(root, found, process.env, host),
   };
 }
 

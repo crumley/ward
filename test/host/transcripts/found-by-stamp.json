@@ -1,0 +1,366 @@
+{
+  "scenario": "found-by-stamp",
+  "recordedWith": "tmux 3.7c",
+  "steps": [
+    {
+      "kind": "run",
+      "argv": [
+        "start-server",
+        ";",
+        "set-option",
+        "-s",
+        "exit-empty",
+        "off"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "new-session",
+        "-d",
+        "-s",
+        "main-f2-beta",
+        "sleep 600"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
+        "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
+      ],
+      "exit": 0,
+      "stdout": "main-f2-beta\t\t\t\t1\t0\t\t1\t\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "list-windows",
+        "-t",
+        "=main-f2-beta:",
+        "-F",
+        "#{@ward_session}"
+      ],
+      "exit": 0,
+      "stdout": "\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "new-session",
+        "-d",
+        "-s",
+        "other-f1",
+        "sleep 600"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "set-option",
+        "-t",
+        "=other-f1:",
+        "@ward_workspace",
+        "ws-other"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "set-option",
+        "-t",
+        "=other-f1:",
+        "@ward_floor",
+        "1"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
+        "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
+      ],
+      "exit": 0,
+      "stdout": "main-f2-beta\t\t\t\t1\t0\t\t1\t\nother-f1\tws-other\t1\t\t1\t0\t\t1\t\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "new-session",
+        "-d",
+        "-s",
+        "main-f1-alpha",
+        "-x",
+        "120",
+        "-y",
+        "40",
+        "-P",
+        "-F",
+        "#{window_id}\t#{window_index}",
+        "cat",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f1-alpha:",
+        "@ward_workspace",
+        "ws-conformance",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f1-alpha:",
+        "@ward_floor",
+        "1",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f1-alpha:",
+        "@ward_version",
+        "0.1.0",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f1-alpha:",
+        "detach-on-destroy",
+        "off",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f1-alpha:",
+        "set-titles",
+        "on",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f1-alpha:",
+        "set-titles-string",
+        "#{window_name} · main f1#{?#{||:#{==:#{pane_title},},#{||:#{==:#{pane_title},#{host}},#{==:#{pane_title},#{host_short}}}},, · #{pane_title}}"
+      ],
+      "exit": 0,
+      "stdout": "@1\t0\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "new-window",
+        "-d",
+        "-P",
+        "-F",
+        "#{window_id}\t#{pane_id}",
+        "-t",
+        "=main-f1-alpha:",
+        "-n",
+        "alpha",
+        "cat"
+      ],
+      "exit": 0,
+      "stdout": "@2\t%1\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "set-option",
+        "-w",
+        "-t",
+        "@2",
+        "@ward_session",
+        "alpha",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@2",
+        "@ward_epoch",
+        "2026-11-18T00:00:38.000Z",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@2",
+        "@ward_pane",
+        "%1",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@2",
+        "remain-on-exit",
+        "failed",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@2",
+        "automatic-rename",
+        "off",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@2",
+        "allow-rename",
+        "off",
+        ";",
+        "respawn-pane",
+        "-k",
+        "-t",
+        "%1",
+        "-c",
+        "<scratch>",
+        "-e",
+        "WARD_AGENT=alpha",
+        "sleep",
+        "600"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "kill-window",
+        "-t",
+        "@1"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "rename-session",
+        "-t",
+        "=main-f1-alpha",
+        "renamed-by-hand"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
+        "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
+      ],
+      "exit": 0,
+      "stdout": "main-f2-beta\t\t\t\t1\t0\t\t1\t\nother-f1\tws-other\t1\t\t1\t0\t\t1\t\nrenamed-by-hand\tws-conformance\t1\t\t1\t0\t0.1.0\t1\t\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "new-window",
+        "-d",
+        "-P",
+        "-F",
+        "#{window_id}\t#{pane_id}",
+        "-t",
+        "=renamed-by-hand:",
+        "-n",
+        "alpha-2",
+        "cat"
+      ],
+      "exit": 0,
+      "stdout": "@3\t%2\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "set-option",
+        "-w",
+        "-t",
+        "@3",
+        "@ward_session",
+        "alpha-2",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@3",
+        "@ward_epoch",
+        "2026-11-18T00:00:13.000Z",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@3",
+        "@ward_pane",
+        "%2",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@3",
+        "remain-on-exit",
+        "failed",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@3",
+        "automatic-rename",
+        "off",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@3",
+        "allow-rename",
+        "off",
+        ";",
+        "respawn-pane",
+        "-k",
+        "-t",
+        "%2",
+        "-c",
+        "<scratch>",
+        "-e",
+        "WARD_AGENT=alpha-2",
+        "sleep",
+        "600"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "list-windows",
+        "-t",
+        "=renamed-by-hand:",
+        "-F",
+        "#{@ward_session}"
+      ],
+      "exit": 0,
+      "stdout": "alpha-2\nalpha\n",
+      "stderr": ""
+    }
+  ]
+}

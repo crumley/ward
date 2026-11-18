@@ -179,6 +179,19 @@ test.each<[string, (s: SessionRecord) => FakeHostOptions, string]>([
   expect(await events(session.id)).toEqual(['opened']);
 });
 
+test('observe refuses a caller with no terminal, watching and recording nothing', async () => {
+  const session = await hosted();
+  const host = fakeHost({ windows: [own(session, ['f0'])] });
+  await expect(observeSession(ws, session.id, { terminal: false, host })).rejects.toThrow(
+    'observe joins this terminal to session',
+  );
+  await expect(observeSession(ws, session.id, { terminal: false, host })).rejects.toThrow(
+    'there is no terminal here',
+  );
+  expect(host.views).toEqual([]);
+  expect(await events(session.id)).toEqual(['opened']);
+});
+
 // -- scaffolding ------------------------------------------------------------------
 
 let scratch: string;
