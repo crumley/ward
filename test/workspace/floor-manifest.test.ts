@@ -31,7 +31,7 @@ import { openTask } from '../../src/workspace/tasks.ts';
 import { AGENTS_MD, FLOOR_AGENTS_MD } from '../../src/workspace/templates.ts';
 import { upgradeWorkspace } from '../../src/workspace/upgrade.ts';
 import { createWorkspaceWorktree } from '../../src/workspace/worktrees.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard, writeFakeClaude } from '../helpers.ts';
+import { applyGitTestEnv, callWard, makeTempDir, removeDir, writeFakeClaude } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
 
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -240,7 +240,7 @@ for (const [name, floor, text, refusal] of refusals) {
 
 test('ward project note --json: one document matching its shape', async () => {
   const ws = await workspaceWith(['alpha']);
-  const result = runWard(['project', 'note', '1', 'a durable fact', '--json'], ws);
+  const result = await callWard(['project', 'note', '1', 'a durable fact', '--json'], ws);
   expect(result.exitCode).toBe(0);
   expect(projectNoteShape.parse(JSON.parse(result.stdout))).toMatchObject({
     floor: 1,
@@ -293,7 +293,7 @@ const launches: ReadonlyArray<readonly [string, string[]]> = [
 for (const [name, argv] of launches) {
   test(`${name} is launched with WARD_AGENT and no floor-manifest variable`, async () => {
     const ws = await workspaceWith(['alpha']);
-    const result = runWard([...argv, '--on-exit', 'keep'], ws);
+    const result = await callWard([...argv, '--on-exit', 'keep'], ws);
     expect(result.exitCode).toBe(0);
     const [run] = runs();
     expect(run?.wardAgent).toMatch(/\S/);

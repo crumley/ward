@@ -12,7 +12,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { jsonVerbShapes, readVerbShapes } from '../../src/cli/schema.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { applyGitTestEnv, callWard, makeTempDir, removeDir } from '../helpers.ts';
 import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 const PR_URL = 'https://example.com/pr/1';
@@ -22,14 +22,14 @@ const PR_URL = 'https://example.com/pr/1';
 for (const [verb, shape] of Object.entries(readVerbShapes)) {
   const argv = [...verb.split(' '), '--json'];
 
-  test(`${verb} --json: the live document validates against the verb's schema`, () => {
-    const result = runWard(argv, ws);
+  test(`${verb} --json: the live document validates against the verb's schema`, async () => {
+    const result = await callWard(argv, ws);
     expect(result.exitCode).toBe(0);
     expect(() => shape.parse(JSON.parse(result.stdout))).not.toThrow();
   });
 
-  test(`ward schema ${verb}: emits exactly the JSON Schema of the verb's shape`, () => {
-    const result = runWard(['schema', ...verb.split(' ')], ws);
+  test(`ward schema ${verb}: emits exactly the JSON Schema of the verb's shape`, async () => {
+    const result = await callWard(['schema', ...verb.split(' ')], ws);
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual(JSON.parse(JSON.stringify(z.toJSONSchema(shape))));
   });
@@ -49,44 +49,44 @@ const CONTRACT_CASE_TIMEOUT_MS = 30_000;
 
 test(
   'ward schema: one document covering every --json verb, keyed by its CLI words',
-  () => {
-    const result = runWard(['schema'], ws);
+  async () => {
+    const result = await callWard(['schema'], ws);
     expect(result.exitCode).toBe(0);
     const contract = JSON.parse(result.stdout);
     expect(Object.keys(contract)).toEqual(Object.keys(jsonVerbShapes));
     for (const verb of Object.keys(jsonVerbShapes)) {
       // The slice invariant: the whole-contract entry is the one-verb document.
-      const single = JSON.parse(runWard(['schema', ...verb.split(' ')], ws).stdout);
+      const single = JSON.parse((await callWard(['schema', ...verb.split(' ')], ws)).stdout);
       expect(contract[verb]).toEqual(single);
     }
   },
   CONTRACT_CASE_TIMEOUT_MS,
 );
 
-test('ward schema is byte-identical across runs', () => {
-  const first = runWard(['schema'], ws);
-  const second = runWard(['schema'], ws);
+test('ward schema is byte-identical across runs', async () => {
+  const first = await callWard(['schema'], ws);
+  const second = await callWard(['schema'], ws);
   expect(first.stdout).toBe(second.stdout);
 });
 
-test('ward schema needs no workspace — the contract is the build, not the record', () => {
-  const result = runWard(['schema'], scratch);
+test('ward schema needs no workspace — the contract is the build, not the record', async () => {
+  const result = await callWard(['schema'], scratch);
   expect(result.exitCode).toBe(0);
   expect(Object.keys(JSON.parse(result.stdout))).toEqual(Object.keys(jsonVerbShapes));
 });
 
-test('an unknown verb is refused legibly, with nothing on stdout', () => {
-  const result = runWard(['schema', 'flimflam'], ws);
+test('an unknown verb is refused legibly, with nothing on stdout', async () => {
+  const result = await callWard(['schema', 'flimflam'], ws);
   expect(result.exitCode).toBe(1);
   expect(result.stdout).toBe('');
   expect(result.stderr).toContain("no --json verb named 'flimflam'");
   expect(result.stderr).toContain('task list'); // the known verbs are named
 });
 
-test('the emitted schemas carry the 0005 stability policy', () => {
+test('the emitted schemas carry the 0005 stability policy', async () => {
   // Exact per build (`additionalProperties: false`) — the schema travels with
   // the binary that emits it — and optional fields are simply not required.
-  const taskList = JSON.parse(runWard(['schema', 'task', 'list'], ws).stdout);
+  const taskList = JSON.parse((await callWard(['schema', 'task', 'list'], ws)).stdout);
   // The listing is an object since 0036 — a windowed array could not say what
   // it left out — so the task shape is one level in, under `tasks`.
   expect(taskList.required).toEqual(['tasks', 'hidden']);
@@ -126,18 +126,18 @@ beforeAll(async () => {
   const remote = join(scratch, 'remote.git');
   preparedRemote(remote, { branch: 'main', files: { 'README.md': 'demo\n' } });
 
-  runWard(['repo', 'add', remote, '--name', 'demo'], ws);
-  runWard(['project', 'open', 'agent-output'], ws); // floor 2 — the standing project holds 1
-  runWard(
+  await callWard(['repo', 'add', remote, '--name', 'demo'], ws);
+  await callWard(['project', 'open', 'agent-output'], ws); // floor 2 — the standing project holds 1
+  await callWard(
     ['task', 'open', 'json-output', '--project', '2', '--purpose', 'machine-readable output'],
     ws,
   );
-  runWard(['worktree', 'create', 't1', '--repo', 'demo'], ws);
-  runWard(
+  await callWard(['worktree', 'create', 't1', '--repo', 'demo'], ws);
+  await callWard(
     ['session', 'open', 't1', '--purpose', 'drive the feature', '--handle', 'claude:run'],
     ws,
   );
-  runWard(['task', 'pr', 't1', PR_URL], ws);
+  await callWard(['task', 'pr', 't1', PR_URL], ws);
 });
 
 afterAll(() => {

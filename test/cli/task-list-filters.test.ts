@@ -14,7 +14,7 @@ import {
   type TaskRecord,
   taskRecordType,
 } from '../../src/store/types.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { applyGitTestEnv, callWard, makeTempDir, removeDir } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
 
 // args → [addresses shown (sorted), hidden.tasks]
@@ -38,9 +38,9 @@ const cases: ReadonlyArray<[readonly string[], readonly string[], number]> = [
   [['--repo', 'unregistered'], [], 0], // history may name a repo no longer registered
 ];
 
-test('each filter row: the tasks shown and what the window cut, as JSON', () => {
+test('each filter row: the tasks shown and what the window cut, as JSON', async () => {
   for (const [args, shown, hidden] of cases) {
-    const result = runWard(['task', 'list', ...args, '--json'], ws);
+    const result = await callWard(['task', 'list', ...args, '--json'], ws);
     expect(result.exitCode).toBe(0);
     const listing = taskListShape.parse(JSON.parse(result.stdout));
     const addresses = listing.tasks.map((task) => task.address).sort();
@@ -52,8 +52,8 @@ test('each filter row: the tasks shown and what the window cut, as JSON', () => 
   }
 });
 
-test('the footer keeps the filter, so its one flag shows THIS listing’s hidden rows', () => {
-  const result = runWard(['task', 'list', '--slug', 'upgrade'], ws);
+test('the footer keeps the filter, so its one flag shows THIS listing’s hidden rows', async () => {
+  const result = await callWard(['task', 'list', '--slug', 'upgrade'], ws);
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('workspace-upgrade-sessions');
   expect(result.stdout).toContain(
@@ -61,23 +61,23 @@ test('the footer keeps the filter, so its one flag shows THIS listing’s hidden
   );
 });
 
-test('a filter that matches only settled work prints just the footer', () => {
-  const result = runWard(['task', 'list', '--floor', '3'], ws);
+test('a filter that matches only settled work prints just the footer', async () => {
+  const result = await callWard(['task', 'list', '--floor', '3'], ws);
   expect(result.exitCode).toBe(0);
   expect(result.stdout).not.toContain('no tasks');
   expect(result.stdout).toContain('1 settled task hidden');
   expect(result.stdout).toContain('ward task list --floor 3 --all');
 });
 
-test('an unmatched filter says so, naming the filter, and exits zero', () => {
-  const result = runWard(['task', 'list', '--slug', 'nope', '--repo', 'ward'], ws);
+test('an unmatched filter says so, naming the filter, and exits zero', async () => {
+  const result = await callWard(['task', 'list', '--slug', 'nope', '--repo', 'ward'], ws);
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('no tasks match --slug nope --repo ward');
   expect(result.stdout).not.toContain('open one with');
 });
 
-test('a state outside the three is optique’s refusal, not an empty list', () => {
-  const result = runWard(['task', 'list', '--state', 'open'], ws);
+test('a state outside the three is optique’s refusal, not an empty list', async () => {
+  const result = await callWard(['task', 'list', '--state', 'open'], ws);
   expect(result.exitCode).not.toBe(0);
   expect(result.stdout).toBe('');
 });

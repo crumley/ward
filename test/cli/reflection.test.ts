@@ -27,7 +27,7 @@ import {
 } from '../../src/workspace/reflection.ts';
 import { workspaceMainLine } from '../../src/workspace/steward.ts';
 import { closeTask, openTask } from '../../src/workspace/tasks.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard, runWardEnv } from '../helpers.ts';
+import { applyGitTestEnv, callWard, callWardEnv, makeTempDir, removeDir } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
 
 const NOTES = 'projects/1-demo/notes.md';
@@ -43,7 +43,7 @@ test('close, packet, open, propose, record, preview, merge: the cursor advances 
 
   // The packet before any vehicle: read-only, and it writes nothing.
   const head = gitOrThrow(ws, 'rev-parse', 'HEAD').stdout;
-  const before = packet();
+  const before = await packet();
   expect(gitOrThrow(ws, 'rev-parse', 'HEAD').stdout).toBe(head);
   expect(before.since).toBeUndefined();
   expect(before.vehicle).toBeUndefined();
@@ -83,7 +83,7 @@ test('close, packet, open, propose, record, preview, merge: the cursor advances 
 
   // The vehicle: a ground-floor task marked as floor 1's reflection, and a
   // worktree of the workspace's own repository.
-  const opened = reflectionOpenShape.parse(json(['reflection', 'open', '1', '--json']));
+  const opened = reflectionOpenShape.parse(await json(['reflection', 'open', '1', '--json']));
   expect(opened).toMatchObject({
     floor: 1,
     outcome: 'opened',
@@ -96,7 +96,9 @@ test('close, packet, open, propose, record, preview, merge: the cursor advances 
     readFileSync(join(ws, 'projects/0-workspace/tasks/t1-reflect-floor-1/task.md'), 'utf8'),
   ).toContain('stewardship: reflection\nreflects: 1\n');
   // Opening again finds the same one.
-  expect(reflectionOpenShape.parse(json(['reflection', 'open', '1', '--json']))).toMatchObject({
+  expect(
+    reflectionOpenShape.parse(await json(['reflection', 'open', '1', '--json'])),
+  ).toMatchObject({
     outcome: 'reused',
     task: 'f0t1',
     branch: BRANCH,
@@ -105,15 +107,15 @@ test('close, packet, open, propose, record, preview, merge: the cursor advances 
   // Work goes on while the reflection is read: a task closes after the
   // vehicle was cut. The copy is the window, so it waits for the next one.
   await closeTask(ws, 'f1t3', 'abandoned');
-  expect(packet().tasks.map((task) => task.slug)).toEqual(['read-here', 'ran-elsewhere']);
-  expect(packet().vehicle).toEqual({ task: 'f0t1', branch: BRANCH, path: COPY });
+  expect((await packet()).tasks.map((task) => task.slug)).toEqual(['read-here', 'ran-elsewhere']);
+  expect((await packet()).vehicle).toEqual({ task: 'f0t1', branch: BRANCH, path: COPY });
 
   // The agent's part: rewrite the notes in the copy, and hand over a summary.
   const notes = readFileSync(join(ws, COPY, NOTES), 'utf8');
   writeFileSync(join(ws, COPY, NOTES), `${notes}- 2026-11-16 — Name an owner at open.\n`);
   writeFileSync(join(scratch, 'summary.md'), '# What floor 1 learned\n\nName an owner.\n');
   const recorded = reflectionRecordShape.parse(
-    json(['reflection', 'record', '1', join(scratch, 'summary.md'), '--json']),
+    await json(['reflection', 'record', '1', join(scratch, 'summary.md'), '--json']),
   );
   expect(recorded).toMatchObject({
     number: 1,
@@ -182,63 +184,67 @@ test('close, packet, open, propose, record, preview, merge: the cursor advances 
   // Recording again replaces: same number, same interval, one more commit.
   writeFileSync(join(scratch, 'summary.md'), '# What floor 1 learned\n\nName an owner, early.\n');
   const again = reflectionRecordShape.parse(
-    json(['reflection', 'record', '1', join(scratch, 'summary.md'), '--json']),
+    await json(['reflection', 'record', '1', join(scratch, 'summary.md'), '--json']),
   );
   expect(again).toMatchObject({ number: 1, outcome: 'replaced', tasks: 2, sessions: 5 });
   expect(again.changed).toEqual([NOTES]);
 
   // The human's two acts: preview, then the gated merge.
-  const preview = runWard(['workspace', 'merge', BRANCH, '--preview'], ws);
+  const preview = await callWard(['workspace', 'merge', BRANCH, '--preview'], ws);
   expect(preview.stdout).toContain(NOTES);
   expect(preview.stdout).toContain(RECORD);
   expect(preview.stdout).toContain('2 files changed');
   // Until the merge the cursor has not moved: status still counts both.
-  expect(unreflectedOnFloor1()).toBe(3);
-  expect(runWard(['workspace', 'merge', BRANCH], ws).exitCode).toBe(0);
-  expect(unreflectedOnFloor1()).toBe(1);
+  expect(await unreflectedOnFloor1()).toBe(3);
+  expect((await callWard(['workspace', 'merge', BRANCH], ws)).exitCode).toBe(0);
+  expect(await unreflectedOnFloor1()).toBe(1);
   expect(readFileSync(join(ws, NOTES), 'utf8')).toContain('Name an owner at open.');
-  expect(runWard(['task', 'close', 'f0t1'], ws).exitCode).toBe(0);
+  expect((await callWard(['task', 'close', 'f0t1'], ws)).exitCode).toBe(0);
 
   // The next reflection starts where this one reached: the task closed
   // meanwhile, and the floor session that was still open when it was read.
-  const after = packet();
+  const after = await packet();
   expect(after.since).toEqual({ number: 1, through: expect.any(String), path: RECORD });
   expect(after.vehicle).toBeUndefined();
   expect(after.tasks.map((task) => task.slug)).toEqual(['still-open']);
   expect(after.floorSessions.map((session) => session.id)).toEqual(['f1-1@test']);
   // A reflection's own task is never something to reflect on.
-  expect(packetOf(0).tasks).toEqual([]);
+  expect((await packetOf(0)).tasks).toEqual([]);
 });
 
 // -- declining ----------------------------------------------------------------
 
 test('declined: never merged, the cursor stays and the next reflection covers the same work', async () => {
   await floorWithHistory();
-  const before = packet();
-  expect(runWard(['reflection', 'open', '1'], ws).exitCode).toBe(0);
+  const before = await packet();
+  expect((await callWard(['reflection', 'open', '1'], ws)).exitCode).toBe(0);
   appendFileSync(join(ws, COPY, NOTES), '- 2026-11-16 — A lesson the human will not take.\n');
   writeFileSync(join(scratch, 'summary.md'), 'Not persuasive.\n');
-  expect(runWard(['reflection', 'record', '1', join(scratch, 'summary.md')], ws).exitCode).toBe(0);
+  expect(
+    (await callWard(['reflection', 'record', '1', join(scratch, 'summary.md')], ws)).exitCode,
+  ).toBe(0);
 
   // Declining is closing the task unmerged. Nothing of the proposal is on
   // the main line; the branch is left, as every stewardship branch is.
-  expect(runWard(['task', 'close', 'f0t1', '--outcome', 'abandoned'], ws).exitCode).toBe(0);
+  expect((await callWard(['task', 'close', 'f0t1', '--outcome', 'abandoned'], ws)).exitCode).toBe(
+    0,
+  );
   expect(existsSync(join(ws, RECORD))).toBe(false);
   expect(readFileSync(join(ws, NOTES), 'utf8')).not.toContain('will not take');
   expect(existsSync(join(ws, COPY))).toBe(false);
 
-  const after = packet();
+  const after = await packet();
   expect(after.since).toBeUndefined();
   expect(after.tasks.map((task) => task.dir)).toEqual(before.tasks.map((task) => task.dir));
 
   // A new reflection of the floor is a new vehicle on a fresh branch, and it
   // is this floor's first reflection again.
-  const reopened = reflectionOpenShape.parse(json(['reflection', 'open', '1', '--json']));
+  const reopened = reflectionOpenShape.parse(await json(['reflection', 'open', '1', '--json']));
   expect(reopened.outcome).toBe('opened');
   expect(reopened.branch).not.toBe(BRANCH);
   expect(reopened.tasks).toBe(2);
   const recorded = reflectionRecordShape.parse(
-    json(['reflection', 'record', '1', join(scratch, 'summary.md'), '--json']),
+    await json(['reflection', 'record', '1', join(scratch, 'summary.md'), '--json']),
   );
   expect(recorded).toMatchObject({ number: 1, outcome: 'recorded', changed: [] });
 });
@@ -249,17 +255,19 @@ test('nothing closed, nothing to open: no vehicle is built for no work', async (
   await openProject(ws, 'demo');
   await openTask(ws, 'in-flight', { floor: 1 });
   const head = gitOrThrow(ws, 'rev-parse', 'HEAD').stdout;
-  const refused = runWard(['reflection', 'open', '1', '--json'], ws);
+  const refused = await callWard(['reflection', 'open', '1', '--json'], ws);
   expect(refused.exitCode).toBe(1);
   expect(refused.stdout).toBe('');
   expect(refused.stderr).toContain('nothing to reflect on yet');
   expect(gitOrThrow(ws, 'rev-parse', 'HEAD').stdout).toBe(head);
 
   writeFileSync(join(scratch, 'summary.md'), 'A summary.\n');
-  const unopened = runWard(['reflection', 'record', '1', join(scratch, 'summary.md')], ws);
+  const unopened = await callWard(['reflection', 'record', '1', join(scratch, 'summary.md')], ws);
   expect(unopened.exitCode).toBe(1);
   expect(unopened.stderr).toContain('no open reflection — open one first: ward reflection open 1');
-  expect(runWard(['reflection', 'packet', '9'], ws).stderr).toContain('no project on floor 9');
+  expect((await callWard(['reflection', 'packet', '9'], ws)).stderr).toContain(
+    'no project on floor 9',
+  );
 });
 
 test.each([
@@ -268,9 +276,12 @@ test.each([
   ['front matter of its own', '---\ntype: reflection\n---\nbody\n', 'Ward writes the front matter'],
 ])('record refuses %s, writing nothing', async (_name, summary, says) => {
   await floorWithHistory();
-  expect(runWard(['reflection', 'open', '1'], ws).exitCode).toBe(0);
+  expect((await callWard(['reflection', 'open', '1'], ws)).exitCode).toBe(0);
   writeFileSync(join(scratch, 'bad.md'), summary);
-  const refused = runWard(['reflection', 'record', '1', join(scratch, 'bad.md'), '--json'], ws);
+  const refused = await callWard(
+    ['reflection', 'record', '1', join(scratch, 'bad.md'), '--json'],
+    ws,
+  );
   expect(refused.exitCode).toBe(1);
   expect(refused.stdout).toBe('');
   expect(refused.stderr).toContain(says);
@@ -279,14 +290,15 @@ test.each([
 
 test('record refuses a branch that changes anything but the notes, committed or not', async () => {
   await floorWithHistory();
-  expect(runWard(['reflection', 'open', '1'], ws).exitCode).toBe(0);
+  expect((await callWard(['reflection', 'open', '1'], ws)).exitCode).toBe(0);
   const copy = join(ws, COPY);
   writeFileSync(join(scratch, 'summary.md'), 'A summary.\n');
-  const record = () => runWard(['reflection', 'record', '1', join(scratch, 'summary.md')], ws);
+  const record = async () =>
+    await callWard(['reflection', 'record', '1', join(scratch, 'summary.md')], ws);
 
   appendFileSync(join(copy, 'AGENTS.md'), 'an edit outside the set\n');
   writeFileSync(join(copy, 'projects/1-demo/extra.md'), 'a new file\n');
-  const uncommitted = record();
+  const uncommitted = await record();
   expect(uncommitted.exitCode).toBe(1);
   expect(uncommitted.stderr).toContain(
     `the reflection branch changes AGENTS.md, projects/1-demo/extra.md — a reflection may ` +
@@ -297,11 +309,11 @@ test('record refuses a branch that changes anything but the notes, committed or 
   // Committing the stray change does not launder it.
   gitOrThrow(copy, 'add', '-A');
   gitOrThrow(copy, 'commit', '-m', 'stray');
-  expect(record().stderr).toContain('the reflection branch changes AGENTS.md');
+  expect((await record()).stderr).toContain('the reflection branch changes AGENTS.md');
 
   // Inside the copy itself the verb refuses like every mutation: it is the
   // enclosing workspace's act.
-  const inside = runWard(['reflection', 'record', '1', join(scratch, 'summary.md')], copy);
+  const inside = await callWard(['reflection', 'record', '1', join(scratch, 'summary.md')], copy);
   expect(inside.exitCode).toBe(1);
   expect(inside.stderr).toContain('stewardship copy');
 });
@@ -313,7 +325,7 @@ test('task close says when a floor has enough unreflected work, and never before
   const hints: string[] = [];
   for (let n = 1; n <= REFLECTION_HINT_THRESHOLD; n++) {
     await openTask(ws, `job-${n}`, { floor: 1 });
-    const closed = runWard(['task', 'close', `f1t${n}`, '--outcome', 'abandoned'], ws);
+    const closed = await callWard(['task', 'close', `f1t${n}`, '--outcome', 'abandoned'], ws);
     expect(closed.exitCode).toBe(0);
     hints.push(closed.stdout.split('\n').find((line) => line.includes('reflection')) ?? '');
   }
@@ -322,7 +334,7 @@ test('task close says when a floor has enough unreflected work, and never before
     `floor 1 has ${REFLECTION_HINT_THRESHOLD} closed tasks no reflection has covered — ` +
       'see: ward reflection packet 1',
   ]);
-  expect(runWard(['status'], ws).stdout).toContain(
+  expect((await callWard(['status'], ws)).stdout).toContain(
     `· ${REFLECTION_HINT_THRESHOLD} closed tasks unreflected`,
   );
 
@@ -330,7 +342,7 @@ test('task close says when a floor has enough unreflected work, and never before
   const next = REFLECTION_HINT_THRESHOLD + 1;
   await openTask(ws, 'one-more', { floor: 1 });
   const doc = taskCloseShape.parse(
-    json(['task', 'close', `f1t${next}`, '--outcome', 'abandoned', '--json']),
+    await json(['task', 'close', `f1t${next}`, '--outcome', 'abandoned', '--json']),
   );
   expect(doc.reflection).toEqual({
     floor: 1,
@@ -340,14 +352,14 @@ test('task close says when a floor has enough unreflected work, and never before
 
   // With the floor's reflection open the human has been told: no hint. And a
   // reflection's own close carries none.
-  expect(runWard(['reflection', 'open', '1'], ws).exitCode).toBe(0);
+  expect((await callWard(['reflection', 'open', '1'], ws)).exitCode).toBe(0);
   await openTask(ws, 'during', { floor: 1 });
   const during = taskCloseShape.parse(
-    json(['task', 'close', `f1t${next + 1}`, '--outcome', 'abandoned', '--json']),
+    await json(['task', 'close', `f1t${next + 1}`, '--outcome', 'abandoned', '--json']),
   );
   expect(during.reflection).toBeUndefined();
   const own = taskCloseShape.parse(
-    json(['task', 'close', 'f0t1', '--outcome', 'abandoned', '--json']),
+    await json(['task', 'close', 'f0t1', '--outcome', 'abandoned', '--json']),
   );
   expect(own.reflection).toBeUndefined();
 });
@@ -363,8 +375,8 @@ test('a workspace below the reflection level is told to upgrade before one opens
   const head = gitOrThrow(ws, 'rev-parse', 'HEAD').stdout;
 
   // Reading is not a new shape: the packet answers.
-  expect(packet().tasks).toHaveLength(2);
-  const refused = runWard(['reflection', 'open', '1'], ws);
+  expect((await packet()).tasks).toHaveLength(2);
+  const refused = await callWard(['reflection', 'open', '1'], ws);
   expect(refused.exitCode).toBe(1);
   expect(refused.stderr).toContain('this task record needs workspace format 2');
   expect(refused.stderr).toContain('raise it first, with: ward workspace upgrade');
@@ -411,44 +423,53 @@ async function floorWithHistory(): Promise<void> {
   await openTask(ws, 'read-here', { floor: 1 });
   await openTask(ws, 'ran-elsewhere', { floor: 1 });
   await openTask(ws, 'still-open', { floor: 1 });
-  const ok = (argv: string[], env?: Record<string, string>): void => {
-    const result = env === undefined ? runWard(argv, ws) : runWardEnv(argv, ws, env);
+  const ok = async (argv: string[], env?: Record<string, string>): Promise<void> => {
+    const result = env === undefined ? await callWard(argv, ws) : await callWardEnv(argv, ws, env);
     expect([argv.join(' '), result.stderr, result.exitCode]).toEqual([argv.join(' '), '', 0]);
   };
-  ok(['session', 'open', 'f1t1', '--purpose', 'build it', '--handle', 'claude:here-1']);
-  ok(['session', 'open', 'f1t1', '--purpose', 'fix it', '--handle', 'claude:here-2']);
-  ok(['session', 'open', 'f1t1', '--purpose', 'no handle']);
-  ok(['session', 'open', 'f1t2', '--purpose', 'far away', '--handle', 'claude:there-1'], {
+  await ok(['session', 'open', 'f1t1', '--purpose', 'build it', '--handle', 'claude:here-1']);
+  await ok(['session', 'open', 'f1t1', '--purpose', 'fix it', '--handle', 'claude:here-2']);
+  await ok(['session', 'open', 'f1t1', '--purpose', 'no handle']);
+  await ok(['session', 'open', 'f1t2', '--purpose', 'far away', '--handle', 'claude:there-1'], {
     WARD_MACHINE: 'other',
     WARD_GH: '/dev/null/gh',
     NO_COLOR: '1',
   });
-  ok(['session', 'open', '--floor', '1', '--purpose', 'the floor', '--handle', 'claude:floor-1']);
+  await ok([
+    'session',
+    'open',
+    '--floor',
+    '1',
+    '--purpose',
+    'the floor',
+    '--handle',
+    'claude:floor-1',
+  ]);
   const history = transcriptPath('here-1', ws, process.env);
   mkdirSync(dirname(history), { recursive: true });
   writeFileSync(history, TRANSCRIPT);
   writeFileSync(join(scratch, 'brief.md'), 'Build the thing.\n');
-  ok(['task', 'brief', 'f1t1', join(scratch, 'brief.md')]);
-  ok(['task', 'pr', 'f1t1', 'https://example.com/pr/7']);
+  await ok(['task', 'brief', 'f1t1', join(scratch, 'brief.md')]);
+  await ok(['task', 'pr', 'f1t1', 'https://example.com/pr/7']);
   await closeTask(ws, 'f1t1', 'delivered');
   await closeTask(ws, 'f1t2', 'abandoned');
 }
 
-function json(argv: string[]): unknown {
-  const result = runWard(argv, ws);
+async function json(argv: string[]): Promise<unknown> {
+  const result = await callWard(argv, ws);
   expect([argv.join(' '), result.stderr, result.exitCode]).toEqual([argv.join(' '), '', 0]);
   return JSON.parse(result.stdout);
 }
 
-function packetOf(floor: number) {
-  return reflectionPacketShape.parse(json(['reflection', 'packet', String(floor), '--json']));
+async function packetOf(floor: number) {
+  return reflectionPacketShape.parse(await json(['reflection', 'packet', String(floor), '--json']));
 }
 
-function packet() {
-  return packetOf(1);
+async function packet() {
+  return await packetOf(1);
 }
 
-function sessionsOf(doc: ReturnType<typeof packet>): [string, string, string][] {
+function sessionsOf(doc: Awaited<ReturnType<typeof packet>>): [string, string, string][] {
   return [...doc.tasks.flatMap((task) => task.sessions), ...doc.floorSessions].map((session) => [
     session.id,
     session.state,
@@ -456,7 +477,7 @@ function sessionsOf(doc: ReturnType<typeof packet>): [string, string, string][] 
   ]);
 }
 
-function unreflectedOnFloor1(): number | undefined {
-  const doc = statusShape.parse(json(['status', '--all', '--json']));
+async function unreflectedOnFloor1(): Promise<number | undefined> {
+  const doc = statusShape.parse(await json(['status', '--all', '--json']));
   return doc.projects.find((project) => project.floor === 1)?.unreflected;
 }

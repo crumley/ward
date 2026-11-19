@@ -27,7 +27,10 @@ export function configDir(env: Env = process.env): string {
 
 /** Machine state — the workspace registry and its lock. */
 export function stateDir(env: Env = process.env): string {
-  return chosen(env.WARD_STATE_DIR, base(env.XDG_STATE_HOME, join(homedir(), '.local', 'state')));
+  return chosen(
+    env.WARD_STATE_DIR,
+    base(env.XDG_STATE_HOME, join(homeDir(env), '.local', 'state')),
+  );
 }
 
 /**
@@ -41,10 +44,22 @@ export function stateDir(env: Env = process.env): string {
  * also the seam that keeps tests off the developer's real `~/.config`.
  */
 export function xdgConfigHome(env: Env = process.env): string {
-  return base(env.XDG_CONFIG_HOME, join(homedir(), '.config'));
+  return base(env.XDG_CONFIG_HOME, join(homeDir(env), '.config'));
 }
 
 type Env = Record<string, string | undefined>;
+
+/**
+ * The user's home directory, read from `env` (design/0074-in-process-cli-tests/).
+ * `os.homedir()` answers from `$HOME` too, but from the environment the
+ * process STARTED with, blind to the one it runs with — so a caller that
+ * hands Ward an environment (a test running the CLI in-process) would get the
+ * test process's home. Same answer as `os.homedir()` for a real run.
+ */
+export function homeDir(env: Env = process.env): string {
+  const home = env.HOME;
+  return home !== undefined && home !== '' ? home : homedir();
+}
 
 /** A relative `XDG_*_HOME` is ignored, as the XDG basedir spec requires. */
 function base(xdgHome: string | undefined, fallback: string): string {

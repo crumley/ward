@@ -8,12 +8,12 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { contextShape } from '../../src/cli/schema.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { applyGitTestEnv, callWard, makeTempDir, removeDir } from '../helpers.ts';
 
 const WORKTREE = 'floors/1-alpha/f1t1-feature';
 
-test('for a file in a floor task worktree: the root, the floor, then the repository', () => {
-  const result = runWard(['context', `${WORKTREE}/src/main.ts`], ws);
+test('for a file in a floor task worktree: the root, the floor, then the repository', async () => {
+  const result = await callWard(['context', `${WORKTREE}/src/main.ts`], ws);
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toBe(
     `Read these before working in ${WORKTREE}/src/main.ts (root first, nearest last)\n\n` +
@@ -23,8 +23,8 @@ test('for a file in a floor task worktree: the root, the floor, then the reposit
   );
 });
 
-test('--json parses as contextShape, and PATH defaults to where the caller stands', () => {
-  const result = runWard(['context', '--json'], join(ws, WORKTREE, 'src'));
+test('--json parses as contextShape, and PATH defaults to where the caller stands', async () => {
+  const result = await callWard(['context', '--json'], join(ws, WORKTREE, 'src'));
   expect(result.exitCode).toBe(0);
   expect(contextShape.parse(JSON.parse(result.stdout))).toEqual({
     root: ws,
@@ -43,15 +43,15 @@ test('--json parses as contextShape, and PATH defaults to where the caller stand
   });
 });
 
-test('the root alone has the root alone', () => {
-  const result = runWard(['context', '.', '--json'], ws);
+test('the root alone has the root alone', async () => {
+  const result = await callWard(['context', '.', '--json'], ws);
   expect(contextShape.parse(JSON.parse(result.stdout)).chain.map((level) => level.agents)).toEqual([
     'AGENTS.md',
   ]);
 });
 
-test('a path outside the workspace is refused, with nothing on stdout', () => {
-  const result = runWard(['context', scratch], ws);
+test('a path outside the workspace is refused, with nothing on stdout', async () => {
+  const result = await callWard(['context', scratch], ws);
   expect(result.exitCode).toBe(1);
   expect(result.stdout).toBe('');
   expect(result.stderr).toContain('is outside the workspace');
@@ -64,7 +64,7 @@ test('a path outside the workspace is refused, with nothing on stdout', () => {
 let scratch: string;
 let ws: string;
 
-beforeAll(() => {
+beforeAll(async () => {
   applyGitTestEnv();
   scratch = makeTempDir();
   ws = join(scratch, 'ws');
@@ -86,7 +86,10 @@ beforeAll(() => {
     ['task', 'open', 'feature', '--project', '1', '--repo', 'demo'],
     ['worktree', 'create', 'f1t1'],
   ]) {
-    const result = runWard(argv, argv[1] === 'create' && argv[0] === 'workspace' ? scratch : ws);
+    const result = await callWard(
+      argv,
+      argv[1] === 'create' && argv[0] === 'workspace' ? scratch : ws,
+    );
     if (result.exitCode !== 0) throw new Error(`${argv.join(' ')}: ${result.stderr}`);
   }
 });

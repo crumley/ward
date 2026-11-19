@@ -10,10 +10,10 @@ import { join } from 'node:path';
 import { statusShape, taskListShape } from '../../src/cli/schema.ts';
 import {
   applyGitTestEnv,
+  callWard,
+  callWardEnv,
   makeTempDir,
   removeDir,
-  runWard,
-  runWardEnv,
   writeFakeGh,
 } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
@@ -24,8 +24,8 @@ const PR_DONE = 'https://example.com/x/pull/3';
 
 // t1 links a merged PR and an open changes-requested one; t2's set is fully
 // merged; t3 links nothing.
-test('status --json live: per-PR forge state, the exact in-review rule, needs-you derived', () => {
-  const result = runWardEnv(['status', '--json'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
+test('status --json live: per-PR forge state, the exact in-review rule, needs-you derived', async () => {
+  const result = await callWardEnv(['status', '--json'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
   expect(result.exitCode).toBe(0);
   const status = JSON.parse(result.stdout);
   expect(() => statusShape.parse(status)).not.toThrow(); // the live doc honors the contract
@@ -48,8 +48,8 @@ test('status --json live: per-PR forge state, the exact in-review rule, needs-yo
 // Since design/0043-task-next-surface/ the PR set is one LINE per PR under
 // the task, not a count beside it: the URL is the thing the human came for,
 // and the count said less in the same space.
-test('status human rendering live: a line per PR under the task, the needs-you block', () => {
-  const result = runWardEnv(['status'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
+test('status human rendering live: a line per PR under the task, the needs-you block', async () => {
+  const result = await callWardEnv(['status'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('f0t1 first [active · in-review]\n');
   expect(result.stdout).not.toContain('prs:'); // the count is gone from status
@@ -67,8 +67,11 @@ test('status human rendering live: a line per PR under the task, the needs-you b
   expect(result.stdout).not.toContain('unavailable');
 });
 
-test('task list carries the same live forge state, both renderings', () => {
-  const json = runWardEnv(['task', 'list', '--json'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
+test('task list carries the same live forge state, both renderings', async () => {
+  const json = await callWardEnv(['task', 'list', '--json'], ws, {
+    NO_COLOR: '1',
+    WARD_GH: fakeGh,
+  });
   const listing = JSON.parse(json.stdout);
   expect(() => taskListShape.parse(listing)).not.toThrow();
   const tasks = listing.tasks;
@@ -76,16 +79,16 @@ test('task list carries the same live forge state, both renderings', () => {
   expect(tasks[1].inReview).toBe(false);
   expect(tasks[2].forge).toBeUndefined();
 
-  const human = runWardEnv(['task', 'list'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
+  const human = await callWardEnv(['task', 'list'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
   expect(human.stdout).toContain(
     'f0t1 first (floor 0) [active · in-review] — prs: 1 open (changes requested) · 1 merged',
   );
   expect(human.stdout).toContain('f0t2 second (floor 0) [active] — prs: 1 merged');
 });
 
-test('a declared agent gets the same live content as a human, without ANSI', () => {
-  const human = runWardEnv(['status'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
-  const agent = runWardEnv(['status'], ws, {
+test('a declared agent gets the same live content as a human, without ANSI', async () => {
+  const human = await callWardEnv(['status'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
+  const agent = await callWardEnv(['status'], ws, {
     WARD_AGENT: 'forge-state-1',
     FORCE_COLOR: '1',
     WARD_GH: fakeGh,
@@ -94,8 +97,8 @@ test('a declared agent gets the same live content as a human, without ANSI', () 
   expect(agent.stdout).not.toContain('\x1b'); // no ANSI, even under FORCE_COLOR
 });
 
-test('without gh, status renders everything it renders today and marks the forge unavailable', () => {
-  const result = runWard(['status'], ws); // runWard pins WARD_GH to an impossible path
+test('without gh, status renders everything it renders today and marks the forge unavailable', async () => {
+  const result = await callWard(['status'], ws); // callWard pins WARD_GH to an impossible path
   expect(result.exitCode).toBe(0);
   expect(result.stderr).toBe('');
   expect(result.stdout).toContain('f0t1 first [active · in-review]'); // the approximation stands
@@ -108,36 +111,36 @@ test('without gh, status renders everything it renders today and marks the forge
   expect(result.stdout).toContain(`    ${PR_MERGED} — state unknown`);
 });
 
-test('without gh, the JSON omits every forge-state field — vanished, never null', () => {
-  const result = runWard(['status', '--json'], ws);
+test('without gh, the JSON omits every forge-state field — vanished, never null', async () => {
+  const result = await callWard(['status', '--json'], ws);
   expect(result.exitCode).toBe(0);
   const status = JSON.parse(result.stdout);
   for (const task of status.projects[0].tasks) {
     expect('forge' in task).toBe(false);
   }
   expect('needsYou' in status).toBe(false);
-  expect(runWard(['status', '--json'], ws).stdout).toBe(result.stdout); // byte-identical
-  const tasks = JSON.parse(runWard(['task', 'list', '--json'], ws).stdout).tasks;
+  expect((await callWard(['status', '--json'], ws)).stdout).toBe(result.stdout); // byte-identical
+  const tasks = JSON.parse((await callWard(['task', 'list', '--json'], ws)).stdout).tasks;
   for (const task of tasks) {
     expect('forge' in task).toBe(false);
   }
 });
 
-test('a forge that errors on every PR degrades exactly like an absent one', () => {
+test('a forge that errors on every PR degrades exactly like an absent one', async () => {
   const broken = writeFakeGh(scratch, 'gh-all-errors', { responses: {} });
-  const result = runWardEnv(['status'], ws, { NO_COLOR: '1', WARD_GH: broken });
+  const result = await callWardEnv(['status'], ws, { NO_COLOR: '1', WARD_GH: broken });
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('forge state unavailable (gh)');
-  expect(result.stdout).toBe(runWard(['status'], ws).stdout);
+  expect(result.stdout).toBe((await callWard(['status'], ws)).stdout);
 });
 
-test('a hung forge is cut at the deadline; status still answers, degraded', () => {
+test('a hung forge is cut at the deadline; status still answers, degraded', async () => {
   const hung = writeFakeGh(scratch, 'gh-hung', {
     responses: { [PR_MERGED]: { state: 'MERGED' } },
     delayMs: 30_000,
   });
   const started = Date.now();
-  const result = runWardEnv(['status'], ws, {
+  const result = await callWardEnv(['status'], ws, {
     NO_COLOR: '1',
     WARD_GH: hung,
     WARD_GH_TIMEOUT_MS: '300',
@@ -147,10 +150,10 @@ test('a hung forge is cut at the deadline; status still answers, degraded', () =
   expect(result.stdout).toContain('forge state unavailable (gh)');
 });
 
-test('with no PRs anywhere needs-you is vacuously empty — present even without gh', () => {
-  const result = runWard(['status', '--json'], emptyWs);
+test('with no PRs anywhere needs-you is vacuously empty — present even without gh', async () => {
+  const result = await callWard(['status', '--json'], emptyWs);
   expect(JSON.parse(result.stdout).needsYou).toEqual([]);
-  const human = runWard(['status'], emptyWs);
+  const human = await callWard(['status'], emptyWs);
   expect(human.stdout).not.toContain('unavailable'); // nothing forge-dependent was shown
   expect(human.stdout).not.toContain('needs you');
 });
@@ -160,7 +163,7 @@ test('with no PRs anywhere needs-you is vacuously empty — present even without
 // derivable — honest silence (a guess would be worse; the close gate still
 // backstops) — but the raw datum reaches the per-PR JSON rows, where an agent
 // reading `task list --json` (which has no needsYou surface) can see it.
-test('an open PR on a non-main base with no mappable repository warns nothing; JSON carries the base', () => {
+test('an open PR on a non-main base with no mappable repository warns nothing; JSON carries the base', async () => {
   const stacked = writeFakeGh(scratch, 'gh-stacked', {
     responses: {
       [PR_MERGED]: { state: 'MERGED', baseRefName: 'main' },
@@ -172,7 +175,7 @@ test('an open PR on a non-main base with no mappable repository warns nothing; J
       [PR_DONE]: { state: 'MERGED', reviewDecision: 'APPROVED', baseRefName: 'main' },
     },
   });
-  const json = runWardEnv(['status', '--json'], ws, { NO_COLOR: '1', WARD_GH: stacked });
+  const json = await callWardEnv(['status', '--json'], ws, { NO_COLOR: '1', WARD_GH: stacked });
   const status = JSON.parse(json.stdout);
   expect(() => statusShape.parse(status)).not.toThrow();
   expect(status.projects[0].tasks[0].forge).toEqual([
@@ -190,29 +193,32 @@ test('an open PR on a non-main base with no mappable repository warns nothing; J
   ]);
   // The base belongs to needs-you, which stays silent here rather than
   // guessing at an unmappable URL — the PR lines carry state, not the base.
-  const human = runWardEnv(['status'], ws, { NO_COLOR: '1', WARD_GH: stacked });
+  const human = await callWardEnv(['status'], ws, { NO_COLOR: '1', WARD_GH: stacked });
   expect(human.stdout).not.toContain('feature-x');
   expect(human.stdout).not.toContain('is based on');
 });
 
 // The close gate reads the same boundary: an open PR refuses the close, a
 // fully merged set delivers, and the trusted path reports its trust.
-test('task close reads the forge through the same seam', () => {
-  const refused = runWardEnv(['task', 'close', 't1'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
+test('task close reads the forge through the same seam', async () => {
+  const refused = await callWardEnv(['task', 'close', 't1'], ws, {
+    NO_COLOR: '1',
+    WARD_GH: fakeGh,
+  });
   expect(refused.exitCode).toBe(1);
   expect(refused.stderr).toContain('a linked PR is still open');
 
-  const trusted = runWard(['task', 'close', 't2'], ws); // no gh: stated outcome trusted
+  const trusted = await callWard(['task', 'close', 't2'], ws); // no gh: stated outcome trusted
   expect(trusted.exitCode).toBe(0);
   expect(trusted.stdout).toContain("forge unavailable — trusting the stated outcome 'delivered'");
 });
 
-test('task close delivers a fully merged set the forge confirmed', () => {
+test('task close delivers a fully merged set the forge confirmed', async () => {
   // Rooms run in opening order (0036), so the close above frees t2 without
   // handing it back: the fourth task in this pool takes t4.
-  runWard(['task', 'open', 'done', '--purpose', 'merged elsewhere'], ws);
-  runWard(['task', 'pr', 't4', PR_DONE], ws);
-  const result = runWardEnv(['task', 'close', 't4'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
+  await callWard(['task', 'open', 'done', '--purpose', 'merged elsewhere'], ws);
+  await callWard(['task', 'pr', 't4', PR_DONE], ws);
+  const result = await callWardEnv(['task', 'close', 't4'], ws, { NO_COLOR: '1', WARD_GH: fakeGh });
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('resolved (merged)');
   // Reachability (0012): no registered repository can answer for this PR's
@@ -241,13 +247,13 @@ beforeAll(async () => {
   emptyWs = join(scratch, 'empty');
   await preparedWorkspace(ws);
   await preparedWorkspace(emptyWs);
-  runWard(['task', 'open', 'first'], ws);
-  runWard(['task', 'open', 'second'], ws);
-  runWard(['task', 'open', 'third'], ws);
-  runWard(['task', 'pr', 't1', PR_MERGED], ws);
-  runWard(['task', 'pr', 't1', PR_CHANGES], ws);
-  runWard(['task', 'pr', 't2', PR_DONE], ws);
-  runWard(['task', 'open', 'idle'], emptyWs);
+  await callWard(['task', 'open', 'first'], ws);
+  await callWard(['task', 'open', 'second'], ws);
+  await callWard(['task', 'open', 'third'], ws);
+  await callWard(['task', 'pr', 't1', PR_MERGED], ws);
+  await callWard(['task', 'pr', 't1', PR_CHANGES], ws);
+  await callWard(['task', 'pr', 't2', PR_DONE], ws);
+  await callWard(['task', 'open', 'idle'], emptyWs);
   fakeGh = writeFakeGh(scratch, 'gh-live', {
     responses: {
       [PR_MERGED]: { state: 'MERGED' },

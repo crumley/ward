@@ -14,25 +14,25 @@ import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { createWorktree } from '../../src/workspace/worktrees.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { applyGitTestEnv, callWard, makeTempDir, removeDir } from '../helpers.ts';
 import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 const BEHIND_LINE =
   'floors/0-workspace/f0t1-feature — behind origin/main by 2 commits — rebase with: ward worktree rebase f0t1';
 
-test('end to end: remote advances → refresh → behind by N with the remedy → rebase → current', () => {
+test('end to end: remote advances → refresh → behind by N with the remedy → rebase → current', async () => {
   advanceRemote('advance-1.txt', 'main moved\n');
   advanceRemote('advance-2.txt', 'main moved again\n');
-  expect(runWard(['repo', 'refresh'], ws).exitCode).toBe(0);
+  expect((await callWard(['repo', 'refresh'], ws)).exitCode).toBe(0);
 
   // The remote disappears before status is asked: the answer below is
   // provably local reads alone — zero network at status time.
   renameSync(remote, `${remote}.offline`);
-  const behind = runWard(['status'], ws);
+  const behind = await callWard(['status'], ws);
   expect(behind.exitCode).toBe(0);
   expect(behind.stdout).toContain(BEHIND_LINE);
 
-  const json = JSON.parse(runWard(['status', '--json'], ws).stdout);
+  const json = JSON.parse((await callWard(['status', '--json'], ws)).stdout);
   expect(() => statusShape.parse(json)).not.toThrow();
   expect(json.projects[0].tasks[0].worktrees).toEqual([
     {
@@ -46,11 +46,11 @@ test('end to end: remote advances → refresh → behind by N with the remedy �
 
   // The named remedy is the 0011 verb; after it, the same glance reads current.
   renameSync(`${remote}.offline`, remote); // rebase refreshes first — it may fetch
-  expect(runWard(['worktree', 'rebase', 't1'], ws).exitCode).toBe(0);
-  const current = runWard(['status'], ws);
+  expect((await callWard(['worktree', 'rebase', 't1'], ws)).exitCode).toBe(0);
+  const current = await callWard(['status'], ws);
   expect(current.stdout).toContain('floors/0-workspace/f0t1-feature — current (atop origin/main)');
   expect(current.stdout).not.toContain('behind');
-  const after = JSON.parse(runWard(['status', '--json'], ws).stdout);
+  const after = JSON.parse((await callWard(['status', '--json'], ws)).stdout);
   expect(after.projects[0].tasks[0].worktrees).toEqual([
     {
       repo: 'demo',
@@ -61,53 +61,53 @@ test('end to end: remote advances → refresh → behind by N with the remedy �
   ]);
 });
 
-test('a dirty worktree reads as occupied — never a behind count', () => {
+test('a dirty worktree reads as occupied — never a behind count', async () => {
   advanceRemote('advance.txt', 'main moved\n');
-  runWard(['repo', 'refresh'], ws);
+  await callWard(['repo', 'refresh'], ws);
   writeFileSync(join(wt, 'src', 'lib.ts'), 'unrecorded work\n');
-  const result = runWard(['status'], ws);
+  const result = await callWard(['status'], ws);
   expect(result.stdout).toContain(
     'floors/0-workspace/f0t1-feature — dirty (uncommitted changes — treated as occupied)',
   );
   expect(result.stdout).not.toContain('behind');
-  const json = JSON.parse(runWard(['status', '--json'], ws).stdout);
+  const json = JSON.parse((await callWard(['status', '--json'], ws)).stdout);
   expect(json.projects[0].tasks[0].worktrees[0].freshness).toBe('dirty');
   expect(json.projects[0].tasks[0].worktrees[0].behindBy).toBeUndefined();
 });
 
-test('a worktree off its recorded branch reads as drifted, naming both branches', () => {
+test('a worktree off its recorded branch reads as drifted, naming both branches', async () => {
   gitOrThrow(wt, 'checkout', '-b', 'sidetrack');
-  const result = runWard(['status'], ws);
+  const result = await callWard(['status'], ws);
   expect(result.stdout).toContain(
     "floors/0-workspace/f0t1-feature — drifted (checked out 'sidetrack' where the record names 'feature')",
   );
-  const json = JSON.parse(runWard(['status', '--json'], ws).stdout);
+  const json = JSON.parse((await callWard(['status', '--json'], ws)).stdout);
   expect(json.projects[0].tasks[0].worktrees[0]).toMatchObject({
     freshness: 'drifted',
     checkedOut: 'sidetrack',
   });
 });
 
-test('a worktree missing on disk reads as unreadable — honest absence', () => {
+test('a worktree missing on disk reads as unreadable — honest absence', async () => {
   rmSync(wt, { recursive: true });
-  const result = runWard(['status'], ws);
+  const result = await callWard(['status'], ws);
   expect(result.exitCode).toBe(0); // status still answers everything else
   expect(result.stdout).toContain('floors/0-workspace/f0t1-feature — unreadable (missing on disk)');
-  const json = JSON.parse(runWard(['status', '--json'], ws).stdout);
+  const json = JSON.parse((await callWard(['status', '--json'], ws)).stdout);
   expect(json.projects[0].tasks[0].worktrees[0].freshness).toBe('unreadable');
 });
 
 test('a task without worktrees renders no sub-line and carries the honest empty array', async () => {
   await openTask(ws, 'bare', { floor: GROUND_FLOOR });
-  const result = runWard(['status'], ws);
+  const result = await callWard(['status'], ws);
   expect(result.stdout).toContain('f0t2 bare [active]');
-  const json = JSON.parse(runWard(['status', '--json'], ws).stdout);
+  const json = JSON.parse((await callWard(['status', '--json'], ws)).stdout);
   expect(json.projects[0].tasks[1].worktrees).toEqual([]);
   // needs you stays quiet: a behind worktree is mid-flight state, not an
   // attention item — the sub-line with its remedy is the whole surface.
   advanceRemote('advance.txt', 'main moved\n');
-  runWard(['repo', 'refresh'], ws);
-  const behind = runWard(['status'], ws);
+  await callWard(['repo', 'refresh'], ws);
+  const behind = await callWard(['status'], ws);
   expect(behind.stdout).toContain('behind origin/main by 1 commit —');
   expect(behind.stdout).not.toContain('needs you');
 });

@@ -7,16 +7,19 @@ import { afterAll, beforeEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { sessionMutationShape } from '../../src/cli/schema.ts';
 import { ambientHandle } from '../../src/harness/index.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard, runWardEnv } from '../helpers.ts';
+import { applyGitTestEnv, callWard, callWardEnv, makeTempDir, removeDir } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
 
 const RUN_ID = '0f8fad5b-d9cb-469f-a165-70867728950e';
 
 // -- session show ---------------------------------------------------------------
 
-test('session show: an open task session — scope, state, handle, and its trail', () => {
-  runWard(['session', 'open', 'f0t1', '--purpose', 'drive it', '--handle', `claude:${RUN_ID}`], ws);
-  const result = runWard(['session', 'show', 'feature-1@test'], ws);
+test('session show: an open task session — scope, state, handle, and its trail', async () => {
+  await callWard(
+    ['session', 'open', 'f0t1', '--purpose', 'drive it', '--handle', `claude:${RUN_ID}`],
+    ws,
+  );
+  const result = await callWard(['session', 'show', 'feature-1@test'], ws);
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('feature-1@test open — drive it');
   expect(result.stdout).toContain('scope    task t1');
@@ -25,11 +28,13 @@ test('session show: an open task session — scope, state, handle, and its trail
   expect(result.stdout).toMatch(/events\n {2}\S+ opened\n$/);
 });
 
-test('session show --json: a session closed by its task is the record session close emits', () => {
-  runWard(['session', 'open', 'f0t1', '--purpose', 'swept up'], ws);
-  expect(runWard(['task', 'close', 'f0t1', '--outcome', 'abandoned'], ws).exitCode).toBe(0);
+test('session show --json: a session closed by its task is the record session close emits', async () => {
+  await callWard(['session', 'open', 'f0t1', '--purpose', 'swept up'], ws);
+  expect((await callWard(['task', 'close', 'f0t1', '--outcome', 'abandoned'], ws)).exitCode).toBe(
+    0,
+  );
 
-  const result = runWard(['session', 'show', 'feature-1@test', '--json'], ws);
+  const result = await callWard(['session', 'show', 'feature-1@test', '--json'], ws);
   expect(result.exitCode).toBe(0);
   const document = sessionMutationShape.parse(JSON.parse(result.stdout));
   expect(document).toMatchObject({
@@ -44,8 +49,8 @@ test('session show --json: a session closed by its task is the record session cl
   expect(document.handle).toBeUndefined();
 });
 
-test('session show: an id that names nothing is refused, pointing at status', () => {
-  const result = runWard(['session', 'show', 'nobody-1@test'], ws);
+test('session show: an id that names nothing is refused, pointing at status', async () => {
+  const result = await callWard(['session', 'show', 'nobody-1@test'], ws);
   expect(result.exitCode).toBe(1);
   expect(result.stdout).toBe('');
   expect(result.stderr).toContain("no session has id 'nobody-1@test'");
@@ -53,55 +58,59 @@ test('session show: an id that names nothing is refused, pointing at status', ()
 
 // -- the refusals say which miss ------------------------------------------------
 
-test('closing a session its task already closed says so, with when, and where to read it', () => {
-  runWard(['session', 'open', 'f0t1', '--purpose', 'swept up'], ws);
-  runWard(['task', 'close', 'f0t1', '--outcome', 'abandoned'], ws);
+test('closing a session its task already closed says so, with when, and where to read it', async () => {
+  await callWard(['session', 'open', 'f0t1', '--purpose', 'swept up'], ws);
+  await callWard(['task', 'close', 'f0t1', '--outcome', 'abandoned'], ws);
 
   for (const verb of ['close', 'resume']) {
-    const result = runWard(['session', verb, 'feature-1@test'], ws);
+    const result = await callWard(['session', verb, 'feature-1@test'], ws);
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toMatch(
       /session 'feature-1@test' is already closed at \S+Z — closed stays closed; its record: ward session show feature-1@test/,
     );
   }
   // An id that was never allocated is the other miss, and reads as one.
-  const unknown = runWard(['session', 'close', 'feature-9@test'], ws);
+  const unknown = await callWard(['session', 'close', 'feature-9@test'], ws);
   expect(unknown.exitCode).toBe(1);
   expect(unknown.stderr).toContain("no session has id 'feature-9@test'");
 });
 
 // -- the handle comes from the run ----------------------------------------------
 
-test('a task session opened inside a Claude Code run records that run, unasked', () => {
-  const result = runWardEnv(['session', 'open', 'f0t1', '--purpose', 'from inside', '--json'], ws, {
-    CLAUDE_CODE_SESSION_ID: RUN_ID,
-  });
+test('a task session opened inside a Claude Code run records that run, unasked', async () => {
+  const result = await callWardEnv(
+    ['session', 'open', 'f0t1', '--purpose', 'from inside', '--json'],
+    ws,
+    {
+      CLAUDE_CODE_SESSION_ID: RUN_ID,
+    },
+  );
   expect(result.exitCode).toBe(0);
   expect(sessionMutationShape.parse(JSON.parse(result.stdout)).handle).toBe(`claude:${RUN_ID}`);
 });
 
-test('--handle still wins over the run, and outside any run nothing is recorded', () => {
-  const explicit = runWardEnv(
+test('--handle still wins over the run, and outside any run nothing is recorded', async () => {
+  const explicit = await callWardEnv(
     ['session', 'open', 'f0t1', '--purpose', 'named', '--handle', 'pi:abc', '--json'],
     ws,
     { CLAUDE_CODE_SESSION_ID: RUN_ID },
   );
   expect(sessionMutationShape.parse(JSON.parse(explicit.stdout)).handle).toBe('pi:abc');
 
-  const outside = runWard(['session', 'open', 'f0t1', '--purpose', 'bare', '--json'], ws);
+  const outside = await callWard(['session', 'open', 'f0t1', '--purpose', 'bare', '--json'], ws);
   expect(sessionMutationShape.parse(JSON.parse(outside.stdout)).handle).toBeUndefined();
 });
 
 // Every session starts at the workspace root (design/0057-context-from-root/):
 // a task session opened without --dir records the root, never a guessed
 // worktree; --dir still records exactly what the caller names.
-test('a task session defaults its working directory to the root; --dir keeps its value', () => {
-  const opened = (argv: string[]) =>
+test('a task session defaults its working directory to the root; --dir keeps its value', async () => {
+  const opened = async (argv: string[]) =>
     sessionMutationShape.parse(
-      JSON.parse(runWard(['session', 'open', 'f0t1', ...argv, '--json'], ws).stdout),
+      JSON.parse((await callWard(['session', 'open', 'f0t1', ...argv, '--json'], ws)).stdout),
     ).workingDirectory;
-  expect(opened(['--purpose', 'at the root'])).toBe('.');
-  expect(opened(['--purpose', 'elsewhere', '--dir', 'floors/0-workspace/somewhere'])).toBe(
+  expect(await opened(['--purpose', 'at the root'])).toBe('.');
+  expect(await opened(['--purpose', 'elsewhere', '--dir', 'floors/0-workspace/somewhere'])).toBe(
     'floors/0-workspace/somewhere',
   );
 });
@@ -124,7 +133,7 @@ beforeEach(async () => {
   scratch ??= makeTempDir();
   ws = join(scratch, `ws-${caseId}`);
   await preparedWorkspace(ws);
-  expect(runWard(['task', 'open', 'feature', '--project', '0'], ws).exitCode).toBe(0);
+  expect((await callWard(['task', 'open', 'feature', '--project', '0'], ws)).exitCode).toBe(0);
 });
 
 afterAll(() => {

@@ -18,14 +18,12 @@ import { openTask } from '../../src/workspace/tasks.ts';
 import {
   applyGitTestEnv,
   type CliResult,
+  callWard,
+  callWardEnv,
   cliPath,
-  GIT_ENV,
   makeTempDir,
   NO_GH,
   removeDir,
-  runWard,
-  runWardEnv,
-  WARD_GLOBAL_ENV,
 } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
 
@@ -105,7 +103,7 @@ const STILL_RUNS: ReadonlyArray<readonly [action: string, argv: readonly string[
   ];
 
 test('too new: every verb that touches the record refuses, with one message and no document', async () => {
-  const results = await Promise.all(REFUSED.map(([, argv]) => spawnWard(argv, tooNew)));
+  const results = await Promise.all(REFUSED.map(([, argv]) => wardIn(argv, tooNew)));
   for (const [index, result] of results.entries()) {
     const verb = REFUSED[index]?.[1].join(' ');
     expect([verb, result.exitCode]).toEqual([verb, 1]);
@@ -121,7 +119,7 @@ test('too new: nothing was written — no commit, no change, no lock left behind
 });
 
 test('too new: the narrow set still runs, and none of it carries the refusal', async () => {
-  const results = await Promise.all(STILL_RUNS.map(([, argv]) => spawnWard(argv, tooNew)));
+  const results = await Promise.all(STILL_RUNS.map(([, argv]) => wardIn(argv, tooNew)));
   for (const [index, result] of results.entries()) {
     const [action, argv, exit] = STILL_RUNS[index] ?? ['', [], 0];
     expect([argv.join(' '), result.exitCode]).toEqual([argv.join(' '), exit]);
@@ -137,15 +135,15 @@ test('every verb the CLI has is in one of the two tables', () => {
   expect(actions.filter((action) => !decided.has(action ?? ''))).toEqual([]);
 });
 
-test('too new: doctor says exactly this — one workspace finding, the machine checks still run', () => {
-  const human = runWard(['doctor'], tooNew);
+test('too new: doctor says exactly this — one workspace finding, the machine checks still run', async () => {
+  const human = await callWard(['doctor'], tooNew);
   expect(human.exitCode).toBe(1);
   expect(human.stdout).toContain('✓ git');
   expect(human.stdout).toContain(`✗ workspace format — ${REFUSAL()}`);
   expect(human.stdout).not.toContain('workspace record');
   expect(human.stdout).toContain('unhealthy');
 
-  const json = runWard(['doctor', '--json'], tooNew);
+  const json = await callWard(['doctor', '--json'], tooNew);
   expect(json.exitCode).toBe(1);
   const report = doctorShape.parse(JSON.parse(json.stdout));
   expect(report.healthy).toBe(false);
@@ -167,7 +165,7 @@ test('too new: doctor says exactly this — one workspace finding, the machine c
 // design/0025-fish-shell-layer/): fast, silent, never failing. In a workspace
 // this ward cannot read they offer nothing from the record — a name read from
 // a record this ward may misread is a candidate the verb then refuses.
-test('too new: completion and the candidate feeds exit 0, say nothing on stderr, and offer no record', () => {
+test('too new: completion and the candidate feeds exit 0, say nothing on stderr, and offer no record', async () => {
   const table: ReadonlyArray<readonly [argv: readonly string[], absent: string]> = [
     [['completion', 'fish', 'task', 'show', ''], 'f0t1'],
     [['completion', 'fish', 'project', 'note', ''], '0'],
@@ -178,25 +176,27 @@ test('too new: completion and the candidate feeds exit 0, say nothing on stderr,
     [['shell', 'candidates', 'coordinators'], 'workspace-1'],
   ];
   for (const [argv, absent] of table) {
-    const result = runWard([...argv], tooNew);
+    const result = await callWard([...argv], tooNew);
     expect([argv.join(' '), result.exitCode, result.stderr]).toEqual([argv.join(' '), 0, '']);
     const offered = result.stdout.split('\n').map((line) => line.split('\t')[0]);
     expect(offered).not.toContain(absent);
   }
   // The tree itself is the build's, not the record's: it still completes.
-  expect(runWard(['completion', 'fish', ''], tooNew).stdout).toContain('doctor');
+  expect((await callWard(['completion', 'fish', ''], tooNew)).stdout).toContain('doctor');
   // And the same feeds do offer the record where this ward can read it.
-  expect(runWard(['completion', 'fish', 'task', 'show', ''], current).stdout).toContain('f0t1');
+  expect((await callWard(['completion', 'fish', 'task', 'show', ''], current)).stdout).toContain(
+    'f0t1',
+  );
 });
 
-test('too new, from outside: the registry fallback is refused the same way', () => {
+test('too new, from outside: the registry fallback is refused the same way', async () => {
   // A human standing nowhere gets the registered workspace — and the guard
   // with it, whichever way the workspace was found.
   const env = { WARD_STATE_DIR: join(scratch, 'state-outside'), NO_COLOR: '1' };
-  expect(runWardEnv(['workspace', 'register', current], scratch, env).exitCode).toBe(0);
+  expect((await callWardEnv(['workspace', 'register', current], scratch, env)).exitCode).toBe(0);
   const registry = join(env.WARD_STATE_DIR, 'workspaces.md');
   writeFileSync(registry, readFileSync(registry, 'utf8').replaceAll(current, tooNew));
-  const result = runWardEnv(['status'], scratch, env);
+  const result = await callWardEnv(['status'], scratch, env);
   expect(result.exitCode).toBe(1);
   expect(result.stdout).toBe('');
   expect(result.stderr).toContain(REFUSAL());
@@ -204,15 +204,15 @@ test('too new, from outside: the registry fallback is refused the same way', () 
 
 // -- the other direction: this ward on an older workspace ---------------------
 
-test('a workspace from before the marker reads and writes as it always did', () => {
+test('a workspace from before the marker reads and writes as it always did', async () => {
   const ws = unmarked('older');
-  expect(runWard(['status'], ws).exitCode).toBe(0);
-  expect(runWard(['task', 'open', 'more'], ws).stdout).toContain('opened f0t2');
-  expect(runWard(['task', 'list'], ws).stdout).toContain('f0t2');
+  expect((await callWard(['status'], ws)).exitCode).toBe(0);
+  expect((await callWard(['task', 'open', 'more'], ws)).stdout).toContain('opened f0t2');
+  expect((await callWard(['task', 'list'], ws)).stdout).toContain('f0t2');
   // A write that is not the upgrade's does not raise the level on the way past.
   expect(readFileSync(join(ws, 'workspace.md'), 'utf8')).not.toContain('format:');
 
-  const doctor = runWard(['doctor', '--json'], ws);
+  const doctor = await callWard(['doctor', '--json'], ws);
   expect(doctor.exitCode).toBe(0); // surfaced, never blocking
   const report = doctorShape.parse(JSON.parse(doctor.stdout));
   expect(report.format).toEqual({ reads: FORMAT_LEVEL, workspace: 0, readable: true });
@@ -225,11 +225,11 @@ test('a workspace from before the marker reads and writes as it always did', () 
   });
 });
 
-test('workspace upgrade raises the level in the convergence commit, and says what it costs', () => {
+test('workspace upgrade raises the level in the convergence commit, and says what it costs', async () => {
   const ws = unmarked('raise');
   const before = Number(gitOrThrow(ws, 'rev-list', '--count', 'HEAD').stdout);
 
-  const result = runWardEnv(['workspace', 'upgrade', '--json'], ws, {
+  const result = await callWardEnv(['workspace', 'upgrade', '--json'], ws, {
     NO_COLOR: '1',
     WARD_GH: NO_GH,
   });
@@ -255,17 +255,17 @@ test('workspace upgrade raises the level in the convergence commit, and says wha
   expect(gitOrThrow(ws, 'status', '--porcelain').stdout).toBe('');
 
   // Convergent: the second run finds the level in place and commits nothing.
-  const again = runWardEnv(['workspace', 'upgrade'], ws, { NO_COLOR: '1', WARD_GH: NO_GH });
+  const again = await callWardEnv(['workspace', 'upgrade'], ws, { NO_COLOR: '1', WARD_GH: NO_GH });
   expect(again.stdout).toContain(`satisfied  workspace format (format ${FORMAT_LEVEL})`);
   expect(Number(gitOrThrow(ws, 'rev-list', '--count', 'HEAD').stdout)).toBe(before + 1);
-  expect(runWard(['doctor'], ws).stdout).toContain(
+  expect((await callWard(['doctor'], ws)).stdout).toContain(
     `✓ workspace format — format ${FORMAT_LEVEL} — this ward reads up to ${FORMAT_LEVEL}`,
   );
 });
 
-test('the human rendering marks the raise where it cannot be read past', () => {
+test('the human rendering marks the raise where it cannot be read past', async () => {
   const ws = unmarked('render');
-  const result = runWardEnv(['workspace', 'upgrade'], ws, { NO_COLOR: '1', WARD_GH: NO_GH });
+  const result = await callWardEnv(['workspace', 'upgrade'], ws, { NO_COLOR: '1', WARD_GH: NO_GH });
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain(`established  workspace format ! format 0 → ${FORMAT_LEVEL} — `);
 });
@@ -306,19 +306,9 @@ function unmarked(name: string): string {
   return ws;
 }
 
-function spawnWard(argv: readonly string[], cwd: string): Promise<CliResult> {
-  const child = Bun.spawn(['bun', cliPath, ...argv], {
-    cwd,
-    env: { ...process.env, NO_COLOR: '1', WARD_GH: NO_GH, ...GIT_ENV, ...WARD_GLOBAL_ENV },
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
-  return Promise.all([
-    child.exited,
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-  ]).then(([exitCode, stdout, stderr]) => ({ exitCode, stdout, stderr }));
+/** Every verb in turn, in-process (design/0074-in-process-cli-tests/). */
+function wardIn(argv: readonly string[], cwd: string): Promise<CliResult> {
+  return callWard([...argv], cwd);
 }
 
 beforeAll(async () => {
@@ -328,8 +318,12 @@ beforeAll(async () => {
   await preparedWorkspace(current);
   await openTask(current, 'work', { floor: GROUND_FLOOR });
   expect(
-    runWard(['session', 'open', '--purpose', 'coordinate', '--handle', 'claude:fixture'], current)
-      .exitCode,
+    (
+      await callWard(
+        ['session', 'open', '--purpose', 'coordinate', '--handle', 'claude:fixture'],
+        current,
+      )
+    ).exitCode,
   ).toBe(0);
   // A repository record with no checkout: enough to be a name the feeds read.
   writeFileSync(

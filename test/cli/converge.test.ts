@@ -8,12 +8,19 @@ import { join } from 'node:path';
 import { workspaceUpgradeShape } from '../../src/cli/schema.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR_DIR } from '../../src/workspace/projects.ts';
-import { applyGitTestEnv, makeTempDir, NO_GH, removeDir, runWard, runWardEnv } from '../helpers.ts';
+import {
+  applyGitTestEnv,
+  callWard,
+  callWardEnv,
+  makeTempDir,
+  NO_GH,
+  removeDir,
+} from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
 
 test('create on an existing workspace: exit 1, stdout empty, the remedy names upgrade', async () => {
   const ws = await workspace('refusal');
-  const result = runWard(['workspace', 'create', ws], scratch);
+  const result = await callWard(['workspace', 'create', ws], scratch);
   expect(result.exitCode).toBe(1);
   expect(result.stdout).toBe(''); // a refusal emits no document (0015)
   expect(result.stderr).toContain(
@@ -28,7 +35,7 @@ test('upgrade --json on a workspace behind on its record: converged rides the do
   removeDir(join(ws, GROUND_FLOOR_DIR)); // the pre-0018 shape
   gitOrThrow(ws, 'commit', '-am', 'a workspace from before the standing project');
 
-  const result = upgrade(ws, ['--json']);
+  const result = await upgrade(ws, ['--json']);
   expect(result.exitCode).toBe(0);
   const report = workspaceUpgradeShape.parse(JSON.parse(result.stdout));
   expect(report.vehicle).toBe('none'); // no default moved: no task, no branch
@@ -45,7 +52,7 @@ test('a run that converged the record does not report nothing to do', async () =
   removeDir(join(ws, GROUND_FLOOR_DIR));
   gitOrThrow(ws, 'commit', '-am', 'a workspace from before the standing project');
 
-  const first = upgrade(ws, []);
+  const first = await upgrade(ws, []);
   expect(first.exitCode).toBe(0);
   expect(first.stdout).toContain('established  standing project');
   expect(first.stdout).toContain('record converged — 4 established');
@@ -53,13 +60,13 @@ test('a run that converged the record does not report nothing to do', async () =
   expect(first.stdout).not.toContain('nothing to upgrade');
 
   // And now there is genuinely nothing to do, which reads differently.
-  const second = upgrade(ws, []);
+  const second = await upgrade(ws, []);
   expect(second.stdout).toContain('nothing to upgrade — everything already current');
 });
 
 test('the converge steps print before the artifact rows, in create step style', async () => {
   const ws = await workspace('render');
-  const rendered = upgrade(ws, []);
+  const rendered = await upgrade(ws, []);
   expect(rendered.exitCode).toBe(0);
   const stdout = rendered.stdout;
   expect(stdout.indexOf('workspace marker')).toBeGreaterThan(-1);
@@ -79,7 +86,7 @@ test('every doctor remedy for an existing workspace names the update verb', asyn
   await Bun.write(join(ws, '.ward', 'baselines.md'), '');
   gitOrThrow(ws, 'commit', '-am', 'a workspace behind in several ways (test fixture)');
 
-  const doctor = JSON.parse(runWard(['doctor', '--json'], ws).stdout) as {
+  const doctor = JSON.parse((await callWard(['doctor', '--json'], ws)).stdout) as {
     workspace: { check: string; message: string }[];
   };
   const messages = doctor.workspace.map((finding) => finding.message);
@@ -89,7 +96,7 @@ test('every doctor remedy for an existing workspace names the update verb', asyn
     expect(finding?.message).toContain('ward workspace upgrade');
   }
   // And the refusal `ward task open` carries is the same string doctor prints.
-  const refused = runWard(['task', 'open', 'nowhere-to-go'], ws);
+  const refused = await callWard(['task', 'open', 'nowhere-to-go'], ws);
   expect(refused.exitCode).toBe(1);
   expect(refused.stderr).toContain('no ground floor — establish it: ward workspace upgrade');
 });
@@ -116,6 +123,9 @@ async function workspace(name: string): Promise<string> {
  * a WARD_AGENT inherited from the environment the suite runs in would turn
  * every one of these into the agent refusal (design/0005-agent-audience/).
  */
-function upgrade(ws: string, flags: string[]) {
-  return runWardEnv(['workspace', 'upgrade', ...flags], ws, { NO_COLOR: '1', WARD_GH: NO_GH });
+async function upgrade(ws: string, flags: string[]) {
+  return await callWardEnv(['workspace', 'upgrade', ...flags], ws, {
+    NO_COLOR: '1',
+    WARD_GH: NO_GH,
+  });
 }

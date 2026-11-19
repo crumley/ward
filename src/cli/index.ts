@@ -172,6 +172,14 @@ import {
 } from '../workspace/worktrees.ts';
 import { callerIsAgent, declaredSession } from './caller.ts';
 import {
+  colorSupported,
+  enterInvocation,
+  type Invocation,
+  invocation,
+  parserColors,
+  processInvocation,
+} from './invocation.ts';
+import {
   contextJson,
   doctorJson,
   printJson,
@@ -227,33 +235,14 @@ import {
 } from './suggest.ts';
 import { isMachineryInvocation, recordInvocation } from './telemetry.ts';
 
-// Output first, before anything can print (design/0048-pipe-safe-output/):
-// every console write is routed through tracked stream writes, so a document
-// larger than a pipe's buffer arrives whole and every exit waits for it.
-installPipeSafeConsole();
-
-// Local usage telemetry, armed before anything can exit: one row per
-// invocation — read verbs included — appended at process exit so it carries
-// the outcome, covers optique's own help/usage exits, and costs the command
-// nothing while it runs (design/0013-telemetry-and-serialized-writes/).
-recordInvocation(process.argv.slice(2));
-
-// The registry's recency, kept current before anything can exit
-// (design/0024-global-config-registry/): an invocation from inside a
-// registered workspace is what makes it the most recently used one, which is
-// what `ward` falls back to from elsewhere. Awaited so nothing dangles, and
-// it is a single small read in the steady state — the write happens only when
-// the order actually changes. The interaction layer's own machinery — a
-// completion callback, a shell-layer candidate feed — is not usage
-// (design/0022-shell-completion/ IF-002, design/0025-fish-shell-layer/), so
-// it never churns the MRU.
-await touchInvokedWorkspace(process.argv.slice(2));
-
 // A declared agent gets deterministic output: no ANSI, whatever the terminal
 // or CI environment would otherwise negotiate (the §8 asymmetry — color is a
 // human-audience cue). Interactive affordances, when the shell grows them,
 // must branch on the same predicate and never block an agent caller.
-const pc = callerIsAgent() ? picocolors.createColors(false) : picocolors;
+// Chosen per invocation, in `main` (design/0074-in-process-cli-tests/): the
+// palette is a function of the caller's environment and terminal, and an
+// in-process run is a new caller in the same module.
+let pc: ReturnType<typeof picocolors.createColors> = picocolors;
 
 /**
  * `--json`: the machine-readable form of a verb — read verbs since 0005,
@@ -1131,15 +1120,6 @@ const version = object({
   }),
 });
 
-// Bare `ward` (no arguments) keeps its 0001 behavior — version plus a help
-// pointer — handled before optique, whose or-of-commands rejects empty input.
-// Completion never reaches here: both the script generation and the per-TAB
-// callback carry `completion <shell> …` (design/0022-shell-completion/).
-if (process.argv.length === 2) {
-  printVersion(false);
-  await exitWhenFlushed(0);
-}
-
 const cli = or(
   workspace,
   repo,
@@ -1155,504 +1135,570 @@ const cli = or(
   shell,
   version,
 );
-// `completion: 'command'` adds `ward completion <shell>` — the script
-// generator AND the per-TAB callback the generated script calls back into, so
-// suggestions are derived from this very tree and can never drift from it
-// (design/0022-shell-completion/). Awaited because the dynamic suggesters in
-// suggest.ts read the record asynchronously, which makes the whole parser
-// async-mode; nothing else about parsing changes.
-const result = await run(cli, {
-  programName: 'ward',
-  help: 'option',
-  completion: 'command',
-  // Help, usage errors, and completion leave through the same flushed door as
-  // every verb (design/0048-pipe-safe-output/): a completion script or help
-  // page bigger than a pipe's buffer must arrive whole too.
-  stdout: (line) => writeOut(`${line}\n`),
-  stderr: (line) => console.error(line),
-  onExit: (code) => exitWhenFlushed(code) as never,
-});
 
-try {
-  if ('action' in result) {
-    switch (result.action) {
-      case 'workspace-create':
-        await cmdWorkspaceCreate(result.path, result.json);
-        break;
-      case 'workspace-merge':
-        await cmdWorkspaceMerge(result.branch, result.preview, result.json);
-        break;
-      case 'workspace-restore':
-        await cmdWorkspaceRestore(result.json);
-        break;
-      case 'workspace-upgrade':
-        await cmdWorkspaceUpgrade(result.task, result.json);
-        break;
-      case 'workspace-register': {
-        const report = await registerWorkspace(result.path ?? process.cwd());
-        renderRegistry(report, result.json);
-        break;
-      }
-      case 'workspace-unregister': {
-        renderRegistry(await unregisterWorkspace(result.target), result.json);
-        break;
-      }
-      case 'workspace-default': {
-        renderRegistry(await setDefaultWorkspace(result.target), result.json);
-        break;
-      }
-      case 'workspace-list':
-        await cmdWorkspaceList(result.json);
-        break;
-      case 'workspace-path': {
-        // Nothing but the path on stdout: this verb exists to be substituted
-        // into a shell command (`cd (ward workspace path)`), so any extra
-        // line would land in the caller's argument.
-        const listing = await locateWorkspace(result.name);
-        if (result.json) printJson(workspacePathJson(listing));
-        else console.log(listing.path);
-        break;
-      }
-      case 'repo-path':
-        await cmdRepoPath(result.name, result.workspace, result.json);
-        break;
-      case 'shell-init':
-        // stdout carries the script and nothing else — it is redirected into
-        // a file the shell will source (§18: Ward emits, the human installs).
-        // The emitted bytes are `emitShellLayer`'s, because doctor compares an
-        // installed file against them (design/0026-shell-staleness-doctor/).
-        writeOut(emitShellLayer(result.shell));
-        break;
-      case 'shell-candidates': {
-        // Machinery, and shaped like it: one NAME<TAB>CUE line per candidate,
-        // no color, no header, and NOTHING on an empty set — a picker with no
-        // candidates is an empty picker, never an error in the human's shell
-        // mid-keystroke (§20).
-        const found = await candidates(result.kind, process.cwd(), result.floor);
-        if (found.length > 0) console.log(renderCandidates(found));
-        break;
-      }
-      case 'shell-adopt':
-        await cmdShellAdopt(result.shell, result.names, {
-          all: result.all,
-          force: result.force,
-          json: result.json,
-          ...(result.dir === undefined ? {} : { dir: result.dir }),
-        });
-        break;
-      case 'shell-diff':
-        await cmdShellDiff(result.shell, result.names, result.dir);
-        break;
-      case 'repo-add':
-        await cmdRepoAdd(result.source, result.name, result.external, result.json);
-        break;
-      case 'repo-refresh':
-        await cmdRepoRefresh(result.name, result.json, result.stash);
-        break;
-      case 'repo-remove':
-        await cmdRepoRemove(result.name, result.json);
-        break;
-      case 'repo-list':
-        await cmdRepoList(result.json);
-        break;
-      case 'project-open': {
-        const root = await requireMutableWorkspace();
-        // Validated before anything is written: a claim on an unregistered
-        // name routes nothing, so it is a bad argument, not a stored fact.
-        for (const name of result.repo) requireRegistered(root, name);
-        const record = await openProject(root, result.slug, {
-          repositories: result.repo,
-          ...(result.color === undefined ? {} : { color: result.color }),
-          ...(result.emoji === undefined ? {} : { emoji: result.emoji }),
-        });
-        if (result.json) {
-          printJson(projectOpenJson(record));
+/**
+ * The CLI, as a callable (design/0074-in-process-cli-tests/): answer one
+ * invocation — its arguments, terminal, input, output and exit — against the
+ * process's environment and working directory. The bin entry at the foot of
+ * this file hands it the process's own invocation; the in-process runner
+ * (in-process.ts) hands it one that captures.
+ */
+export async function main(invoked: Invocation): Promise<void> {
+  const leave = enterInvocation(invoked);
+  try {
+    await answer(invoked);
+  } finally {
+    leave();
+  }
+}
+
+async function answer(invoked: Invocation): Promise<void> {
+  // Output first, before anything can print (design/0048-pipe-safe-output/):
+  // every console write is routed through tracked stream writes, so a document
+  // larger than a pipe's buffer arrives whole and every exit waits for it.
+  installPipeSafeConsole();
+
+  // Local usage telemetry, armed before anything can exit: one row per
+  // invocation — read verbs included — appended at process exit so it carries
+  // the outcome, covers optique's own help/usage exits, and costs the command
+  // nothing while it runs (design/0013-telemetry-and-serialized-writes/).
+  recordInvocation(invoked.argv);
+
+  // The registry's recency, kept current before anything can exit
+  // (design/0024-global-config-registry/): an invocation from inside a
+  // registered workspace is what makes it the most recently used one, which is
+  // what `ward` falls back to from elsewhere. Awaited so nothing dangles, and
+  // it is a single small read in the steady state — the write happens only when
+  // the order actually changes. The interaction layer's own machinery — a
+  // completion callback, a shell-layer candidate feed — is not usage
+  // (design/0022-shell-completion/ IF-002, design/0025-fish-shell-layer/), so
+  // it never churns the MRU.
+  await touchInvokedWorkspace(invoked.argv);
+
+  // The palette, from the same rule picocolors applies to a process at load,
+  // read from this invocation; a declared agent never gets color.
+  pc = picocolors.createColors(!callerIsAgent() && colorSupported(invoked));
+
+  // Bare `ward` (no arguments) keeps its 0001 behavior — version plus a help
+  // pointer — handled before optique, whose or-of-commands rejects empty input.
+  // Completion never reaches here: both the script generation and the per-TAB
+  // callback carry `completion <shell> …` (design/0022-shell-completion/).
+  if (invoked.argv.length === 0) {
+    printVersion(false);
+    await exitWhenFlushed(0);
+  }
+
+  // `completion: 'command'` adds `ward completion <shell>` — the script
+  // generator AND the per-TAB callback the generated script calls back into, so
+  // suggestions are derived from this very tree and can never drift from it
+  // (design/0022-shell-completion/). Awaited because the dynamic suggesters in
+  // suggest.ts read the record asynchronously, which makes the whole parser
+  // async-mode; nothing else about parsing changes.
+  const result = await run(cli, {
+    programName: 'ward',
+    args: invoked.argv,
+    colors: parserColors(invoked),
+    help: 'option',
+    completion: 'command',
+    // Help, usage errors, and completion leave through the same flushed door as
+    // every verb (design/0048-pipe-safe-output/): a completion script or help
+    // page bigger than a pipe's buffer must arrive whole too.
+    stdout: (line) => writeOut(`${line}\n`),
+    stderr: (line) => console.error(line),
+    onExit: (code) => exitWhenFlushed(code) as never,
+  });
+
+  try {
+    if ('action' in result) {
+      switch (result.action) {
+        case 'workspace-create':
+          await cmdWorkspaceCreate(result.path, result.json);
+          break;
+        case 'workspace-merge':
+          await cmdWorkspaceMerge(result.branch, result.preview, result.json);
+          break;
+        case 'workspace-restore':
+          await cmdWorkspaceRestore(result.json);
+          break;
+        case 'workspace-upgrade':
+          await cmdWorkspaceUpgrade(result.task, result.json);
+          break;
+        case 'workspace-register': {
+          const report = await registerWorkspace(result.path ?? process.cwd());
+          renderRegistry(report, result.json);
           break;
         }
-        console.log(
-          `${pc.green('opened')} floor ${pc.bold(String(record.floor))} — ` +
-            `${floorGlyph(record)}${record.slug}${floorColorCue(record)}` +
-            (record.repositories === undefined
-              ? ''
-              : pc.dim(` (claims ${record.repositories.join(', ')})`)),
-        );
-        break;
-      }
-      case 'project-claim': {
-        const root = await requireMutableWorkspace();
-        const report = await claimRepository(root, result.floor, result.repo);
-        if (result.json) {
-          printJson(projectClaimJson(report, report.staying));
+        case 'workspace-unregister': {
+          renderRegistry(await unregisterWorkspace(result.target), result.json);
           break;
         }
-        renderClaim(report);
-        break;
-      }
-      case 'project-release': {
-        const root = await requireMutableWorkspace();
-        const report = await releaseRepository(root, result.floor, result.repo);
-        if (result.json) {
-          printJson(projectClaimJson(report));
+        case 'workspace-default': {
+          renderRegistry(await setDefaultWorkspace(result.target), result.json);
           break;
         }
-        console.log(
-          report.outcome === 'absent'
-            ? pc.dim(`floor ${report.project.floor} does not claim ${report.repository}`)
-            : `${pc.yellow('released')} ${report.repository} from floor ` +
-                `${pc.bold(String(report.project.floor))} — ${report.project.slug}`,
-        );
-        break;
-      }
-      case 'project-list':
-        await cmdProjectList(result.all, result.json);
-        break;
-      case 'project-identity': {
-        const root = await requireMutableWorkspace();
-        const report = await setFloorIdentity(root, result.floor, {
-          ...(result.color === undefined ? {} : { color: result.color }),
-          ...(result.emoji === undefined ? {} : { emoji: result.emoji }),
-        });
-        // The record first, then the live half: a host already standing is
-        // dressed where it stands, never re-created.
-        const hosts = await dressFloor(root, result.floor, hostOf('tmux'), 'tmux');
-        if (result.json) {
-          printJson(projectIdentityJson(report, hosts));
+        case 'workspace-list':
+          await cmdWorkspaceList(result.json);
+          break;
+        case 'workspace-path': {
+          // Nothing but the path on stdout: this verb exists to be substituted
+          // into a shell command (`cd (ward workspace path)`), so any extra
+          // line would land in the caller's argument.
+          const listing = await locateWorkspace(result.name);
+          if (result.json) printJson(workspacePathJson(listing));
+          else console.log(listing.path);
           break;
         }
-        renderIdentity(report, hosts);
-        break;
-      }
-      case 'project-note': {
-        const root = await requireMutableWorkspace();
-        const report = await appendFloorNote(root, result.floor, result.text);
-        if (result.json) {
-          printJson(projectNoteJson(report));
+        case 'repo-path':
+          await cmdRepoPath(result.name, result.workspace, result.json);
+          break;
+        case 'shell-init':
+          // stdout carries the script and nothing else — it is redirected into
+          // a file the shell will source (§18: Ward emits, the human installs).
+          // The emitted bytes are `emitShellLayer`'s, because doctor compares an
+          // installed file against them (design/0026-shell-staleness-doctor/).
+          writeOut(emitShellLayer(result.shell));
+          break;
+        case 'shell-candidates': {
+          // Machinery, and shaped like it: one NAME<TAB>CUE line per candidate,
+          // no color, no header, and NOTHING on an empty set — a picker with no
+          // candidates is an empty picker, never an error in the human's shell
+          // mid-keystroke (§20).
+          const found = await candidates(result.kind, process.cwd(), result.floor);
+          if (found.length > 0) console.log(renderCandidates(found));
           break;
         }
-        console.log(
-          `${pc.green('noted')} on floor ${pc.bold(String(report.floor))} — ${report.slug}` +
-            pc.dim(` (${report.path}${report.seeded ? ', seeded' : ''})`),
-        );
-        break;
-      }
-      case 'reflection-packet': {
-        const packet = await reflectionPacket(await requireWorkspace(), result.floor);
-        if (result.json) {
-          printJson(reflectionPacketJson(packet));
+        case 'shell-adopt':
+          await cmdShellAdopt(result.shell, result.names, {
+            all: result.all,
+            force: result.force,
+            json: result.json,
+            ...(result.dir === undefined ? {} : { dir: result.dir }),
+          });
           break;
-        }
-        renderReflectionPacket(packet);
-        break;
-      }
-      case 'reflection-open': {
-        const report = await openReflection(await requireMutableWorkspace(), result.floor);
-        if (result.json) {
-          printJson(reflectionOpenJson(report));
+        case 'shell-diff':
+          await cmdShellDiff(result.shell, result.names, result.dir);
           break;
-        }
-        console.log(
-          `${pc.green(report.outcome)} the reflection of floor ${pc.bold(String(report.floor))} — ` +
-            `${report.slug}: task ${pc.bold(report.task)}, branch ${report.branch}\n` +
-            `  ${report.path} ${pc.dim(`(${report.tasks} closed task${report.tasks === 1 ? '' : 's'} to cover)`)}\n` +
-            `  a reflection may change: ${report.editable.join(', ')}`,
-        );
-        renderReflectionActs(report.remaining);
-        break;
-      }
-      case 'reflection-record': {
-        const root = await requireMutableWorkspace();
-        const text =
-          result.file === '-' ? await Bun.stdin.text() : await readSummaryFile(result.file);
-        const report = await recordReflection(root, result.floor, text, declaredSession());
-        if (result.json) {
-          printJson(reflectionRecordJson(report));
+        case 'repo-add':
+          await cmdRepoAdd(result.source, result.name, result.external, result.json);
           break;
-        }
-        console.log(
-          `${pc.green(report.outcome)} reflection ${report.number} of floor ` +
-            `${pc.bold(String(report.floor))} — ${report.slug} ` +
-            pc.dim(`(${report.path}, commit ${report.commit} on ${report.branch})`) +
-            `\n  covers ${report.tasks} closed task${report.tasks === 1 ? '' : 's'} and ` +
-            `${report.sessions} session${report.sessions === 1 ? '' : 's'}` +
-            (report.unread.length === 0
-              ? ''
-              : `; ${report.unread.length} with no history readable here`) +
-            (report.changed.length === 0
-              ? '\n  proposes no change to the notes'
-              : `\n  proposes changes to ${report.changed.join(', ')}`),
-        );
-        renderReflectionActs(report.remaining);
-        break;
-      }
-      case 'task-open': {
-        const root = await requireMutableWorkspace();
-        for (const name of result.repo) requireRegistered(root, name);
-        const placement = await placeTask(root, result.project, result.repo);
-        const opened = await openTask(root, result.slug, {
-          floor: placement.floor ?? (await requireGroundFloor(root)),
-          ...(result.repo.length === 0 ? {} : { repositories: result.repo }),
-          ...(result.purpose === undefined ? {} : { purpose: result.purpose }),
-        });
-        if (result.json) {
-          printJson(taskMutationJson(opened.record, taskAddress(opened)));
+        case 'repo-refresh':
+          await cmdRepoRefresh(result.name, result.json, result.stash);
           break;
-        }
-        console.log(
-          `${pc.green('opened')} ${pc.bold(taskAddress(opened))} — ${opened.record.slug}` +
-            renderPlacement(placement, opened.record.floor),
-        );
-        break;
-      }
-      case 'task-list':
-        await cmdTaskList(
-          {
-            ...(result.slug === undefined ? {} : { slug: result.slug }),
-            ...(result.state === undefined ? {} : { state: result.state }),
-            ...(result.floor === undefined ? {} : { floor: result.floor }),
-            ...(result.repo === undefined ? {} : { repo: result.repo }),
-          },
-          result.all,
-          result.json,
-        );
-        break;
-      case 'task-show': {
-        const target = await resolveTaskTarget(
-          result.code,
-          'ward task show ADDRESS',
-          result.json,
-          'read',
-        );
-        await cmdTaskShow(target.root, target.code, result.all, result.json);
-        break;
-      }
-      case 'task-pause': {
-        const target = await resolveTaskTarget(result.code, 'ward task pause ADDRESS', result.json);
-        const paused = await setTaskState(target.root, target.code, 'paused');
-        if (result.json) {
-          printJson(taskMutationJson(paused.record, await resolvableAddress(target.root, paused)));
+        case 'repo-remove':
+          await cmdRepoRemove(result.name, result.json);
           break;
-        }
-        console.log(
-          `${pc.yellow('paused')} ${pc.bold(await resolvableAddress(target.root, paused))} — ${paused.record.slug}`,
-        );
-        break;
-      }
-      case 'task-resume': {
-        const target = await resolveTaskTarget(
-          result.code,
-          'ward task resume ADDRESS',
-          result.json,
-        );
-        const resumed = await setTaskState(target.root, target.code, 'active');
-        if (result.json) {
-          printJson(
-            taskMutationJson(resumed.record, await resolvableAddress(target.root, resumed)),
-          );
+        case 'repo-list':
+          await cmdRepoList(result.json);
           break;
-        }
-        console.log(
-          `${pc.green('resumed')} ${pc.bold(await resolvableAddress(target.root, resumed))} — ${resumed.record.slug}`,
-        );
-        break;
-      }
-      case 'task-pr': {
-        const code = 'code' in result ? result.code : undefined;
-        const target = await resolveTaskTarget(code, 'ward task pr ADDRESS URL', result.json);
-        const linked = result.unlink
-          ? await removeTaskPr(target.root, target.code, result.url)
-          : await addTaskPr(target.root, target.code, result.url);
-        if (result.json) {
-          printJson(taskMutationJson(linked.record, await resolvableAddress(target.root, linked)));
-          break;
-        }
-        console.log(
-          (result.unlink
-            ? `${pc.green('unlinked')} ${result.url} from ${pc.bold(await resolvableAddress(target.root, linked))} `
-            : `${pc.green('linked')} ${result.url} to ${pc.bold(await resolvableAddress(target.root, linked))} `) +
-            pc.dim(`(${linked.record.prs.length} in the set)`),
-        );
-        break;
-      }
-      case 'task-brief': {
-        const code = 'code' in result ? result.code : undefined;
-        const target = await resolveTaskTarget(code, 'ward task brief ADDRESS FILE', result.json);
-        const text =
-          result.file === '-' ? await Bun.stdin.text() : await readBriefFile(result.file);
-        const report = await recordBrief(target.root, target.code, text, declaredSession());
-        if (result.json) {
-          printJson(taskBriefJson(report));
-          break;
-        }
-        console.log(
-          `${pc.green(report.replaced ? 'replaced' : 'recorded')} the brief for ` +
-            `${pc.bold(report.address)} ${pc.dim(`(${report.path})`)}`,
-        );
-        break;
-      }
-      case 'task-dispatch':
-        await cmdTaskDispatch(
-          result.slug,
-          result.to,
-          result.brief,
-          result.repo,
-          result.purpose,
-          result.json,
-        );
-        break;
-      case 'task-dispatches':
-        await cmdTaskDispatches(
-          {
-            ...(result.from === undefined ? {} : { from: result.from }),
-            ...(result.to === undefined ? {} : { to: result.to }),
-            ...(result.state === undefined ? {} : { state: result.state }),
-          },
-          result.mine,
-          result.all,
-          result.json,
-        );
-        break;
-      case 'task-close':
-        await cmdTaskClose(result.code, result.outcome, result.json);
-        break;
-      case 'worktree-create': {
-        const target = await resolveTaskTarget(
-          result.task,
-          'ward worktree create ADDRESS --repo NAME | --workspace',
-          result.json,
-        );
-        // With no `--repo` and no `--workspace`, the task's own record can
-        // answer — but only when it names exactly one repository
-        // (design/0037-repo-floor-affinity/). Several, or none, is not a guess
-        // Ward gets to make, and the refusal is the one that always stood.
-        const repo =
-          result.repo ??
-          (result.workspace
-            ? undefined
-            : recordedRepository(await resolveOpenTask(target.root, target.code)));
-        if (result.workspace === (repo !== undefined)) {
-          throw new WardError(
-            'name the worktree source: --repo NAME for a registered repository, or ' +
-              "--workspace for the workspace's own (exactly one of the two)",
-          );
-        }
-        const created =
-          repo === undefined
-            ? await createWorkspaceWorktree(target.root, target.code, result.branch)
-            : await createWorktree(target.root, target.code, repo, result.branch);
-        if (result.json) {
-          printJson(
-            worktreeCreateJson(
-              created.task.record.code,
-              await resolvableAddress(target.root, created.task),
-              created.record,
-            ),
-          );
-          break;
-        }
-        console.log(
-          `${pc.green('created')} ${created.record.path} ` +
-            pc.dim(
-              `(${created.record.repo ?? "the workspace's own repository"}, ` +
-                `branch ${created.record.branch}, deliverable)`,
-            ),
-        );
-        // Made outside the workspace by its repository's command (0065): say
-        // where the floor reaches it, since that is the path to work through.
-        if (standsOutside(created.record)) {
+        case 'project-open': {
+          const root = await requireMutableWorkspace();
+          // Validated before anything is written: a claim on an unregistered
+          // name routes nothing, so it is a bad argument, not a stored fact.
+          for (const name of result.repo) requireRegistered(root, name);
+          const record = await openProject(root, result.slug, {
+            repositories: result.repo,
+            ...(result.color === undefined ? {} : { color: result.color }),
+            ...(result.emoji === undefined ? {} : { emoji: result.emoji }),
+          });
+          if (result.json) {
+            printJson(projectOpenJson(record));
+            break;
+          }
           console.log(
-            pc.dim(
-              `  reached from ${worktreePlacement(created.task, created.record.branch)} — ` +
-                'work through that path, so its floor is on the way down',
-            ),
+            `${pc.green('opened')} floor ${pc.bold(String(record.floor))} — ` +
+              `${floorGlyph(record)}${record.slug}${floorColorCue(record)}` +
+              (record.repositories === undefined
+                ? ''
+                : pc.dim(` (claims ${record.repositories.join(', ')})`)),
           );
-        }
-        break;
-      }
-      case 'worktree-rebase': {
-        const target = await resolveTaskTarget(
-          result.task,
-          'ward worktree rebase ADDRESS',
-          result.json,
-        );
-        await cmdWorktreeRebase(target.root, target.code, result.json);
-        break;
-      }
-      case 'worktree-list':
-        await cmdWorktreeList(result.json);
-        break;
-      case 'session-open':
-        await cmdSessionOpen(
-          result.task,
-          result.floor,
-          result.purpose,
-          result.handle,
-          result.dir,
-          hostFlagOf(result.detach, result.foreground),
-          result.onExit,
-          result.json,
-        );
-        break;
-      case 'session-resume': {
-        const id = resumeTarget(result);
-        if (id === undefined) {
-          await cmdSessionResumeAll(result.go, result.floor, result.json);
           break;
         }
-        await cmdSessionResume(
-          id,
-          hostFlagOf(result.detach, result.foreground),
-          result.onExit ?? 'ask',
-          result.json,
-        );
-        break;
-      }
-      case 'session-attach':
-        await cmdSessionJoin('attach', result.id);
-        break;
-      case 'session-observe':
-        await cmdSessionJoin('observe', result.id);
-        break;
-      case 'session-show':
-        await cmdSessionShow(result.id, result.json);
-        break;
-      case 'session-locate':
-        await cmdSessionLocate(result.id, result.json);
-        break;
-      case 'session-close': {
-        const { record: closed, teardown } = await closeHostedSession(
-          await requireMutableWorkspace(),
-          result.id,
-        );
-        if (result.json) {
-          printJson(sessionMutationJson(closed, { teardown }));
+        case 'project-claim': {
+          const root = await requireMutableWorkspace();
+          const report = await claimRepository(root, result.floor, result.repo);
+          if (result.json) {
+            printJson(projectClaimJson(report, report.staying));
+            break;
+          }
+          renderClaim(report);
           break;
         }
-        console.log(`${pc.dim('closed')} session ${pc.bold(closed.id)}`);
-        if (teardown !== undefined) console.log(pc.dim(`  ${teardown.kind}: ${teardown.detail}`));
-        break;
+        case 'project-release': {
+          const root = await requireMutableWorkspace();
+          const report = await releaseRepository(root, result.floor, result.repo);
+          if (result.json) {
+            printJson(projectClaimJson(report));
+            break;
+          }
+          console.log(
+            report.outcome === 'absent'
+              ? pc.dim(`floor ${report.project.floor} does not claim ${report.repository}`)
+              : `${pc.yellow('released')} ${report.repository} from floor ` +
+                  `${pc.bold(String(report.project.floor))} — ${report.project.slug}`,
+          );
+          break;
+        }
+        case 'project-list':
+          await cmdProjectList(result.all, result.json);
+          break;
+        case 'project-identity': {
+          const root = await requireMutableWorkspace();
+          const report = await setFloorIdentity(root, result.floor, {
+            ...(result.color === undefined ? {} : { color: result.color }),
+            ...(result.emoji === undefined ? {} : { emoji: result.emoji }),
+          });
+          // The record first, then the live half: a host already standing is
+          // dressed where it stands, never re-created.
+          const hosts = await dressFloor(root, result.floor, hostOf('tmux'), 'tmux');
+          if (result.json) {
+            printJson(projectIdentityJson(report, hosts));
+            break;
+          }
+          renderIdentity(report, hosts);
+          break;
+        }
+        case 'project-note': {
+          const root = await requireMutableWorkspace();
+          const report = await appendFloorNote(root, result.floor, result.text);
+          if (result.json) {
+            printJson(projectNoteJson(report));
+            break;
+          }
+          console.log(
+            `${pc.green('noted')} on floor ${pc.bold(String(report.floor))} — ${report.slug}` +
+              pc.dim(` (${report.path}${report.seeded ? ', seeded' : ''})`),
+          );
+          break;
+        }
+        case 'reflection-packet': {
+          const packet = await reflectionPacket(await requireWorkspace(), result.floor);
+          if (result.json) {
+            printJson(reflectionPacketJson(packet));
+            break;
+          }
+          renderReflectionPacket(packet);
+          break;
+        }
+        case 'reflection-open': {
+          const report = await openReflection(await requireMutableWorkspace(), result.floor);
+          if (result.json) {
+            printJson(reflectionOpenJson(report));
+            break;
+          }
+          console.log(
+            `${pc.green(report.outcome)} the reflection of floor ${pc.bold(String(report.floor))} — ` +
+              `${report.slug}: task ${pc.bold(report.task)}, branch ${report.branch}\n` +
+              `  ${report.path} ${pc.dim(`(${report.tasks} closed task${report.tasks === 1 ? '' : 's'} to cover)`)}\n` +
+              `  a reflection may change: ${report.editable.join(', ')}`,
+          );
+          renderReflectionActs(report.remaining);
+          break;
+        }
+        case 'reflection-record': {
+          const root = await requireMutableWorkspace();
+          const text =
+            result.file === '-'
+              ? await invocation().readStdin()
+              : await readSummaryFile(result.file);
+          const report = await recordReflection(root, result.floor, text, declaredSession());
+          if (result.json) {
+            printJson(reflectionRecordJson(report));
+            break;
+          }
+          console.log(
+            `${pc.green(report.outcome)} reflection ${report.number} of floor ` +
+              `${pc.bold(String(report.floor))} — ${report.slug} ` +
+              pc.dim(`(${report.path}, commit ${report.commit} on ${report.branch})`) +
+              `\n  covers ${report.tasks} closed task${report.tasks === 1 ? '' : 's'} and ` +
+              `${report.sessions} session${report.sessions === 1 ? '' : 's'}` +
+              (report.unread.length === 0
+                ? ''
+                : `; ${report.unread.length} with no history readable here`) +
+              (report.changed.length === 0
+                ? '\n  proposes no change to the notes'
+                : `\n  proposes changes to ${report.changed.join(', ')}`),
+          );
+          renderReflectionActs(report.remaining);
+          break;
+        }
+        case 'task-open': {
+          const root = await requireMutableWorkspace();
+          for (const name of result.repo) requireRegistered(root, name);
+          const placement = await placeTask(root, result.project, result.repo);
+          const opened = await openTask(root, result.slug, {
+            floor: placement.floor ?? (await requireGroundFloor(root)),
+            ...(result.repo.length === 0 ? {} : { repositories: result.repo }),
+            ...(result.purpose === undefined ? {} : { purpose: result.purpose }),
+          });
+          if (result.json) {
+            printJson(taskMutationJson(opened.record, taskAddress(opened)));
+            break;
+          }
+          console.log(
+            `${pc.green('opened')} ${pc.bold(taskAddress(opened))} — ${opened.record.slug}` +
+              renderPlacement(placement, opened.record.floor),
+          );
+          break;
+        }
+        case 'task-list':
+          await cmdTaskList(
+            {
+              ...(result.slug === undefined ? {} : { slug: result.slug }),
+              ...(result.state === undefined ? {} : { state: result.state }),
+              ...(result.floor === undefined ? {} : { floor: result.floor }),
+              ...(result.repo === undefined ? {} : { repo: result.repo }),
+            },
+            result.all,
+            result.json,
+          );
+          break;
+        case 'task-show': {
+          const target = await resolveTaskTarget(
+            result.code,
+            'ward task show ADDRESS',
+            result.json,
+            'read',
+          );
+          await cmdTaskShow(target.root, target.code, result.all, result.json);
+          break;
+        }
+        case 'task-pause': {
+          const target = await resolveTaskTarget(
+            result.code,
+            'ward task pause ADDRESS',
+            result.json,
+          );
+          const paused = await setTaskState(target.root, target.code, 'paused');
+          if (result.json) {
+            printJson(
+              taskMutationJson(paused.record, await resolvableAddress(target.root, paused)),
+            );
+            break;
+          }
+          console.log(
+            `${pc.yellow('paused')} ${pc.bold(await resolvableAddress(target.root, paused))} — ${paused.record.slug}`,
+          );
+          break;
+        }
+        case 'task-resume': {
+          const target = await resolveTaskTarget(
+            result.code,
+            'ward task resume ADDRESS',
+            result.json,
+          );
+          const resumed = await setTaskState(target.root, target.code, 'active');
+          if (result.json) {
+            printJson(
+              taskMutationJson(resumed.record, await resolvableAddress(target.root, resumed)),
+            );
+            break;
+          }
+          console.log(
+            `${pc.green('resumed')} ${pc.bold(await resolvableAddress(target.root, resumed))} — ${resumed.record.slug}`,
+          );
+          break;
+        }
+        case 'task-pr': {
+          const code = 'code' in result ? result.code : undefined;
+          const target = await resolveTaskTarget(code, 'ward task pr ADDRESS URL', result.json);
+          const linked = result.unlink
+            ? await removeTaskPr(target.root, target.code, result.url)
+            : await addTaskPr(target.root, target.code, result.url);
+          if (result.json) {
+            printJson(
+              taskMutationJson(linked.record, await resolvableAddress(target.root, linked)),
+            );
+            break;
+          }
+          console.log(
+            (result.unlink
+              ? `${pc.green('unlinked')} ${result.url} from ${pc.bold(await resolvableAddress(target.root, linked))} `
+              : `${pc.green('linked')} ${result.url} to ${pc.bold(await resolvableAddress(target.root, linked))} `) +
+              pc.dim(`(${linked.record.prs.length} in the set)`),
+          );
+          break;
+        }
+        case 'task-brief': {
+          const code = 'code' in result ? result.code : undefined;
+          const target = await resolveTaskTarget(code, 'ward task brief ADDRESS FILE', result.json);
+          const text =
+            result.file === '-' ? await invocation().readStdin() : await readBriefFile(result.file);
+          const report = await recordBrief(target.root, target.code, text, declaredSession());
+          if (result.json) {
+            printJson(taskBriefJson(report));
+            break;
+          }
+          console.log(
+            `${pc.green(report.replaced ? 'replaced' : 'recorded')} the brief for ` +
+              `${pc.bold(report.address)} ${pc.dim(`(${report.path})`)}`,
+          );
+          break;
+        }
+        case 'task-dispatch':
+          await cmdTaskDispatch(
+            result.slug,
+            result.to,
+            result.brief,
+            result.repo,
+            result.purpose,
+            result.json,
+          );
+          break;
+        case 'task-dispatches':
+          await cmdTaskDispatches(
+            {
+              ...(result.from === undefined ? {} : { from: result.from }),
+              ...(result.to === undefined ? {} : { to: result.to }),
+              ...(result.state === undefined ? {} : { state: result.state }),
+            },
+            result.mine,
+            result.all,
+            result.json,
+          );
+          break;
+        case 'task-close':
+          await cmdTaskClose(result.code, result.outcome, result.json);
+          break;
+        case 'worktree-create': {
+          const target = await resolveTaskTarget(
+            result.task,
+            'ward worktree create ADDRESS --repo NAME | --workspace',
+            result.json,
+          );
+          // With no `--repo` and no `--workspace`, the task's own record can
+          // answer — but only when it names exactly one repository
+          // (design/0037-repo-floor-affinity/). Several, or none, is not a guess
+          // Ward gets to make, and the refusal is the one that always stood.
+          const repo =
+            result.repo ??
+            (result.workspace
+              ? undefined
+              : recordedRepository(await resolveOpenTask(target.root, target.code)));
+          if (result.workspace === (repo !== undefined)) {
+            throw new WardError(
+              'name the worktree source: --repo NAME for a registered repository, or ' +
+                "--workspace for the workspace's own (exactly one of the two)",
+            );
+          }
+          const created =
+            repo === undefined
+              ? await createWorkspaceWorktree(target.root, target.code, result.branch)
+              : await createWorktree(target.root, target.code, repo, result.branch);
+          if (result.json) {
+            printJson(
+              worktreeCreateJson(
+                created.task.record.code,
+                await resolvableAddress(target.root, created.task),
+                created.record,
+              ),
+            );
+            break;
+          }
+          console.log(
+            `${pc.green('created')} ${created.record.path} ` +
+              pc.dim(
+                `(${created.record.repo ?? "the workspace's own repository"}, ` +
+                  `branch ${created.record.branch}, deliverable)`,
+              ),
+          );
+          // Made outside the workspace by its repository's command (0065): say
+          // where the floor reaches it, since that is the path to work through.
+          if (standsOutside(created.record)) {
+            console.log(
+              pc.dim(
+                `  reached from ${worktreePlacement(created.task, created.record.branch)} — ` +
+                  'work through that path, so its floor is on the way down',
+              ),
+            );
+          }
+          break;
+        }
+        case 'worktree-rebase': {
+          const target = await resolveTaskTarget(
+            result.task,
+            'ward worktree rebase ADDRESS',
+            result.json,
+          );
+          await cmdWorktreeRebase(target.root, target.code, result.json);
+          break;
+        }
+        case 'worktree-list':
+          await cmdWorktreeList(result.json);
+          break;
+        case 'session-open':
+          await cmdSessionOpen(
+            result.task,
+            result.floor,
+            result.purpose,
+            result.handle,
+            result.dir,
+            hostFlagOf(result.detach, result.foreground),
+            result.onExit,
+            result.json,
+          );
+          break;
+        case 'session-resume': {
+          const id = resumeTarget(result);
+          if (id === undefined) {
+            await cmdSessionResumeAll(result.go, result.floor, result.json);
+            break;
+          }
+          await cmdSessionResume(
+            id,
+            hostFlagOf(result.detach, result.foreground),
+            result.onExit ?? 'ask',
+            result.json,
+          );
+          break;
+        }
+        case 'session-attach':
+          await cmdSessionJoin('attach', result.id);
+          break;
+        case 'session-observe':
+          await cmdSessionJoin('observe', result.id);
+          break;
+        case 'session-show':
+          await cmdSessionShow(result.id, result.json);
+          break;
+        case 'session-locate':
+          await cmdSessionLocate(result.id, result.json);
+          break;
+        case 'session-close': {
+          const { record: closed, teardown } = await closeHostedSession(
+            await requireMutableWorkspace(),
+            result.id,
+          );
+          if (result.json) {
+            printJson(sessionMutationJson(closed, { teardown }));
+            break;
+          }
+          console.log(`${pc.dim('closed')} session ${pc.bold(closed.id)}`);
+          if (teardown !== undefined) console.log(pc.dim(`  ${teardown.kind}: ${teardown.detail}`));
+          break;
+        }
+        case 'status':
+          await cmdStatus(result.all, result.json);
+          break;
+        case 'doctor':
+          await cmdDoctor(result.json);
+          break;
+        case 'context':
+          await cmdContext(result.path, result.json);
+          break;
+        case 'schema':
+          cmdSchema(result.verb);
+          break;
       }
-      case 'status':
-        await cmdStatus(result.all, result.json);
-        break;
-      case 'doctor':
-        await cmdDoctor(result.json);
-        break;
-      case 'context':
-        await cmdContext(result.path, result.json);
-        break;
-      case 'schema':
-        cmdSchema(result.verb);
-        break;
+    } else {
+      printVersion(result.version);
     }
-  } else {
-    printVersion(result.version);
+  } catch (error) {
+    if (error instanceof WardError) {
+      console.error(`${pc.red('error:')} ${error.message}`);
+      await exitWhenFlushed(1);
+    }
+    throw error;
   }
-} catch (error) {
-  if (error instanceof WardError) {
-    console.error(`${pc.red('error:')} ${error.message}`);
-    await exitWhenFlushed(1);
-  }
-  throw error;
 }
 
 // -- rendering ------------------------------------------------------------
@@ -2880,7 +2926,7 @@ async function cmdTaskDispatch(
 ): Promise<void> {
   const root = await requireMutableWorkspace();
   for (const name of repos) requireRegistered(root, name);
-  const text = briefFile === '-' ? await Bun.stdin.text() : await readBriefFile(briefFile);
+  const text = briefFile === '-' ? await invocation().readStdin() : await readBriefFile(briefFile);
   const declared = declaredSession();
   const report = await dispatchTask(root, slug, {
     to,
@@ -3688,7 +3734,7 @@ async function cmdSessionLocate(id: string, json: boolean): Promise<void> {
  */
 async function cmdSessionJoin(verb: 'attach' | 'observe', id: string): Promise<void> {
   const root = await requireMutableWorkspace();
-  const terminal = process.stdin.isTTY === true && process.stdout.isTTY === true;
+  const terminal = invocation().stdinIsTTY && invocation().stdoutIsTTY;
   const joined = await (verb === 'attach' ? attachSession : observeSession)(root, id, {
     terminal,
     onReady: (prepared) => {
@@ -3848,7 +3894,7 @@ async function afterRun(root: string, id: string, onExit: OnExit, json: boolean)
   const history = await runHistory(root, id);
   const decision = exitDecision({
     history,
-    tty: process.stdin.isTTY === true && process.stdout.isTTY === true,
+    tty: invocation().stdinIsTTY && invocation().stdoutIsTTY,
     agent: callerIsAgent(),
     json,
     onExit,
@@ -4207,3 +4253,9 @@ function renderFinding(finding: Finding): string {
   }[finding.severity];
   return `  ${symbol} ${finding.check} ${pc.dim('—')} ${finding.message}`;
 }
+
+// The bin entry (design/0074-in-process-cli-tests/): run as a program, the CLI
+// answers the process's own invocation. Imported — by the in-process runner —
+// it does nothing until `main` is called. At the foot of the file, so every
+// module-level declaration above is initialized before any verb runs.
+if (import.meta.main) await main(processInvocation());

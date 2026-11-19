@@ -15,6 +15,7 @@ import { discoverWorkspace } from '../workspace/layout.ts';
 import { listRepositories } from '../workspace/repos.ts';
 import { scopeFromCwd } from '../workspace/scope.ts';
 import { callerIsAgent } from './caller.ts';
+import { invocation } from './invocation.ts';
 import { isCompletionCallback } from './suggest.ts';
 
 /**
@@ -105,14 +106,18 @@ export function recordInvocation(argv: readonly string[]): void {
   // before the resolution lands omits the field — absence over blocking.
   let scope: string | undefined;
   const invokedIn = discoverWorkspace(process.cwd());
-  if (invokedIn !== null) {
-    void resolveScope(invokedIn, process.cwd())
-      .then((value) => {
-        scope = value;
-      })
-      .catch(() => {});
-  }
-  process.on('exit', (code) => {
+  const scoped =
+    invokedIn === null
+      ? undefined
+      : resolveScope(invokedIn, process.cwd())
+          .then((value) => {
+            scope = value;
+          })
+          .catch(() => {});
+  // The invocation's exit (design/0074-in-process-cli-tests/): a real run's is
+  // the process's `exit` event, which cannot wait on the scope; an in-process
+  // run's waits for it, so a row never depends on how fast the verb was.
+  invocation().atExit((code) => {
     try {
       const workspace = discoverWorkspace(process.cwd());
       if (workspace === null) return;
@@ -145,7 +150,7 @@ export function recordInvocation(argv: readonly string[]): void {
     } catch {
       // A telemetry failure never fails the command it records (§20).
     }
-  });
+  }, scoped);
 }
 
 /**

@@ -63,7 +63,7 @@ export function gitOrThrow(cwd: string, ...args: string[]): GitResult {
 }
 
 export function gitAvailable(): boolean {
-  return Bun.which('git') !== null;
+  return Bun.which('git', { PATH: process.env.PATH ?? '' }) !== null;
 }
 
 /** Whether git can determine an author identity (config or environment). */

@@ -14,8 +14,8 @@
 // invocation: the hermeticity seam tests use — the same pattern as
 // `WARD_CONFIG_DIR` and `WARD_GH` — so no test ever spawns the real CLI.
 import { existsSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { homeDir } from '../global/paths.ts';
 import {
   type CommandSource,
   type Env,
@@ -150,7 +150,7 @@ export function resumeArgv(nativeId: string, args: readonly string[]): string[] 
  * run as gone.
  */
 export function transcriptPath(nativeId: string, cwd: string, env: Env = process.env): string {
-  const configDir = env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude');
+  const configDir = env.CLAUDE_CONFIG_DIR ?? join(homeDir(env), '.claude');
   return join(configDir, 'projects', mungeCwd(cwd), `${nativeId}.jsonl`);
 }
 

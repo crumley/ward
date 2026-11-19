@@ -21,20 +21,20 @@ import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { workspaceMainLine } from '../../src/workspace/steward.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { createWorkspaceWorktree } from '../../src/workspace/worktrees.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { applyGitTestEnv, callWard, makeTempDir, removeDir } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
 
 // -- worktree create --workspace --------------------------------------------
 
-test('worktree create --workspace: the stewardship worktree, both renderings', () => {
-  const human = runWard(['worktree', 'create', 't1', '--workspace'], ws);
+test('worktree create --workspace: the stewardship worktree, both renderings', async () => {
+  const human = await callWard(['worktree', 'create', 't1', '--workspace'], ws);
   expect(human.exitCode).toBe(0);
   expect(human.stdout).toContain('created floors/0-workspace/f0t1-steward-steward-work');
   expect(human.stdout).toContain("the workspace's own repository");
   expect(human.stdout).toContain('branch steward/steward-work');
 
   // Convergent re-run under --json: one document, alone, source named plainly.
-  const json = runWard(['worktree', 'create', 't1', '--workspace', '--json'], ws);
+  const json = await callWard(['worktree', 'create', 't1', '--workspace', '--json'], ws);
   expect(json.exitCode).toBe(0);
   const doc = worktreeCreateShape.parse(JSON.parse(json.stdout));
   expect(doc).toEqual({
@@ -49,26 +49,26 @@ test('worktree create --workspace: the stewardship worktree, both renderings', (
   expect(Object.keys(doc)).not.toContain('repo');
 });
 
-test('the worktree source is exactly one of --repo and --workspace', () => {
-  const neither = runWard(['worktree', 'create', 't1'], ws);
+test('the worktree source is exactly one of --repo and --workspace', async () => {
+  const neither = await callWard(['worktree', 'create', 't1'], ws);
   expect(neither.exitCode).toBe(1);
   expect(neither.stdout).toBe('');
   expect(neither.stderr).toContain('--repo NAME');
   expect(neither.stderr).toContain('--workspace');
 
-  const both = runWard(['worktree', 'create', 't1', '--repo', 'demo', '--workspace'], ws);
+  const both = await callWard(['worktree', 'create', 't1', '--repo', 'demo', '--workspace'], ws);
   expect(both.exitCode).toBe(1);
   expect(both.stderr).toContain('exactly one of the two');
 });
 
 test('worktree list names the workspace source, in both renderings', async () => {
   await createWorkspaceWorktree(ws, 't1');
-  const human = runWard(['worktree', 'list'], ws);
+  const human = await callWard(['worktree', 'list'], ws);
   expect(human.exitCode).toBe(0);
   expect(human.stdout).toContain('t1 workspace:steward/steward-work (deliverable)');
 
   const rows = worktreeListShape.parse(
-    JSON.parse(runWard(['worktree', 'list', '--json'], ws).stdout),
+    JSON.parse((await callWard(['worktree', 'list', '--json'], ws)).stdout),
   );
   expect(rows[0]?.source).toBe('workspace');
   expect(rows[0]?.repo).toBeUndefined();
@@ -89,7 +89,7 @@ test('inside a stewardship copy, mutating verbs refuse plainly and reads proceed
     ['repo', 'refresh'],
     ['workspace', 'merge', record.branch],
   ]) {
-    const refused = runWard(argv, copy);
+    const refused = await callWard(argv, copy);
     expect(refused.exitCode).toBe(1);
     expect(refused.stdout).toBe('');
     expect(refused.stderr).toContain('stewardship copy');
@@ -98,10 +98,10 @@ test('inside a stewardship copy, mutating verbs refuse plainly and reads proceed
   }
 
   // Reads proceed — against the candidate copy, which is the preview's point.
-  const list = runWard(['task', 'list'], copy);
+  const list = await callWard(['task', 'list'], copy);
   expect(list.exitCode).toBe(0);
   expect(list.stdout).toContain('t1 steward-work');
-  const status = runWard(['status'], copy);
+  const status = await callWard(['status'], copy);
   expect(status.exitCode).toBe(0);
 
   // And no journal entry landed anywhere: both histories are unmoved.
@@ -114,13 +114,16 @@ test('preview, merge, converge: both renderings, the 0015 document postures', as
   const { record } = await createWorkspaceWorktree(ws, 't1');
   commitInCopy(join(ws, record.path), 'note.md', 'stewardship change\n');
 
-  const preview = runWard(['workspace', 'merge', record.branch, '--preview'], ws);
+  const preview = await callWard(['workspace', 'merge', record.branch, '--preview'], ws);
   expect(preview.exitCode).toBe(0);
   expect(preview.stdout).toContain(`would merge '${record.branch}' into ${mainLine} — 1 commit`);
   expect(preview.stdout).toContain('note.md');
   expect(preview.stdout).toContain(`merge with: ward workspace merge ${record.branch}`);
 
-  const previewJson = runWard(['workspace', 'merge', record.branch, '--preview', '--json'], ws);
+  const previewJson = await callWard(
+    ['workspace', 'merge', record.branch, '--preview', '--json'],
+    ws,
+  );
   expect(previewJson.exitCode).toBe(0);
   const previewDoc = workspaceMergeShape.parse(JSON.parse(previewJson.stdout));
   expect(previewDoc.outcome).toBe('previewed');
@@ -128,7 +131,7 @@ test('preview, merge, converge: both renderings, the 0015 document postures', as
   expect(previewDoc.diffStat).toContain('note.md');
   expect(previewDoc.mergeCommit).toBeUndefined();
 
-  const merge = runWard(['workspace', 'merge', record.branch, '--json'], ws);
+  const merge = await callWard(['workspace', 'merge', record.branch, '--json'], ws);
   expect(merge.exitCode).toBe(0);
   const doc = workspaceMergeShape.parse(JSON.parse(merge.stdout));
   expect(doc.outcome).toBe('merged');
@@ -138,7 +141,7 @@ test('preview, merge, converge: both renderings, the 0015 document postures', as
   expect(doc.diffStat).toBeUndefined();
   expect(existsSync(join(ws, 'note.md'))).toBe(true);
 
-  const again = runWard(['workspace', 'merge', record.branch], ws);
+  const again = await callWard(['workspace', 'merge', record.branch], ws);
   expect(again.exitCode).toBe(0);
   expect(again.stdout).toContain('already merged');
 });
@@ -150,7 +153,7 @@ test('a conflicted merge is a refusal: stderr + exit 1 + empty stdout, tree left
   gitOrThrow(ws, 'add', '-A', '--', 'AGENTS.md');
   gitOrThrow(ws, 'commit', '-m', 'Advance main');
 
-  const result = runWard(['workspace', 'merge', record.branch, '--json'], ws);
+  const result = await callWard(['workspace', 'merge', record.branch, '--json'], ws);
   expect(result.exitCode).toBe(1);
   expect(result.stdout).toBe(''); // a refusal emits no document, --json or not
   expect(result.stderr).toContain('conflicts in: AGENTS.md');
@@ -162,12 +165,12 @@ test('a dirty root and an unknown branch refuse legibly', async () => {
   const { record } = await createWorkspaceWorktree(ws, 't1');
   commitInCopy(join(ws, record.path), 'note.md', 'x\n');
   writeFileSync(join(ws, 'stray.txt'), 'uncommitted\n');
-  const dirty = runWard(['workspace', 'merge', record.branch], ws);
+  const dirty = await callWard(['workspace', 'merge', record.branch], ws);
   expect(dirty.exitCode).toBe(1);
   expect(dirty.stdout).toBe('');
   expect(dirty.stderr).toContain('uncommitted changes');
 
-  const unknown = runWard(['workspace', 'merge', 'no-such-branch'], ws);
+  const unknown = await callWard(['workspace', 'merge', 'no-such-branch'], ws);
   expect(unknown.exitCode).toBe(1);
   expect(unknown.stderr).toContain("no branch named 'no-such-branch'");
 });
@@ -178,15 +181,15 @@ test('close refused before the merge, delivered after it — through the CLI', a
   const { record } = await createWorkspaceWorktree(ws, 't1');
   commitInCopy(join(ws, record.path), 'work.md', 'the deliverable\n');
 
-  const refused = runWard(['task', 'close', 't1'], ws);
+  const refused = await callWard(['task', 'close', 't1'], ws);
   expect(refused.exitCode).toBe(1);
   expect(refused.stdout).toBe('');
   expect(refused.stderr).toContain("has not reached the workspace's main line");
   expect(refused.stderr).toContain(`ward workspace merge ${record.branch}`);
   expect(existsSync(join(ws, record.path))).toBe(true); // refusal precedes teardown
 
-  expect(runWard(['workspace', 'merge', record.branch], ws).exitCode).toBe(0);
-  const closed = runWard(['task', 'close', 't1'], ws);
+  expect((await callWard(['workspace', 'merge', record.branch], ws)).exitCode).toBe(0);
+  const closed = await callWard(['task', 'close', 't1'], ws);
   expect(closed.exitCode).toBe(0);
   expect(closed.stdout).toContain('reachability');
   expect(closed.stdout).toContain(`reaches ${mainLine} in the workspace's own history`);
@@ -200,15 +203,15 @@ test('status reads workspace-worktree freshness against the workspace main line'
   const { record } = await createWorkspaceWorktree(ws, 't1');
   // The journal advances the main line (a second task opens); the branch is
   // now honestly behind it — the normal mid-flight state of stewardship work.
-  expect(runWard(['task', 'open', 'second'], ws).exitCode).toBe(0);
+  expect((await callWard(['task', 'open', 'second'], ws)).exitCode).toBe(0);
 
-  const status = runWard(['status'], ws);
+  const status = await callWard(['status'], ws);
   expect(status.exitCode).toBe(0);
   expect(status.stdout).toContain(
     `${record.path} — behind ${mainLine} by 1 commit — rebase with: ward worktree rebase f0t1`,
   );
 
-  const doc = statusShape.parse(JSON.parse(runWard(['status', '--json'], ws).stdout));
+  const doc = statusShape.parse(JSON.parse((await callWard(['status', '--json'], ws)).stdout));
   const rows = doc.projects[0]?.tasks.find((task) => task.code === 't1')?.worktrees;
   expect(rows).toEqual([
     {
@@ -221,14 +224,16 @@ test('status reads workspace-worktree freshness against the workspace main line'
   ]);
 
   // The rebase remedy works, and the glance then reads current.
-  expect(runWard(['worktree', 'rebase', 't1'], ws).exitCode).toBe(0);
-  expect(runWard(['status'], ws).stdout).toContain(`${record.path} — current (atop ${mainLine})`);
+  expect((await callWard(['worktree', 'rebase', 't1'], ws)).exitCode).toBe(0);
+  expect((await callWard(['status'], ws)).stdout).toContain(
+    `${record.path} — current (atop ${mainLine})`,
+  );
 });
 
 // -- the contract's home ----------------------------------------------------
 
-test('ward schema workspace merge documents the new verb, and telemetry knows its words', () => {
-  const result = runWard(['schema', 'workspace', 'merge'], ws);
+test('ward schema workspace merge documents the new verb, and telemetry knows its words', async () => {
+  const result = await callWard(['schema', 'workspace', 'merge'], ws);
   expect(result.exitCode).toBe(0);
   const schema = JSON.parse(result.stdout);
   expect(schema.required).toEqual(['branch', 'mainLine', 'outcome', 'commits']);

@@ -13,11 +13,11 @@ import {
   type TaskRecord,
   taskRecordType,
 } from '../../src/store/types.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { applyGitTestEnv, callWard, makeTempDir, removeDir } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
 
-test('status: the open task by address, the recent close by slug, the old close gone', () => {
-  const result = runWard(['status'], ws);
+test('status: the open task by address, the recent close by slug, the old close gone', async () => {
+  const result = await callWard(['status'], ws);
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('f2t3 in-flight [active]'); // open: named by its address
   expect(result.stdout).toContain(`· just-landed [closed · delivered · ${recently.slice(0, 10)}]`);
@@ -27,61 +27,63 @@ test('status: the open task by address, the recent close by slug, the old close 
   expect(result.stdout).not.toContain('t2 just-landed');
 });
 
-test('status: open work sorts above closed work within a floor', () => {
-  const lines = runWard(['status'], ws).stdout.split('\n');
+test('status: open work sorts above closed work within a floor', async () => {
+  const lines = (await callWard(['status'], ws)).stdout.split('\n');
   const open = lines.findIndex((line) => line.includes('in-flight'));
   const closed = lines.findIndex((line) => line.includes('just-landed'));
   expect(open).toBeGreaterThan(-1);
   expect(closed).toBeGreaterThan(open);
 });
 
-test('status: the footer says what was hidden, why, and the one flag that shows it', () => {
-  const result = runWard(['status'], ws);
+test('status: the footer says what was hidden, why, and the one flag that shows it', async () => {
+  const result = await callWard(['status'], ws);
   expect(result.stdout).toContain(
     '2 settled tasks and 1 settled floor hidden (closed more than 7 days ago) — ward status --all',
   );
 });
 
-test('status --all: the window lifted, nothing hidden, no footer', () => {
-  const result = runWard(['status', '--all'], ws);
+test('status --all: the window lifted, nothing hidden, no footer', async () => {
+  const result = await callWard(['status', '--all'], ws);
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain('long-settled');
   expect(result.stdout).toContain('floor 3');
   expect(result.stdout).not.toContain('hidden (closed more than');
 });
 
-test('status --json: the same filter, and a hidden summary that is never absent', () => {
-  const windowed = JSON.parse(runWard(['status', '--json'], ws).stdout);
+test('status --json: the same filter, and a hidden summary that is never absent', async () => {
+  const windowed = JSON.parse((await callWard(['status', '--json'], ws)).stdout);
   expect(windowed.hidden).toEqual({ tasks: 2, projects: 1, settledAfterDays: 7 });
   const floor2 = windowed.projects.find((p: { floor: number }) => p.floor === 2);
   expect(floor2.tasks.map((t: { address: string }) => t.address)).toEqual(['f2t3', 'f2t2']);
   // The record is the record: a closed task still carries code and address.
   expect(floor2.tasks[1]).toMatchObject({ code: 't2', address: 'f2t2', state: 'closed' });
 
-  const all = JSON.parse(runWard(['status', '--all', '--json'], ws).stdout);
+  const all = JSON.parse((await callWard(['status', '--all', '--json'], ws)).stdout);
   expect(all.hidden).toEqual({ tasks: 0, projects: 0, settledAfterDays: 7 });
   expect(all.projects.length).toBe(3);
 });
 
-test('task list and project list carry the same window and the same flag', () => {
-  const listing = JSON.parse(runWard(['task', 'list', '--json'], ws).stdout);
+test('task list and project list carry the same window and the same flag', async () => {
+  const listing = JSON.parse((await callWard(['task', 'list', '--json'], ws)).stdout);
   expect(listing.hidden).toEqual({ tasks: 2, projects: 0, settledAfterDays: 7 });
   expect(listing.tasks.map((t: { address: string }) => t.address)).toEqual(['f2t3', 'f2t2']);
 
-  const projects = JSON.parse(runWard(['project', 'list', '--json'], ws).stdout);
+  const projects = JSON.parse((await callWard(['project', 'list', '--json'], ws)).stdout);
   expect(projects.hidden).toEqual({ tasks: 1, projects: 1, settledAfterDays: 7 });
   expect(projects.projects.map((p: { floor: number }) => p.floor)).toEqual([0, 2]);
 
-  const human = runWard(['project', 'list'], ws);
+  const human = await callWard(['project', 'list'], ws);
   expect(human.stdout).toContain(
     '1 settled task and 1 settled floor hidden (closed more than 7 days ago) — ' +
       'ward project list --all',
   );
-  expect(runWard(['project', 'list', '--all'], ws).stdout).toContain('floor 3 — done-with');
+  expect((await callWard(['project', 'list', '--all'], ws)).stdout).toContain(
+    'floor 3 — done-with',
+  );
 });
 
-test('a settled task is still addressable in the record, just not on the glance', () => {
-  const all = JSON.parse(runWard(['task', 'list', '--all', '--json'], ws).stdout);
+test('a settled task is still addressable in the record, just not on the glance', async () => {
+  const all = JSON.parse((await callWard(['task', 'list', '--all', '--json'], ws)).stdout);
   expect(all.hidden).toEqual({ tasks: 0, projects: 0, settledAfterDays: 7 });
   expect(all.tasks.map((t: { address: string }) => t.address).sort()).toEqual([
     'f2t1',

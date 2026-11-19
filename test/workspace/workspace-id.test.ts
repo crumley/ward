@@ -19,7 +19,7 @@ import { mergeWorkspaceBranch } from '../../src/workspace/steward.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { selfServiceUpgrade, upgradeWorkspace } from '../../src/workspace/upgrade.ts';
 import { createWorkspaceWorktree } from '../../src/workspace/worktrees.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { applyGitTestEnv, callWard, makeTempDir, removeDir } from '../helpers.ts';
 
 // -- minted at creation -------------------------------------------------------
 
@@ -138,10 +138,10 @@ test('a hand-tampered id outside the tmux-safe alphabet is refused by the record
 
 test('status --json and doctor --json both carry the id, within their schemas', async () => {
   const id = await workspaceId(ws);
-  const status = runWard(['status', '--json'], ws);
+  const status = await callWard(['status', '--json'], ws);
   expect(status.exitCode).toBe(0);
   expect(statusShape.parse(JSON.parse(status.stdout)).workspaceId).toBe(id);
-  const doctor = runWard(['doctor', '--json'], ws);
+  const doctor = await callWard(['doctor', '--json'], ws);
   const parsed = doctorShape.parse(JSON.parse(doctor.stdout));
   expect(parsed.workspaceId).toBe(id);
   expect(parsed.workspace.find((f) => f.check === 'workspace id')).toEqual({
@@ -153,10 +153,10 @@ test('status --json and doctor --json both carry the id, within their schemas', 
 
 test('status --json omits the id on an unminted workspace; doctor --json says null', async () => {
   await dropId(ws);
-  const status = runWard(['status', '--json'], ws);
+  const status = await callWard(['status', '--json'], ws);
   expect(status.exitCode).toBe(0);
   expect(statusShape.parse(JSON.parse(status.stdout))).not.toHaveProperty('workspaceId');
-  const doctor = doctorShape.parse(JSON.parse(runWard(['doctor', '--json'], ws).stdout));
+  const doctor = doctorShape.parse(JSON.parse((await callWard(['doctor', '--json'], ws)).stdout));
   expect(doctor.workspaceId).toBeNull();
 });
 

@@ -14,11 +14,11 @@ import { addRepository } from '../../src/workspace/repos.ts';
 import { closeSession, openSession, openWorkspaceSession } from '../../src/workspace/sessions.ts';
 import { closeTask, openTask } from '../../src/workspace/tasks.ts';
 import { createWorkspaceWorktree } from '../../src/workspace/worktrees.ts';
-import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { applyGitTestEnv, callWard, makeTempDir, removeDir } from '../helpers.ts';
 import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
-test('`ward completion fish` emits a script that calls back into this very tree', () => {
-  const result = runWard(['completion', 'fish'], ws);
+test('`ward completion fish` emits a script that calls back into this very tree', async () => {
+  const result = await callWard(['completion', 'fish'], ws);
   expect(result.exitCode).toBe(0);
   expect(result.stdout.length).toBeGreaterThan(500);
   // Derived from the parser, not hand-written: the function fish registers,
@@ -28,7 +28,7 @@ test('`ward completion fish` emits a script that calls back into this very tree'
   expect(result.stdout).toContain("ward 'completion' 'fish' $prev $current");
 });
 
-test('every shell optique ships gets its own script; an unknown one is refused', () => {
+test('every shell optique ships gets its own script; an unknown one is refused', async () => {
   const table: ReadonlyArray<[string, string]> = [
     ['fish', 'function __ward_complete'],
     ['bash', 'function _ward ()'],
@@ -37,17 +37,17 @@ test('every shell optique ships gets its own script; an unknown one is refused',
     ['nu', 'export def "nu-complete-ward"'],
   ];
   for (const [shell, marker] of table) {
-    const result = runWard(['completion', shell], ws);
+    const result = await callWard(['completion', shell], ws);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain(marker);
   }
-  const unknown = runWard(['completion', 'csh'], ws);
+  const unknown = await callWard(['completion', 'csh'], ws);
   expect(unknown.exitCode).toBe(1);
   expect(unknown.stderr).toContain('Unsupported shell');
 });
 
-test('the noun/verb tree completes itself — the commands, from the parser', () => {
-  expect(words([''])).toEqual(
+test('the noun/verb tree completes itself — the commands, from the parser', async () => {
+  expect(await words([''])).toEqual(
     expect.arrayContaining([
       'workspace',
       'repo',
@@ -60,10 +60,10 @@ test('the noun/verb tree completes itself — the commands, from the parser', ()
       'schema',
     ]),
   );
-  expect(words(['w'])).toEqual(['workspace', 'worktree']);
+  expect(await words(['w'])).toEqual(['workspace', 'worktree']);
 });
 
-test('task-addressed verbs complete to OPEN task codes, the slug as the cue', () => {
+test('task-addressed verbs complete to OPEN task codes, the slug as the cue', async () => {
   const table: ReadonlyArray<readonly string[]> = [
     ['task', 'pause', ''],
     ['task', 'resume', ''],
@@ -75,7 +75,7 @@ test('task-addressed verbs complete to OPEN task codes, the slug as the cue', ()
     ['workspace', 'upgrade', ''],
   ];
   for (const argv of table) {
-    expect(offers(argv)).toEqual(
+    expect(await offers(argv)).toEqual(
       expect.arrayContaining([
         { text: 'f0t1', description: 'alpha-task' },
         { text: 'f0t2', description: 'beta-task' },
@@ -83,61 +83,65 @@ test('task-addressed verbs complete to OPEN task codes, the slug as the cue', ()
     );
     // A closed task's code is reused after close, so offering it would name
     // either nothing or somebody else's task.
-    expect(words(argv)).not.toContain('f0t3');
+    expect(await words(argv)).not.toContain('f0t3');
   }
 });
 
-test('only candidates that start with the prefix come back', () => {
-  expect(offers(['task', 'pause', 'f0t1'])).toEqual([{ text: 'f0t1', description: 'alpha-task' }]);
-  expect(offers(['task', 'pause', 'zz'])).toEqual([]);
+test('only candidates that start with the prefix come back', async () => {
+  expect(await offers(['task', 'pause', 'f0t1'])).toEqual([
+    { text: 'f0t1', description: 'alpha-task' },
+  ]);
+  expect(await offers(['task', 'pause', 'zz'])).toEqual([]);
 });
 
-test('repository arguments complete to registered names, the main line as the cue', () => {
-  expect(offers(['repo', 'refresh', ''])).toEqual(
+test('repository arguments complete to registered names, the main line as the cue', async () => {
+  expect(await offers(['repo', 'refresh', ''])).toEqual(
     expect.arrayContaining([{ text: 'demo', description: 'main' }]),
   );
-  expect(offers(['worktree', 'create', 't1', '--repo', ''])).toEqual([
+  expect(await offers(['worktree', 'create', 't1', '--repo', ''])).toEqual([
     { text: 'demo', description: 'main' },
   ]);
 });
 
-test('`task list` filters complete: every state, registered repos, every floor', () => {
-  expect(words(['task', 'list', '--state', ''])).toEqual(['active', 'paused', 'closed']);
-  expect(offers(['task', 'list', '--repo', ''])).toEqual([{ text: 'demo', description: 'main' }]);
-  expect(offers(['task', 'list', '--floor', ''])).toEqual([
+test('`task list` filters complete: every state, registered repos, every floor', async () => {
+  expect(await words(['task', 'list', '--state', ''])).toEqual(['active', 'paused', 'closed']);
+  expect(await offers(['task', 'list', '--repo', ''])).toEqual([
+    { text: 'demo', description: 'main' },
+  ]);
+  expect(await offers(['task', 'list', '--floor', ''])).toEqual([
     { text: String(GROUND_FLOOR), description: 'workspace' },
   ]);
 });
 
-test('`session close|resume ID` complete to OPEN session ids — closed stays closed', () => {
+test('`session close|resume ID` complete to OPEN session ids — closed stays closed', async () => {
   for (const verb of ['close', 'resume']) {
-    expect(offers(['session', verb, ''])).toEqual(
+    expect(await offers(['session', verb, ''])).toEqual(
       expect.arrayContaining([
         { text: 'alpha-task-1@test', description: 'task t1' },
         // A workspace-scope session says so instead of naming a task it has not got.
         { text: 'workspace-1@test', description: 'workspace scope' },
       ]),
     );
-    expect(words(['session', verb, ''])).not.toContain('beta-task-1@test');
+    expect(await words(['session', verb, ''])).not.toContain('beta-task-1@test');
   }
 });
 
-test('`session locate ID` offers closed ids too — reflection reads finished work', () => {
-  expect(words(['session', 'locate', ''])).toContain('beta-task-1@test');
+test('`session locate ID` offers closed ids too — reflection reads finished work', async () => {
+  expect(await words(['session', 'locate', ''])).toContain('beta-task-1@test');
 });
 
-test('`workspace merge BRANCH` completes to branches the main line does not hold', () => {
-  expect(words(['workspace', 'merge', ''])).toEqual(['steward/beta-task']);
+test('`workspace merge BRANCH` completes to branches the main line does not hold', async () => {
+  expect(await words(['workspace', 'merge', ''])).toEqual(['steward/beta-task']);
   // The main line itself is never a candidate — merging it into itself is refused.
-  expect(words(['workspace', 'merge', ''])).not.toContain(mainLine);
+  expect(await words(['workspace', 'merge', ''])).not.toContain(mainLine);
 });
 
-test('`ward schema VERB…` completes one word at a time, from the shape registry', () => {
-  expect(words(['schema', ''])).toEqual(
+test('`ward schema VERB…` completes one word at a time, from the shape registry', async () => {
+  expect(await words(['schema', ''])).toEqual(
     expect.arrayContaining(['status', 'doctor', 'task', 'worktree', 'repo', 'workspace']),
   );
   // With `task` already typed, only what can follow it — never the first words again.
-  const afterTask = words(['schema', 'task', '']);
+  const afterTask = await words(['schema', 'task', '']);
   expect(afterTask).toEqual(
     expect.arrayContaining(['list', 'open', 'pause', 'resume', 'pr', 'close']),
   );
@@ -145,7 +149,7 @@ test('`ward schema VERB…` completes one word at a time, from the shape registr
   expect(afterTask).not.toContain('doctor');
 });
 
-test('outside a workspace the callback answers empty and exit 0 — never an error', () => {
+test('outside a workspace the callback answers empty and exit 0 — never an error', async () => {
   const nowhere = makeTempDir();
   const table: ReadonlyArray<readonly string[]> = [
     ['task', 'pause', ''],
@@ -155,13 +159,13 @@ test('outside a workspace the callback answers empty and exit 0 — never an err
     ['worktree', 'create', 't1', '--repo', ''],
   ];
   for (const argv of table) {
-    const result = runWard(['completion', 'fish', ...argv], nowhere);
+    const result = await callWard(['completion', 'fish', ...argv], nowhere);
     expect(result.exitCode).toBe(0);
     expect(result.stderr).toBe('');
-    expect(words(argv, nowhere)).toEqual([]);
+    expect(await words(argv, nowhere)).toEqual([]);
   }
   // The tree still completes itself — that needs no record.
-  expect(words([''], nowhere)).toContain('task');
+  expect(await words([''], nowhere)).toContain('task');
   expect(existsSync(join(nowhere, '.ward'))).toBe(false);
   removeDir(nowhere);
 });
@@ -177,12 +181,12 @@ test('a completion callback writes no telemetry row; generating the script write
     ['schema', 'task', ''],
     ['repo', 'refresh', ''],
   ]) {
-    expect(runWard(['completion', 'fish', ...argv], fresh).exitCode).toBe(0);
+    expect((await callWard(['completion', 'fish', ...argv], fresh)).exitCode).toBe(0);
   }
   expect(telemetryVerbs(fresh)).toEqual([]);
 
-  expect(runWard(['completion', 'fish'], fresh).exitCode).toBe(0);
-  expect(runWard(['status'], fresh).exitCode).toBe(0);
+  expect((await callWard(['completion', 'fish'], fresh)).exitCode).toBe(0);
+  expect((await callWard(['status'], fresh)).exitCode).toBe(0);
   expect(telemetryVerbs(fresh)).toEqual(['completion', 'status']);
 });
 
@@ -209,8 +213,8 @@ interface Offer {
  * typed words then the word being completed (empty but always present). Fish
  * encodes each candidate as `text\tdescription`, blank lines between.
  */
-function offers(argv: readonly string[], cwd = ws): Offer[] {
-  const result = runWard(['completion', 'fish', ...argv], cwd);
+async function offers(argv: readonly string[], cwd = ws): Promise<Offer[]> {
+  const result = await callWard(['completion', 'fish', ...argv], cwd);
   expect(result.exitCode).toBe(0);
   return result.stdout
     .split('\n')
@@ -223,8 +227,8 @@ function offers(argv: readonly string[], cwd = ws): Offer[] {
 }
 
 /** The candidate words alone — for the cases where the cue is not the point. */
-function words(argv: readonly string[], cwd = ws): string[] {
-  return offers(argv, cwd).map((offer) => offer.text);
+async function words(argv: readonly string[], cwd = ws): Promise<string[]> {
+  return (await offers(argv, cwd)).map((offer) => offer.text);
 }
 
 function telemetryVerbs(root: string): string[] {
