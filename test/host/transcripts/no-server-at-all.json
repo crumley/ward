@@ -1,0 +1,102 @@
+{
+  "scenario": "no-server-at-all",
+  "recordedWith": "tmux 3.7c",
+  "steps": [
+    {
+      "kind": "run",
+      "argv": [
+        "list-panes",
+        "-a",
+        "-F",
+        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}"
+      ],
+      "exit": 1,
+      "stdout": "",
+      "stderr": "error connecting to <socket> (No such file or directory)\n"
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
+        "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
+      ],
+      "exit": 1,
+      "stdout": "",
+      "stderr": "error connecting to <socket> (No such file or directory)\n"
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "show-environment",
+        "-g"
+      ],
+      "exit": 1,
+      "stdout": "",
+      "stderr": "error connecting to <socket> (No such file or directory)\n"
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "display-message",
+        "-p",
+        "-t",
+        "@999",
+        "#{@ward_session}"
+      ],
+      "exit": 1,
+      "stdout": "",
+      "stderr": "error connecting to <socket> (No such file or directory)\n"
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "display-message",
+        "-p",
+        "-t",
+        "@999",
+        "#{@ward_session}\t#{@ward_pane}"
+      ],
+      "exit": 1,
+      "stdout": "",
+      "stderr": "error connecting to <socket> (No such file or directory)\n"
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
+        "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
+      ],
+      "exit": 1,
+      "stdout": "",
+      "stderr": "error connecting to <socket> (No such file or directory)\n"
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "start-server",
+        ";",
+        "set-option",
+        "-s",
+        "exit-empty",
+        "off"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-panes",
+        "-a",
+        "-F",
+        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}"
+      ],
+      "exit": 1,
+      "stdout": "",
+      "stderr": "no current target\n"
+    }
+  ]
+}

@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { teardownSession } from '../agent/host.ts';
 import { WardError } from '../errors.ts';
 import { type PrForgeState, prBelongsToRemote, probeForge } from '../forge/gh.ts';
+import type { SessionHost } from '../host/host.ts';
 import { readDocument, readDocumentSync, writeDocument } from '../store/document.ts';
 import { withStoreLock } from '../store/lock.ts';
 import {
@@ -246,6 +247,7 @@ export async function closeTask(
   root: string,
   code: string,
   outcome: Outcome,
+  host?: SessionHost,
 ): Promise<CloseReport> {
   const task = await resolveOpenTask(root, code);
   const steps: CloseStep[] = [];
@@ -318,7 +320,12 @@ export async function closeTask(
     // own window ended, as `session close` would — record first, window second
     // (design/0031-detached-session-hosting/).
     for (const closed of swept) {
-      const teardown = await teardownSession(root, { scopeDir: task.dir, record: closed });
+      const teardown = await teardownSession(
+        root,
+        { scopeDir: task.dir, record: closed },
+        process.env,
+        host,
+      );
       if (teardown !== undefined) {
         steps.push({ step: 'live windows', detail: `${closed.id}: ${teardown.detail}` });
       }

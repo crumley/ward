@@ -62,12 +62,13 @@ export async function chooseHost(
   flag: HostFlag | undefined,
   configured: Resolved<AgentHost>,
   env: Env = process.env,
+  given?: SessionHost,
 ): Promise<HostChoice> {
   if (flag === 'foreground') return { kind: 'foreground' };
   const wanted = configured.provenance === 'absent' ? 'foreground' : configured.value;
   if (flag === undefined && wanted === 'foreground') return { kind: 'foreground' };
   const kind: HostedKind = wanted === 'foreground' ? 'tmux' : wanted;
-  const host = hostOf(kind, env);
+  const host = given ?? hostOf(kind, env);
   const problem = await unready(root, host);
   if (problem === undefined) return { kind, host, workspace: await workspaceId(root) };
   if (flag === 'detach') {
