@@ -9,10 +9,10 @@ import { join } from 'node:path';
 import { taskMutationShape } from '../../src/cli/schema.ts';
 import { writeDocument } from '../../src/store/document.ts';
 import { type TaskRecord, taskRecordType } from '../../src/store/types.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { openProject } from '../../src/workspace/projects.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { applyGitTestEnv, GIT_ENV, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 const URL = 'https://example.com/x/pull/67';
 const AMBIGUOUS =
@@ -113,7 +113,7 @@ afterAll(() => removeDir(scratch));
 beforeEach(async () => {
   counter += 1;
   ws = join(scratch, `case-${counter}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   await openProject(ws, 'ledger'); // floor 1
   await openProject(ws, 'intent'); // floor 2
   for (const [floor, slug] of [

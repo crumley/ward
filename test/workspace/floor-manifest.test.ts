@@ -12,7 +12,6 @@ import { projectNoteShape } from '../../src/cli/schema.ts';
 import { readDocument, writeDocument } from '../../src/store/document.ts';
 import { projectRecordType } from '../../src/store/types.ts';
 import { convergeWorkspace } from '../../src/workspace/converge.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import {
   FLOOR_AGENTS_MD_HISTORY,
@@ -33,6 +32,7 @@ import { AGENTS_MD, FLOOR_AGENTS_MD } from '../../src/workspace/templates.ts';
 import { upgradeWorkspace } from '../../src/workspace/upgrade.ts';
 import { createWorkspaceWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir, runWard, writeFakeClaude } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -333,7 +333,7 @@ afterAll(() => {
 
 async function workspaceWith(slugs: readonly string[]): Promise<string> {
   const ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   for (const slug of slugs) await openProject(ws, slug);
   return ws;
 }

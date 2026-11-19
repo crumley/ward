@@ -15,9 +15,10 @@ import { recordedWorkspaceMainLine, workspaceMainLine } from '../../src/workspac
 import { AGENTS_MD, WARD_INTERNAL_README } from '../../src/workspace/templates.ts';
 import { LEGACY_AGENTS_MD, LEGACY_WARD_README } from '../fixtures/legacy.ts';
 import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 test('workspace upgrade --json: one validating document; the fixture upgrades mechanically', async () => {
-  runWard(['workspace', 'create', ws], scratch);
+  await preparedWorkspace(ws);
   mainLine = workspaceMainLine(ws);
   // Regress to the live workspace's shape: stale untouched artifacts, empty
   // baselines, no recorded main-line name.

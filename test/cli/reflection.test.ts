@@ -19,7 +19,6 @@ import { transcriptPath } from '../../src/harness/claude.ts';
 import { readDocument } from '../../src/store/document.ts';
 import { FORMAT_LEVEL } from '../../src/store/format.ts';
 import { reflectionRecordType } from '../../src/store/types.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { openProject } from '../../src/workspace/projects.ts';
 import {
@@ -29,6 +28,7 @@ import {
 import { workspaceMainLine } from '../../src/workspace/steward.ts';
 import { closeTask, openTask } from '../../src/workspace/tasks.ts';
 import { applyGitTestEnv, makeTempDir, removeDir, runWard, runWardEnv } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 const NOTES = 'projects/1-demo/notes.md';
 const RECORD = 'projects/1-demo/reflections/1.md';
@@ -391,7 +391,7 @@ beforeAll(() => {
 beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
 });
 
 afterAll(() => {

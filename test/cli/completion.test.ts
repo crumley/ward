@@ -8,7 +8,6 @@ import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { verbPath } from '../../src/cli/telemetry.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
@@ -16,6 +15,7 @@ import { closeSession, openSession, openWorkspaceSession } from '../../src/works
 import { closeTask, openTask } from '../../src/workspace/tasks.ts';
 import { createWorkspaceWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 test('`ward completion fish` emits a script that calls back into this very tree', () => {
   const result = runWard(['completion', 'fish'], ws);
@@ -168,7 +168,7 @@ test('outside a workspace the callback answers empty and exit 0 — never an err
 
 test('a completion callback writes no telemetry row; generating the script writes one', async () => {
   const fresh = join(scratch, 'telemetry-ws');
-  await createWorkspace(fresh);
+  await preparedWorkspace(fresh);
   await openTask(fresh, 'counted', { floor: GROUND_FLOOR });
 
   for (const argv of [
@@ -253,16 +253,10 @@ beforeAll(async () => {
 
   // A registered repository, so `--repo NAME` has something to offer.
   const remote = join(scratch, 'remote.git');
-  gitOrThrow('.', 'init', '--bare', '--initial-branch=main', remote);
-  const seed = join(scratch, 'seed');
-  gitOrThrow('.', 'clone', remote, seed);
-  await Bun.write(join(seed, 'file.txt'), 'seed\n');
-  gitOrThrow(seed, 'add', '-A');
-  gitOrThrow(seed, 'commit', '-m', 'seed');
-  gitOrThrow(seed, 'push', '-u', 'origin', 'main');
+  preparedRemote(remote, { branch: 'main', files: { 'file.txt': 'seed\n' } });
 
   ws = join(scratch, 'ws');
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   mainLine = gitOrThrow(ws, 'symbolic-ref', '--short', 'HEAD').stdout.trim();
   await addRepository(ws, remote, 'demo');
 

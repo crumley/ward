@@ -16,7 +16,6 @@ import { sessionLocateShape, sessionMutationShape } from '../../src/cli/schema.t
 import { mungeCwd } from '../../src/harness/claude.ts';
 import { readDocument, writeDocument } from '../../src/store/document.ts';
 import { type SessionRecord, workspaceRecordType } from '../../src/store/types.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { defaultWorkspaceSessionPurpose, readSessions } from '../../src/workspace/sessions.ts';
@@ -28,6 +27,7 @@ import {
   removeDir,
   writeFakeClaude,
 } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const DEFAULT_PURPOSE = /^Coordinating work · opened \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
@@ -534,7 +534,7 @@ beforeEach(async () => {
   configHome = join(scratch, `config-${caseId}`);
   logFile = join(scratch, `runs-${caseId}.jsonl`);
   stub = writeFakeClaude(scratch, `claude-${caseId}`, { logFile });
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   writeGlobalConfig(undefined);
 });
 

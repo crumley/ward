@@ -12,6 +12,7 @@ import {
   runWardEnv,
   writeFakeGh,
 } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 const KEPT = 'https://example.com/x/pull/1';
 const WITHDRAWN = 'https://example.com/x/pull/2';
@@ -70,12 +71,12 @@ let scratch: string;
 let ws: string;
 let caseId = 0;
 
-beforeEach(() => {
+beforeEach(async () => {
   applyGitTestEnv();
   caseId += 1;
   scratch ??= makeTempDir();
   ws = join(scratch, `ws-${caseId}`);
-  expect(runWard(['workspace', 'create', ws], scratch).exitCode).toBe(0);
+  await preparedWorkspace(ws);
   expect(runWard(['task', 'open', 'feature', '--project', '0'], ws).exitCode).toBe(0);
 });
 

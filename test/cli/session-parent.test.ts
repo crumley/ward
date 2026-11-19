@@ -18,6 +18,7 @@ import {
   runWardEnv,
   writeFakeClaude,
 } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 const COORDINATOR = 'workspace-1@test';
 
@@ -152,14 +153,14 @@ let ws: string;
 let logFile: string;
 let caseId = 0;
 
-beforeEach(() => {
+beforeEach(async () => {
   applyGitTestEnv();
   caseId += 1;
   scratch ??= makeTempDir();
   ws = join(scratch, `ws-${caseId}`);
   logFile = join(scratch, `runs-${caseId}.jsonl`);
   expect(existsSync(logFile)).toBe(false);
-  expect(runWard(['workspace', 'create', ws], scratch).exitCode).toBe(0);
+  await preparedWorkspace(ws);
   expect(runWard(['task', 'open', 'feature', '--project', '0'], ws).exitCode).toBe(0);
   // The coordinating session every case opens from: recorded, not launched.
   const coordinator = runWard(

@@ -10,7 +10,6 @@ import { join } from 'node:path';
 import { readDocument, writeDocument } from '../../src/store/document.ts';
 import { workspaceRecordType } from '../../src/store/types.ts';
 import { convergeWorkspace } from '../../src/workspace/converge.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
@@ -23,6 +22,7 @@ import {
 import { openTask } from '../../src/workspace/tasks.ts';
 import { createWorkspaceWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 /** Rewrite the workspace record without its mainLine — the pre-0020 shape. */
 async function dropRecordedMainLine(root: string): Promise<void> {
@@ -162,7 +162,7 @@ beforeAll(() => {
 beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   mainLine = workspaceMainLine(ws);
 });
 

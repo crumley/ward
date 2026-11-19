@@ -12,7 +12,6 @@ import { join } from 'node:path';
 import picocolors from 'picocolors';
 import { refreshDisplay } from '../../src/cli/progress.ts';
 import { repoRefreshShape } from '../../src/cli/schema.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { git, gitOrThrow } from '../../src/workspace/git.ts';
 import {
   addRepository,
@@ -21,6 +20,7 @@ import {
   refreshRepositories,
 } from '../../src/workspace/repos.ts';
 import { applyGitTestEnv, makeTempDir, removeDir, runWard, runWardEnv } from '../helpers.ts';
+import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 // -- the streamed report (not a terminal) ---------------------------------
 
@@ -310,19 +310,12 @@ beforeAll(() => {
 beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   remotes = {};
   for (const name of ['alpha', 'beta', 'gamma']) {
     const remote = join(scratch, `remote-${caseId}`, `${name}.git`);
     mkdirSync(remote, { recursive: true });
-    gitOrThrow('.', 'init', '--bare', '--initial-branch=main', remote);
-    const seed = join(scratch, `seed-${caseId}-${name}`);
-    gitOrThrow('.', 'clone', remote, seed);
-    writeFileSync(join(seed, 'seed.txt'), '');
-    gitOrThrow(seed, 'checkout', '-b', 'main');
-    gitOrThrow(seed, 'add', '-A');
-    gitOrThrow(seed, 'commit', '-m', 'seed');
-    gitOrThrow(seed, 'push', '-u', 'origin', 'main');
+    preparedRemote(remote, { branch: 'main', files: { 'seed.txt': '' } });
     remotes[name] = remote;
     await addRepository(ws, remote, name);
   }

@@ -14,7 +14,6 @@ import {
   type SessionRecord,
   type TaskRecord,
 } from '../../src/store/types.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import {
   type DispatchState,
   dispatchState,
@@ -34,6 +33,7 @@ import {
 import { listDispatches, statusReport, taskDetail } from '../../src/workspace/status.ts';
 import { closeTask, openTask, setTaskState } from '../../src/workspace/tasks.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 const BRIEF = '# Fix the login page\n\nIt rejects every password.\n';
 const SENT = new Date('2026-11-16T12:00:00.000Z');
@@ -286,7 +286,7 @@ beforeEach(async () => {
   scratch ??= makeTempDir();
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   await openProject(ws, 'alpha');
   await openProject(ws, 'beta');
 });

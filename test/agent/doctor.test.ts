@@ -16,9 +16,9 @@ import type { AgentSettings } from '../../src/agent/settings.ts';
 import { doctorShape } from '../../src/cli/schema.ts';
 import { readDocument, writeDocument } from '../../src/store/document.ts';
 import { workspaceRecordType } from '../../src/store/types.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { type Finding, runDoctor as runDoctorReal } from '../../src/workspace/doctor.ts';
 import { applyGitTestEnv, makeTempDir, NO_GH, removeDir, writeFakeClaude } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 test('doctor resolves both axes and names the layer that answered, per key', async () => {
   writeGlobalAgent({ model: 'fable', effort: 'high', args: ['--dangerously-skip-permissions'] });
@@ -318,8 +318,8 @@ beforeEach(async () => {
   root = join(home, 'ws');
   bareRoot = join(home, 'bare');
   process.env.WARD_CONFIG_DIR = configHome;
-  await createWorkspace(root);
-  await createWorkspace(bareRoot);
+  await preparedWorkspace(root);
+  await preparedWorkspace(bareRoot);
 });
 
 afterAll(() => {

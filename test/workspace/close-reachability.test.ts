@@ -16,7 +16,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
@@ -32,6 +31,7 @@ import {
   runWardEnv,
   writeFakeGh,
 } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 const REMOTE_URL = 'https://forge.example/demo';
 const PR = 'https://forge.example/demo/pull/24';
@@ -227,7 +227,7 @@ beforeAll(() => {
 beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   remote = join(scratch, `remote-${caseId}.git`);
   gitOrThrow('.', 'init', '--bare', '--initial-branch=main', remote);
   // Every git spawned from here on rewrites the forge-shaped remote URL to

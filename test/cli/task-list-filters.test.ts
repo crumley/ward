@@ -14,8 +14,8 @@ import {
   type TaskRecord,
   taskRecordType,
 } from '../../src/store/types.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 // args → [addresses shown (sorted), hidden.tasks]
 const cases: ReadonlyArray<[readonly string[], readonly string[], number]> = [
@@ -97,7 +97,7 @@ beforeAll(async () => {
   applyGitTestEnv();
   scratch = makeTempDir();
   ws = join(scratch, 'ws');
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
 
   await seedProject(ws, 2, 'in-progress');
   await seedTask(ws, 2, 'in-progress', 1, 'workspace-upgrade', {

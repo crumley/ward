@@ -8,7 +8,6 @@ import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } fr
 import { join } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import { verbPath } from '../../src/cli/telemetry.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
@@ -16,6 +15,7 @@ import { addRepository } from '../../src/workspace/repos.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { createWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, NO_GH, removeDir, runWard, runWardEnv } from '../helpers.ts';
+import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 test('a human invocation appends one row: verb, caller, cwd, outcome, duration', () => {
   const result = runWard(['status'], ws);
@@ -75,14 +75,7 @@ test('the verb path is the command words, never the arguments', () => {
 test('the row records the invocation scope, anchor-shaped: task, repo, workspace', async () => {
   // A registered repository and a claimed worktree to stand in.
   const remote = join(scratch, `remote-${caseId}.git`);
-  gitOrThrow('.', 'init', '--bare', '--initial-branch=main', remote);
-  const seed = join(scratch, `seed-${caseId}`);
-  gitOrThrow('.', 'clone', remote, seed);
-  await Bun.write(join(seed, 'src', 'lib.ts'), 'export {};\n');
-  gitOrThrow(seed, 'checkout', '-b', 'main');
-  gitOrThrow(seed, 'add', '-A');
-  gitOrThrow(seed, 'commit', '-m', 'seed');
-  gitOrThrow(seed, 'push', '-u', 'origin', 'main');
+  preparedRemote(remote, { branch: 'main', files: { 'src/lib.ts': 'export {};\n' } });
   await addRepository(ws, remote, 'demo');
   await openTask(ws, 'scoped', { floor: GROUND_FLOOR });
   const { record } = await createWorktree(ws, 't1', 'demo');
@@ -177,7 +170,7 @@ function telemetryFinding(report: Awaited<ReturnType<typeof runDoctor>>) {
 async function freshWorkspace(): Promise<string> {
   caseId += 1;
   const dir = join(scratch, `ws-${caseId}`);
-  await createWorkspace(dir);
+  await preparedWorkspace(dir);
   return dir;
 }
 
@@ -195,7 +188,7 @@ beforeAll(() => {
 beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
 });
 
 afterAll(() => {

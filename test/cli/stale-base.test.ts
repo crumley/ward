@@ -15,7 +15,6 @@
 import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { statusShape } from '../../src/cli/schema.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
@@ -29,6 +28,7 @@ import {
   runWardEnv,
   writeFakeGh,
 } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 const REMOTE_URL = 'https://forge.example/demo';
 const PR = 'https://forge.example/demo/pull/24';
@@ -129,7 +129,7 @@ beforeAll(async () => {
   applyGitTestEnv();
   scratch = makeTempDir();
   ws = join(scratch, 'ws');
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   const remote = join(scratch, 'remote.git');
   gitOrThrow('.', 'init', '--bare', '--initial-branch=main', remote);
   process.env.GIT_CONFIG_COUNT = '1';

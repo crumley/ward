@@ -9,13 +9,13 @@ import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { statusShape } from '../../src/cli/schema.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { createWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 const BEHIND_LINE =
   'floors/0-workspace/f0t1-feature — behind origin/main by 2 commits — rebase with: ward worktree rebase f0t1';
@@ -140,16 +140,9 @@ beforeAll(() => {
 beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   remote = join(scratch, `remote-${caseId}.git`);
-  gitOrThrow('.', 'init', '--bare', '--initial-branch=main', remote);
-  const seed = join(scratch, `seed-${caseId}`);
-  gitOrThrow('.', 'clone', remote, seed);
-  await Bun.write(join(seed, 'src', 'lib.ts'), 'export {};\n');
-  gitOrThrow(seed, 'checkout', '-b', 'main');
-  gitOrThrow(seed, 'add', '-A');
-  gitOrThrow(seed, 'commit', '-m', 'seed');
-  gitOrThrow(seed, 'push', '-u', 'origin', 'main');
+  preparedRemote(remote, { branch: 'main', files: { 'src/lib.ts': 'export {};\n' } });
   await addRepository(ws, remote, 'demo');
   await openTask(ws, 'feature', { floor: GROUND_FLOOR });
   const { record } = await createWorktree(ws, 't1', 'demo');

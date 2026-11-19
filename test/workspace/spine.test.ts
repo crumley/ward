@@ -5,7 +5,6 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR, openProject } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
@@ -15,6 +14,7 @@ import { statusReport } from '../../src/workspace/status.ts';
 import { addTaskPr, closeTask, openTask, setTaskState } from '../../src/workspace/tasks.ts';
 import { createWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 test('the bootstrap loop: project → task → worktree → work → merge → delivered close', async () => {
   // Floor 0 is the ground floor, established at creation and outside the
@@ -160,16 +160,9 @@ beforeAll(() => {
 beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   remote = join(scratch, `remote-${caseId}.git`);
-  gitOrThrow('.', 'init', '--bare', '--initial-branch=main', remote);
-  const seed = join(scratch, `seed-${caseId}`);
-  gitOrThrow('.', 'clone', remote, seed);
-  await Bun.write(join(seed, 'README.md'), 'demo\n');
-  gitOrThrow(seed, 'checkout', '-b', 'main');
-  gitOrThrow(seed, 'add', '-A');
-  gitOrThrow(seed, 'commit', '-m', 'seed');
-  gitOrThrow(seed, 'push', '-u', 'origin', 'main');
+  preparedRemote(remote, { branch: 'main', files: { 'README.md': 'demo\n' } });
   await addRepository(ws, remote, 'demo');
 });
 

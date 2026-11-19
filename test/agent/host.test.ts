@@ -21,7 +21,6 @@ import { floats, placementFloor } from '../../src/agent/placement.ts';
 import { claudeAdapter } from '../../src/harness/claude.ts';
 import type { FindResult, FoundWindow } from '../../src/host/host.ts';
 import type { SessionRecord } from '../../src/store/types.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { workspaceId } from '../../src/workspace/identity.ts';
 import { openProject } from '../../src/workspace/projects.ts';
 import {
@@ -31,6 +30,7 @@ import {
   readAllSessions,
 } from '../../src/workspace/sessions.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 import { fakeHost } from './fake-host.ts';
 
 const EPOCH = '2026-11-08T10:00:00.000Z';
@@ -394,7 +394,7 @@ beforeEach(async () => {
   caseId += 1;
   scratch ??= makeTempDir();
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
 });
 
 afterAll(() => {

@@ -11,7 +11,6 @@ import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { existsSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { WardError } from '../../src/errors.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { readTasks } from '../../src/workspace/scan.ts';
@@ -29,6 +28,7 @@ import {
   worktreeStatuses,
 } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 // -- creation ---------------------------------------------------------------
 
@@ -343,7 +343,7 @@ beforeAll(() => {
 beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   await openTask(ws, 'steward-work', { floor: GROUND_FLOOR });
   mainLine = workspaceMainLine(ws);
 });

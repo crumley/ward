@@ -5,17 +5,18 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
-test('task open with no floor named opens on the ground floor, and the echo says why', () => {
-  const ws = workspace('echo');
+test('task open with no floor named opens on the ground floor, and the echo says why', async () => {
+  const ws = await workspace('echo');
   const opened = runWard(['task', 'open', 'a-thing'], ws);
   expect(opened.exitCode).toBe(0);
   expect(opened.stdout).toBe('opened f0t1 — a-thing (floor 0 — the ground floor)\n');
   expect(taskJson(ws, 'a-thing')).toMatchObject({ address: 'f0t1', floor: 0, code: 't1' });
 });
 
-test('--project 0 is an ordinary floor argument; an explicit floor still wins', () => {
-  const ws = workspace('explicit');
+test('--project 0 is an ordinary floor argument; an explicit floor still wins', async () => {
+  const ws = await workspace('explicit');
   expect(runWard(['project', 'open', 'toolchain'], ws).stdout).toContain('floor 1');
   const named = runWard(['task', 'open', 'on-the-ground', '--project', '0'], ws);
   expect(named.exitCode).toBe(0);
@@ -24,8 +25,8 @@ test('--project 0 is an ordinary floor argument; an explicit floor still wins', 
   expect(elsewhere.stdout).toBe('opened f1t1 — upstairs\n');
 });
 
-test('status and project list lead with the ground floor, named as one', () => {
-  const ws = workspace('listings');
+test('status and project list lead with the ground floor, named as one', async () => {
+  const ws = await workspace('listings');
   runWard(['project', 'open', 'toolchain'], ws);
   const status = runWard(['status'], ws).stdout;
   expect(status).toContain('floor 0 — 🔧 workspace (ground floor) [active]');
@@ -37,8 +38,8 @@ test('status and project list lead with the ground floor, named as one', () => {
   expect(projects.map((project: { floor: number }) => project.floor)).toEqual([0, 1]);
 });
 
-test('a workspace with no ground floor refuses the open, with the update remedy', () => {
-  const ws = workspace('no-ground-floor');
+test('a workspace with no ground floor refuses the open, with the update remedy', async () => {
+  const ws = await workspace('no-ground-floor');
   removeDir(join(ws, 'projects', '0-workspace'));
   const refused = runWard(['task', 'open', 'nowhere-to-go'], ws);
   expect(refused.exitCode).not.toBe(0);
@@ -63,11 +64,9 @@ beforeAll(() => {
 
 afterAll(() => removeDir(scratch));
 
-function workspace(name: string): string {
+async function workspace(name: string): Promise<string> {
   counter += 1;
-  const ws = join(scratch, `${name}-${counter}`);
-  runWard(['workspace', 'create', ws], scratch);
-  return ws;
+  return preparedWorkspace(join(scratch, `${name}-${counter}`));
 }
 
 function taskJson(ws: string, slug: string): unknown {

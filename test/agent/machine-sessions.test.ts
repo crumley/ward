@@ -12,7 +12,6 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sessionMutationShape, statusShape } from '../../src/cli/schema.ts';
 import { mungeCwd } from '../../src/harness/claude.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { readSessions } from '../../src/workspace/sessions.ts';
 import {
@@ -22,6 +21,7 @@ import {
   removeDir,
   writeFakeClaude,
 } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 // -- ids carry the machine, and never reuse a number -------------------------
 
@@ -321,7 +321,7 @@ beforeEach(async () => {
   configHome = join(scratch, `config-${caseId}`);
   logFile = join(scratch, `runs-${caseId}.jsonl`);
   stub = writeFakeClaude(scratch, `claude-${caseId}`, { logFile });
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
 });
 
 afterAll(() => {

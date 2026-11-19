@@ -16,13 +16,13 @@ import {
   worktreeListShape,
 } from '../../src/cli/schema.ts';
 import { verbPath } from '../../src/cli/telemetry.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { workspaceMainLine } from '../../src/workspace/steward.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { createWorkspaceWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir, runWard } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 // -- worktree create --workspace --------------------------------------------
 
@@ -264,7 +264,7 @@ beforeAll(() => {
 beforeEach(async () => {
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   await openTask(ws, 'steward-work', { floor: GROUND_FLOOR });
   mainLine = workspaceMainLine(ws);
 });

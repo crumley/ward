@@ -16,6 +16,7 @@ import {
   runWardEnv,
   writeFakeGh,
 } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 const PR_MERGED = 'https://example.com/x/pull/1';
 const PR_CHANGES = 'https://example.com/x/pull/2';
@@ -233,13 +234,13 @@ let ws: string;
 let emptyWs: string;
 let fakeGh: string;
 
-beforeAll(() => {
+beforeAll(async () => {
   applyGitTestEnv();
   scratch = makeTempDir();
   ws = join(scratch, 'ws');
   emptyWs = join(scratch, 'empty');
-  runWard(['workspace', 'create', ws], scratch);
-  runWard(['workspace', 'create', emptyWs], scratch);
+  await preparedWorkspace(ws);
+  await preparedWorkspace(emptyWs);
   runWard(['task', 'open', 'first'], ws);
   runWard(['task', 'open', 'second'], ws);
   runWard(['task', 'open', 'third'], ws);

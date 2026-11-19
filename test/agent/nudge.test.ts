@@ -11,7 +11,6 @@ import { claudeInputLine } from '../../src/harness/claude.ts';
 import type { FoundWindow, TypeResult } from '../../src/host/host.ts';
 import { TYPEABLE } from '../../src/host/tmux.ts';
 import type { DispatchRecord, SessionRecord } from '../../src/store/types.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { workspaceId } from '../../src/workspace/identity.ts';
 import { openProject } from '../../src/workspace/projects.ts';
 import {
@@ -23,6 +22,7 @@ import {
 } from '../../src/workspace/sessions.ts';
 import { openTask } from '../../src/workspace/tasks.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 import { fakeHost } from './fake-host.ts';
 
 const TEXT = '[ward] hand-off to floor 2: task f2t1 (x). Read it: ward task show f2t1';
@@ -203,7 +203,7 @@ beforeEach(async () => {
   scratch ??= makeTempDir();
   caseId += 1;
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   await openProject(ws, 'alpha');
   await openProject(ws, 'beta');
 });

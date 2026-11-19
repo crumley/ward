@@ -10,10 +10,9 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { argumentReadVerbShapes, repoPathShape, workspacePathShape } from '../../src/cli/schema.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
-import { gitOrThrow } from '../../src/workspace/git.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { applyGitTestEnv, makeTempDir, NO_GH, removeDir } from '../helpers.ts';
+import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 // -- the registry verbs ----------------------------------------------------
 
@@ -346,14 +345,7 @@ beforeAll(async () => {
   applyGitTestEnv();
   scratch = makeTempDir();
   remote = join(scratch, 'remote.git');
-  gitOrThrow('.', 'init', '--bare', '--initial-branch=main', remote);
-  const seed = join(scratch, 'seed');
-  gitOrThrow('.', 'clone', remote, seed);
-  await Bun.write(join(seed, 'README.md'), 'demo\n');
-  gitOrThrow(seed, 'checkout', '-b', 'main');
-  gitOrThrow(seed, 'add', '-A');
-  gitOrThrow(seed, 'commit', '-m', 'seed');
-  gitOrThrow(seed, 'push', '-u', 'origin', 'main');
+  preparedRemote(remote, { branch: 'main', files: { 'README.md': 'demo\n' } });
 });
 
 beforeEach(async () => {
@@ -362,8 +354,8 @@ beforeEach(async () => {
   state = join(home, 'state');
   alpha = join(home, 'alpha');
   beta = join(home, 'beta');
-  await createWorkspace(alpha);
-  await createWorkspace(beta);
+  await preparedWorkspace(alpha);
+  await preparedWorkspace(beta);
   await addRepository(alpha, remote, 'shared');
   await addRepository(beta, remote, 'shared');
   await addRepository(beta, remote, 'beta-only');

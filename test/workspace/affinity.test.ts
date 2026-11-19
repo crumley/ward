@@ -12,13 +12,12 @@ import {
   releaseRepository,
   requireRegistered,
 } from '../../src/workspace/affinity.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
-import { gitOrThrow } from '../../src/workspace/git.ts';
 import { openProject, readProjects, resolveProject } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { closeTask, openTask } from '../../src/workspace/tasks.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 // -- the claim ------------------------------------------------------------
 
@@ -172,7 +171,7 @@ let counter = 0;
 beforeEach(async () => {
   counter += 1;
   ws = join(scratch, `case-${counter}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   for (const name of ['demo', 'other']) {
     await addRepository(ws, makeRemote(join(scratch, `remote-${counter}-${name}`)), name);
   }
@@ -180,13 +179,7 @@ beforeEach(async () => {
 
 /** A bare repository with one commit — the source `repo add` clones from. */
 function makeRemote(path: string): string {
-  const seed = `${path}-seed`;
-  gitOrThrow(scratch, 'init', '--bare', '--initial-branch=main', path);
-  gitOrThrow(scratch, 'clone', path, seed);
-  Bun.write(join(seed, 'README.md'), '# seed\n');
-  gitOrThrow(seed, 'add', '-A');
-  gitOrThrow(seed, 'commit', '-m', 'seed');
-  gitOrThrow(seed, 'push', 'origin', 'main');
+  preparedRemote(path, { branch: 'main', files: { 'README.md': '# seed\n' } });
   return path;
 }
 

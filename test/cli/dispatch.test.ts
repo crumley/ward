@@ -16,7 +16,6 @@ import {
   taskDispatchShape,
   taskShowShape,
 } from '../../src/cli/schema.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import {
@@ -28,6 +27,7 @@ import {
   runWard,
   runWardEnv,
 } from '../helpers.ts';
+import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 test('task dispatch: a human reads what was handed, to whom, and that it waits', () => {
   const result = runWard(['task', 'dispatch', 'fix-login', '--to', '2', '--brief', brief], ws);
@@ -252,7 +252,7 @@ let counter = 0;
 beforeEach(async () => {
   counter += 1;
   ws = join(scratch, `case-${counter}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   await Bun.write(brief, '# Fix the login page\n\nIt rejects every password.\n');
   await addRepository(ws, makeRemote(join(scratch, `remote-${counter}`)), 'demo');
   expect(runWard(['project', 'open', 'alpha'], ws).exitCode).toBe(0);
@@ -289,12 +289,6 @@ function humanEnv(): Record<string, string> {
 
 /** A bare repository with one commit — the source `repo add` clones from. */
 function makeRemote(path: string): string {
-  const seed = `${path}-seed`;
-  gitOrThrow(scratch, 'init', '--bare', '--initial-branch=main', path);
-  gitOrThrow(scratch, 'clone', path, seed);
-  Bun.write(join(seed, 'README.md'), '# seed\n');
-  gitOrThrow(seed, 'add', '-A');
-  gitOrThrow(seed, 'commit', '-m', 'seed');
-  gitOrThrow(seed, 'push', 'origin', 'main');
+  preparedRemote(path, { branch: 'main', files: { 'README.md': '# seed\n' } });
   return path;
 }

@@ -33,6 +33,7 @@ import {
   runWardEnv,
   writeFakeGh,
 } from '../helpers.ts';
+import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 const PR_URL = 'https://example.com/pr/1';
 
@@ -331,17 +332,10 @@ beforeAll(async () => {
   scratch = makeTempDir();
   ws = join(scratch, 'ws');
   emptyWs = join(scratch, 'empty');
-  runWard(['workspace', 'create', emptyWs], scratch);
+  await preparedWorkspace(emptyWs);
 
   remote = join(scratch, 'remote.git');
-  gitOrThrow('.', 'init', '--bare', '--initial-branch=main', remote);
-  const seed = join(scratch, 'seed');
-  gitOrThrow('.', 'clone', remote, seed);
-  await Bun.write(join(seed, 'README.md'), 'demo\n');
-  gitOrThrow(seed, 'checkout', '-b', 'main');
-  gitOrThrow(seed, 'add', '-A');
-  gitOrThrow(seed, 'commit', '-m', 'seed');
-  gitOrThrow(seed, 'push', '-u', 'origin', 'main');
+  preparedRemote(remote, { branch: 'main', files: { 'README.md': 'demo\n' } });
 });
 
 afterAll(() => {

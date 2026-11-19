@@ -10,7 +10,6 @@ import { afterAll, beforeEach, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { piNativeId, piSessionDir } from '../../src/harness/pi.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { readSessions } from '../../src/workspace/sessions.ts';
 import {
   applyGitTestEnv,
@@ -20,6 +19,7 @@ import {
   runWardEnv,
   writeFakeClaude,
 } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -74,7 +74,7 @@ beforeEach(async () => {
   configHome = join(scratch, `config-${caseId}`);
   logFile = join(scratch, `runs-${caseId}.jsonl`);
   stub = writeFakeClaude(scratch, `pi-${caseId}`, { logFile });
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
   mkdirSync(configHome, { recursive: true });
   writeFileSync(
     join(configHome, 'config.md'),

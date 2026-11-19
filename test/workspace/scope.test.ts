@@ -6,14 +6,13 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { createWorkspace } from '../../src/workspace/create.ts';
-import { gitOrThrow } from '../../src/workspace/git.ts';
 import { GROUND_FLOOR } from '../../src/workspace/projects.ts';
 import { addRepository } from '../../src/workspace/repos.ts';
 import { scopeFromCwd } from '../../src/workspace/scope.ts';
 import { closeTask, openTask } from '../../src/workspace/tasks.ts';
 import { createWorktree } from '../../src/workspace/worktrees.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedRemote, preparedWorkspace } from '../prepared.ts';
 
 const rows: readonly { name: string; dir: () => string; task: string | null }[] = [
   {
@@ -79,17 +78,10 @@ beforeAll(async () => {
   ws = join(scratch, 'ws');
   outside = join(scratch, 'elsewhere');
   mkdirSync(outside, { recursive: true });
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
 
   const remote = join(scratch, 'remote.git');
-  gitOrThrow('.', 'init', '--bare', '--initial-branch=main', remote);
-  const seed = join(scratch, 'seed');
-  gitOrThrow('.', 'clone', remote, seed);
-  await Bun.write(join(seed, 'README.md'), 'demo\n');
-  gitOrThrow(seed, 'checkout', '-b', 'main');
-  gitOrThrow(seed, 'add', '-A');
-  gitOrThrow(seed, 'commit', '-m', 'seed');
-  gitOrThrow(seed, 'push', '-u', 'origin', 'main');
+  preparedRemote(remote, { branch: 'main', files: { 'README.md': 'demo\n' } });
   await addRepository(ws, remote, 'demo');
 
   await openTask(ws, 'feature', { floor: GROUND_FLOOR });

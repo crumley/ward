@@ -11,7 +11,6 @@ import { readDocument, writeDocument } from '../../src/store/document.ts';
 import { projectRecordType } from '../../src/store/types.ts';
 import { PALETTE, POOL_COLORS, POOL_EMOJI } from '../../src/theme/palette.ts';
 import { convergeWorkspace } from '../../src/workspace/converge.ts';
-import { createWorkspace } from '../../src/workspace/create.ts';
 import { runDoctor } from '../../src/workspace/doctor.ts';
 import {
   assignIdentity,
@@ -23,6 +22,7 @@ import {
 import { git } from '../../src/workspace/git.ts';
 import { openProject, readProjects, resolveProject } from '../../src/workspace/projects.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
+import { preparedWorkspace } from '../prepared.ts';
 
 // -- assignment -----------------------------------------------------------------
 
@@ -459,7 +459,7 @@ beforeEach(async () => {
   caseId += 1;
   scratch ??= makeTempDir();
   ws = join(scratch, `ws-${caseId}`);
-  await createWorkspace(ws);
+  await preparedWorkspace(ws);
 });
 
 afterAll(() => {
