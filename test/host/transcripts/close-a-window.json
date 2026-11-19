@@ -1,6 +1,6 @@
 {
   "scenario": "close-a-window",
-  "recordedWith": "tmux 3.7c",
+  "recordedWith": "tmux 3.8",
   "steps": [
     {
       "kind": "run",
@@ -268,10 +268,10 @@
         "-p",
         "-t",
         "@3",
-        "#{@ward_session}"
+        "#{window_id}\t#{@ward_session}"
       ],
       "exit": 0,
-      "stdout": "helper\n",
+      "stdout": "@3\thelper\n",
       "stderr": ""
     },
     {
@@ -294,10 +294,10 @@
         "-p",
         "-t",
         "@3",
-        "#{@ward_session}"
+        "#{window_id}\t#{@ward_session}"
       ],
       "exit": 0,
-      "stdout": "helper\n",
+      "stdout": "@3\thelper\n",
       "stderr": ""
     },
     {
@@ -331,10 +331,10 @@
         "-p",
         "-t",
         "@3",
-        "#{@ward_session}"
+        "#{window_id}\t#{@ward_session}"
       ],
       "exit": 0,
-      "stdout": "\n",
+      "stdout": "\t\n",
       "stderr": ""
     },
     {
@@ -359,10 +359,10 @@
         "-p",
         "-t",
         "@4",
-        "#{@ward_session}"
+        "#{window_id}\t#{@ward_session}"
       ],
       "exit": 0,
-      "stdout": "\n",
+      "stdout": "@4\t\n",
       "stderr": ""
     },
     {
@@ -381,7 +381,7 @@
         "-p",
         "-t",
         "@3",
-        "#{@ward_session}"
+        "#{window_id}\t#{@ward_session}"
       ],
       "exit": 1,
       "stdout": "",

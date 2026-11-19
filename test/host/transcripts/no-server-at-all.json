@@ -1,6 +1,6 @@
 {
   "scenario": "no-server-at-all",
-  "recordedWith": "tmux 3.7c",
+  "recordedWith": "tmux 3.8",
   "steps": [
     {
       "kind": "run",
@@ -42,7 +42,7 @@
         "-p",
         "-t",
         "@999",
-        "#{@ward_session}"
+        "#{window_id}\t#{@ward_session}"
       ],
       "exit": 1,
       "stdout": "",
@@ -55,7 +55,7 @@
         "-p",
         "-t",
         "@999",
-        "#{@ward_session}\t#{@ward_pane}"
+        "#{window_id}\t#{@ward_session}\t#{@ward_pane}"
       ],
       "exit": 1,
       "stdout": "",
