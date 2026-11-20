@@ -1,6 +1,6 @@
 {
   "scenario": "typing-a-line",
-  "recordedWith": "tmux 3.7c",
+  "recordedWith": "tmux 3.8",
   "steps": [
     {
       "kind": "run",
@@ -192,10 +192,10 @@
         "-p",
         "-t",
         "@2",
-        "#{@ward_session}\t#{@ward_pane}"
+        "#{window_id}\t#{@ward_session}\t#{@ward_pane}"
       ],
       "exit": 0,
-      "stdout": "target\t%1\n",
+      "stdout": "@2\ttarget\t%1\n",
       "stderr": ""
     },
     {
@@ -297,10 +297,10 @@
         "-p",
         "-t",
         "@2",
-        "#{@ward_session}\t#{@ward_pane}"
+        "#{window_id}\t#{@ward_session}\t#{@ward_pane}"
       ],
       "exit": 0,
-      "stdout": "target\t%1\n",
+      "stdout": "@2\ttarget\t%1\n",
       "stderr": ""
     },
     {
@@ -413,10 +413,10 @@
         "-p",
         "-t",
         "@2",
-        "#{@ward_session}\t#{@ward_pane}"
+        "#{window_id}\t#{@ward_session}\t#{@ward_pane}"
       ],
       "exit": 0,
-      "stdout": "target\t%1\n",
+      "stdout": "@2\ttarget\t%1\n",
       "stderr": ""
     },
     {
@@ -452,10 +452,10 @@
         "-p",
         "-t",
         "@2",
-        "#{@ward_session}\t#{@ward_pane}"
+        "#{window_id}\t#{@ward_session}\t#{@ward_pane}"
       ],
       "exit": 0,
-      "stdout": "target\t%1\n",
+      "stdout": "@2\ttarget\t%1\n",
       "stderr": ""
     },
     {
@@ -554,10 +554,10 @@
         "-p",
         "-t",
         "@3",
-        "#{@ward_session}\t#{@ward_pane}"
+        "#{window_id}\t#{@ward_session}\t#{@ward_pane}"
       ],
       "exit": 0,
-      "stdout": "asked\t%2\n",
+      "stdout": "@3\tasked\t%2\n",
       "stderr": ""
     },
     {
@@ -683,10 +683,10 @@
         "-p",
         "-t",
         "@4",
-        "#{@ward_session}\t#{@ward_pane}"
+        "#{window_id}\t#{@ward_session}\t#{@ward_pane}"
       ],
       "exit": 0,
-      "stdout": "ended\t%3\n",
+      "stdout": "@4\tended\t%3\n",
       "stderr": ""
     },
     {
@@ -700,6 +700,32 @@
       ],
       "exit": 0,
       "stdout": "@4\t1\t0\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "set-option",
+        "-wu",
+        "-t",
+        "@4",
+        "@ward_pane"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "display-message",
+        "-p",
+        "-t",
+        "@4",
+        "#{window_id}\t#{@ward_session}\t#{@ward_pane}"
+      ],
+      "exit": 0,
+      "stdout": "@4\tended\t\n",
       "stderr": ""
     },
     {
@@ -720,10 +746,10 @@
         "-p",
         "-t",
         "@4",
-        "#{@ward_session}\t#{@ward_pane}"
+        "#{window_id}\t#{@ward_session}\t#{@ward_pane}"
       ],
       "exit": 0,
-      "stdout": "\t\n",
+      "stdout": "\t\t\n",
       "stderr": ""
     }
   ]

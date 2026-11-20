@@ -1,6 +1,6 @@
 {
   "scenario": "rename-in-place",
-  "recordedWith": "tmux 3.7c",
+  "recordedWith": "tmux 3.8",
   "steps": [
     {
       "kind": "run",
@@ -373,6 +373,9 @@
         "=ward-main-f0",
         "-s",
         "ward-main-f0-v1",
+        "-P",
+        "-F",
+        "#{session_id}",
         ";",
         "set-option",
         "-t",
@@ -397,7 +400,7 @@
         "=ward-main-f0-v1:@2"
       ],
       "exit": 0,
-      "stdout": "",
+      "stdout": "$1\n",
       "stderr": ""
     },
     {

@@ -365,6 +365,11 @@ export function attachViewArgv(
     sessionTarget(group),
     '-s',
     name,
+    // The view's session id, printed as it is made: a view whose window
+    // cannot be selected is ended by it ({@link endViewArgv}'s reasoning).
+    '-P',
+    '-F',
+    '#{session_id}',
     ...setOption(['-t', windowTarget(name)], '@ward_view', workspace),
     // A grouped session shares its host's windows, not its options: the view
     // is titled for itself.
@@ -572,9 +577,14 @@ export function statusText(text: string): string {
   return text.replace(/#/g, '##').replace(/%/g, '%%');
 }
 
-/** Read one window's tag, then end it — two calls, the read first. */
+/**
+ * Read one window's tag, then end it — two calls, the read first. The read
+ * asks for the window's id beside its tag: tmux answers a read of a window it
+ * no longer holds with an empty line and exit 0 (display-message's target may
+ * fail), so an empty id is the only sign that the window has gone.
+ */
 export function windowTagArgv(window: string): string[] {
-  return ['display-message', '-p', '-t', window, '#{@ward_session}'];
+  return ['display-message', '-p', '-t', window, ['#{window_id}', '#{@ward_session}'].join(FIELD)];
 }
 
 export function killWindowArgv(window: string): string[] {
@@ -590,9 +600,19 @@ export const TYPEABLE = /^[\x20-\x7e]{1,200}$/;
 const TYPE_WAIT_MS = 2000;
 const TYPE_POLL_MS = 100;
 
-/** The window's session tag and the pane its run was started in. */
+/**
+ * The window's id, its session tag, and the pane its run was started in — the
+ * id read only to tell a window that has gone (an empty one, see
+ * {@link windowTagArgv}).
+ */
 export function windowRunArgv(window: string): string[] {
-  return ['display-message', '-p', '-t', window, ['#{@ward_session}', '#{@ward_pane}'].join(FIELD)];
+  return [
+    'display-message',
+    '-p',
+    '-t',
+    window,
+    ['#{window_id}', '#{@ward_session}', '#{@ward_pane}'].join(FIELD),
+  ];
 }
 
 /** The run's pane: the window it is in, whether its run has ended, whether it is in a mode. */
@@ -1087,7 +1107,8 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
         }
         return { outcome: 'unknown', reason: tag.stderr };
       }
-      const found = tag.stdout.trim();
+      const [id = '', found = ''] = tag.stdout.replace(/\n$/, '').split(FIELD);
+      if (id === '') return { outcome: 'absent' };
       if (found !== session) {
         return {
           outcome: 'refused',
@@ -1115,12 +1136,19 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
       if (!run.ok) {
         return gone(run) ? { outcome: 'absent' } : { outcome: 'unknown', reason: run.stderr };
       }
-      const [tag = '', pane = ''] = run.stdout.trim().split(FIELD);
-      if (tag !== session || pane === '') {
+      const [id = '', tag = '', pane = ''] = run.stdout.replace(/\n$/, '').split(FIELD);
+      if (id === '') return { outcome: 'absent' };
+      if (tag !== session) {
         const carries = tag === '' ? 'no session tag' : `'${tag}'`;
         return {
           outcome: 'withheld',
           reason: `window ${window} carries ${carries}, not '${session}'`,
+        };
+      }
+      if (pane === '') {
+        return {
+          outcome: 'withheld',
+          reason: `window ${window} carries '${session}' but names no pane for its run`,
         };
       }
       const state = call(paneStateArgv(pane));
@@ -1284,8 +1312,13 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
           );
           if (made.ok) return worn({ name, mode: 'attach' }, request);
           last = made.stderr;
-          if (!/duplicate session/.test(made.stderr)) break;
-          continue;
+          if (/duplicate session/.test(made.stderr)) continue;
+          // Made, then refused its window: the session this call made (named
+          // by the id it printed, never by a name another may since have
+          // taken) is ended, as an observe view's is.
+          const viewId = made.stdout.trim().split('\n')[0] ?? '';
+          if (viewId.startsWith('$')) call(['kill-session', '-t', viewId]);
+          break;
         }
         const made = call(observeViewArgv(name, request.workspace, request));
         if (!made.ok) {

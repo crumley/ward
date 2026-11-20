@@ -1,6 +1,6 @@
 {
   "scenario": "place-a-host",
-  "recordedWith": "tmux 3.7c",
+  "recordedWith": "tmux 3.8",
   "steps": [
     {
       "kind": "run",

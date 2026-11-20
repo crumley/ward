@@ -1,6 +1,6 @@
 {
   "scenario": "found-by-stamp",
-  "recordedWith": "tmux 3.7c",
+  "recordedWith": "tmux 3.8",
   "steps": [
     {
       "kind": "run",

@@ -46,6 +46,7 @@ import {
   viewName,
   watchArgv,
   windowRunArgv,
+  windowTagArgv,
   windowTarget,
 } from '../../src/host/tmux.ts';
 
@@ -355,6 +356,9 @@ test("an attach view is grouped with the floor host, stamped, and selects the se
     '=ward-a-f3',
     '-s',
     'ward-a-f3-v1',
+    '-P',
+    '-F',
+    '#{session_id}',
     ';',
     'set-option',
     '-t',
@@ -639,7 +643,14 @@ test('a line is typed literally, by pane id, and never carries the submitting ke
     '-p',
     '-t',
     '@3',
-    '#{@ward_session}\t#{@ward_pane}',
+    '#{window_id}\t#{@ward_session}\t#{@ward_pane}',
+  ]);
+  expect(windowTagArgv('@3')).toEqual([
+    'display-message',
+    '-p',
+    '-t',
+    '@3',
+    '#{window_id}\t#{@ward_session}',
   ]);
   expect(paneStateArgv('%7')).toEqual([
     'display-message',

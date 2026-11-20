@@ -1,6 +1,6 @@
 {
   "scenario": "views",
-  "recordedWith": "tmux 3.7c",
+  "recordedWith": "tmux 3.8",
   "steps": [
     {
       "kind": "run",
@@ -281,6 +281,9 @@
         "=main-f0-workspace",
         "-s",
         "main-f0-workspace-v1",
+        "-P",
+        "-F",
+        "#{session_id}",
         ";",
         "set-option",
         "-t",
@@ -305,7 +308,7 @@
         "=main-f0-workspace-v1:@3"
       ],
       "exit": 0,
-      "stdout": "",
+      "stdout": "$1\n",
       "stderr": ""
     },
     {
@@ -354,6 +357,9 @@
         "=main-f0-workspace",
         "-s",
         "main-f0-workspace-v2",
+        "-P",
+        "-F",
+        "#{session_id}",
         ";",
         "set-option",
         "-t",
@@ -378,7 +384,7 @@
         "=main-f0-workspace-v2:@3"
       ],
       "exit": 0,
-      "stdout": "",
+      "stdout": "$2\n",
       "stderr": ""
     },
     {
@@ -414,6 +420,9 @@
         "=main-f0-workspace",
         "-s",
         "main-f0-workspace-v4",
+        "-P",
+        "-F",
+        "#{session_id}",
         ";",
         "set-option",
         "-t",
@@ -438,7 +447,7 @@
         "=main-f0-workspace-v4:@3"
       ],
       "exit": 0,
-      "stdout": "",
+      "stdout": "$3\n",
       "stderr": ""
     },
     {
@@ -718,6 +727,9 @@
         "=main-f0-workspace",
         "-s",
         "main-f0-workspace-v5",
+        "-P",
+        "-F",
+        "#{session_id}",
         ";",
         "set-option",
         "-t",
@@ -742,18 +754,18 @@
         "=main-f0-workspace-v5:@999"
       ],
       "exit": 1,
-      "stdout": "",
+      "stdout": "$4\n",
       "stderr": "can't find window: @999\n"
     },
     {
-      "kind": "outside",
+      "kind": "run",
       "argv": [
-        "list-sessions",
-        "-F",
-        "#{session_name}"
+        "kill-session",
+        "-t",
+        "$4"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\nmain-f0-workspace-o1\nmain-f0-workspace-v1\nmain-f0-workspace-v2\nmain-f0-workspace-v3\nmain-f0-workspace-v4\nmain-f0-workspace-v5\n",
+      "stdout": "",
       "stderr": ""
     },
     {
@@ -764,7 +776,18 @@
         "#{session_name}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\nmain-f0-workspace-o1\nmain-f0-workspace-v1\nmain-f0-workspace-v2\nmain-f0-workspace-v3\nmain-f0-workspace-v4\nmain-f0-workspace-v5\n",
+      "stdout": "main-f0-workspace\nmain-f0-workspace-o1\nmain-f0-workspace-v1\nmain-f0-workspace-v2\nmain-f0-workspace-v3\nmain-f0-workspace-v4\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "list-sessions",
+        "-F",
+        "#{session_name}"
+      ],
+      "exit": 0,
+      "stdout": "main-f0-workspace\nmain-f0-workspace-o1\nmain-f0-workspace-v1\nmain-f0-workspace-v2\nmain-f0-workspace-v3\nmain-f0-workspace-v4\n",
       "stderr": ""
     },
     {
@@ -817,7 +840,7 @@
         "#{session_name}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\nmain-f0-workspace-o1\nmain-f0-workspace-v2\nmain-f0-workspace-v3\nmain-f0-workspace-v4\nmain-f0-workspace-v5\n",
+      "stdout": "main-f0-workspace\nmain-f0-workspace-o1\nmain-f0-workspace-v2\nmain-f0-workspace-v3\nmain-f0-workspace-v4\n",
       "stderr": ""
     },
     {
@@ -830,7 +853,7 @@
         "#{socket_path}\t#{session_id}"
       ],
       "exit": 0,
-      "stdout": "<socket>\t$2\n",
+      "stdout": "<socket>\t$5\n",
       "stderr": ""
     },
     {
@@ -863,7 +886,7 @@
       "argv": [
         "set-option",
         "-t",
-        "$2:",
+        "$5:",
         "destroy-unattached",
         "on"
       ],
@@ -879,7 +902,7 @@
         "#{session_name}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\nmain-f0-workspace-v2\nmain-f0-workspace-v3\nmain-f0-workspace-v4\nmain-f0-workspace-v5\n",
+      "stdout": "main-f0-workspace\nmain-f0-workspace-v2\nmain-f0-workspace-v3\nmain-f0-workspace-v4\n",
       "stderr": ""
     },
     {
@@ -892,7 +915,7 @@
         "#{socket_path}\t#{session_id}"
       ],
       "exit": 0,
-      "stdout": "<socket>\t$3\n",
+      "stdout": "<socket>\t$2\n",
       "stderr": ""
     },
     {
@@ -926,7 +949,7 @@
         "#{session_name}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\nmain-f0-workspace-v2\nmain-f0-workspace-v3\nmain-f0-workspace-v4\nmain-f0-workspace-v5\n",
+      "stdout": "main-f0-workspace\nmain-f0-workspace-v2\nmain-f0-workspace-v3\nmain-f0-workspace-v4\n",
       "stderr": ""
     },
     {
@@ -937,7 +960,7 @@
         "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\tws-conformance\t0\t\t1\t0\t0.1.0\t2\tmain-f0-workspace\nmain-f0-workspace-v2\t\t\tws-conformance\t1\t0\t\t2\tmain-f0-workspace\nmain-f0-workspace-v3\t\t\t\t1\t0\t\t1\t\nmain-f0-workspace-v4\t\t\tws-conformance\t1\t0\t\t2\tmain-f0-workspace\nmain-f0-workspace-v5\t\t\tws-conformance\t1\t0\t\t2\tmain-f0-workspace\n",
+      "stdout": "main-f0-workspace\tws-conformance\t0\t\t1\t0\t0.1.0\t2\tmain-f0-workspace\nmain-f0-workspace-v2\t\t\tws-conformance\t1\t0\t\t2\tmain-f0-workspace\nmain-f0-workspace-v3\t\t\t\t1\t0\t\t1\t\nmain-f0-workspace-v4\t\t\tws-conformance\t1\t0\t\t2\tmain-f0-workspace\n",
       "stderr": ""
     },
     {
@@ -1056,7 +1079,7 @@
         "#{socket_path}\t#{session_id}"
       ],
       "exit": 0,
-      "stdout": "<socket>\t$4\n",
+      "stdout": "<socket>\t$6\n",
       "stderr": ""
     },
     {
@@ -1090,7 +1113,7 @@
       "argv": [
         "set-option",
         "-t",
-        "$4:",
+        "$6:",
         "destroy-unattached",
         "on"
       ],
@@ -1106,7 +1129,7 @@
         "#{session_name}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\nmain-f0-workspace-v2\nmain-f0-workspace-v3\nmain-f0-workspace-v4\nmain-f0-workspace-v5\n",
+      "stdout": "main-f0-workspace\nmain-f0-workspace-v2\nmain-f0-workspace-v3\nmain-f0-workspace-v4\n",
       "stderr": ""
     }
   ]

@@ -319,7 +319,7 @@ test.each<[string, Step[], ReturnType<SessionHost['close']>]>([
   [
     'a window gone between the read and the kill',
     [
-      call(windowTagArgv('@2'), { stdout: 'coord\n' }),
+      call(windowTagArgv('@2'), { stdout: '@2\tcoord\n' }),
       call(killWindowArgv('@2'), { exit: 1, stderr: "can't find window: @2" }),
     ],
     { outcome: 'absent' },
@@ -327,7 +327,7 @@ test.each<[string, Step[], ReturnType<SessionHost['close']>]>([
   [
     'a kill that errors otherwise',
     [
-      call(windowTagArgv('@2'), { stdout: 'coord\n' }),
+      call(windowTagArgv('@2'), { stdout: '@2\tcoord\n' }),
       call(killWindowArgv('@2'), { exit: 1, stderr: 'boom' }),
     ],
     { outcome: 'unknown', reason: 'boom' },
@@ -370,7 +370,7 @@ describe('typeLine', () => {
   const type = (host: SessionHost) =>
     host.typeLine({ window: '@2', session: 'target', text: TEXT, inputLine: claudeInputLine });
   const tagged = (): Step[] => [
-    call(windowRunArgv('@2'), { stdout: 'target\t%1\n' }),
+    call(windowRunArgv('@2'), { stdout: '@2\ttarget\t%1\n' }),
     call(paneStateArgv('%1'), { stdout: '@2\t0\t0\n' }),
   ];
   // A screen read, answered again for as long as the host keeps asking.
@@ -389,8 +389,8 @@ describe('typeLine', () => {
     ],
     [
       'the window carries its tag but names no pane',
-      [call(windowRunArgv('@2'), { stdout: 'target\t\n' })],
-      { outcome: 'withheld', reason: "window @2 carries 'target', not 'target'" },
+      [call(windowRunArgv('@2'), { stdout: '@2\ttarget\t\n' })],
+      { outcome: 'withheld', reason: "window @2 carries 'target' but names no pane for its run" },
     ],
     [
       'the pane read errors with a gone pane',

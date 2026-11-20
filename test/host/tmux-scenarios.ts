@@ -240,14 +240,10 @@ export const SCENARIOS: readonly Scenario[] = [
       expect(windowsIn(stage, F0).sort()).toEqual(['coord', 'helper']);
       expect(host.close(helper.window, 'helper')).toEqual({ outcome: 'closed' });
       expect(windowsIn(stage, F0)).toEqual(['coord']);
-      // Closing a window tmux no longer holds is never an error — but tmux
-      // answers a read of a window it does not hold with an empty line, not a
-      // refusal (display-message's target may fail), so the tag read comes
-      // back blank and the close is refused rather than found absent.
-      expect(host.close(helper.window, 'helper')).toEqual({
-        outcome: 'refused',
-        reason: `window ${helper.window} carries no session tag, not 'helper'`,
-      });
+      // Closing a window tmux no longer holds is never an error: tmux answers
+      // a read of it with an empty line and exit 0 (display-message's target
+      // may fail), and the empty window id is what says it has gone.
+      expect(host.close(helper.window, 'helper')).toEqual({ outcome: 'absent' });
       // A window that carries no tag is not Ward's to end.
       const human = stage.tmux('new-window', '-d', '-P', '-F', '#{window_id}', '-t', `=${F0}:`);
       expect(host.close(human.trim(), 'coord')).toEqual({
@@ -513,16 +509,15 @@ export const SCENARIOS: readonly Scenario[] = [
         [`${F0}-v4`, WS, F0],
       ]);
 
-      // A view of a window that is not there is refused. The observe view made
-      // for it is ended; the attach view is NOT — tmux made the session before
-      // it failed to select the window, and it is left for doctor to report as
-      // a leftover view (pinned as it stands; design/0073-scripted-tmux-runner/).
+      // A view of a window that is not there is refused, and the view made
+      // for it is ended: tmux makes the session before it fails to find the
+      // window, so neither kind is left behind for doctor to call leftover.
       expect(() => observe('@999')).toThrow(
         "tmux could not make a view of @999: can't find window",
       );
       expect(() => attach('@999')).toThrow("tmux could not make a view of @999: can't find window");
       expect(groupNames(stage)).not.toContain(`${F0}-o2`);
-      expect(groupNames(stage)).toContain(`${F0}-v5`);
+      expect(groupNames(stage)).not.toContain(`${F0}-v5`);
 
       // Entering from no terminal: tmux refuses the client, and Ward ends the view after it.
       expect(await host.enter(one)).toBe(1);
@@ -596,13 +591,17 @@ export const SCENARIOS: readonly Scenario[] = [
         outcome: 'withheld',
         reason: 'its run has ended',
       });
-      // A window tmux no longer holds reads back blank (see close-a-window):
-      // withheld, never typed into.
-      stage.tmux('kill-window', '-t', ended.window);
+      // A window that carries the session's tag but names no pane for its run
+      // is not typed into, and the refusal says what is missing.
+      stage.tmux('set-option', '-wu', '-t', ended.window, '@ward_pane');
       expect(type('hello', 'ended', ended.window)).toEqual({
         outcome: 'withheld',
-        reason: `window ${ended.window} carries no session tag, not 'ended'`,
+        reason: `window ${ended.window} carries 'ended' but names no pane for its run`,
       });
+      // A window tmux no longer holds reads back blank (see close-a-window):
+      // absent, never typed into.
+      stage.tmux('kill-window', '-t', ended.window);
+      expect(type('hello', 'ended', ended.window)).toEqual({ outcome: 'absent' });
       if (stage.live) expect(stage.read('typed.log')).toBe('target: hello there\n');
     },
   },
