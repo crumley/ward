@@ -254,13 +254,110 @@
     {
       "kind": "run",
       "argv": [
+        "if-shell",
+        "-F",
+        "-t",
+        "%1",
+        "#{&&:#{==:#{pane_in_mode},0},#{&&:#{==:#{C/r:^(─){40#}$},1},#{&&:#{==:#{C/r:^❯ hello there$},2},#{&&:#{==:#{C/r:^(─){40#}$},1},#{==:#{C/r:^  stub status$},4}}}}}",
+        "send-keys -t %1 Enter ; display-message -p submitted",
+        "display-message -p held"
+      ],
+      "exit": 0,
+      "stdout": "submitted\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "-u",
+        "capture-pane",
+        "-p",
+        "-t",
+        "%1"
+      ],
+      "exit": 0,
+      "stdout": "────────────────────────────────────────\n❯\n────────────────────────────────────────\n  stub status\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "display-message",
+        "-p",
+        "-t",
+        "@2",
+        "#{window_id}\t#{@ward_session}\t#{@ward_pane}"
+      ],
+      "exit": 0,
+      "stdout": "@2\ttarget\t%1\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "display-message",
+        "-p",
+        "-t",
+        "%1",
+        "#{window_id}\t#{pane_dead}\t#{pane_in_mode}"
+      ],
+      "exit": 0,
+      "stdout": "@2\t0\t0\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "-u",
+        "capture-pane",
+        "-p",
+        "-t",
+        "%1"
+      ],
+      "exit": 0,
+      "stdout": "────────────────────────────────────────\n❯\n────────────────────────────────────────\n  stub status\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
         "send-keys",
         "-t",
         "%1",
-        "Enter"
+        "-l",
+        "--",
+        "[ward] a,b}{#x (y) $z ^q |r *s +t ?u .v \\\\w #{session_name} ...."
       ],
       "exit": 0,
       "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "-u",
+        "capture-pane",
+        "-p",
+        "-t",
+        "%1"
+      ],
+      "exit": 0,
+      "stdout": "────────────────────────────────────────\n❯ [ward] a,b}{#x (y) $z ^q |r *s +t ?u .v \\\\w #{session_name} ....\n────────────────────────────────────────\n  stub status\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "if-shell",
+        "-F",
+        "-t",
+        "%1",
+        "#{&&:#{==:#{pane_in_mode},0},#{&&:#{==:#{C/r:^(─){40#}$},1},#{&&:#{==:#{C/r:^❯ \\[ward] a#,b#}\\{##x \\(y\\) \\$z \\^q \\|r \\*s \\+t \\?u \\.v \\\\\\\\w ##\\{session_name#} (\\.){4#}$},2},#{&&:#{==:#{C/r:^(─){40#}$},1},#{==:#{C/r:^  stub status$},4}}}}}",
+        "send-keys -t %1 Enter ; display-message -p submitted",
+        "display-message -p held"
+      ],
+      "exit": 0,
+      "stdout": "submitted\n",
       "stderr": ""
     },
     {

@@ -177,7 +177,7 @@ function screen(session: SessionMutationShape): string {
 
 /** The run's input line, read exactly as the nudge reads it. */
 function inputLine(session: SessionMutationShape): string | null {
-  return claudeInputLine(screen(session));
+  return claudeInputLine(screen(session))?.text ?? null;
 }
 
 async function lineSoon(session: SessionMutationShape, wanted = ''): Promise<string | null> {

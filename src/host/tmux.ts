@@ -33,6 +33,7 @@
 // already looks.
 import { realpathSync } from 'node:fs';
 import { WardError } from '../errors.ts';
+import type { InputLine } from '../harness/adapter.ts';
 import { INK, PALETTE } from '../theme/palette.ts';
 import type {
   CloseResult,
@@ -449,21 +450,29 @@ export const OBSERVER_LEAVES = 'detach-client -t "#{client_name}" ; kill-session
  * (an attach run inside tmux would otherwise nest); anyone else attaches,
  * observe read-only and without resizing the window.
  *
- * A view ends when its client leaves, and WHO ends it depends on who is
- * still there to. A client that attaches has Ward standing by until it
- * returns, and Ward ends the view then ({@link endViewArgv}) — never tmux
- * while the client is still on its way out. A switched client has nobody
- * standing by (the verb returns at once), so its view is set
- * `destroy-unattached on` as the client joins — only once it is in, because
- * tmux ends an unattached session the moment the option is set.
+ * A view ends when its client leaves, and it is never left to tmux's
+ * `destroy-unattached` to end it (design/0076-tmux-remaining-races/). That
+ * option is a tmux fault waiting to happen (through 3.7c): a client told to
+ * detach stops counting as attached before it has left its session, and the
+ * next time tmux looks for unattached sessions — any client of the server
+ * disconnecting is enough — it destroys a `destroy-unattached` view with that
+ * client still pointing into it, and the SERVER dies, every host and run on
+ * it with it. `kill-session` takes the other path, which moves every client
+ * out first, so a view is only ever ended by one, guarded so that it ends
+ * only a view nobody is in ({@link endViewIfEmpty}):
  *
- * The difference is a tmux fault, not a preference (through 3.7c): a client
- * told to detach stops counting as attached before it has left its session,
- * and the next time tmux looks for unattached sessions — any client of the
- * server disconnecting is enough — it destroys a `destroy-unattached` view
- * with that client still pointing into it, and the SERVER dies, every host
- * and run on it with it. A view that is not `destroy-unattached` while it
- * holds its client cannot be destroyed that way.
+ * - by the view's own `client-detached` hook ({@link VIEW_ENDS}), which tmux
+ *   runs once a client that was in it has GONE — detached, or its terminal
+ *   closed — never while it is on its way out;
+ * - by Ward, when the client it attached returns ({@link endViewArgv}), for
+ *   a view whose client never got in;
+ * - and, for a view its client left by switching to another session — tmux
+ *   runs no hook of the view's for that — by the next view made in the
+ *   workspace ({@link leftViewsArgv}), which ends every view that was joined
+ *   and has nobody in it. Until then it is what doctor reports as a leftover.
+ *
+ * Every view is marked `@ward_joined` as its client joins, so that sweep
+ * never ends a view another Ward has made and not yet joined.
  *
  * What becomes of the client when the VIEW ends under it (the last window it
  * shows closed) is said here too, never left to the server's default: it
@@ -493,8 +502,9 @@ export function enterArgv(view: View, inside: boolean): string[] {
   const options = ['-t', windowTarget(view.name)];
   return [
     ...join,
-    ...(switches(view, inside) ? setOption(options, 'destroy-unattached', 'on') : []),
+    ...setOption(options, '@ward_joined', '1'),
     ...setOption(options, 'detach-on-destroy', 'off'),
+    ...setOption(options, 'client-detached', VIEW_ENDS),
     ...(view.mode === 'observe'
       ? setOption(['-F', ...options], 'session-window-changed', OBSERVER_LEAVES)
       : []),
@@ -506,16 +516,58 @@ function switches(view: View, inside: boolean): boolean {
   return view.mode === 'attach' && inside;
 }
 
+/** True of a session nobody is attached to — the only kind a view is ended as. */
+const EMPTY = '#{==:#{session_attached},0}';
+
 /**
- * End a view whose client has left: `destroy-unattached on`, which tmux acts
- * on at once for a session nobody is attached to — and holds to for one that
- * tmux has since moved another client into, until that client leaves too.
- * The view is named by its tmux session id (`$N`), never by name: an id is
- * not handed out twice, so a view that has already ended — its name perhaps
- * taken by another client's fresh, not-yet-joined view — is simply not found.
+ * A view's `client-detached` hook: once a client that was in it has gone,
+ * end the view if nobody is left in it. tmux runs a hook with the view as
+ * its target, so the bare `kill-session` ends this view and no other; a
+ * client tmux has moved in since keeps it standing, and the hook runs again
+ * when that one goes.
  */
+export const VIEW_ENDS = `if-shell -F '${EMPTY}' kill-session`;
+
+/**
+ * End the view `sessionId` (`$N`) if nobody is in it — the check and the end
+ * one tmux command, so a client that joins it in between is never thrown
+ * out. Named by id, never by name: an id is not handed out twice, so a view
+ * that has already ended — its name perhaps taken by another client's fresh,
+ * not-yet-joined view — is simply not found.
+ */
+function endViewIfEmpty(sessionId: string, also = ''): string[] {
+  const when = also === '' ? EMPTY : `#{&&:${EMPTY},${also}}`;
+  // Quoted: tmux would read a bare `$N` in a command string as a variable.
+  return ['if-shell', '-F', '-t', `${sessionId}:`, when, `kill-session -t '${sessionId}'`];
+}
+
+/** End a view whose client has left — unless tmux has moved another client into it. */
 export function endViewArgv(sessionId: string): string[] {
-  return ['set-option', '-t', `${sessionId}:`, 'destroy-unattached', 'on'];
+  return endViewIfEmpty(sessionId);
+}
+
+/** Every view's id, the workspace it was made for, whether it was joined, and its clients. */
+export function leftViewsArgv(): string[] {
+  return [
+    'list-sessions',
+    '-F',
+    ['#{session_id}', '#{@ward_view}', '#{@ward_joined}', '#{session_attached}'].join(FIELD),
+  ];
+}
+
+/** The ids of `workspace`'s views that were joined and have nobody in them. */
+export function parseLeftViews(stdout: string, workspace: string): string[] {
+  return lines(stdout)
+    .map((row) => row.split(FIELD))
+    .filter(([id = '', of = '', joined = '', clients = '']) => {
+      return id.startsWith('$') && of === workspace && joined === '1' && clients === '0';
+    })
+    .map(([id = '']) => id);
+}
+
+/** End a view the sweep found left — still only if it is joined and empty as it ends. */
+export function endLeftViewArgv(sessionId: string): string[] {
+  return endViewIfEmpty(sessionId, '#{@ward_joined}');
 }
 
 /**
@@ -639,9 +691,96 @@ export function typeArgv(pane: string, text: string): string[] {
   return ['send-keys', '-t', pane, '-l', '--', text];
 }
 
-/** The submitting key, alone — sent only after the typed line was read back. */
-export function submitArgv(pane: string): string[] {
-  return ['send-keys', '-t', pane, 'Enter'];
+/** What {@link submitArgv} prints: the key went, or tmux held it back. */
+export const SUBMITTED = 'submitted';
+export const HELD = 'held';
+
+/**
+ * The submitting key, sent only after the typed line was read back — and
+ * sent BY TMUX, only while the screen still reads as it did then
+ * (design/0076-tmux-remaining-races/). The check and the key are one tmux
+ * command: `if-shell -F` evaluates {@link screenHolds} and, when it holds,
+ * queues the `send-keys` right behind itself, and tmux runs its command
+ * queue to the end before it reads anything more from any pane. So no
+ * output of the run's — a question drawn over its input line — can land
+ * between the check and the key, as it could between a read-back on Ward's
+ * side and a second tmux client sending the key. Prints {@link SUBMITTED}
+ * or {@link HELD}, so Ward knows which happened.
+ */
+export function submitArgv(pane: string, screen: string, rows: InputLine['rows']): string[] {
+  return [
+    'if-shell',
+    '-F',
+    '-t',
+    pane,
+    `#{&&:#{==:#{pane_in_mode},0},${screenHolds(screen, rows)}}`,
+    `send-keys -t ${pane} Enter ; display-message -p ${SUBMITTED}`,
+    `display-message -p ${HELD}`,
+  ];
+}
+
+/**
+ * A tmux format that is true while the pane's visible screen still holds,
+ * at the same places, the non-blank rows `first` to `last` of `screen` (a
+ * capture of it). tmux's `#{C/r:…}` answers the first visible row a regular
+ * expression matches (1-based, 0 for none, trailing blanks ignored, as a
+ * capture prints them), so each row is asked for whole — anchored, its
+ * characters escaped — and must answer the row where it first stands in
+ * `screen`. A row seen twice is known by where it was first seen, which is
+ * a weaker check of the later one and never a looser answer: any change
+ * that moves either reads as a change. A blank row cannot be told apart this
+ * way and is not asked about. Nothing here can make the check pass on a
+ * screen that differs in an asked row; a pattern tmux cannot compile matches
+ * nothing, and holds the key back.
+ */
+export function screenHolds(screen: string, rows: InputLine['rows']): string {
+  const visible = screen.split('\n').map((row) => row.replace(/[ \t\n\v\f\r]+$/u, ''));
+  const terms: string[] = [];
+  for (let index = rows.first; index <= rows.last; index++) {
+    const row = visible[index];
+    if (row === undefined || row === '') continue;
+    const at = visible.indexOf(row) + 1;
+    terms.push(`#{==:#{C/r:^${formatEscape(rowPattern(row))}$},${at}}`);
+  }
+  // Nothing to ask about is a screen this check cannot vouch for.
+  if (terms.length === 0) return '0';
+  return terms.reduceRight((rest, term) => `#{&&:${term},${rest}}`);
+}
+
+/** The most repeats one POSIX interval may count (RE_DUP_MAX is 255 on macOS). */
+const RUN_MAX = 255;
+
+/**
+ * A row as an extended regular expression that matches it alone: every
+ * character special to one escaped, and a run of four or more of the same
+ * character — a rule, a gutter of spaces — counted rather than spelled, so a
+ * wide pane's row stays well inside what one tmux command may carry. A run is
+ * counted as a group, `(─){40}`, so a character of several bytes repeats
+ * whole whatever the server's locale.
+ */
+export function rowPattern(row: string): string {
+  const chars = [...row];
+  let out = '';
+  for (let at = 0; at < chars.length; ) {
+    const char = chars[at] ?? '';
+    let run = 1;
+    while (chars[at + run] === char) run += 1;
+    const one = /[.[()*+?{|^$\\]/u.test(char) ? `\\${char}` : char;
+    if (run < 4) {
+      out += one.repeat(run);
+    } else {
+      for (let left = run; left > 0; left -= RUN_MAX) {
+        out += `(${one}){${Math.min(left, RUN_MAX)}}`;
+      }
+    }
+    at += run;
+  }
+  return out;
+}
+
+/** Text as a literal inside a tmux format: `#`, `,` and `}` escaped with `#`. */
+function formatEscape(text: string): string {
+  return text.replace(/[#,}]/gu, (char) => `#${char}`);
 }
 
 /** Take back exactly `count` typed characters, at the cursor that typed them. */
@@ -1164,13 +1303,14 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
       if (mode !== '0') {
         return { outcome: 'withheld', reason: 'someone is scrolling its window (copy mode)' };
       }
-      const line = (): string | null => {
+      const look = (): { screen: string; read: InputLine | null } | null => {
         // `-u`: the screen is read as UTF-8 whatever locale Ward was run
         // in — the marks an input line is known by are not ASCII, and a
         // client in the C locale is handed `_` in their place.
         const screen = call(captureArgv(pane), ['-u']);
-        return screen.ok ? request.inputLine(screen.stdout) : null;
+        return screen.ok ? { screen: screen.stdout, read: request.inputLine(screen.stdout) } : null;
       };
+      const line = (): string | null => look()?.read?.text ?? null;
       if (line() === null) {
         return { outcome: 'withheld', reason: 'its screen does not show an input line' };
       }
@@ -1179,15 +1319,19 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
       // Read it back: the submitting key is sent only at an input line that
       // holds this line and nothing else.
       const wanted = squash(text);
-      const until = (done: (seen: string | null) => boolean): string | null => {
-        let seen = line();
-        for (let waited = 0; !done(seen) && waited < TYPE_WAIT_MS; waited += TYPE_POLL_MS) {
+      const until = <T>(read: () => T, done: (seen: T) => boolean): { seen: T; waited: number } => {
+        let seen = read();
+        let waited = 0;
+        for (; !done(seen) && waited < TYPE_WAIT_MS; waited += TYPE_POLL_MS) {
           tmux.pause(TYPE_POLL_MS);
-          seen = line();
+          seen = read();
         }
-        return seen;
+        return { seen, waited };
       };
-      const seen = until((held) => held !== null && squash(held) === wanted);
+      const holds = (held: string | null | undefined): boolean =>
+        held !== null && held !== undefined && squash(held) === wanted;
+      const back = until(look, (held) => holds(held?.read?.text));
+      const seen = back.seen?.read?.text ?? null;
       if (seen === null) {
         return {
           outcome: 'unknown',
@@ -1202,7 +1346,7 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
         // line — done only when the screen shows them at its end.
         const before = squash(seen).slice(0, -wanted.length);
         if (squash(seen).endsWith(wanted) && call(eraseArgv(pane, text.length)).ok) {
-          const restored = until((held) => held !== null && squash(held) === before);
+          const restored = until(line, (held) => held !== null && squash(held) === before).seen;
           if (restored !== null && squash(restored) === before) {
             return {
               outcome: 'withheld',
@@ -1215,13 +1359,39 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
           reason: 'its input line did not read back as typed — not submitted; the text may remain',
         };
       }
-      const sent = call(submitArgv(pane));
-      if (!sent.ok) return { outcome: 'unknown', reason: sent.stderr || 'tmux gave no reason' };
-      const after = until((held) => held === null || squash(held) !== wanted);
-      if (after !== null && squash(after) === wanted) {
-        return { outcome: 'unknown', reason: 'typed and submitted, but the line is still there' };
+      // Submit — tmux sends the key only while the rows this reading rests on
+      // still read the same (submitArgv). A screen that moved in between is
+      // read again: still the line, alone, and the key is tried again over
+      // the new reading; anything else, and the key is never sent.
+      let reading = back.seen;
+      let waited = back.waited;
+      for (;;) {
+        const rows = reading?.read?.rows;
+        if (reading === null || rows === undefined) break;
+        const sent = call(submitArgv(pane, reading.screen, rows));
+        if (!sent.ok) return { outcome: 'unknown', reason: sent.stderr || 'tmux gave no reason' };
+        if (sent.stdout.trim() === SUBMITTED) {
+          const after = until(line, (held) => held === null || squash(held) !== wanted).seen;
+          if (after !== null && squash(after) === wanted) {
+            return {
+              outcome: 'unknown',
+              reason: 'typed and submitted, but the line is still there',
+            };
+          }
+          return { outcome: 'typed' };
+        }
+        if (waited >= TYPE_WAIT_MS) break;
+        tmux.pause(TYPE_POLL_MS);
+        waited += TYPE_POLL_MS;
+        reading = look();
+        if (!holds(reading?.read?.text)) break;
       }
-      return { outcome: 'typed' };
+      return {
+        outcome: 'unknown',
+        reason:
+          'its screen changed before the line could be submitted — not submitted; ' +
+          'the typed text may remain on its input line',
+      };
     },
     rename(request: RenameRequest): Renamed {
       const renamed: { from: string; to: string }[] = [];
@@ -1302,6 +1472,14 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
       return { groups: renamed, views: moved, failed, themed };
     },
     view(request: ViewRequest): View {
+      // First, the views this workspace's clients left by switching away from
+      // them (enterArgv): best effort, each ended only if still empty.
+      const left = call(leftViewsArgv());
+      if (left.ok) {
+        for (const id of parseLeftViews(left.stdout, request.workspace)) {
+          call(endLeftViewArgv(id));
+        }
+      }
       // A name another view just took fails the create; the next free one is tried.
       let last = '';
       for (let attempt = 0; attempt < 5; attempt++) {

@@ -266,6 +266,17 @@
       "argv": [
         "list-sessions",
         "-F",
+        "#{session_id}\t#{@ward_view}\t#{@ward_joined}\t#{session_attached}"
+      ],
+      "exit": 0,
+      "stdout": "$1\t\t\t0\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
         "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
       ],
       "exit": 0,
@@ -308,7 +319,7 @@
         "=main-f0-workspace-v1:@3"
       ],
       "exit": 0,
-      "stdout": "$1\n",
+      "stdout": "$2\n",
       "stderr": ""
     },
     {
@@ -335,6 +346,17 @@
       ],
       "exit": 0,
       "stdout": "@3\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
+        "#{session_id}\t#{@ward_view}\t#{@ward_joined}\t#{session_attached}"
+      ],
+      "exit": 0,
+      "stdout": "$1\t\t\t0\n$2\tws-conformance\t\t0\n",
       "stderr": ""
     },
     {
@@ -384,7 +406,7 @@
         "=main-f0-workspace-v2:@3"
       ],
       "exit": 0,
-      "stdout": "$2\n",
+      "stdout": "$3\n",
       "stderr": ""
     },
     {
@@ -398,6 +420,17 @@
       ],
       "exit": 0,
       "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
+        "#{session_id}\t#{@ward_view}\t#{@ward_joined}\t#{session_attached}"
+      ],
+      "exit": 0,
+      "stdout": "$1\t\t\t0\n$2\tws-conformance\t\t0\n$3\tws-conformance\t\t0\n$4\t\t\t0\n",
       "stderr": ""
     },
     {
@@ -447,7 +480,18 @@
         "=main-f0-workspace-v4:@3"
       ],
       "exit": 0,
-      "stdout": "$3\n",
+      "stdout": "$5\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
+        "#{session_id}\t#{@ward_view}\t#{@ward_joined}\t#{session_attached}"
+      ],
+      "exit": 0,
+      "stdout": "$1\t\t\t0\n$2\tws-conformance\t\t0\n$3\tws-conformance\t\t0\n$4\t\t\t0\n$5\tws-conformance\t\t0\n",
       "stderr": ""
     },
     {
@@ -621,6 +665,17 @@
       "argv": [
         "list-sessions",
         "-F",
+        "#{session_id}\t#{@ward_view}\t#{@ward_joined}\t#{session_attached}"
+      ],
+      "exit": 0,
+      "stdout": "$1\t\t\t0\n$6\tws-conformance\t\t0\n$2\tws-conformance\t\t0\n$3\tws-conformance\t\t0\n$4\t\t\t0\n$5\tws-conformance\t\t0\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
         "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
       ],
       "exit": 0,
@@ -712,6 +767,17 @@
       "argv": [
         "list-sessions",
         "-F",
+        "#{session_id}\t#{@ward_view}\t#{@ward_joined}\t#{session_attached}"
+      ],
+      "exit": 0,
+      "stdout": "$1\t\t\t0\n$6\tws-conformance\t\t0\n$2\tws-conformance\t\t0\n$3\tws-conformance\t\t0\n$4\t\t\t0\n$5\tws-conformance\t\t0\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
         "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
       ],
       "exit": 0,
@@ -754,7 +820,7 @@
         "=main-f0-workspace-v5:@999"
       ],
       "exit": 1,
-      "stdout": "$4\n",
+      "stdout": "$7\n",
       "stderr": "can't find window: @999\n"
     },
     {
@@ -762,7 +828,7 @@
       "argv": [
         "kill-session",
         "-t",
-        "$4"
+        "$7"
       ],
       "exit": 0,
       "stdout": "",
@@ -800,7 +866,7 @@
         "#{socket_path}\t#{session_id}"
       ],
       "exit": 0,
-      "stdout": "<socket>\t$1\n",
+      "stdout": "<socket>\t$2\n",
       "stderr": ""
     },
     {
@@ -813,8 +879,20 @@
         "set-option",
         "-t",
         "=main-f0-workspace-v1:",
+        "@ward_joined",
+        "1",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace-v1:",
         "detach-on-destroy",
-        "off"
+        "off",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace-v1:",
+        "client-detached",
+        "if-shell -F '#{==:#{session_attached},0}' kill-session"
       ],
       "exit": 1,
       "stderr": "open terminal failed: not a terminal\n"
@@ -822,11 +900,12 @@
     {
       "kind": "run",
       "argv": [
-        "set-option",
+        "if-shell",
+        "-F",
         "-t",
-        "$1:",
-        "destroy-unattached",
-        "on"
+        "$2:",
+        "#{==:#{session_attached},0}",
+        "kill-session -t '$2'"
       ],
       "exit": 0,
       "stdout": "",
@@ -853,7 +932,7 @@
         "#{socket_path}\t#{session_id}"
       ],
       "exit": 0,
-      "stdout": "<socket>\t$5\n",
+      "stdout": "<socket>\t$6\n",
       "stderr": ""
     },
     {
@@ -868,8 +947,20 @@
         "set-option",
         "-t",
         "=main-f0-workspace-o1:",
+        "@ward_joined",
+        "1",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace-o1:",
         "detach-on-destroy",
         "off",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace-o1:",
+        "client-detached",
+        "if-shell -F '#{==:#{session_attached},0}' kill-session",
         ";",
         "set-option",
         "-F",
@@ -884,11 +975,12 @@
     {
       "kind": "run",
       "argv": [
-        "set-option",
+        "if-shell",
+        "-F",
         "-t",
-        "$5:",
-        "destroy-unattached",
-        "on"
+        "$6:",
+        "#{==:#{session_attached},0}",
+        "kill-session -t '$6'"
       ],
       "exit": 0,
       "stdout": "",
@@ -915,7 +1007,7 @@
         "#{socket_path}\t#{session_id}"
       ],
       "exit": 0,
-      "stdout": "<socket>\t$2\n",
+      "stdout": "<socket>\t$3\n",
       "stderr": ""
     },
     {
@@ -928,14 +1020,20 @@
         "set-option",
         "-t",
         "=main-f0-workspace-v2:",
-        "destroy-unattached",
-        "on",
+        "@ward_joined",
+        "1",
         ";",
         "set-option",
         "-t",
         "=main-f0-workspace-v2:",
         "detach-on-destroy",
-        "off"
+        "off",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace-v2:",
+        "client-detached",
+        "if-shell -F '#{==:#{session_attached},0}' kill-session"
       ],
       "tmux": "<socket>,1,0",
       "exit": 1,
@@ -950,6 +1048,17 @@
       ],
       "exit": 0,
       "stdout": "main-f0-workspace\nmain-f0-workspace-v2\nmain-f0-workspace-v3\nmain-f0-workspace-v4\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
+        "#{session_id}\t#{@ward_view}\t#{@ward_joined}\t#{session_attached}"
+      ],
+      "exit": 0,
+      "stdout": "$1\t\t\t0\n$3\tws-conformance\t\t0\n$4\t\t\t0\n$5\tws-conformance\t\t0\n",
       "stderr": ""
     },
     {
@@ -1079,7 +1188,7 @@
         "#{socket_path}\t#{session_id}"
       ],
       "exit": 0,
-      "stdout": "<socket>\t$6\n",
+      "stdout": "<socket>\t$8\n",
       "stderr": ""
     },
     {
@@ -1094,8 +1203,20 @@
         "set-option",
         "-t",
         "=main-f0-workspace-o1:",
+        "@ward_joined",
+        "1",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace-o1:",
         "detach-on-destroy",
         "off",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace-o1:",
+        "client-detached",
+        "if-shell -F '#{==:#{session_attached},0}' kill-session",
         ";",
         "set-option",
         "-F",
@@ -1111,11 +1232,12 @@
     {
       "kind": "run",
       "argv": [
-        "set-option",
+        "if-shell",
+        "-F",
         "-t",
-        "$6:",
-        "destroy-unattached",
-        "on"
+        "$8:",
+        "#{==:#{session_attached},0}",
+        "kill-session -t '$8'"
       ],
       "exit": 0,
       "stdout": "",
@@ -1130,6 +1252,145 @@
       ],
       "exit": 0,
       "stdout": "main-f0-workspace\nmain-f0-workspace-v2\nmain-f0-workspace-v3\nmain-f0-workspace-v4\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "set-option",
+        "-t",
+        "=main-f0-workspace-v2:",
+        "@ward_joined",
+        "1"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "new-session",
+        "-d",
+        "-t",
+        "main-f0-workspace",
+        "-s",
+        "elsewhere-v1"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "set-option",
+        "-t",
+        "=elsewhere-v1:",
+        "@ward_view",
+        "ws-other"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "set-option",
+        "-t",
+        "=elsewhere-v1:",
+        "@ward_joined",
+        "1"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
+        "#{session_id}\t#{@ward_view}\t#{@ward_joined}\t#{session_attached}"
+      ],
+      "exit": 0,
+      "stdout": "$9\tws-other\t1\t0\n$1\t\t\t0\n$3\tws-conformance\t1\t0\n$4\t\t\t0\n$5\tws-conformance\t\t0\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "if-shell",
+        "-F",
+        "-t",
+        "$3:",
+        "#{&&:#{==:#{session_attached},0},#{@ward_joined}}",
+        "kill-session -t '$3'"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
+        "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
+      ],
+      "exit": 0,
+      "stdout": "elsewhere-v1\t\t\tws-other\t1\t0\t\t2\tmain-f0-workspace\nmain-f0-workspace\tws-conformance\t0\t\t1\t0\t0.1.0\t2\tmain-f0-workspace\nmain-f0-workspace-v3\t\t\t\t1\t0\t\t1\t\nmain-f0-workspace-v4\t\t\tws-conformance\t1\t0\t\t2\tmain-f0-workspace\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "new-session",
+        "-d",
+        "-t",
+        "=main-f0-workspace",
+        "-s",
+        "main-f0-workspace-v1",
+        "-P",
+        "-F",
+        "#{session_id}",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace-v1:",
+        "@ward_view",
+        "ws-conformance",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace-v1:",
+        "set-titles",
+        "on",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace-v1:",
+        "set-titles-string",
+        "#{window_name} · main f0#{?#{||:#{==:#{pane_title},},#{||:#{==:#{pane_title},#{host}},#{==:#{pane_title},#{host_short}}}},, · #{pane_title}}",
+        ";",
+        "select-window",
+        "-t",
+        "=main-f0-workspace-v1:@3"
+      ],
+      "exit": 0,
+      "stdout": "$10\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "list-sessions",
+        "-F",
+        "#{session_name}"
+      ],
+      "exit": 0,
+      "stdout": "elsewhere-v1\nmain-f0-workspace\nmain-f0-workspace-v1\nmain-f0-workspace-v3\nmain-f0-workspace-v4\n",
       "stderr": ""
     }
   ]

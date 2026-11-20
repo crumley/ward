@@ -23,6 +23,7 @@ import {
   type HarnessAdapter,
   type HarnessCommand,
   harnessCommand,
+  type InputLine,
   type LocateResult,
   type StartRequest,
 } from './adapter.ts';
@@ -196,6 +197,11 @@ const BELOW_INPUT_MAX = 6;
  * says where the line is, not whether it is empty; a caller that needs to
  * know types into it and reads again.
  *
+ * The rows the reading rests on run from the upper rule to the last status
+ * row beneath the lower one: every row this rule looked at to decide the
+ * screen is the input line's, and nothing above it, where the transcript
+ * scrolls while a turn runs (design/0076-tmux-remaining-races/).
+ *
  * Null for every screen that is not that one. A permission question is drawn
  * under ONE rule with its options beneath — no second rule, no prompt mark at
  * the left edge — and so are the trust question at startup and the pickers:
@@ -204,7 +210,7 @@ const BELOW_INPUT_MAX = 6;
  * the line differently reads as null, which withholds a notice and loses
  * nothing.
  */
-export function claudeInputLine(screen: string): string | null {
+export function claudeInputLine(screen: string): InputLine | null {
   const rows = screen.split('\n').map((row) => row.replace(/\s+$/u, ''));
   const lower = rows.findLastIndex((row) => INPUT_RULE.test(row));
   if (lower < 2) return null;
@@ -220,10 +226,12 @@ export function claudeInputLine(screen: string): string | null {
   // Beneath the line is the status area and nothing else: a question's
   // options are longer, and carry the mark that says which one Enter takes.
   if (below.length > BELOW_INPUT_MAX || below.some((row) => row.includes('❯'))) return null;
-  return box
+  const text = box
     .map((row, index) => (index === 0 ? row.slice(1) : row).trim())
     .filter((row) => row !== '')
     .join(' ');
+  const status = rows.slice(lower + 1).findLastIndex((row) => row !== '');
+  return { text, rows: { first: upper, last: lower + 1 + status } };
 }
 
 export const claudeAdapter: HarnessAdapter = {

@@ -11,11 +11,13 @@ import {
   createGroupArgv,
   createWindowArgv,
   EXIT_RULE,
+  endLeftViewArgv,
   endViewArgv,
   enterArgv,
   eraseArgv,
   exitRuleArgv,
   insideServer,
+  leftViewsArgv,
   linkWindowArgv,
   MINIMUM_VERSION,
   mintGroupName,
@@ -25,11 +27,14 @@ import {
   parseEnvironmentNames,
   parseGroups,
   parseInventoryWindows,
+  parseLeftViews,
   parseVersion,
   parseWindows,
   prepareArgv,
   renameGroupArgv,
   renameWindowArgv,
+  rowPattern,
+  screenHolds,
   sessionTarget,
   shellQuote,
   squash,
@@ -42,6 +47,7 @@ import {
   titleString,
   tmuxHost,
   typeArgv,
+  VIEW_ENDS,
   viewHosts,
   viewName,
   watchArgv,
@@ -396,8 +402,80 @@ test('an observe view is a session of its own, sized like a host, holding a plac
   ]);
 });
 
-test('a view whose client has left is ended by its tmux session id, never by a name another may hold', () => {
-  expect(endViewArgv('$7')).toEqual(['set-option', '-t', '$7:', 'destroy-unattached', 'on']);
+test('a view whose client has left is ended by its tmux session id, and only while nobody is in it', () => {
+  // Never destroy-unattached (design/0076-tmux-remaining-races/): kill-session
+  // moves any client still pointing in out first; the id is quoted so tmux
+  // does not read `$7` as a variable.
+  expect(endViewArgv('$7')).toEqual([
+    'if-shell',
+    '-F',
+    '-t',
+    '$7:',
+    '#{==:#{session_attached},0}',
+    "kill-session -t '$7'",
+  ]);
+  expect(endLeftViewArgv('$7')).toEqual([
+    'if-shell',
+    '-F',
+    '-t',
+    '$7:',
+    '#{&&:#{==:#{session_attached},0},#{@ward_joined}}',
+    "kill-session -t '$7'",
+  ]);
+  expect(VIEW_ENDS).toBe("if-shell -F '#{==:#{session_attached},0}' kill-session");
+});
+
+test("the views a sweep ends: this workspace's, joined, and with nobody in them", () => {
+  expect(leftViewsArgv()).toEqual([
+    'list-sessions',
+    '-F',
+    '#{session_id}\t#{@ward_view}\t#{@ward_joined}\t#{session_attached}',
+  ]);
+  const listed = [
+    '$1\t\t\t0', // a floor host, or a human's own session
+    '$2\tws\t1\t0', // left
+    '$3\tws\t1\t1', // someone is in it
+    '$4\tws\t\t0', // made, not yet joined — another Ward's, on its way
+    '$5\tother\t1\t0', // another workspace's
+    '$6\tws\t1\t0',
+  ].join('\n');
+  expect(parseLeftViews(`${listed}\n`, 'ws')).toEqual(['$2', '$6']);
+  expect(parseLeftViews('', 'ws')).toEqual([]);
+});
+
+test.each<[string, string, string]>([
+  ['plain text', 'hello there', 'hello there'],
+  [
+    'every character special to a regular expression',
+    '.[()*+?{|^$\\]}',
+    '\\.\\[\\(\\)\\*\\+\\?\\{\\|\\^\\$\\\\]}',
+  ],
+  ['a rule, counted as a group', '─'.repeat(40), '(─){40}'],
+  ['a run of three is spelled out', 'aaa', 'aaa'],
+  ['a run past what one interval may count', ' '.repeat(300), '( ){255}( ){45}'],
+  ['an escaped character repeated', '....', '(\\.){4}'],
+])('a screen row as a pattern: %s', (_, row, pattern) => {
+  expect(rowPattern(row)).toBe(pattern);
+  // And it matches that row alone, whole (JavaScript's non-unicode syntax is
+  // the nearest to POSIX's: a lone `]` or `}` is literal in both).
+  const re = new RegExp(`^${pattern}$`);
+  expect(re.test(row)).toBe(true);
+  expect(re.test(`${row}x`)).toBe(false);
+});
+
+test('the screen check asks for each non-blank row where it first stands, escaped for a format', () => {
+  const screen = ['rule', '❯ a,b}#c', 'rule', '', '  status', ''].join('\n');
+  expect(screenHolds(screen, { first: 0, last: 4 })).toBe(
+    '#{&&:#{==:#{C/r:^rule$},1},' +
+      '#{&&:#{==:#{C/r:^❯ a#,b#}##c$},2},' +
+      // The lower rule reads the same as the upper: it is known by where that one stands.
+      '#{&&:#{==:#{C/r:^rule$},1},' +
+      '#{==:#{C/r:^  status$},5}}}}',
+  );
+  // Trailing blanks are not part of a row, as tmux reads it.
+  expect(screenHolds('x  \n', { first: 0, last: 0 })).toBe('#{==:#{C/r:^x$},1}');
+  // Nothing to ask about vouches for nothing.
+  expect(screenHolds('\n\n', { first: 0, last: 1 })).toBe('0');
 });
 
 test.each([
@@ -419,12 +497,13 @@ test.each([
   const argv = enterArgv({ name: 'v', mode }, inside);
   expect(argv.slice(0, join.length)).toEqual([...join]);
   expect(options(argv.slice(join.length))).toEqual([
-    // Only a switched client's view is left to tmux to end — set once the
-    // client is in it, since tmux ends an unattached session the moment it is
-    // set. A client that attaches has Ward standing by, and Ward ends its view.
-    ...(mode === 'attach' && inside ? [['=v:', 'destroy-unattached', 'on']] : []),
+    // Marked joined, so a sweep never ends a view another Ward has not yet joined.
+    ['=v:', '@ward_joined', '1'],
     // A view that ends under its client moves it on, as the host does — never to the shell.
     ['=v:', 'detach-on-destroy', 'off'],
+    // No view is ever destroy-unattached: it ends itself once its client has
+    // gone, however it joined (design/0076-tmux-remaining-races/).
+    ['=v:', 'client-detached', VIEW_ENDS],
     // Only an observer leaves for the shell when its window goes — that one
     // client by name, so nobody tmux moved into the view goes with it.
     ...(mode === 'observe'
@@ -635,7 +714,16 @@ test('a line is typed literally, by pane id, and never carries the submitting ke
     '--',
     '[ward] Enter C-c -x',
   ]);
-  expect(submitArgv('%7')).toEqual(['send-keys', '-t', '%7', 'Enter']);
+  // The key is never sent alone: tmux sends it, behind a check of the screen.
+  expect(submitArgv('%7', 'r\n❯ hi\n', { first: 1, last: 1 })).toEqual([
+    'if-shell',
+    '-F',
+    '-t',
+    '%7',
+    '#{&&:#{==:#{pane_in_mode},0},#{==:#{C/r:^❯ hi$},2}}',
+    'send-keys -t %7 Enter ; display-message -p submitted',
+    'display-message -p held',
+  ]);
   expect(eraseArgv('%7', 12)).toEqual(['send-keys', '-t', '%7', '-N', '12', 'BSpace']);
   expect(captureArgv('%7')).toEqual(['capture-pane', '-p', '-t', '%7']);
   expect(windowRunArgv('@3')).toEqual([
@@ -676,7 +764,12 @@ test.each<[string, boolean]>([
 test('a line that is not typeable is withheld before tmux is asked anything', () => {
   const host = tmuxHost({ WARD_TMUX_BIN: '/nonexistent/tmux' });
   expect(
-    host.typeLine({ window: '@1', session: 's', text: 'two\nlines', inputLine: () => '' }),
+    host.typeLine({
+      window: '@1',
+      session: 's',
+      text: 'two\nlines',
+      inputLine: () => ({ text: '', rows: { first: 0, last: 0 } }),
+    }),
   ).toEqual({ outcome: 'withheld', reason: 'the line is not one line of printable ASCII' });
 });
 

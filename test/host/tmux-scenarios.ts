@@ -82,8 +82,31 @@ export function asking(stage: Stage): string[] {
       `draw() { printf '\\033[2J\\033[H%s\\n❯ \\n%s\\n  stub status\\n\\033[2;3H' "$rule" "$rule"; }`,
       'draw',
       'while IFS= read -r line; do',
-      `  echo "$WARD_AGENT: $line" >> '${stage.scratch}/typed.log'`,
+      // printf, not echo: a POSIX sh's echo reads backslashes in the line.
+      `  printf '%s: %s\\n' "$WARD_AGENT" "$line" >> '${stage.scratch}/typed.log'`,
       '  draw',
+      'done',
+    ].join('\n'),
+  );
+  return ['sh', stub];
+}
+
+/**
+ * A stand-in at its prompt, as {@link asking}, that draws a question over it
+ * the moment `cue` appears — a permission prompt arriving between Ward's
+ * read-back and its submitting key. Whatever line it is then handed is
+ * logged, as an answer would be taken.
+ */
+export function interrupted(stage: Stage, cue: string): string[] {
+  const stub = stage.stub(
+    'interrupted',
+    [
+      `rule='${RULE}'`,
+      `printf '\\033[2J\\033[H%s\\n❯ \\n%s\\n  stub status\\n\\033[2;3H' "$rule" "$rule"`,
+      `( while [ ! -e '${stage.scratch}/${cue}' ]; do sleep 0.02; done`,
+      `  printf '\\033[2J\\033[H%s\\n Bash command\\n Do you want to proceed?\\n ❯ 1. Yes\\n   2. No\\n' "$rule" ) &`,
+      'while IFS= read -r line; do',
+      `  echo "$WARD_AGENT: $line" >> '${stage.scratch}/typed.log'`,
       'done',
     ].join('\n'),
   );
@@ -533,6 +556,18 @@ export const SCENARIOS: readonly Scenario[] = [
       const watchingInside = observe(helper.window);
       expect(await inside.enter(watchingInside)).toBe(1);
       expect(groupNames(stage)).not.toContain(watchingInside.name);
+
+      // A view its client left by switching to another session runs no hook
+      // of its own (design/0076-tmux-remaining-races/): the next view made in
+      // the workspace ends it — joined, and nobody in it. A view not yet
+      // joined (another Ward's, on its way) and another workspace's are left.
+      stage.tmux('set-option', '-t', `=${F0}-v2:`, '@ward_joined', '1');
+      stage.tmux('new-session', '-d', '-t', F0, '-s', 'elsewhere-v1');
+      stage.tmux('set-option', '-t', '=elsewhere-v1:', '@ward_view', OTHER_WS);
+      stage.tmux('set-option', '-t', '=elsewhere-v1:', '@ward_joined', '1');
+      // (v1 was ended when its client was refused, above: the new view takes its name.)
+      expect(attach(helper.window).name).toBe(`${F0}-v1`);
+      expect(groupNames(stage)).toEqual(['elsewhere-v1', F0, `${F0}-v1`, `${F0}-v3`, `${F0}-v4`]);
     },
   },
   {
@@ -542,7 +577,8 @@ export const SCENARIOS: readonly Scenario[] = [
       host.prepare();
       const target = host.place(request(stage, 'target', { command: asking(stage) }));
       const pane = windowOption(stage, target.window, '@ward_pane');
-      const line = () => claudeInputLine(stage.peek('capture-pane', '-p', '-t', pane));
+      const line = () =>
+        claudeInputLine(stage.peek('capture-pane', '-p', '-t', pane))?.text ?? null;
       const type = (text: string, session = 'target', window = target.window) =>
         host.typeLine({ window, session, text, inputLine: claudeInputLine });
       stage.waitFor('the prompt', () => line() === '');
@@ -552,6 +588,16 @@ export const SCENARIOS: readonly Scenario[] = [
       stage.waitFor('the line to be read', () => stage.read('typed.log') !== '');
       if (stage.live) expect(stage.read('typed.log')).toBe('target: hello there\n');
 
+      // Every character a regular expression or a tmux format treats
+      // specially survives the check tmux makes before it sends the key.
+      stage.waitFor('the prompt again', () => line() === '');
+      const awkward = '[ward] a,b}{#x (y) $z ^q |r *s +t ?u .v \\\\w #{session_name} ....';
+      expect(type(awkward)).toEqual({ outcome: 'typed' });
+      stage.waitFor('the awkward line to be read', () => stage.read('typed.log').includes('....'));
+      if (stage.live) {
+        expect(stage.read('typed.log')).toBe(`target: hello there\ntarget: ${awkward}\n`);
+      }
+
       // Someone's words already on the line are put back as they were.
       stage.waitFor('the prompt again', () => line() === '');
       stage.tmux('send-keys', '-t', pane, '-l', '--', 'half a thought');
@@ -560,7 +606,9 @@ export const SCENARIOS: readonly Scenario[] = [
         outcome: 'withheld',
         reason: 'its input line already held text — put back as it was',
       });
-      expect(claudeInputLine(stage.tmux('capture-pane', '-p', '-t', pane))).toBe('half a thought');
+      expect(claudeInputLine(stage.tmux('capture-pane', '-p', '-t', pane))?.text).toBe(
+        'half a thought',
+      );
 
       // A window someone is scrolling is not typed into.
       stage.tmux('copy-mode', '-t', pane);
@@ -602,7 +650,47 @@ export const SCENARIOS: readonly Scenario[] = [
       // absent, never typed into.
       stage.tmux('kill-window', '-t', ended.window);
       expect(type('hello', 'ended', ended.window)).toEqual({ outcome: 'absent' });
-      if (stage.live) expect(stage.read('typed.log')).toBe('target: hello there\n');
+      if (stage.live) expect(stage.read('typed.log')).toContain('target: hello there\n');
+    },
+  },
+  {
+    // design/0076-tmux-remaining-races/: a question that arrives after the
+    // line reads back, and before the submitting key, never takes that key.
+    // The hold puts the question on the screen at the worst instant — just
+    // before the host's submitting call reaches tmux.
+    name: 'a-question-before-the-key',
+    run(stage) {
+      const host = stage.host();
+      host.prepare();
+      const target = host.place(request(stage, 'target', { command: interrupted(stage, 'ask') }));
+      const pane = windowOption(stage, target.window, '@ward_pane');
+      const screen = () => stage.peek('capture-pane', '-p', '-t', pane);
+      stage.waitFor('the prompt', () => claudeInputLine(screen())?.text === '');
+      stage.holdBefore(
+        (argv) => argv.some((arg) => arg.includes('Enter')),
+        () => {
+          stage.touch('ask');
+          return screen().includes('Do you want to proceed?');
+        },
+      );
+      expect(
+        host.typeLine({
+          window: target.window,
+          session: 'target',
+          text: 'hello there',
+          inputLine: claudeInputLine,
+        }),
+      ).toEqual({
+        outcome: 'unknown',
+        reason:
+          'its screen changed before the line could be submitted — not submitted; ' +
+          'the typed text may remain on its input line',
+      });
+      // The question was never answered: no key reached the run.
+      if (stage.live) {
+        Bun.sleepSync(300);
+        expect(stage.read('typed.log')).toBe('');
+      }
     },
   },
 ];

@@ -1,0 +1,283 @@
+{
+  "scenario": "a-question-before-the-key",
+  "recordedWith": "tmux 3.8",
+  "steps": [
+    {
+      "kind": "run",
+      "argv": [
+        "start-server",
+        ";",
+        "set-option",
+        "-s",
+        "exit-empty",
+        "off"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
+        "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "new-session",
+        "-d",
+        "-s",
+        "main-f0-workspace",
+        "-x",
+        "120",
+        "-y",
+        "40",
+        "-P",
+        "-F",
+        "#{window_id}\t#{window_index}",
+        "cat",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "@ward_workspace",
+        "ws-conformance",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "@ward_floor",
+        "0",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "@ward_version",
+        "0.1.0",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "detach-on-destroy",
+        "off",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "set-titles",
+        "on",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "set-titles-string",
+        "#{window_name} · main f0#{?#{||:#{==:#{pane_title},},#{||:#{==:#{pane_title},#{host}},#{==:#{pane_title},#{host_short}}}},, · #{pane_title}}"
+      ],
+      "exit": 0,
+      "stdout": "@1\t0\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "new-window",
+        "-d",
+        "-P",
+        "-F",
+        "#{window_id}\t#{pane_id}",
+        "-t",
+        "=main-f0-workspace:",
+        "-n",
+        "target",
+        "cat"
+      ],
+      "exit": 0,
+      "stdout": "@2\t%1\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "set-option",
+        "-w",
+        "-t",
+        "@2",
+        "@ward_session",
+        "target",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@2",
+        "@ward_epoch",
+        "2026-11-18T00:00:47.000Z",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@2",
+        "@ward_pane",
+        "%1",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@2",
+        "remain-on-exit",
+        "failed",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@2",
+        "automatic-rename",
+        "off",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@2",
+        "allow-rename",
+        "off",
+        ";",
+        "respawn-pane",
+        "-k",
+        "-t",
+        "%1",
+        "-c",
+        "<scratch>",
+        "-e",
+        "WARD_AGENT=target",
+        "sh",
+        "<scratch>/interrupted.sh"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "kill-window",
+        "-t",
+        "@1"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "show-options",
+        "-wv",
+        "-t",
+        "@2",
+        "@ward_pane"
+      ],
+      "exit": 0,
+      "stdout": "%1\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "display-message",
+        "-p",
+        "-t",
+        "@2",
+        "#{window_id}\t#{@ward_session}\t#{@ward_pane}"
+      ],
+      "exit": 0,
+      "stdout": "@2\ttarget\t%1\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "display-message",
+        "-p",
+        "-t",
+        "%1",
+        "#{window_id}\t#{pane_dead}\t#{pane_in_mode}"
+      ],
+      "exit": 0,
+      "stdout": "@2\t0\t0\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "-u",
+        "capture-pane",
+        "-p",
+        "-t",
+        "%1"
+      ],
+      "exit": 0,
+      "stdout": "────────────────────────────────────────\n❯\n────────────────────────────────────────\n  stub status\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "send-keys",
+        "-t",
+        "%1",
+        "-l",
+        "--",
+        "hello there"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "-u",
+        "capture-pane",
+        "-p",
+        "-t",
+        "%1"
+      ],
+      "exit": 0,
+      "stdout": "────────────────────────────────────────\n❯ hello there\n────────────────────────────────────────\n  stub status\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "if-shell",
+        "-F",
+        "-t",
+        "%1",
+        "#{&&:#{==:#{pane_in_mode},0},#{&&:#{==:#{C/r:^(─){40#}$},1},#{&&:#{==:#{C/r:^❯ hello there$},2},#{&&:#{==:#{C/r:^(─){40#}$},1},#{==:#{C/r:^  stub status$},4}}}}}",
+        "send-keys -t %1 Enter ; display-message -p submitted",
+        "display-message -p held"
+      ],
+      "exit": 0,
+      "stdout": "held\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "-u",
+        "capture-pane",
+        "-p",
+        "-t",
+        "%1"
+      ],
+      "exit": 0,
+      "stdout": "────────────────────────────────────────\n Bash command\n Do you want to proceed?\n ❯ 1. Yes\n   2. No\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+      "stderr": ""
+    }
+  ]
+}
