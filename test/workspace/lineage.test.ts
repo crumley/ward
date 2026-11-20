@@ -156,6 +156,11 @@ test('the AGENTS.md 0029 supersedes is in history — every workspace still on i
   expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
     '9765a59300f689a15883aa7beff9251b1818dadb02e62a951f8d1018abe486d3', // design 0068
   );
+  // …and the 0077 manifest, superseded by design/0078-task-named-windows/'s
+  // task-named windows and harness names.
+  expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
+    'b87ca192617b4425f141721c6adee31b4fbf8233b6dc0f24aed9b2586971ca9c', // design 0077
+  );
 });
 
 // The maintenance guard-rail: the lineage's history is maintained by hand, so
@@ -165,7 +170,7 @@ test('the AGENTS.md 0029 supersedes is in history — every workspace still on i
 // exactly the bookkeeping that keeps every shipped default recognizable.
 test('the current defaults are pinned; changing one must move its old hash into history', () => {
   expect(sha256OfText(AGENTS_MD)).toBe(
-    'b87ca192617b4425f141721c6adee31b4fbf8233b6dc0f24aed9b2586971ca9c', // since design 0077 (a floor at a chosen number)
+    '94cc3a5c8dd86cc66a634e8baaea7eb0fe02359c80bff716a6da085168e403a5', // since design 0078 (task-named windows)
   );
   expect(sha256OfText(WARD_INTERNAL_README)).toBe(
     '6f10845611635508f006727f83bdc2222d840a9da972393781662c9f6ff04ac4', // since 65f1e8b (0013)

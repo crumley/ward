@@ -111,6 +111,12 @@ open is what starts the agent** — there is no id to copy by hand:
   has one floor: work that keeps spanning two floors is a sign they are one project, and a
   session that only routes between floors is a workspace-scope one. \`--floor 0\` is the ground floor's own session — the
   workspace's own work — while workspace scope holds the status of every floor.
+- **A floor's session can name the task it is working**, and stays a floor session:
+  \`ward session open --task ADDRESS\` opens one on that task's floor already working it, and
+  \`ward session task ID ADDRESS\` (or \`--clear\`) moves an open one to another of its floor's
+  tasks. The record keeps every change; its window and its harness run take the task's name, and
+  it reads as its floor's again once that task closes. Naming a task that was handed over picks
+  the hand-off up.
 - **A session id names the machine it ran on**, and a number is never reused:
   \`workspace-7@mbp\` is workspace session seven, on \`mbp\`. A session is bound to the computer
   holding its harness history while this record travels, so two machines sharing one workspace
@@ -162,9 +168,11 @@ instead of in the foreground.
   saying so) where tmux 3.2 or later is not usable. Floor hosts live on your default tmux server,
   so \`tmux ls\` shows them.
 - **Names say what a thing is, and are never how it is found.** A window is named for its
-  session — \`coord\` for the coordinator, a floor's slug for that floor's session,
-  \`t<room> <slug>\` for a task's (with the floor in front, \`f5t2 <slug>\`, in another floor's
-  host) — and a number only where two would read the same. A terminal looking at a host is titled
+  session — \`coord\` for the coordinator, a floor's slug for that floor's session, and a task's
+  full address and slug (\`f5t2 <slug>\`) for a task's session or a floor's session working that
+  task — and a number only where two would read the same. The harness's own run is given the
+  same name (\`f5t2 <slug>\`, \`f5 <floor-slug>\`, \`<workspace> coord\`), shown in its prompt and
+  its resume picker, and given again at every resume. A terminal looking at a host is titled
   \`<window> · <workspace> f<N>\`, then whatever the agent titled its own pane; a foreground run's
   terminal is titled once, before the agent takes it. Ward finds hosts and windows by stamps it
   set on them, so renaming one by hand breaks nothing — and Ward names it back the next time a

@@ -93,10 +93,13 @@ export function hostTitle(workspace: string, floor: FloorIdentity): string {
 
 /**
  * The name a session's window is given in the host of floor `hostFloor`.
- * A window on its own floor's host does not repeat the floor — the host
- * already names it — so a floor's session is its slug and a task is
- * `t<room> <slug>`; a window placed on ANOTHER floor's host (a session a
- * floor-3 coordinator started for floor 5) says which floor it is for.
+ * A floor's session on its own floor's host does not repeat the floor — the
+ * host already names it — so it is its slug; placed on ANOTHER floor's host
+ * (a session a floor-3 coordinator started for floor 5) it says which floor
+ * it is for. A task — a task's own session, or a floor's session working one
+ * (design/0078-task-named-windows/) — is its full address and slug in every
+ * host, `f7t54 task-named-windows`, because the address is what every
+ * command takes; on another floor's host it carries that floor's emoji too.
  */
 export function windowLabel(subject: Subject, hostFloor: number): string {
   switch (subject.kind) {
@@ -117,10 +120,30 @@ export function windowLabel(subject: Subject, hostFloor: number): string {
       const slug = shortSlug(subject.slug);
       if (floor === undefined) return `legacy-t${subject.room} ${slug}`;
       const address =
-        floor.number === hostFloor ? `t${subject.room}` : `${floorMark(floor)}t${subject.room}`;
+        floor.number === hostFloor
+          ? `f${floor.number}t${subject.room}`
+          : `${floorMark(floor)}t${subject.room}`;
       return `${address} ${slug}`;
     }
   }
+}
+
+/**
+ * The name a session's harness run is given (design/0078-task-named-windows/):
+ * what its own surfaces — a prompt box, a resume picker — show for the run.
+ * The window's label read from no host, so it carries no ordinal and no
+ * emoji, and depends on nothing a host or the session's id decides: it can be
+ * worked out before the record exists, and reads the same in every terminal.
+ * A floor's session is `f7 ward-development`, a task `f7t54 task-named-windows`;
+ * a workspace session — whose window name says nothing outside this workspace
+ * — is qualified by the workspace, `main coord`.
+ */
+export function harnessName(subject: Subject, workspace: string): string {
+  const [, plain] = unmarked(subject);
+  const label = windowLabel(plain, NO_HOST);
+  return subject.kind === 'coordinator' || subject.kind === 'helper'
+    ? oneLine(`${workspace} ${label}`)
+    : label;
 }
 
 /**

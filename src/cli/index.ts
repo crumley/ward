@@ -16,11 +16,12 @@ import {
   closeHostedSession,
   describeExit,
   type HostFlag,
+  hostedBy,
   hostOf,
   type LiveState,
   liveStateOf,
 } from '../agent/host.ts';
-import { type Dressed, dressFloor } from '../agent/naming.ts';
+import { type Dressed, dressFloor, refreshHosted } from '../agent/naming.ts';
 import { dispatchNotice, type Nudge, nudgeFloor } from '../agent/nudge.ts';
 import {
   type EnactedSession,
@@ -63,7 +64,7 @@ import { FISH_SHORTHAND_NAMES, findShorthand } from '../shell/shorthands.ts';
 import { requireReadableFormat } from '../store/format.ts';
 import type { SessionRecord, TaskRecord, WorkState } from '../store/types.ts';
 import { FLOOR_COLORS, type FloorColor, INK, PALETTE, POOL_COLORS } from '../theme/palette.ts';
-import { distinctAddress, taskAddress } from '../workspace/address.ts';
+import { distinctAddress, taskAddress, taskFloor } from '../workspace/address.ts';
 import {
   type ClaimReport,
   claimRepository,
@@ -121,6 +122,7 @@ import {
   closeSession,
   describeScope,
   findSession,
+  nameSessionTask,
   openFloorSession,
   openSession,
   openWorkspaceSession,
@@ -146,6 +148,7 @@ import {
   type TaskFilter,
   type TaskStatus,
   taskDetail,
+  workingOnOf,
 } from '../workspace/status.ts';
 import {
   mergeWorkspaceBranch,
@@ -1010,6 +1013,11 @@ const session = command(
             description: message`Open the session at this floor's scope — responsible for the floor's outcome, standing at the workspace root.`,
           }),
         ),
+        working: optional(
+          option('--task', taskIdentity('ADDRESS'), {
+            description: message`Open a floor's session working this open task of its floor: its window and its harness run take the task's name. Implies --floor.`,
+          }),
+        ),
         handle: optional(option('--handle', string({ metavar: 'TEXT' }))),
         dir: optional(option('--dir', string({ metavar: 'PATH' }))),
         detach: detachFlag(),
@@ -1054,6 +1062,21 @@ const session = command(
       brief: message`Watch a detached session's live window, read-only — its one window alone.`,
     }),
     command(
+      'task',
+      object({
+        action: constant('session-task'),
+        id: argument(sessionId()),
+        task: optional(argument(taskIdentity('ADDRESS'))),
+        clear: option('--clear', {
+          description: message`Set the task down: the session reads as its floor's again.`,
+        }),
+        json: jsonFlag(),
+      }),
+      {
+        brief: message`Name the task a floor's session is working — or, with --clear, set it down.`,
+      },
+    ),
+    command(
       'show',
       object({
         action: constant('session-show'),
@@ -1081,7 +1104,9 @@ const session = command(
       { brief: message`Close a session record; closed stays closed.` },
     ),
   ),
-  { brief: message`Open, resume, attach, observe, show, locate, and close agent sessions.` },
+  {
+    brief: message`Open, resume, attach, observe, name the task of, show, locate, and close agent sessions.`,
+  },
 );
 const status = command(
   'status',
@@ -1639,6 +1664,7 @@ async function answer(invoked: Invocation): Promise<void> {
           await cmdSessionOpen(
             result.task,
             result.floor,
+            result.working,
             result.purpose,
             result.handle,
             result.dir,
@@ -1666,6 +1692,9 @@ async function answer(invoked: Invocation): Promise<void> {
           break;
         case 'session-observe':
           await cmdSessionJoin('observe', result.id);
+          break;
+        case 'session-task':
+          await cmdSessionTask(result.id, result.task, result.clear, result.json);
           break;
         case 'session-show':
           await cmdSessionShow(result.id, result.json);
@@ -3037,6 +3066,24 @@ function renderDispatchState(standing: DispatchStanding): string {
 }
 
 /** The floor a session is responsible for — undefined for any but a floor's own, or an unknown id. */
+/**
+ * The floor an open task stands on — the floor a session opened with only
+ * `--task` belongs to (design/0078-task-named-windows/). A legacy bare task
+ * stands on none, and a floor's session cannot work it.
+ */
+async function floorOfTask(root: string, address: string): Promise<number> {
+  const task = await resolveOpenTask(root, address);
+  const floor = taskFloor(task);
+  if (floor === undefined) {
+    throw new WardError(
+      `${address.toLowerCase()} is a legacy bare task, on no floor — a floor's session works its ` +
+        `own floor's tasks; open a session on the task itself: ward session open ${address} ` +
+        '--purpose TEXT',
+    );
+  }
+  return floor;
+}
+
 async function floorOfSession(root: string, id: string): Promise<number | undefined> {
   try {
     const { record } = await findSession(root, id);
@@ -3280,7 +3327,8 @@ async function cmdWorktreeList(json: boolean): Promise<void> {
  */
 async function cmdSessionOpen(
   task: string | undefined,
-  floor: number | undefined,
+  given: number | undefined,
+  working: string | undefined,
   purpose: string | undefined,
   handle: string | undefined,
   dir: string | undefined,
@@ -3289,6 +3337,15 @@ async function cmdSessionOpen(
   json: boolean,
 ): Promise<void> {
   const root = await requireMutableWorkspace();
+  if (working !== undefined && task !== undefined) {
+    throw new WardError(
+      `a session has one scope — a task session is its task's (ward session open ${task}); ` +
+        `a floor's session working one names it (ward session open --task ${working})`,
+    );
+  }
+  // A floor's session working a task stands on that task's floor
+  // (design/0078-task-named-windows/), so --task alone names the floor too.
+  const floor = given ?? (working === undefined ? undefined : await floorOfTask(root, working));
   // Only a launch is hosted: a record-only open starts nothing to place.
   if (hostFlag !== undefined && (task !== undefined || handle !== undefined)) {
     throw new WardError(
@@ -3330,9 +3387,10 @@ async function cmdSessionOpen(
   // how an agent responsible for the workspace or a floor starts a child
   // session. Reading the ambient run here would turn every such launch into a
   // record of the caller itself.
+  const named = working === undefined ? {} : { task: working };
   if (handle !== undefined) {
     await notePendingDispatches(root, floor);
-    const options = { handle, ...at, ...started };
+    const options = { handle, ...at, ...started, ...named };
     renderSessionOpened(
       floor === undefined
         ? await openWorkspaceSession(root, purpose, options)
@@ -3345,7 +3403,7 @@ async function cmdSessionOpen(
   // the callback, so what the caller reads is the record as it stood BEFORE
   // any process existed — the ordering the whole design rests on, made
   // visible rather than merely promised.
-  const scope = floor === undefined ? {} : { floor };
+  const scope = floor === undefined ? {} : { floor, ...named };
   await notePendingDispatches(root, floor);
   const launched = await launchSession(
     root,
@@ -3672,8 +3730,9 @@ async function cmdSessionShow(id: string, json: boolean): Promise<void> {
   // The live half, when the latest launch was hosted: derived here, per read,
   // from the host itself (design/0031-detached-session-hosting/).
   const live = await liveStateOf(root, listing);
+  const workingOn = workingOnOf(record, await readTasks(root));
   if (json) {
-    printJson(sessionMutationJson(record, { live }));
+    printJson(sessionMutationJson(record, { live, workingOn }));
     return;
   }
   const state = record.state === 'open' ? pc.green('open') : pc.dim('closed');
@@ -3684,6 +3743,7 @@ async function cmdSessionShow(id: string, json: boolean): Promise<void> {
   row('dir', record.workingDirectory);
   row('handle', record.handle ?? pc.dim('none recorded'));
   if (record.parent !== undefined) row('parent', record.parent);
+  if (workingOn !== undefined) row('working', `${workingOn.address} ${workingOn.slug}`);
   row('opened', record.openedAt);
   if (record.closedAt !== undefined) row('closed', record.closedAt);
   if (live !== undefined) row('live', describeLive(live));
@@ -3692,8 +3752,66 @@ async function cmdSessionShow(id: string, json: boolean): Promise<void> {
     for (const event of record.events) {
       const cause = event.cause === undefined ? '' : pc.dim(` — ${event.cause}`);
       const host = event.host === undefined ? '' : pc.dim(` (in ${event.host})`);
-      console.log(`  ${event.at} ${event.event}${host}${cause}`);
+      const task = event.task === undefined ? '' : ` ${event.task}`;
+      console.log(`  ${event.at} ${event.event}${task}${host}${cause}`);
     }
+  }
+}
+
+/**
+ * `session task` (design/0078-task-named-windows/): name the task a floor's
+ * session is working, or set it down. The record first; then, for a session
+ * whose latest run was hosted, every window of the workspace is brought to
+ * its name in place — so the window says the task at once. The harness's own
+ * name for the run follows at its next resume: Ward never types into a run to
+ * rename it.
+ */
+async function cmdSessionTask(
+  id: string,
+  address: string | undefined,
+  clear: boolean,
+  json: boolean,
+): Promise<void> {
+  const root = await requireMutableWorkspace();
+  if (clear && address !== undefined) {
+    throw new WardError(
+      `--clear sets the task down — name no task with it (ward session task ${id} --clear)`,
+    );
+  }
+  if (!clear && address === undefined) {
+    throw new WardError(
+      `name the task the session is working (ward session task ${id} ADDRESS), or set it ` +
+        `down with: ward session task ${id} --clear`,
+    );
+  }
+  const named = await nameSessionTask(root, id, address);
+  const kind = hostedBy(named.record);
+  const refreshed =
+    named.changed && kind !== undefined ? await refreshHosted(root, hostOf(kind), kind) : undefined;
+  const workingOn = workingOnOf(named.record, await readTasks(root));
+  if (json) {
+    printJson(sessionMutationJson(named.record, { workingOn }));
+    return;
+  }
+  const session = pc.bold(named.record.id);
+  const task = workingOn === undefined ? undefined : `${workingOn.address} ${workingOn.slug}`;
+  console.log(
+    named.changed
+      ? task === undefined
+        ? `${pc.green('cleared')} the task of session ${session}`
+        : `${pc.green('named')} ${task} on session ${session}`
+      : `${pc.dim('unchanged')} — session ${session} ${task === undefined ? 'names no task' : `already works ${task}`}`,
+  );
+  if (refreshed !== undefined) {
+    for (const line of refreshed.failed) console.log(pc.yellow(`  could not rename: ${line}`));
+  }
+  if (named.changed) {
+    console.log(
+      pc.dim(
+        `  ${kind === undefined ? '' : 'its window is renamed now; '}the harness takes the name ` +
+          `at its next resume (ward session resume ${named.record.id})`,
+      ),
+    );
   }
 }
 
@@ -4062,7 +4180,14 @@ function renderSessions(report: StatusReport): void {
 
 /** One open session's line — the same at workspace scope and on a floor's row. */
 function renderSessionRow(here: string, session: SessionStatus): string {
-  return `${pc.bold(session.id)} — ${session.purpose} ${pc.dim(`(${sessionNote(here, session)})`)}`;
+  const working =
+    session.workingOn === undefined
+      ? ''
+      : `${pc.cyan(`working ${session.workingOn.address} ${session.workingOn.slug}`)} · `;
+  return (
+    `${pc.bold(session.id)} — ${working}${session.purpose} ` +
+    pc.dim(`(${sessionNote(here, session)})`)
+  );
 }
 
 function sessionNote(here: string, session: SessionStatus): string {

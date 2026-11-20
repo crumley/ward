@@ -13,6 +13,7 @@ import {
   claudeHandle,
   claudeNativeId,
   DEFAULT_CLAUDE_COMMAND,
+  KEEP_DESCRIPTIVE_TITLE,
   locateClaudeRun,
   locateProgram,
   mungeCwd,
@@ -60,10 +61,39 @@ test('start argv: every key that resolved, in order, and nothing for the ones th
       { nativeId: ID, args: ['--add-dir', '/data'] },
       ['--session-id', ID, '--add-dir', '/data'],
     ],
+    [
+      // design/0078-task-named-windows/: the name, and the setting that keeps
+      // Claude's own description in the terminal title — before the human's args.
+      'a name: after the id, with the title setting, before the args',
+      { nativeId: ID, name: 'f7t54 task-named-windows', model: 'fable', args: ['--verbose'] },
+      [
+        '--session-id',
+        ID,
+        '--name',
+        'f7t54 task-named-windows',
+        '--settings',
+        '{"terminalTitleFromRename":false}',
+        '--model',
+        'fable',
+        '--verbose',
+      ],
+    ],
   ];
   for (const [name, request, expected] of table) {
     expect(startArgv(request), name).toEqual(expected);
   }
+});
+
+test('resume argv: the name again when given, before the args', () => {
+  expect(resumeArgv(ID, ['--verbose'], 'f7 ward-development')).toEqual([
+    '--resume',
+    ID,
+    '--name',
+    'f7 ward-development',
+    '--settings',
+    KEEP_DESCRIPTIVE_TITLE,
+    '--verbose',
+  ]);
 });
 
 test('resume argv: the same id, the args, and never a model or an effort', () => {

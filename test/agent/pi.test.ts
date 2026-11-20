@@ -65,6 +65,21 @@ test('start argv: every key that resolved, in order — thinking, not effort', (
 
 test('resume argv: --session, the args, and never a model or a thinking level', () => {
   expect(piResumeArgv(ID, [])).toEqual(['--session', ID]);
+  // The name again, before the args (design/0078-task-named-windows/).
+  expect(piResumeArgv(ID, ['--offline'], 'f7t5 x')).toEqual([
+    '--session',
+    ID,
+    '--name',
+    'f7t5 x',
+    '--offline',
+  ]);
+  expect(piStartArgv({ nativeId: ID, name: 'f7t5 x', args: ['--offline'] })).toEqual([
+    '--session-id',
+    ID,
+    '--name',
+    'f7t5 x',
+    '--offline',
+  ]);
   expect(piResumeArgv(ID, ['--no-approve'])).toEqual(['--session', ID, '--no-approve']);
   // A resumed run restores what it was saved with; passing today's
   // configuration would silently re-model an old conversation mid-thread.

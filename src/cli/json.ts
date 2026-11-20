@@ -55,6 +55,7 @@ import type {
   StatusReport,
   TaskDetail,
   TaskStatus,
+  WorkingOn,
 } from '../workspace/status.ts';
 import type { MergeReport } from '../workspace/steward.ts';
 import type { CloseReport } from '../workspace/tasks.ts';
@@ -214,6 +215,7 @@ function statusSessionJson(session: SessionStatus): StatusSessionShape {
     ...(session.machine === undefined ? {} : { machine: session.machine }),
     openedAt: session.openedAt,
     history: session.history,
+    ...(session.workingOn === undefined ? {} : { workingOn: { ...session.workingOn } }),
   };
 }
 
@@ -820,6 +822,8 @@ export function workspaceUpgradeJson(report: UpgradeReport): WorkspaceUpgradeSha
 export interface SessionOverlay {
   readonly live?: (LiveState & { readonly join?: string }) | undefined;
   readonly teardown?: Teardown | undefined;
+  /** The task a floor's session is working now (design/0078-task-named-windows/). */
+  readonly workingOn?: WorkingOn | undefined;
 }
 
 export function sessionMutationJson(
@@ -850,11 +854,13 @@ export function sessionMutationJson(
             at: event.at,
             ...(event.cause === undefined ? {} : { cause: event.cause }),
             ...(event.host === undefined ? {} : { host: event.host }),
+            ...(event.task === undefined ? {} : { task: event.task }),
           })),
         }),
     openedAt: record.openedAt,
     ...(record.closedAt === undefined ? {} : { closedAt: record.closedAt }),
     ...(overlay.live === undefined ? {} : { live: liveJson(overlay.live) }),
+    ...(overlay.workingOn === undefined ? {} : { workingOn: { ...overlay.workingOn } }),
     ...(overlay.teardown === undefined
       ? {}
       : {

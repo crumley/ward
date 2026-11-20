@@ -50,7 +50,7 @@ import {
   placeLaunch,
   type ResumeGate,
 } from './host.ts';
-import { readNaming } from './naming.ts';
+import { launchName, readNaming } from './naming.ts';
 import type { Resolved } from './settings.ts';
 import { setTerminalTitle } from './title.ts';
 
@@ -107,10 +107,13 @@ type Recorded = (record: SessionRecord) => void;
 
 /**
  * The scope a launched session opens at: the workspace itself, or one floor
- * (design/0051-floor-scope-sessions/). A task session is never launched — it
+ * (design/0051-floor-scope-sessions/), optionally working one of its tasks
+ * (design/0078-task-named-windows/). A task session is never launched — it
  * stays the record-only verb 0004 built.
  */
-export type LaunchScope = { readonly floor?: undefined } | { readonly floor: number };
+export type LaunchScope =
+  | { readonly floor?: undefined; readonly task?: undefined }
+  | { readonly floor: number; readonly task?: string | undefined };
 
 /**
  * Open a workspace- or floor-scope session and run the agent in it, in the
@@ -159,11 +162,21 @@ export async function launchSession(
     ...(workingDirectory === undefined ? {} : { workingDirectory }),
     ...(startedBy === undefined ? {} : { startedBy }),
   };
-  const argv = adapter.startArgv({ nativeId, ...model, ...effort, args: argsOf(agent.args) });
+  // Named before the record exists (design/0078-task-named-windows/), from
+  // what the open is about to record — never from the id it will be given.
+  const name = await launchName(root, at, purpose, startedBy);
+  const argv = adapter.startArgv({
+    nativeId,
+    ...model,
+    ...effort,
+    ...(name === undefined ? {} : { name }),
+    args: argsOf(agent.args),
+  });
+  const named = at.task === undefined ? {} : { task: at.task };
   const open = (extra: Partial<OpenSessionOptions>) =>
     at.floor === undefined
       ? openWorkspaceSession(root, purpose, { ...options, ...extra })
-      : openFloorSession(root, at.floor, purpose, { ...options, ...extra });
+      : openFloorSession(root, at.floor, purpose, { ...options, ...named, ...extra });
   // Chosen BEFORE the record is written, because the record says where the
   // run was placed — and before the store lock, because the host's readiness
   // check and hygiene preamble are not the critical section's to pay for.
@@ -221,6 +234,15 @@ async function titleForeground(root: string, listing: OpenSessionListing): Promi
   }
 }
 
+/** A resumed run's harness name — and a name is never why a resume does not happen. */
+async function resumeName(root: string, listing: OpenSessionListing): Promise<string | undefined> {
+  try {
+    return (await readNaming(root)).harness(listing);
+  } catch {
+    return undefined;
+  }
+}
+
 /** Read a placed window back a beat later, so an exit already over is reported now. */
 async function verified(
   root: string,
@@ -265,7 +287,8 @@ function messageOf(error: unknown): string {
  * appends `resume-failed` with its cause.
  *
  * Model and effort are deliberately not passed (see each adapter's
- * `resumeArgv`); `agent.args` is, because those are per-invocation flags.
+ * `resumeArgv`); `agent.args` is, because those are per-invocation flags; and
+ * so is the run's name, worked out afresh (design/0078-task-named-windows/).
  */
 export async function resumeSession(
   root: string,
@@ -283,7 +306,10 @@ export async function resumeSession(
   const history = adapter.locate(nativeId, resolve(root, open.record.workingDirectory));
   if (history.outcome === 'gone') await refuseUnresumable(root, open.record, history.path);
   const agent = await readAgentConfig(root);
-  const argv = adapter.resumeArgv(nativeId, argsOf(agent.args));
+  // The name again, from the record as it stands now: a floor session that
+  // has moved to another task comes back under that task's name
+  // (design/0078-task-named-windows/).
+  const argv = adapter.resumeArgv(nativeId, argsOf(agent.args), await resumeName(root, open));
   const choice = await chooseHost(root, launch.hostFlag, agent.host);
   // The gate runs whatever this resume's host: a window still running from a
   // hosted launch refuses a foreground resume exactly as a hosted one.

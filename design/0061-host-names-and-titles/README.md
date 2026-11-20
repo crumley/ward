@@ -4,7 +4,8 @@
 > (`coord`, a floor's slug, `t33 host-names-and-titles`), and a terminal looking at either is given
 > a title — all derived from the records, and brought up to date in place on hosts that already run.
 >
-> **Status:** built — awaiting review · **Started:** 2026-11-15
+> **Status:** built — awaiting review · **Started:** 2026-11-15 · **Partly superseded:** a task's
+> window label, read relative to its host, by [0078](../0078-task-named-windows/README.md)
 
 Detached hosting ([0031](../0031-detached-session-hosting/README.md)) named a floor host
 `ward-<workspace>-f<N>` and a window by its session id, and left anything richer to a later arc. In
@@ -127,9 +128,11 @@ way in; this takes it off the screen once they are there.
     always the full address and slug (`f7t33 host-names-and-titles`) — is uniform, and loses because
     in floor 7's host every window would begin with the same three characters, which is the id's
     machine suffix over again. So the floor is spelled only where it is news: on a window lineage
-    placed in another floor's host. A floor's own session is the slug rather than the word "floor",
-    because the window list is the one surface certain to be on screen, and there the slug answers
-    what the number means.
+    placed in another floor's host. (Superseded for tasks by
+    [0078](../0078-task-named-windows/README.md): a task's window is its full address in every host,
+    because the address is what a command takes.) A floor's own session is the slug rather than the
+    word "floor", because the window list is the one surface certain to be on screen, and there the
+    slug answers what the number means.
   - **The purpose names a helper, and nothing else.** A purpose is the richest text a session has,
     and using it wherever one was given is attractive. It loses for coordinators, floor sessions,
     and task sessions because what they _are_ is already a short, stable noun and a purpose is a

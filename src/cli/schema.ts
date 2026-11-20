@@ -141,6 +141,17 @@ export type NeedsYouShape = z.infer<typeof needsYouShape>;
  * harness transcript is on THIS machine, read from the local filesystem at
  * read time and never stored.
  */
+/**
+ * The task a floor's session is working (design/0078-task-named-windows/):
+ * the one its trail names, while that task is open on the session's floor —
+ * DERIVED at read time, absent when the session names none or the task it
+ * named has closed. `address` is the spelling that resolves to the task now.
+ */
+export const workingOnShape = z.strictObject({
+  address: z.string(),
+  slug: z.string(),
+});
+
 export const statusSessionShape = z.strictObject({
   id: z.string(),
   purpose: z.string(),
@@ -149,6 +160,8 @@ export const statusSessionShape = z.strictObject({
   openedAt: z.string(),
   /** 'unlocatable': no handle this build can resolve, so nothing to look for. */
   history: z.enum(['found', 'gone', 'unlocatable']),
+  /** The task a floor's session is working now (0078). */
+  workingOn: workingOnShape.optional(),
 });
 export type StatusSessionShape = z.infer<typeof statusSessionShape>;
 
@@ -1193,10 +1206,21 @@ export const sessionMutationShape = z.strictObject({
   events: z
     .array(
       z.strictObject({
-        event: z.enum(['opened', 'resumed', 'resume-failed', 'attached', 'observed', 'closed']),
+        event: z.enum([
+          'opened',
+          'resumed',
+          'resume-failed',
+          'attached',
+          'observed',
+          'task-named',
+          'task-cleared',
+          'closed',
+        ]),
         at: z.string(),
         /** Why it failed on `resume-failed`; on `resumed`, how the previous hosted run ended. */
         cause: z.string().optional(),
+        /** On `task-named` (0078): the slug-qualified address of the task named. */
+        task: z.string().optional(),
         /** The detached host a launch was placed in (0031); absent for a foreground run. */
         host: z.enum(['tmux']).optional(),
       }),
@@ -1213,6 +1237,8 @@ export const sessionMutationShape = z.strictObject({
    * not answer (never read as gone).
    */
   live: sessionLiveShape.optional(),
+  /** The task a floor's session is working now (0078) — derived from the trail. */
+  workingOn: workingOnShape.optional(),
   /** What `session close` did to the live half (0031): present when the latest launch was hosted. */
   teardown: z
     .strictObject({
@@ -1453,6 +1479,7 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'worktree rebase': worktreeRebaseShape,
   'session open': sessionMutationShape,
   'session resume': sessionResumeShape,
+  'session task': sessionMutationShape,
   'session close': sessionMutationShape,
   'workspace merge': workspaceMergeShape,
   'workspace restore': workspaceRestoreShape,

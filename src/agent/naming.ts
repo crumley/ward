@@ -24,20 +24,24 @@ import {
   sessionScopeOf,
   workspaceRecordType,
 } from '../store/types.ts';
+import { taskRoom } from '../workspace/address.ts';
 import { identityOf } from '../workspace/floor-identity.ts';
 import { workspaceId } from '../workspace/identity.ts';
-import { projectDirs } from '../workspace/scan.ts';
+import { type FoundTask, projectDirs, readTasks, resolveOpenTask } from '../workspace/scan.ts';
 import {
   defaultWorkspaceSessionPurpose,
   type OpenSessionListing,
+  parentOf,
   parseSessionId,
   readAllSessions,
+  workingTaskOf,
 } from '../workspace/sessions.ts';
 import { hostedBy, latestLaunch } from './host.ts';
 import {
   distinguish,
   type FloorIdentity,
   foregroundTitle,
+  harnessName,
   hostName,
   hostTitle,
   type Subject,
@@ -62,6 +66,11 @@ export interface Naming {
   label(listing: OpenSessionListing): string;
   /** The title of a terminal running the session in the foreground. */
   foreground(listing: OpenSessionListing): string;
+  /**
+   * The name the session's harness run is given at every launch
+   * (design/0078-task-named-windows/) — host-independent, with no ordinal.
+   */
+  harness(listing: OpenSessionListing): string;
 }
 
 /**
@@ -107,10 +116,16 @@ export function groupIdentity(floor: FloorIdentity): GroupIdentity | undefined {
   return { color: floor.color, emoji: floor.emoji, label };
 }
 
-/** What a session is, read from its record and from where the record stands. */
+/**
+ * What a session is, read from its record and from where the record stands.
+ * A floor's session working one of its tasks (design/0078-task-named-windows/)
+ * is that task, as far as a name is concerned: `tasks` is what lets the trail's
+ * naming be checked against a task still open on the floor.
+ */
 export function subjectOf(
   listing: OpenSessionListing,
   floor: (number: number) => FloorIdentity,
+  tasks: readonly FoundTask[] = [],
 ): Subject {
   const { record, scopeDir } = listing;
   switch (sessionScopeOf(record)) {
@@ -120,8 +135,12 @@ export function subjectOf(
       const given = record.purpose !== defaultWorkspaceSessionPurpose(record.openedAt);
       return given ? { kind: 'helper', purpose: record.purpose } : { kind: 'helper' };
     }
-    case 'project':
-      return { kind: 'floor', floor: floor(record.floor ?? 0) };
+    case 'project': {
+      const working = workingTaskOf(record, tasks);
+      return working === undefined
+        ? { kind: 'floor', floor: floor(record.floor ?? 0) }
+        : taskSubject(floor(record.floor ?? 0), working);
+    }
     case 'task': {
       const task = TASK_DIR.exec(scopeDir);
       const project = PROJECT_DIR.exec(scopeDir);
@@ -135,6 +154,11 @@ export function subjectOf(
   }
 }
 
+/** A task as a name's subject: its floor, its room, its slug. */
+function taskSubject(floor: FloorIdentity, task: FoundTask): Subject {
+  return { kind: 'task', floor, room: taskRoom(task) ?? 0, slug: task.record.slug };
+}
+
 export async function readNaming(
   root: string,
   all?: readonly OpenSessionListing[],
@@ -142,7 +166,9 @@ export async function readNaming(
   const workspace = (await readDocument(root, workspaceRecordType)).data.name;
   const floors = await floorIdentities(root);
   const sessions = all ?? (await readAllSessions(root));
+  const tasks = await readTasks(root);
   const floor = (number: number): FloorIdentity => floors.get(number) ?? { number, slug: '' };
+  const subject = (listing: OpenSessionListing) => subjectOf(listing, floor, tasks);
   // Told apart among the sessions a host can be showing: open, and hosted.
   const hosted = sessions.filter(
     ({ record }) => record.state === 'open' && hostedBy(record) !== undefined,
@@ -152,7 +178,7 @@ export async function readNaming(
     return {
       id: listing.record.id,
       host,
-      label: windowLabel(subjectOf(listing, floor), host),
+      label: windowLabel(subject(listing), host),
       ordinal: parseSessionId(listing.record.id)?.n,
     };
   });
@@ -171,9 +197,50 @@ export async function readNaming(
     },
     label: (listing) =>
       labels.get(listing.record.id) ??
-      windowLabel(subjectOf(listing, floor), placementFloor(listing, sessions)),
-    foreground: (listing) => foregroundTitle(subjectOf(listing, floor), workspace),
+      windowLabel(subject(listing), placementFloor(listing, sessions)),
+    foreground: (listing) => foregroundTitle(subject(listing), workspace),
+    harness: (listing) => harnessName(subject(listing), workspace),
   };
+}
+
+/** Where a launch is about to open: the workspace, or a floor and perhaps a task on it. */
+export interface LaunchAt {
+  readonly floor?: number | undefined;
+  readonly task?: string | undefined;
+}
+
+/**
+ * The harness name of a session that does not exist yet
+ * (design/0078-task-named-windows/): a launch builds its argv before it
+ * writes its record, so the name is worked out from what the open will
+ * record — the scope, the named task, whether a session started it — and
+ * never from the id the record will be given. It reads the same as
+ * `Naming.harness` will once the record stands. A name is never why a launch
+ * stops: anything that cannot be worked out answers undefined, and the run
+ * starts unnamed (a task the open will refuse is refused there, by the open).
+ */
+export async function launchName(
+  root: string,
+  at: LaunchAt,
+  purpose: string | undefined,
+  startedBy: string | undefined,
+): Promise<string | undefined> {
+  try {
+    const workspace = (await readDocument(root, workspaceRecordType)).data.name;
+    if (at.floor === undefined) {
+      const parent = parentOf(await readAllSessions(root), startedBy, undefined);
+      if (parent === undefined) return harnessName({ kind: 'coordinator' }, workspace);
+      return harnessName(
+        purpose === undefined ? { kind: 'helper' } : { kind: 'helper', purpose },
+        workspace,
+      );
+    }
+    const floor = (await floorIdentities(root)).get(at.floor) ?? { number: at.floor, slug: '' };
+    if (at.task === undefined) return harnessName({ kind: 'floor', floor }, workspace);
+    return harnessName(taskSubject(floor, await resolveOpenTask(root, at.task)), workspace);
+  } catch {
+    return undefined;
+  }
 }
 
 /** What a refresh changed, in words — and what it could not. */
@@ -318,6 +385,28 @@ export function standingViews(
     views.set(host, [...(views.get(host) ?? []), { name: group.name, mode }]);
   }
   return views;
+}
+
+/**
+ * Bring this workspace's standing hosts and windows to what the records say
+ * now — what a verb that changes a name runs after it writes
+ * (design/0078-task-named-windows/: a floor session naming its task renames
+ * its window at once). Undefined when there is no host to bring up to date:
+ * tmux unusable here, or a workspace that has never placed one.
+ */
+export async function refreshHosted(
+  root: string,
+  host: SessionHost,
+  kind: HostedKind,
+): Promise<Refreshed | undefined> {
+  if (!host.check().usable) return undefined;
+  let workspace: string;
+  try {
+    workspace = await workspaceId(root);
+  } catch {
+    return undefined;
+  }
+  return refreshNames(root, host, workspace, kind);
 }
 
 /** What dressing one floor's host in its identity came to. */

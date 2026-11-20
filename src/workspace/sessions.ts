@@ -18,8 +18,9 @@ import {
   sessionRecordType,
   sessionScopeOf,
 } from '../store/types.ts';
+import { addressMatches, parseTaskAddress, qualifiedAddress, taskFloor } from './address.ts';
 import { resolveProject } from './projects.ts';
-import { commitRecords, projectDirs, readTasks, resolveOpenTask } from './scan.ts';
+import { commitRecords, type FoundTask, projectDirs, readTasks, resolveOpenTask } from './scan.ts';
 
 export interface OpenSessionOptions {
   readonly handle?: string;
@@ -45,6 +46,12 @@ export interface OpenSessionOptions {
    * on an empty floor cannot each mint a host.
    */
   readonly withinLock?: (opened: OpenSessionListing) => Promise<void>;
+  /**
+   * The task a floor session opens working (design/0078-task-named-windows/):
+   * an address of an open task on the session's own floor, recorded as a
+   * `task-named` event beside `opened`. Floor scope only.
+   */
+  readonly task?: string;
 }
 
 /**
@@ -193,12 +200,15 @@ export async function openFloorSession(
     if (project.record.state === 'closed') {
       throw new WardError(`project on floor ${floor} is closed — a session cannot open on it`);
     }
+    const named =
+      options.task === undefined ? undefined : await floorTask(root, floor, options.task);
     const machine = (await readMachine()).name;
     const id = await allocateId(root, floorSessionSlug(floor), machine);
     return writeOpened(root, project.dir, {
       id,
       scope: 'project',
       floor,
+      ...(named === undefined ? {} : { named: qualifiedAddress(named) }),
       machine,
       purpose,
       workingDirectory: options.workingDirectory ?? '.',
@@ -424,6 +434,123 @@ export function describeScope(record: SessionRecord): string {
   }
 }
 
+// -- the task a floor session works (design/0078-task-named-windows/) ----------
+
+/**
+ * The task a session's trail names now: the address on its latest
+ * `task-named` event, unless a `task-cleared` came after it. Read from the
+ * trail, never from a field, so every naming the session ever made stays on
+ * the record in the order it happened.
+ */
+export function namedTaskOf(record: SessionRecord): string | undefined {
+  for (const event of [...(record.events ?? [])].reverse()) {
+    if (event.event === 'task-named') return event.task;
+    if (event.event === 'task-cleared') return undefined;
+  }
+  return undefined;
+}
+
+/**
+ * The task a floor session is working NOW: the one its trail names, while
+ * that task is open and stands on the session's floor. A task that has since
+ * closed names nothing — the trail keeps the naming, and the session reads as
+ * its floor's again — because a window that says a finished task is still in
+ * hand would be the record contradicting itself. Derived per read.
+ */
+export function workingTaskOf(
+  record: SessionRecord,
+  tasks: readonly FoundTask[],
+): FoundTask | undefined {
+  const named = namedTaskOf(record);
+  if (named === undefined || sessionScopeOf(record) !== 'project') return undefined;
+  const wanted = parseTaskAddress(named);
+  if (wanted === null) return undefined;
+  return tasks.find(
+    (task) =>
+      task.record.state !== 'closed' &&
+      taskFloor(task) === record.floor &&
+      addressMatches(task, wanted),
+  );
+}
+
+/** What naming (or clearing) a floor session's task came to. */
+export interface TaskNamed {
+  readonly record: SessionRecord;
+  readonly scopeDir: string;
+  /** False when the trail already said this — nothing was written. */
+  readonly changed: boolean;
+  /** The task now named; absent once cleared. */
+  readonly task?: FoundTask;
+}
+
+/**
+ * Name the task a floor session works, or (`address` undefined) clear it
+ * (design/0078-task-named-windows/). Appends `task-named` or `task-cleared`
+ * and commits; a call that would say again what the trail already says writes
+ * nothing. Only a floor's own session names a task: a task session already is
+ * its task's, and a workspace session answers for every floor at once.
+ */
+export async function nameSessionTask(
+  root: string,
+  id: string,
+  address: string | undefined,
+): Promise<TaskNamed> {
+  return withStoreLock(root, `session task ${id}`, async () => {
+    const open = await requireOpenSession(root, id);
+    const { record, scopeDir } = open;
+    if (sessionScopeOf(record) !== 'project' || record.floor === undefined) {
+      throw new WardError(
+        `session ${id} is at ${describeScope(record)} — only a floor's own session names the ` +
+          "task it works (a task session is already its task's)",
+      );
+    }
+    const current = workingTaskOf(record, await readTasks(root));
+    if (address === undefined) {
+      if (namedTaskOf(record) === undefined) return { record, scopeDir, changed: false };
+      const cleared = withEvent(record, { event: 'task-cleared', at: new Date().toISOString() });
+      await writeSession(root, scopeDir, cleared);
+      commitRecords(
+        root,
+        `Clear the task of session ${id}`,
+        sessionRecordType(scopeDir, id).relPath,
+      );
+      return { record: cleared, scopeDir, changed: true };
+    }
+    const task = await floorTask(root, record.floor, address);
+    if (current?.dir === task.dir) return { record, scopeDir, changed: false, task };
+    const named = withEvent(record, {
+      event: 'task-named',
+      at: new Date().toISOString(),
+      task: qualifiedAddress(task),
+    });
+    await writeSession(root, scopeDir, named);
+    commitRecords(
+      root,
+      `Name task ${qualifiedAddress(task)} on session ${id}`,
+      sessionRecordType(scopeDir, id).relPath,
+    );
+    return { record: named, scopeDir, changed: true, task };
+  });
+}
+
+/**
+ * Resolve an address to an open task on `floor`, refusing one elsewhere: a
+ * floor session works its own floor's tasks — handing work to another floor is
+ * a hand-off (design/0067-floor-dispatch/), not a name.
+ */
+async function floorTask(root: string, floor: number, address: string): Promise<FoundTask> {
+  const task = await resolveOpenTask(root, address);
+  const on = taskFloor(task);
+  if (on !== floor) {
+    throw new WardError(
+      `${address.toLowerCase()} is ${on === undefined ? 'a legacy bare task' : `on floor ${on}`} ` +
+        `— a floor ${floor} session names its own floor's tasks (hand work to another floor ` +
+        'with: ward task dispatch SLUG --to FLOOR --brief FILE)',
+    );
+  }
+  return task;
+}
+
 function sessionsDir(scopeDir: string): string {
   return scopeDir === '' ? 'sessions' : `${scopeDir}/sessions`;
 }
@@ -491,6 +618,8 @@ interface OpenedFields {
   readonly scope: SessionRecord['scope'];
   readonly task?: string;
   readonly floor?: number;
+  /** The slug-qualified address of the task a floor session opens working (0078). */
+  readonly named?: string;
   /** Absent only at workspace and floor scope, where the record states one itself. */
   readonly purpose?: string | undefined;
   readonly workingDirectory: string;
@@ -576,6 +705,9 @@ async function writeOpened(
         at: openedAt,
         ...(fields.host === undefined ? {} : { host: fields.host }),
       },
+      ...(fields.named === undefined
+        ? []
+        : [{ event: 'task-named' as const, at: openedAt, task: fields.named }]),
     ],
     openedAt,
   };

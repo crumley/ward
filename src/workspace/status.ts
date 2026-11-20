@@ -42,7 +42,7 @@ import { type FoundProject, readProjects } from './projects.ts';
 import { unreflectedCount } from './reflection.ts';
 import { listRepositories } from './repos.ts';
 import { ambiguous, type FoundTask, readTasks } from './scan.ts';
-import { readSessions } from './sessions.ts';
+import { readSessions, workingTaskOf } from './sessions.ts';
 import { type WorktreeStatus, worktreeStatuses } from './worktrees.ts';
 
 /**
@@ -356,6 +356,29 @@ export interface SessionStatus {
   readonly machine?: string;
   readonly openedAt: string;
   readonly history: SessionHistory;
+  /** The task a floor's session is working now (design/0078-task-named-windows/). */
+  readonly workingOn?: WorkingOn;
+}
+
+/**
+ * The task a floor's session is working, as every surface reports it
+ * (design/0078-task-named-windows/): the address that names it now, and its
+ * slug. Derived from the session's trail and the task's state, never stored.
+ */
+export interface WorkingOn {
+  readonly address: string;
+  readonly slug: string;
+}
+
+/** The task a session's trail names while it stays open on its floor, as reported. */
+export function workingOnOf(
+  record: SessionRecord,
+  tasks: readonly FoundTask[],
+): WorkingOn | undefined {
+  const task = workingTaskOf(record, tasks);
+  return task === undefined
+    ? undefined
+    : { address: distinctAddress(task, tasks), slug: task.record.slug };
 }
 
 export interface StatusReport {
@@ -415,7 +438,7 @@ export async function statusReport(
   let hiddenProjects = 0;
   for (const project of projects) {
     const own = tasks.filter((task) => task.dir.startsWith(`${project.dir}/`));
-    const sessions = openSessionStatuses(root, await readSessions(root, project.dir));
+    const sessions = openSessionStatuses(root, await readSessions(root, project.dir), tasks);
     const derived = projectState(
       project.record,
       own.map((task) => task.record.state),
@@ -501,16 +524,24 @@ function workspaceSessions(root: string, records: readonly SessionRecord[]): Ses
  * (design/0051-floor-scope-sessions/), and `task show`
  * (design/0043-task-next-surface/), so a session reads the same everywhere.
  */
-function openSessionStatuses(root: string, records: readonly SessionRecord[]): SessionStatus[] {
+function openSessionStatuses(
+  root: string,
+  records: readonly SessionRecord[],
+  tasks: readonly FoundTask[] = [],
+): SessionStatus[] {
   return records
     .filter((record) => record.state === 'open')
-    .map((record) => ({
-      id: record.id,
-      purpose: record.purpose,
-      ...(record.machine === undefined ? {} : { machine: record.machine }),
-      openedAt: record.openedAt,
-      history: sessionHistory(root, record),
-    }));
+    .map((record) => {
+      const workingOn = workingOnOf(record, tasks);
+      return {
+        id: record.id,
+        purpose: record.purpose,
+        ...(record.machine === undefined ? {} : { machine: record.machine }),
+        openedAt: record.openedAt,
+        history: sessionHistory(root, record),
+        ...(workingOn === undefined ? {} : { workingOn }),
+      };
+    });
 }
 
 function sessionHistory(root: string, record: SessionRecord): SessionHistory {
@@ -606,7 +637,10 @@ export interface TaskDetail {
   readonly dispatch?: DispatchStanding;
   /** This machine's name — what makes the session rows readable (0038). */
   readonly machine: string;
-  /** The task's OPEN sessions, each saying whether its history is on this machine. */
+  /**
+   * The task's OPEN sessions, each saying whether its history is on this
+   * machine — its own, then its floor's sessions working it (0078).
+   */
   readonly sessions: readonly SessionStatus[];
   /** The one imperative line: what moves this task forward now. */
   readonly next: NextStep;
@@ -629,17 +663,30 @@ export async function taskDetail(
   if (status === undefined) throw new WardError(`could not read task ${input}`);
   const dispatch = await dispatchOf(root, task, everyone);
   const floor = taskFloor(task);
-  const project =
+  const found =
     floor === undefined
       ? undefined
-      : (await readProjects(root)).find((found) => found.record.floor === floor)?.record;
+      : (await readProjects(root)).find((candidate) => candidate.record.floor === floor);
+  const project = found?.record;
+  // Its floor's sessions that are working it (design/0078-task-named-windows/)
+  // are its sessions too: they are where the task is being worked.
+  const working =
+    found === undefined
+      ? []
+      : (await readSessions(root, found.dir)).filter(
+          (record) => workingTaskOf(record, everyone)?.dir === task.dir,
+        );
   return {
     status,
     ...(project === undefined ? {} : { project }),
     brief: { path: briefPath(task.dir), standing: (await readBrief(root, task.dir)).standing },
     ...(dispatch === undefined ? {} : { dispatch }),
     machine: (await readMachine()).name,
-    sessions: openSessionStatuses(root, await readSessions(root, task.dir)),
+    sessions: openSessionStatuses(
+      root,
+      [...(await readSessions(root, task.dir)), ...working],
+      everyone,
+    ),
     next: nextStep({
       record: task.record,
       address: status.address,

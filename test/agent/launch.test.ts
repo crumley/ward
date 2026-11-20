@@ -13,7 +13,7 @@ import { afterAll, beforeEach, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sessionLocateShape, sessionMutationShape } from '../../src/cli/schema.ts';
-import { mungeCwd } from '../../src/harness/claude.ts';
+import { KEEP_DESCRIPTIVE_TITLE, mungeCwd } from '../../src/harness/claude.ts';
 import { readDocument, writeDocument } from '../../src/store/document.ts';
 import { type SessionRecord, workspaceRecordType } from '../../src/store/types.ts';
 import { gitOrThrow } from '../../src/workspace/git.ts';
@@ -28,6 +28,10 @@ import {
   writeFakeClaude,
 } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
+
+/** Ward's name flags for a run (design/0078-task-named-windows/). */
+const named = (name: string) => ['--name', name, '--settings', KEEP_DESCRIPTIVE_TITLE];
+const wsName = () => `ws-${caseId}`;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const DEFAULT_PURPOSE = /^Coordinating work · opened \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
@@ -114,6 +118,7 @@ test('the resolved configuration becomes the argv — absent keys omit their fla
   expect(ward(['session', 'open', '--purpose', 'configured']).exitCode).toBe(0);
   const [run] = runs();
   expect(run?.argv.slice(2)).toEqual([
+    ...named(`${wsName()} coord`),
     '--model',
     'sonnet',
     '--effort',
@@ -124,11 +129,12 @@ test('the resolved configuration becomes the argv — absent keys omit their fla
   // session, not the machine that happened to launch it.
   expect((await readSessions(ws, ''))[0]).toMatchObject({ model: 'sonnet', effort: 'high' });
 
-  // Nothing configured at all: the id and nothing else — no flag is invented.
+  // Nothing configured at all: the id and the run's name (0078) — no
+  // model or effort flag is invented.
   writeGlobalConfig(undefined);
   await writeWorkspaceAgent(undefined);
   expect(ward(['session', 'open', '--purpose', 'unconfigured']).exitCode).toBe(0);
-  expect(runs()[1]?.argv.length).toBe(2);
+  expect(runs()[1]?.argv.slice(2)).toEqual(named(`${wsName()} coord`));
   const unconfigured = (await readSessions(ws, ''))[1];
   expect(unconfigured?.model).toBeUndefined(); // nothing chosen, nothing recorded
   expect(unconfigured?.effort).toBeUndefined();
@@ -146,7 +152,10 @@ test("agent.command is how the harness is invoked here: its words first, then Wa
   expect(run?.argv[0]).toBe('claude');
   expect(run?.argv[1]).toBe('--session-id');
   expect(run?.argv[2]).toMatch(UUID);
-  expect(run?.argv.slice(3)).toEqual(['--dangerously-skip-permissions']);
+  expect(run?.argv.slice(3)).toEqual([
+    ...named(`${wsName()} coord`),
+    '--dangerously-skip-permissions',
+  ]);
   expect(run?.wardAgent).toBe('workspace-1@test');
   expect(run?.recordSeen).toBe(true);
 
@@ -159,6 +168,7 @@ test("agent.command is how the harness is invoked here: its words first, then Wa
     'claude',
     '--resume',
     nativeId,
+    ...named(`${wsName()} coord`),
     '--dangerously-skip-permissions',
   ]);
 
@@ -236,7 +246,13 @@ test('resume: the same id, in the recorded directory, with the attempt recorded'
   expect(resumed.stdout).toContain('resuming session workspace-1@test');
   // The model is NOT passed — the run restores its own — while the
   // per-invocation args ride along.
-  expect(runs()[1]?.argv).toEqual(['--resume', nativeId, '--dangerously-skip-permissions']);
+  // So does its name, worked out again (0078).
+  expect(runs()[1]?.argv).toEqual([
+    '--resume',
+    nativeId,
+    ...named(`${wsName()} coord`),
+    '--dangerously-skip-permissions',
+  ]);
   expect(runs()[1]?.cwd).toBe(ws);
   expect(eventsOf(await readSessions(ws, ''))).toEqual(['opened', 'resumed']);
 
@@ -269,7 +285,7 @@ test('resume works on a manually recorded task session — any claude: handle', 
   fabricateTranscript('abc-123', ws);
   const resumed = ward(['session', 'resume', 'feature-1@test']);
   expect(resumed.exitCode).toBe(0);
-  expect(runs()[0]?.argv).toEqual(['--resume', 'abc-123']);
+  expect(runs()[0]?.argv).toEqual(['--resume', 'abc-123', ...named('f0t1 feature')]);
   expect(eventsOf(await readSessions(ws, 'projects/0-workspace/tasks/t1-feature'))).toEqual([
     'opened',
     'resumed',
