@@ -615,6 +615,12 @@ export type RepoRemoveShape = z.infer<typeof repoRemoveShape>;
 
 export const projectOpenShape = z.strictObject({
   floor: z.number().int().positive(),
+  /**
+   * Whether the opener chose the number (`--floor N`) rather than taking the
+   * next (0077). Either way it is one no floor has ever spent, and the next
+   * floor opened without a choice takes one past the highest spent.
+   */
+  chosen: z.boolean(),
   slug: z.string(),
   state: workStateSchema,
   /** Repositories claimed at open — a routing default, absent when none (0037). */

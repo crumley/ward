@@ -74,7 +74,7 @@ import {
 } from './layout.ts';
 import { findStandingProject, GROUND_FLOOR, readProjects } from './projects.ts';
 import { listRepositoryNames, remoteKey } from './repos.ts';
-import { type FoundTask, readTasks } from './scan.ts';
+import { dirFloor, type FoundTask, projectDirs, readTasks } from './scan.ts';
 import { readOpenSessions } from './sessions.ts';
 import {
   absentBecause,
@@ -688,6 +688,7 @@ async function workspaceChecks(
   findings.push(await standingProjectFinding(root));
   findings.push(...(await legacyBareTaskFinding(root)));
   findings.push(...(await roomCollisionFindings(root)));
+  findings.push(...(await floorCollisionFindings(root)));
   findings.push(...(await claimFindings(root)));
   findings.push(...(await floorIdentityFindings(root)));
   findings.push(...(await floorManifestFindings(root)));
@@ -1265,6 +1266,50 @@ async function roomCollisionFindings(root: string): Promise<Finding[]> {
     if (!(error instanceof WardError)) throw error;
     return [{ check, severity: 'error', message: error.message }];
   }
+}
+
+/**
+ * Floor numbers two floors hold at once (design/0077-floor-chosen-number/):
+ * what two machines sharing the workspace leave behind when each opened a
+ * floor at the same number — the next one, or the same chosen one — before
+ * their records synced. Read from the directories alone, so a record that
+ * will not read is still counted. Warn, as for a room (0058): nothing is lost
+ * and both floors still work, but the number names neither alone — every
+ * verb that takes a floor number reaches the first by directory name, and the
+ * two floors' task addresses compose with the same number. The finding names
+ * each floor by its directory, which is what tells them apart meanwhile.
+ * Unlike a room, a floor number does not clear when work closes: it is never
+ * reused, so the collision stands until one of the floors holds another.
+ */
+async function floorCollisionFindings(root: string): Promise<Finding[]> {
+  const check = 'floor collisions';
+  const byFloor = new Map<number, string[]>();
+  for (const dir of projectDirs(root)) {
+    const floor = dirFloor(dir);
+    if (floor === undefined) continue;
+    byFloor.set(floor, [...(byFloor.get(floor) ?? []), dir]);
+  }
+  return [...byFloor.entries()]
+    .filter(([, dirs]) => dirs.length > 1)
+    .map(([floor, dirs]) => ({
+      check,
+      severity: 'warn' as const,
+      message:
+        `floor ${floor} is held by ${dirs.length} floors: ${dirs.join(', ')} — the number was ` +
+        'handed out twice, as two machines do when each opens a floor before their records ' +
+        'sync. Each is told apart by its directory meanwhile: a verb given floor ' +
+        `${floor} reaches ${dirs[0]}, and task addresses f${floor}t<room> name rooms on ` +
+        `every one of them. ${floorCollisionRemedy(floor)}`,
+    }));
+}
+
+/**
+ * How a floor collision ends. One sentence, kept apart so that the verb which
+ * gives a floor another number can be named here once it exists; until then
+ * the finding says what ends it and promises no verb.
+ */
+function floorCollisionRemedy(floor: number): string {
+  return `The collision stands until all but one of them holds a number other than ${floor}`;
 }
 
 /**

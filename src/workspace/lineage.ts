@@ -368,8 +368,15 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '90dd5fd955002845c526981ff75be53e917a2efaa27c00851e8a8817bc24ac30',
         era: 'design 0070 (a clean exit closes its window)',
       },
-      // Current since design 0068 (built after 0070): `ward session resume
-      // --all`, the plan and `--go`, in the Detached sessions section.
+      // design 0068 (built after 0070) — `ward session resume --all`, the
+      // plan and `--go`, in the Detached sessions section. A floor always
+      // took the next number.
+      {
+        sha256: '9765a59300f689a15883aa7beff9251b1818dadb02e62a951f8d1018abe486d3',
+        era: 'design 0068 (bulk session resume)',
+      },
+      // Current since design 0077: `ward project open SLUG --floor N` opens a
+      // floor at a number never spent, and doctor reports two floors on one.
     ],
   },
 ];
