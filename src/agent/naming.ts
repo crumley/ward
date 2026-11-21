@@ -79,6 +79,10 @@ export async function floorIdentities(root: string): Promise<Map<number, FloorId
     const match = PROJECT_DIR.exec(dir);
     if (match?.[1] === undefined) continue;
     const number = Number.parseInt(match[1], 10);
+    // Two directories leading with one number (a floor collision,
+    // design/0077-floor-chosen-number/): the first by name answers, as it
+    // does for every verb that resolves a floor by number.
+    if (floors.has(number)) continue;
     floors.set(number, { number, slug: match[2] ?? '', ...(await lookOf(root, dir)) });
   }
   return floors;

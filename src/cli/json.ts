@@ -545,9 +545,10 @@ export function repoRemoveJson(report: RemoveReport): RepoRemoveShape {
   };
 }
 
-export function projectOpenJson(record: ProjectRecord): ProjectOpenShape {
+export function projectOpenJson(record: ProjectRecord, chosen = false): ProjectOpenShape {
   return {
     floor: record.floor,
+    chosen,
     slug: record.slug,
     state: record.state,
     ...(record.repositories === undefined ? {} : { repositories: record.repositories }),

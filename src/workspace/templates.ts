@@ -81,6 +81,12 @@ operated with the \`ward\` CLI and tracked in git.
   (\`--color NAME\` names it). \`ward project identity FLOOR [--color NAME] [--emoji EMOJI]\`
   changes them later, and dresses a host that is already standing where it stands. **The ground
   floor wears 🔧 silver in every workspace**: that is not changed, and no other floor wears either.
+- **A floor takes the next number unless its opener chooses one**: \`ward project open SLUG
+  --floor N\` opens it at N, any number from 1 to 999 that no floor has ever spent — held, open
+  or closed, or retired. Ward refuses a spent number, naming what spent it. A number is never
+  reused, and a chosen one counts: the next floor opened without \`--floor\` takes one past the
+  highest number ever spent. Two machines that each open the same number before their records sync
+  leave two floors on it: \`ward doctor\` reports it, naming each by its directory.
 - Work is never committed to a repository's main line directly; changes travel through a worktree
   and a pull request.
 - When a main line moves under work in progress, \`ward worktree rebase\` replays the task's

@@ -94,6 +94,7 @@ import {
   GROUND_FLOOR,
   openProject,
   readProjects,
+  requireFloorChoice,
   requireGroundFloor,
 } from '../workspace/projects.ts';
 import type { Publication } from '../workspace/publish.ts';
@@ -610,6 +611,13 @@ const project = command(
         action: constant('project-open'),
         slug: argument(string({ metavar: 'SLUG' })),
         repo: multiple(option('--repo', repoName())),
+        // A string, read by requireFloorChoice: the refusal of a bad number
+        // is Ward's own, naming what to do instead (design/0077).
+        floor: optional(
+          option('--floor', string({ metavar: 'N' }), {
+            description: message`The floor's number — any from 1 to 999 that no floor has ever held or retired. Left out, the floor takes the next.`,
+          }),
+        ),
         emoji: optional(
           option('--emoji', string({ metavar: 'EMOJI' }), {
             description: message`The floor's emoji — one that fits what the floor is about, and that no other open floor wears. Left out, Ward picks one.`,
@@ -623,7 +631,7 @@ const project = command(
         json: jsonFlag(),
       }),
       {
-        brief: message`Open a project; it takes the next floor number. --emoji names its emoji; --repo claims a repository for it.`,
+        brief: message`Open a project; it takes the next floor number, or the one --floor names. --emoji names its emoji; --repo claims a repository for it.`,
       },
     ),
     command(
@@ -1295,13 +1303,15 @@ async function answer(invoked: Invocation): Promise<void> {
           // Validated before anything is written: a claim on an unregistered
           // name routes nothing, so it is a bad argument, not a stored fact.
           for (const name of result.repo) requireRegistered(root, name);
+          const chosen = result.floor === undefined ? undefined : requireFloorChoice(result.floor);
           const record = await openProject(root, result.slug, {
             repositories: result.repo,
+            ...(chosen === undefined ? {} : { floor: chosen }),
             ...(result.color === undefined ? {} : { color: result.color }),
             ...(result.emoji === undefined ? {} : { emoji: result.emoji }),
           });
           if (result.json) {
-            printJson(projectOpenJson(record));
+            printJson(projectOpenJson(record, chosen !== undefined));
             break;
           }
           console.log(

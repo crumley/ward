@@ -21,9 +21,33 @@ import {
 import { gitOrThrow } from './git.ts';
 import { warnJournalOffMainLine } from './steward.ts';
 
-/** Workspace-relative project directories, e.g. `projects/1-agent-output`. */
+/**
+ * Workspace-relative project directories, e.g. `projects/1-agent-output`, in
+ * FLOOR order — by the number the directory leads with, then by name
+ * (design/0077-floor-chosen-number/). Sorted as text, floor 10 would come
+ * between 1 and 2; every listing, every scan over tasks and sessions, and every
+ * resolver that takes the first match reads this order, so it is fixed here
+ * once. Two directories that lead with one number (a floor collision) keep
+ * their name order, which is what makes "the first" a stable answer. A
+ * directory that leads with no number sorts last.
+ */
 export function projectDirs(root: string): string[] {
-  return subdirs(join(root, 'projects')).map((name) => `projects/${name}`);
+  return subdirs(join(root, 'projects'))
+    .sort(byFloorThenName)
+    .map((name) => `projects/${name}`);
+}
+
+/** The floor a project directory's name leads with (`12-night-shift` → 12), if any. */
+export function dirFloor(name: string): number | undefined {
+  const match = /^(\d+)-/.exec(name.split('/').pop() ?? '');
+  return match?.[1] === undefined ? undefined : Number.parseInt(match[1], 10);
+}
+
+function byFloorThenName(a: string, b: string): number {
+  const fa = dirFloor(a) ?? Number.POSITIVE_INFINITY;
+  const fb = dirFloor(b) ?? Number.POSITIVE_INFINITY;
+  if (fa !== fb) return fa < fb ? -1 : 1;
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /** Workspace-relative task directories across every container. */
