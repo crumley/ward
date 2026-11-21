@@ -177,10 +177,17 @@ function claimDestination(root: string): void {
  * rewrites a file (git rewrites its index and refs in place) never changes a
  * template or a sibling's copy. Symbolic links are copied as the links they
  * are; every one a workspace holds is relative.
+ *
+ * A `*.lock` file is never copied. It is another process's claim on the
+ * template, not part of it: git starts background maintenance after a commit,
+ * and its `objects/maintenance.lock` can still come and go while a template is
+ * being copied — listed by the directory read, gone by the copy. A lock carried
+ * into a copy would also be a claim nobody holds there.
  */
 function copyTree(from: string, to: string): void {
   mkdirSync(to, { recursive: true });
   for (const entry of readdirSync(from, { withFileTypes: true })) {
+    if (entry.name.endsWith('.lock')) continue;
     const source = join(from, entry.name);
     const target = join(to, entry.name);
     if (entry.isDirectory()) copyTree(source, target);
