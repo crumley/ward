@@ -278,6 +278,17 @@
       "argv": [
         "list-sessions",
         "-F",
+        "#{session_id}\t#{@ward_view}\t#{@ward_joined}\t#{session_attached}"
+      ],
+      "exit": 0,
+      "stdout": "$1\t\t\t0\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
         "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
       ],
       "exit": 0,
@@ -358,6 +369,17 @@
       "argv": [
         "list-sessions",
         "-F",
+        "#{session_id}\t#{@ward_view}\t#{@ward_joined}\t#{session_attached}"
+      ],
+      "exit": 0,
+      "stdout": "$1\t\t\t0\n$2\tws-conformance\t\t0\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
         "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
       ],
       "exit": 0,
@@ -400,7 +422,7 @@
         "=ward-main-f0-v1:@2"
       ],
       "exit": 0,
-      "stdout": "$1\n",
+      "stdout": "$3\n",
       "stderr": ""
     },
     {

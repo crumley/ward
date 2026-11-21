@@ -353,7 +353,9 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     // The verb returns at once — the client is theirs, and stays where it was put.
     expect(await fileSoon(inside.exit)).toBe('0\n');
     expect(clientSessions()).toEqual([view]);
-    expect(sessionOption(view, 'destroy-unattached')).toBe('on');
+    // Never destroy-unattached (design/0076-tmux-remaining-races/): the view
+    // ends itself, by hook, once its client has gone.
+    expect(sessionOption(view, 'destroy-unattached')).toBe('');
     expect(sessionOption(view, 'detach-on-destroy')).toBe('off');
     expect(
       session(ward(['session', 'show', opened.id, '--json'])).events?.map((e) => e.event),
@@ -677,7 +679,7 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     writeFileSync(inside.go, '');
     const view = await clientOn(`${f1}-v1`, own);
     expect(await fileSoon(inside.exit)).toBe('0\n');
-    expect(sessionOption(view, 'destroy-unattached')).toBe('on');
+    expect(sessionOption(view, 'destroy-unattached')).toBe('');
 
     leaving.leave();
 
@@ -857,6 +859,58 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
       // The client has left, so the view is gone by the time the verb returns.
       expect(tmux('list-sessions', '-F', '#{session_name}').split('\n')).not.toContain(view);
     }
+    expect(session(ward(['session', 'show', helper.id, '--json'])).live?.state).toBe('live');
+  });
+
+  test('a view switched into from inside tmux ends once its client has left — never under a client on its way out', async () => {
+    // design/0076-tmux-remaining-races/: the switched view used to be set
+    // destroy-unattached at join, and through tmux 3.7c that destroys it
+    // under a client told to detach and slow to go, and kills the server.
+    // The view's own client-detached hook ends it instead, once the client
+    // has gone; leaving it by switching away leaves it for the next view.
+    const helper = session(ward(['session', 'open', '--detach', '--json']));
+    const f0 = `${name}-f0-workspace`;
+    const inside = insideTmux(['session', 'attach', helper.id]);
+    tmux('new-session', '-d', '-s', 'mine', 'sh', inside.script);
+    const own = human('mine');
+    await clientOn('mine', own);
+    writeFileSync(inside.go, '');
+    const view = await clientOn(`${f0}-v1`, own);
+    expect(await fileSoon(inside.exit)).toBe('0\n');
+    expect(sessionOption(view, 'destroy-unattached')).toBe(''); // the fix: not while it holds its client
+    expect(sessionOption(view, '@ward_joined')).toBe('1');
+
+    // Leaving by switching away: no hook of the view's runs, so it stands
+    // empty until the next view made in the workspace ends it.
+    tmux('switch-client', '-c', clientName(view), '-t', '=mine');
+    await clientOn('mine', own);
+    expect(tmux('list-sessions', '-F', '#{session_name}').split('\n')).toContain(view);
+    const observer = attach(['session', 'observe', helper.id]);
+    await clientOn(`${f0}-o1`, observer);
+    expect(tmux('list-sessions', '-F', '#{session_name}').split('\n')).not.toContain(view);
+    tmux('detach-client', '-s', `=${f0}-o1`);
+    expect(await exited(observer)).toBe(0);
+
+    // In again, then the worst order, held still: the client is told to
+    // detach and is slow to go while other clients of the server disconnect.
+    rmSync(inside.go);
+    rmSync(inside.exit);
+    tmux('respawn-pane', '-k', '-t', '=mine:', 'sh', inside.script);
+    writeFileSync(inside.go, '');
+    const back = await clientOn(`${f0}-v1`, own);
+    expect(await fileSoon(inside.exit)).toBe('0\n');
+    const pid = Number(clientOf(back));
+    process.kill(pid, 'SIGSTOP');
+    try {
+      tmux('detach-client', '-s', `=${back}`);
+      tmux('list-sessions');
+      expect(tmux('list-sessions', '-F', '#{session_name}').split('\n')).toContain(back);
+    } finally {
+      process.kill(pid, 'SIGCONT');
+    }
+    expect(await exited(own)).toBe(0);
+    // The client has gone, the hook has ended the view, and the server stands.
+    expect(await groupsSoon((names) => !names.includes(back))).toContain(f0);
     expect(session(ward(['session', 'show', helper.id, '--json'])).live?.state).toBe('live');
   });
 
@@ -1319,6 +1373,10 @@ async function groupsSoon(done: (names: string[]) => boolean): Promise<string[]>
 }
 
 /** The pid of the one client looking at a tmux session — empty when none is. */
+function clientName(view: string): string {
+  return tmux('list-clients', '-t', `=${view}`, '-F', '#{client_name}').trim();
+}
+
 function clientOf(view: string): string {
   const rows = tmux('list-clients', '-F', '#{client_session}\t#{client_pid}').split('\n');
   return rows.find((row) => row.startsWith(`${view}\t`))?.split('\t')[1] ?? '';

@@ -18,6 +18,18 @@
 
 type Env = Record<string, string | undefined>;
 
+/**
+ * A harness's input line as read off one screenful (design/0067-floor-dispatch/,
+ * design/0076-tmux-remaining-races/): what it holds, and the screen rows the
+ * reading rests on — 0-based, `first` to `last` inclusive. Those rows are
+ * what the host checks again, inside tmux, at the instant it submits: while
+ * they read as they did, the screen is the one this reading was made of.
+ */
+export interface InputLine {
+  readonly text: string;
+  readonly rows: { readonly first: number; readonly last: number };
+}
+
 export type { Env };
 
 /**
@@ -112,7 +124,7 @@ export interface HarnessAdapter {
    * same keys answer whatever is asking. Absent for a harness whose screen
    * this build cannot read, and such a run is never typed into.
    */
-  inputLine?(screen: string): string | null;
+  inputLine?(screen: string): InputLine | null;
   /** The handle recorded for a run: the name, then its native id. */
   handle(nativeId: string): string;
   /** The native id inside one of THIS adapter's handles — null for any other. */

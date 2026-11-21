@@ -13,6 +13,7 @@
 // that hosts sessions itself) is one more implementation of this interface
 // beside src/host/tmux.ts, selected by `agent.host`, and the Ward side does
 // not change.
+import type { InputLine } from '../harness/adapter.ts';
 import type { HostedKind } from '../store/types.ts';
 import type { FloorColor } from '../theme/palette.ts';
 
@@ -291,12 +292,13 @@ export interface TypeRequest {
   /** One line of printable ASCII — a host refuses anything else. */
   readonly text: string;
   /**
-   * Reads the run's screen: what its input line holds, or null when the
-   * screen shows none. Handed in by the Ward side, which knows which harness
-   * the run is; the host knows only that it must see the line it typed,
-   * alone, before it submits it.
+   * Reads the run's screen: what its input line holds and the rows that
+   * reading rests on, or null when the screen shows none. Handed in by the
+   * Ward side, which knows which harness the run is; the host knows only that
+   * it must see the line it typed, alone, before it submits it — and that
+   * those rows must still read the same as the submitting key goes.
    */
-  readonly inputLine: (screen: string) => string | null;
+  readonly inputLine: (screen: string) => InputLine | null;
 }
 
 export type TypeResult =

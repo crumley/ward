@@ -19,10 +19,13 @@ import {
   captureArgv,
   createGroupArgv,
   createWindowArgv,
+  endLeftViewArgv,
   endViewArgv,
   enterArgv,
   eraseArgv,
+  HELD,
   killWindowArgv,
+  leftViewsArgv,
   linkWindowArgv,
   listGroupsArgv,
   listPanesArgv,
@@ -30,6 +33,7 @@ import {
   paneStateArgv,
   prepareArgv,
   renameGroupArgv,
+  SUBMITTED,
   startRunArgv,
   submitArgv,
   themeArgv,
@@ -375,6 +379,12 @@ describe('typeLine', () => {
   ];
   // A screen read, answered again for as long as the host keeps asking.
   const capture = (screen: string): Step => call(['-u', ...captureArgv('%1')], { stdout: screen });
+  // The guarded key over the reading of `screen`, and what tmux said it did.
+  const submit = (
+    screen: string,
+    answer = SUBMITTED,
+    extra: { exit?: number; stderr?: string } = {},
+  ): Step => call(submitArgv('%1', screen, readRows(screen)), { stdout: `${answer}\n`, ...extra });
 
   test.each<[string, Step[], ReturnType<SessionHost['typeLine']>, number?]>([
     [
@@ -475,7 +485,7 @@ describe('typeLine', () => {
         capture(prompt('')),
         call(typeArgv('%1', TEXT)),
         capture(prompt(TEXT)),
-        call(submitArgv('%1'), { exit: 1, stderr: 'boom' }),
+        submit(prompt(TEXT), '', { exit: 1, stderr: 'boom' }),
       ],
       { outcome: 'unknown', reason: 'boom' },
     ],
@@ -486,10 +496,63 @@ describe('typeLine', () => {
         capture(prompt('')),
         call(typeArgv('%1', TEXT)),
         capture(prompt(TEXT)),
-        call(submitArgv('%1')),
+        submit(prompt(TEXT)),
         capture(prompt(TEXT)),
       ],
       { outcome: 'unknown', reason: 'typed and submitted, but the line is still there' },
+      20,
+    ],
+    [
+      'tmux holds the key back: a question took the screen after the read-back',
+      [
+        ...tagged(),
+        capture(prompt('')),
+        call(typeArgv('%1', TEXT)),
+        capture(prompt(TEXT)),
+        submit(prompt(TEXT), HELD),
+        capture(QUESTION),
+      ],
+      {
+        outcome: 'unknown',
+        reason:
+          'its screen changed before the line could be submitted — not submitted; ' +
+          'the typed text may remain on its input line',
+      },
+      1,
+    ],
+    [
+      'tmux holds the key back, the line still reads alone: the key goes over the new reading',
+      [
+        ...tagged(),
+        capture(prompt('')),
+        call(typeArgv('%1', TEXT)),
+        capture(prompt(TEXT)),
+        submit(prompt(TEXT), HELD),
+        capture(prompt(TEXT, 'status moved')),
+        submit(prompt(TEXT, 'status moved')),
+        capture(QUESTION),
+      ],
+      { outcome: 'typed' },
+      1,
+    ],
+    [
+      'tmux keeps holding the key back: given up when the wait runs out',
+      [
+        ...tagged(),
+        capture(prompt('')),
+        call(typeArgv('%1', TEXT)),
+        capture(prompt(TEXT)),
+        ...Array.from({ length: 21 }, () => [
+          submit(prompt(TEXT), HELD),
+          capture(prompt(TEXT)),
+        ]).flat(),
+      ].slice(0, -1),
+      {
+        outcome: 'unknown',
+        reason:
+          'its screen changed before the line could be submitted — not submitted; ' +
+          'the typed text may remain on its input line',
+      },
       20,
     ],
     [
@@ -499,7 +562,7 @@ describe('typeLine', () => {
         capture(prompt('')),
         call(typeArgv('%1', TEXT)),
         capture(prompt(TEXT)),
-        call(submitArgv('%1')),
+        submit(prompt(TEXT)),
         capture(QUESTION),
       ],
       { outcome: 'typed' },
@@ -565,6 +628,7 @@ describe('view', () => {
 
   test('a name another view takes in the meantime: the next free one is tried', () => {
     const { host, played } = scripted([
+      call(leftViewsArgv()),
       call(listGroupsArgv(), { stdout: rows([F0, WS, 0]) }),
       call(attachViewArgv(F0, `${F0}-v1`, WS, '@2', asked), duplicate(`${F0}-v1`)),
       call(listGroupsArgv(), { stdout: rows([F0, WS, 0], [`${F0}-v1`, '', '', 0, F0, WS]) }),
@@ -575,7 +639,7 @@ describe('view', () => {
   });
 
   test('five names taken in turn: refused, with tmux’s last word', () => {
-    const steps: Step[] = [];
+    const steps: Step[] = [call(leftViewsArgv())];
     for (let n = 1; n <= 5; n++) {
       const taken = Array.from(
         { length: n - 1 },
@@ -593,6 +657,7 @@ describe('view', () => {
 
   test('an observe view that cannot be made, and one dressed with a theme that fails', () => {
     const failing = scripted([
+      call(leftViewsArgv()),
       call(listGroupsArgv()),
       call(observeViewArgv(`${F0}-o1`, WS, asked), { exit: 1, stderr: 'no memory' }),
     ]);
@@ -603,6 +668,7 @@ describe('view', () => {
 
     const dressed = { ...asked, identity: SILVER };
     const { host, played } = scripted([
+      call(leftViewsArgv()),
       call(listGroupsArgv()),
       call(observeViewArgv(`${F0}-o1`, WS, dressed), { stdout: '@9\n' }),
       call(watchArgv(`${F0}-o1`, '@9', '@2')),
@@ -614,6 +680,32 @@ describe('view', () => {
     });
     played.finish();
   });
+});
+
+test('a view is made after the views its clients left are ended — and is made when they cannot be listed', () => {
+  const asked = { group: F0, window: '@2', workspace: WS, title: 'main f0' };
+  const left = `$3\t${WS}\t1\t0\n$4\t${WS}\t1\t1\n$5\t${WS}\t\t0\n$6\t${WS}\t1\t0\n`;
+  const swept = scripted([
+    call(leftViewsArgv(), { stdout: left }),
+    // Each end is its own check: one that fails (it went, or someone joined) stops nothing.
+    call(endLeftViewArgv('$3'), { exit: 1, stderr: "can't find session: $3" }),
+    call(endLeftViewArgv('$6')),
+    call(listGroupsArgv(), { stdout: rows([F0, WS, 0]) }),
+    call(attachViewArgv(F0, `${F0}-v1`, WS, '@2', asked)),
+  ]);
+  expect(swept.host.view({ ...asked, mode: 'attach' })).toEqual({
+    name: `${F0}-v1`,
+    mode: 'attach',
+  });
+  swept.played.finish();
+
+  const unlisted = scripted([
+    call(leftViewsArgv(), { exit: 1, stderr: 'boom' }),
+    call(listGroupsArgv(), { stdout: rows([F0, WS, 0]) }),
+    call(attachViewArgv(F0, `${F0}-v1`, WS, '@2', asked)),
+  ]);
+  expect(unlisted.host.view({ ...asked, mode: 'attach' }).name).toBe(`${F0}-v1`);
+  unlisted.played.finish();
 });
 
 describe('enter', () => {
@@ -687,6 +779,7 @@ describe('the scripted tmux itself', () => {
       call(['-u', 'capture-pane', '-p', '-t', '%12'], { stdout: 'A' }),
       call(['send-keys', '-t', '%12', 'x']),
       call(['-u', 'capture-pane', '-p', '-t', '%12'], { stdout: 'A' }),
+      call(['-u', 'capture-pane', '-p', '-t', '%12'], { stdout: 'A' }),
       call(['-u', 'capture-pane', '-p', '-t', '%12'], { stdout: 'B' }),
     ];
     expect(
@@ -698,6 +791,8 @@ describe('the scripted tmux itself', () => {
       [['display-message', '-p', '#{socket_path}\t#{session_created}'], '<socket>\t1\n'],
       [['-u', 'capture-pane', '-p', '-t', '%1'], 'A'],
       [['send-keys', '-t', '%1', 'x'], ''],
+      // A read after anything else is kept, though it answers as an earlier one did.
+      [['-u', 'capture-pane', '-p', '-t', '%1'], 'A'],
       [['-u', 'capture-pane', '-p', '-t', '%1'], 'B'],
     ]);
   });
@@ -735,7 +830,11 @@ function shape(argv: readonly string[]): string {
   return JSON.stringify(
     commands.map(([name = '', ...rest]) => [
       name,
-      ...rest.filter((word) => /^-[A-Za-z]+$/.test(word) || word.includes('#{')),
+      ...rest
+        .filter((word) => /^-[A-Za-z]+$/.test(word) || word.includes('#{'))
+        // A screen check's rows are values too: each asks for one row, and
+        // only how many it asks for is its form (submitArgv).
+        .map((word) => word.replace(/#\{C\/r:[\s\S]*?\$\},\d+\}/gu, 'C')),
     ]),
   );
 }
@@ -749,8 +848,15 @@ const SEEN = new Set(
 );
 
 /** A screen with the stand-in's input line holding `text`. */
-function prompt(text: string): string {
-  return `${RULE}\n❯ ${text}\n${RULE}\n  stub status\n${'\n'.repeat(36)}`;
+function prompt(text: string, status = 'stub status'): string {
+  return `${RULE}\n❯ ${text}\n${RULE}\n  ${status}\n${'\n'.repeat(36)}`;
+}
+
+/** The rows a screen's input line rests on, as the claude reader finds them. */
+function readRows(screen: string) {
+  const read = claudeInputLine(screen);
+  if (read === null) throw new Error('no input line on that screen');
+  return read.rows;
 }
 
 const QUESTION = `${RULE}\n Bash command\n Do you want to proceed?\n ❯ 1. Yes\n   2. No\n`;

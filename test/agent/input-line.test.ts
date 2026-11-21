@@ -61,7 +61,27 @@ test.each<[string, string, string]>([
     '',
   ],
 ])('the input line: %s', (_name, text, expected) => {
-  expect(claudeInputLine(text)).toBe(expected);
+  expect(claudeInputLine(text)?.text).toBe(expected);
+});
+
+test('the rows a reading rests on: the upper rule to the last status row, never the transcript above', () => {
+  // Banner rows 0-2, the upper rule at 3, the line at 4, the lower rule at 5,
+  // three status rows at 6-8.
+  expect(claudeInputLine(screen(...BANNER, ...box(`❯ ${NOTICE}`)))?.rows).toEqual({
+    first: 3,
+    last: 8,
+  });
+  // A wrapped line, and no status beneath it: the lower rule is the last row.
+  expect(
+    claudeInputLine(
+      screen('prose', RULE, `❯ ${NOTICE.slice(0, 60)}`, `  ${NOTICE.slice(60).trimStart()}`, RULE),
+    )?.rows,
+  ).toEqual({ first: 1, last: 4 });
+  // Blank rows beneath the status area are not part of it.
+  expect(claudeInputLine(screen(RULE, '❯ ', RULE, '  status', '', ''))?.rows).toEqual({
+    first: 0,
+    last: 3,
+  });
 });
 
 test.each<[string, string]>([

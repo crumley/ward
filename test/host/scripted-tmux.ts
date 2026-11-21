@@ -405,7 +405,6 @@ export function normalize(
       .replace(EPOCH, '1')
       .replace(ID, (whole) => ids.get(whole) ?? whole);
   const out: Step[] = [];
-  const lastScreen = new Map<string, string>();
   for (const step of steps) {
     const argv = step.argv.map(clean);
     if (step.kind === 'client') {
@@ -415,10 +414,19 @@ export function normalize(
     const isVersion = argv.length === 1 && argv[0] === '-V';
     const stdout = isVersion ? 'tmux <version>\n' : clean(step.stdout);
     const reply = { ...step, argv, stdout, stderr: clean(step.stderr) };
-    if (step.kind === 'run' && isScreenRead(argv)) {
-      const key = argv.join('\u0000');
-      if (lastScreen.get(key) === `${reply.exit}\u0000${stdout}`) continue;
-      lastScreen.set(key, `${reply.exit}\u0000${stdout}`);
+    // Only a read answered the same as the step right before it — the one
+    // playback answers again — is dropped: a read that follows anything else
+    // is a read the host will ask for again, and must be there to answer it.
+    const last = out.at(-1);
+    if (
+      step.kind === 'run' &&
+      isScreenRead(argv) &&
+      last?.kind === 'run' &&
+      sameArgv(last.argv, argv) &&
+      last.exit === reply.exit &&
+      last.stdout === stdout
+    ) {
+      continue;
     }
     out.push(reply);
   }
