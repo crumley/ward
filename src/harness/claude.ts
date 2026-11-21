@@ -118,6 +118,7 @@ export function startArgv(request: StartRequest): string[] {
   return [
     '--session-id',
     request.nativeId,
+    ...nameFlags(request.name),
     ...flag('--model', request.model),
     ...flag('--effort', request.effort),
     ...request.args,
@@ -135,8 +136,28 @@ export function startArgv(request: StartRequest): string[] {
  * per-invocation flags (`--dangerously-skip-permissions` is the motivating
  * case) that a resumed process needs exactly as much as a fresh one.
  */
-export function resumeArgv(nativeId: string, args: readonly string[]): string[] {
-  return ['--resume', nativeId, ...args];
+export function resumeArgv(nativeId: string, args: readonly string[], name?: string): string[] {
+  return ['--resume', nativeId, ...nameFlags(name), ...args];
+}
+
+/**
+ * Claude Code's own setting that keeps its terminal title its own
+ * description of the work when the session has a name. Measured on 2.1.325
+ * (design/0078-task-named-windows/): `--name` alone pins the terminal title to
+ * `✳ <name>` and stops the description Claude otherwise writes there after the
+ * first prompt; with this setting the name stays in the prompt box, the
+ * transcript and the resume picker, and the title goes on describing the work.
+ */
+export const KEEP_DESCRIPTIVE_TITLE = JSON.stringify({ terminalTitleFromRename: false });
+
+/**
+ * The run's name, and the setting that keeps it out of the terminal title —
+ * which a hosted window's title already leads with (0061) — or nothing at all.
+ * A `--settings` a human passes in `agent.args` comes later and wins key by
+ * key (measured), so the tail stays theirs.
+ */
+function nameFlags(name: string | undefined): string[] {
+  return name === undefined ? [] : ['--name', name, '--settings', KEEP_DESCRIPTIVE_TITLE];
 }
 
 /**

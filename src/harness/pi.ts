@@ -59,6 +59,7 @@ export function piStartArgv(request: StartRequest): string[] {
   return [
     '--session-id',
     request.nativeId,
+    ...flag('--name', request.name),
     ...flag('--model', request.model),
     ...flag('--thinking', request.effort),
     ...request.args,
@@ -73,8 +74,8 @@ export function piStartArgv(request: StartRequest): string[] {
  * what it was saved with, as for claude. `args` rides along — per-invocation
  * flags a resumed process needs as much as a fresh one.
  */
-export function piResumeArgv(nativeId: string, args: readonly string[]): string[] {
-  return ['--session', nativeId, ...args];
+export function piResumeArgv(nativeId: string, args: readonly string[], name?: string): string[] {
+  return ['--session', nativeId, ...flag('--name', name), ...args];
 }
 
 /**

@@ -1,5 +1,5 @@
 {
-  "format": 2,
+  "format": 3,
   "shapes": {
     "baselines": {
       "type": "object",
@@ -448,10 +448,16 @@
                   "resume-failed",
                   "attached",
                   "observed",
+                  "task-named",
+                  "task-cleared",
                   "closed"
                 ]
               },
               "at": {
+                "type": "string",
+                "minLength": 1
+              },
+              "task": {
                 "type": "string",
                 "minLength": 1
               },

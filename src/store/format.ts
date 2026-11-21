@@ -82,6 +82,21 @@ export const FORMAT_LEVELS: readonly FormatLevel[] = [
       type === 'reflection' ||
       (type === 'task' && (data as { stewardship?: unknown }).stewardship === 'reflection'),
   },
+  {
+    level: 3,
+    entry: '0078-task-named-windows',
+    introduces:
+      "a floor session's `task-named` and `task-cleared` events, naming the task it works",
+    older:
+      'a ward that reads only format 2 refuses this workspace until it is updated; a ward from ' +
+      'before the guard (design 0066) is not stopped, and fails on a session record that names ' +
+      'a task wherever it lists sessions — update ward on every machine that shares this workspace',
+    needs: (type, data) =>
+      type === 'session' &&
+      ((data as { events?: { event?: unknown }[] }).events ?? []).some(
+        (event) => event.event === 'task-named' || event.event === 'task-cleared',
+      ),
+  },
 ];
 
 /** The highest level this Ward reads and writes. */

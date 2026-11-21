@@ -6,6 +6,7 @@ import {
   distinguish,
   type FloorIdentity,
   foregroundTitle,
+  harnessName,
   hostName,
   hostTitle,
   type Subject,
@@ -46,17 +47,41 @@ test.each<[string, Subject, number, string]>([
   ["a floor's session, in another's host", { kind: 'floor', floor: F7 }, 3, 'f7 ward-development'],
   ['a floor with an emoji, elsewhere', { kind: 'floor', floor: F9 }, 3, '🔍f9 review-tool'],
   ['a floor no record names', { kind: 'floor', floor: { number: 3, slug: '' } }, 3, 'f3'],
+  // A task is its full address in every host, its own floor's included (0078).
   [
     'a task, on its own floor',
     { kind: 'task', floor: F7, room: 33, slug: 'host-names-and-titles' },
     7,
-    't33 host-names-and-titles',
+    'f7t33 host-names-and-titles',
   ],
   [
     "a task, in another floor's host",
     { kind: 'task', floor: F7, room: 33, slug: 'host-names-and-titles' },
     3,
     'f7t33 host-names-and-titles',
+  ],
+  [
+    'a task of a marked floor, at home',
+    { kind: 'task', floor: F9, room: 6, slug: 'markup' },
+    9,
+    'f9t6 markup',
+  ],
+  [
+    'a task of a marked floor, elsewhere',
+    { kind: 'task', floor: F9, room: 6, slug: 'markup' },
+    3,
+    '🔍f9t6 markup',
+  ],
+  [
+    'a long slug, cut at a word',
+    {
+      kind: 'task',
+      floor: { number: 12, slug: 'x' },
+      room: 99,
+      slug: 'obsidian-brain-refresh-and-more',
+    },
+    12,
+    'f12t99 obsidian-brain-refresh',
   ],
   ['a legacy bare task', { kind: 'task', room: 2, slug: 'old-work' }, 0, 'legacy-t2 old-work'],
 ])('%s is %p (host floor %p) → %p', (_name, subject, hostFloor, label) => {
@@ -77,6 +102,24 @@ test.each<[string, Subject, string]>([
   ['a legacy bare task', { kind: 'task', room: 2, slug: 'old-work' }, 'legacy-t2 old-work · main'],
 ])('in the foreground, %s is titled %p', (_name, subject, title) => {
   expect(foregroundTitle(subject, 'main')).toBe(title);
+});
+
+// The harness's own name for the run (0078): host-independent, no ordinal,
+// no emoji — and a workspace session qualified by its workspace.
+test.each<[string, Subject, string]>([
+  ['the coordinator', { kind: 'coordinator' }, 'main coord'],
+  ['a helper', { kind: 'helper' }, 'main helper'],
+  [
+    'a helper with a purpose',
+    { kind: 'helper', purpose: 'Sweep the worktrees' },
+    'main Sweep the worktrees',
+  ],
+  ["a floor's session", { kind: 'floor', floor: F7 }, 'f7 ward-development'],
+  ['a marked floor', { kind: 'floor', floor: F9 }, 'f9 review-tool'],
+  ['a task', { kind: 'task', floor: F9, room: 6, slug: 'markup' }, 'f9t6 markup'],
+  ['a legacy bare task', { kind: 'task', room: 2, slug: 'old-work' }, 'legacy-t2 old-work'],
+])('the harness names %s %p', (_name, subject, name) => {
+  expect(harnessName(subject, 'main')).toBe(name);
 });
 
 test('only windows that would read the same in one host take their ordinal', () => {

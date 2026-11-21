@@ -3,18 +3,19 @@
 // a workspace is called now — derived per call, never stored.
 import { afterAll, beforeEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { readNaming, refreshNames, standingViews } from '../../src/agent/naming.ts';
+import { launchName, readNaming, refreshNames, standingViews } from '../../src/agent/naming.ts';
 import type { InventoryGroup, StandingView } from '../../src/host/host.ts';
 import type { SessionRecord } from '../../src/store/types.ts';
 import { workspaceId } from '../../src/workspace/identity.ts';
 import { GROUND_FLOOR, openProject } from '../../src/workspace/projects.ts';
 import {
   findSession,
+  nameSessionTask,
   openFloorSession,
   openSession,
   openWorkspaceSession,
 } from '../../src/workspace/sessions.ts';
-import { openTask } from '../../src/workspace/tasks.ts';
+import { closeTask, openTask } from '../../src/workspace/tasks.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
 import { fakeHost } from './fake-host.ts';
@@ -44,7 +45,7 @@ test('every scope reads as what it is: coordinator, helper, floor, task', async 
   expect(await label(quiet)).toBe('helper'); // the purpose Ward wrote for it names nothing
   expect(await label(sweep)).toBe('Sweep the worktrees');
   expect(await label(floor)).toBe('alpha'); // a purpose never displaces what the session is
-  expect(await label(task)).toBe('t1 fix-the-thing');
+  expect(await label(task)).toBe('f1t1 fix-the-thing'); // the full address, at home too (0078)
   expect(await label(lineage)).toBe('🔧f0 workspace'); // another floor's, marked with its emoji
   // Its host wears its identity (0060), whose emoji the host puts at the head
   // of the title (0064) — so where it stands carries none.
@@ -55,6 +56,43 @@ test('every scope reads as what it is: coordinator, helper, floor, task', async 
   });
   expect(naming.group(6)).toEqual({ name: `${name}-f6`, title: `${name} f6` });
   expect(naming.foreground(await findSession(ws, floor.id))).toBe(`🌊 f1 alpha · ${name}`);
+});
+
+test('a floor session working a task is named for it — window and harness — until it closes', async () => {
+  // design/0078-task-named-windows/
+  await openProject(ws, 'alpha');
+  await openTask(ws, 'fix-the-thing', { floor: 1 });
+  await openTask(ws, 'next-thing', { floor: 1 });
+  const floor = await openFloorSession(ws, 1, undefined, { ...hosted('f'), task: 'f1t1' });
+  const read = async () => {
+    const naming = await readNaming(ws);
+    const listing = await findSession(ws, floor.id);
+    return [naming.label(listing), naming.harness(listing)];
+  };
+  expect(await read()).toEqual(['f1t1 fix-the-thing', 'f1t1 fix-the-thing']);
+  // Worked out before the record exists, it reads the same as after.
+  expect(await launchName(ws, { floor: 1, task: 'f1t1' }, undefined, undefined)).toBe(
+    'f1t1 fix-the-thing',
+  );
+  await nameSessionTask(ws, floor.id, 'f1t2');
+  expect(await read()).toEqual(['f1t2 next-thing', 'f1t2 next-thing']);
+  // The task it names closes: the session reads as its floor's again.
+  await closeTask(ws, 'f1t2', 'abandoned');
+  expect(await read()).toEqual(['alpha', 'f1 alpha']);
+  await nameSessionTask(ws, floor.id, 'f1t1');
+  await nameSessionTask(ws, floor.id, undefined);
+  expect(await read()).toEqual(['alpha', 'f1 alpha']);
+});
+
+test('the harness names a launch from what the open will record', async () => {
+  await openProject(ws, 'alpha');
+  const coordinator = await openWorkspaceSession(ws, undefined, HOSTED);
+  expect(await launchName(ws, {}, undefined, undefined)).toBe(`${name} coord`);
+  expect(await launchName(ws, {}, undefined, coordinator.id)).toBe(`${name} helper`);
+  expect(await launchName(ws, {}, 'Sweep', coordinator.id)).toBe(`${name} Sweep`);
+  expect(await launchName(ws, { floor: 1 }, undefined, undefined)).toBe('f1 alpha');
+  // A task the open will refuse names nothing: the open refuses it, in its words.
+  expect(await launchName(ws, { floor: 1, task: 'f1t9' }, undefined, undefined)).toBeUndefined();
 });
 
 test('two sessions that would read the same are told apart; a foreground one never counts', async () => {

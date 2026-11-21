@@ -7,7 +7,8 @@
 //
 // What is stored is only what cannot be derived: who sent it, to which floor,
 // when. Where it stands is read at the leaves every time it is asked — a
-// hand-off is PICKED UP once a session has been opened on its task, and
+// hand-off is PICKED UP once a session has been opened on its task (or a
+// floor's session has named it, design/0078-task-named-windows/), and
 // CLOSED when the task is, with the task's outcome — so nothing here can
 // disagree with the task it describes (intent/01-concepts/00-domain-model.md,
 // Status: recorded at the leaves, derived above).
@@ -23,7 +24,7 @@ import {
   sessionScopeOf,
   type TaskRecord,
 } from '../store/types.ts';
-import { distinctAddress, taskAddress } from './address.ts';
+import { distinctAddress, qualifiedAddress, taskAddress } from './address.ts';
 import { briefBody, writeBrief } from './briefs.ts';
 import { commitRecords, type FoundTask, readTasks, requireSlug } from './scan.ts';
 import { findSession, type OpenSessionListing, readSessions } from './sessions.ts';
@@ -172,32 +173,52 @@ function fromClause(record: DispatchRecord): string {
 
 export type DispatchState = 'pending' | 'picked-up' | 'closed';
 
-/** The session whose opening picked a hand-off up: the first one on its task. */
+/**
+ * The session that picked a hand-off up: the first one opened on its task, or
+ * the first of its floor's sessions to name it (design/0078-task-named-windows/).
+ */
 export interface PickUp {
   readonly session: string;
   readonly at: string;
 }
 
 /**
- * The first session opened on a task, by `openedAt` — open or closed, since a
- * session that has ended still picked the work up. Undefined while none has.
+ * The first session to take a task up — open or closed, since a session that
+ * has ended still picked the work up. Undefined while none has. A task's own
+ * session takes it up when it is opened; a floor's session, when its trail
+ * first names the task (`named`, the task's slug-qualified address) — the same
+ * act in substance, an agent now working the task, and the one a floor's
+ * session makes when the hand-off's line reaches it.
  */
-export function pickUpOf(sessions: readonly SessionRecord[]): PickUp | undefined {
-  let first: SessionRecord | undefined;
+export function pickUpOf(sessions: readonly SessionRecord[], named?: string): PickUp | undefined {
+  let first: PickUp | undefined;
   for (const session of sessions) {
-    if (first === undefined || session.openedAt < first.openedAt) first = session;
+    const at = takenUpAt(session, named);
+    if (at !== undefined && (first === undefined || at < first.at)) {
+      first = { session: session.id, at };
+    }
   }
-  return first === undefined ? undefined : { session: first.id, at: first.openedAt };
+  return first;
+}
+
+function takenUpAt(session: SessionRecord, named: string | undefined): string | undefined {
+  if (sessionScopeOf(session) !== 'project') return session.openedAt;
+  if (named === undefined) return undefined;
+  return session.events?.find((event) => event.event === 'task-named' && event.task === named)?.at;
 }
 
 /**
- * Where a hand-off stands, from its task and that task's sessions: `closed`
- * once the task is — whatever came before, the outcome is the answer —
- * `picked-up` once a session has been opened on it, `pending` until then.
+ * Where a hand-off stands, from its task and the sessions that may have taken
+ * it up: `closed` once the task is — whatever came before, the outcome is the
+ * answer — `picked-up` once a session has (`pickUpOf`), `pending` until then.
  */
-export function dispatchState(task: TaskRecord, sessions: readonly SessionRecord[]): DispatchState {
+export function dispatchState(
+  task: TaskRecord,
+  sessions: readonly SessionRecord[],
+  named?: string,
+): DispatchState {
   if (task.state === 'closed') return 'closed';
-  return sessions.length > 0 ? 'picked-up' : 'pending';
+  return pickUpOf(sessions, named) === undefined ? 'pending' : 'picked-up';
 }
 
 /** One hand-off with everything derived about it. */
@@ -210,6 +231,9 @@ export interface DispatchStanding {
   readonly pickedUp?: PickUp;
 }
 
+/** A floor task's directory → its floor's project directory. */
+const FLOOR_OF_TASK = /^(projects\/[^/]+)\/tasks\/[^/]+$/;
+
 /** The hand-off a task was opened by, with where it stands — undefined for a task nobody handed over. */
 export async function dispatchOf(
   root: string,
@@ -219,13 +243,19 @@ export async function dispatchOf(
   const type = dispatchRecordType(task.dir);
   if (!existsSync(join(root, type.relPath))) return undefined;
   const record = (await readDocument(root, type)).data;
-  const sessions = await readSessions(root, task.dir);
-  const pickedUp = pickUpOf(sessions);
+  // The task's own sessions, and its floor's, which may have named it (0078).
+  const floorDir = FLOOR_OF_TASK.exec(task.dir)?.[1];
+  const sessions = [
+    ...(await readSessions(root, task.dir)),
+    ...(floorDir === undefined ? [] : await readSessions(root, floorDir)),
+  ];
+  const named = qualifiedAddress(task);
+  const pickedUp = pickUpOf(sessions, named);
   return {
     record,
     task,
     address: distinctAddress(task, everyone),
-    state: dispatchState(task.record, sessions),
+    state: dispatchState(task.record, sessions, named),
     ...(pickedUp === undefined ? {} : { pickedUp }),
   };
 }

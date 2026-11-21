@@ -38,6 +38,7 @@ import { mungeCwd } from '../../src/harness/claude.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { workspaceId } from '../../src/workspace/identity.ts';
 import { openProject } from '../../src/workspace/projects.ts';
+import { openTask } from '../../src/workspace/tasks.ts';
 import { applyGitTestEnv, type CliResult, makeTempDir, removeDir } from '../helpers.ts';
 
 // Real tmux on a shared CI runner: a re-create-then-join round trip took over
@@ -1123,6 +1124,35 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     expect(ward(['session', 'resume', '--all', '--go']).stdout).toContain('nothing to resume on');
   });
 
+  test('a floor session working a task: its window and run say the task, follow it to the next, and come back with it after the server dies', async () => {
+    // design/0078-task-named-windows/
+    await openProject(ws, 'alpha');
+    await openTask(ws, 'fix-the-thing', { floor: 1 });
+    await openTask(ws, 'next-thing', { floor: 1 });
+    const floor = session(ward(['session', 'open', '--task', 'f1t1', '--detach', '--json']));
+    fabricateTranscript(floor.handle?.replace('claude:', '') ?? '');
+    expect(await runsSoon(1)).toHaveLength(1);
+    const f1 = `${name}-f1-alpha`;
+    expect(windowNames(f1)).toEqual(['f1t1 fix-the-thing']);
+    expect(startCommands(f1)[0]).toContain('f1t1 fix-the-thing');
+
+    // Moved to the next task: the window is renamed in place, at once — same pane.
+    const pane = tmux('list-panes', '-t', `=${f1}:`, '-F', '#{pane_id}').trim();
+    expect(ward(['session', 'task', floor.id, 'f1t2']).exitCode).toBe(0);
+    expect(windowNames(f1)).toEqual(['f1t2 next-thing']);
+    expect(tmux('list-panes', '-t', `=${f1}:`, '-F', '#{pane_id}').trim()).toBe(pane);
+
+    // The reboot: the window and its host go; the record brings both back named.
+    killServer(SOCKET);
+    const went = bulk(ward(['session', 'resume', '--all', '--go', '--json']));
+    expect(went.sessions.map((s) => [s.id, s.outcome])).toEqual([[floor.id, 'resumed']]);
+    expect(windowsIn(f1)).toEqual([floor.id]);
+    expect(windowNames(f1)).toEqual(['f1t2 next-thing']);
+    // …and the run is resumed under the task it works now.
+    expect(startCommands(f1)[0]).toContain('f1t2 next-thing');
+    expect(startCommands(f1)[0]).toContain('--resume');
+  });
+
   test('resume --all: a floor that cannot be placed fails alone — the next floor still comes back, and a rerun picks up only what is left', async () => {
     await openProject(ws, 'alpha');
     await openProject(ws, 'beta');
@@ -1500,6 +1530,13 @@ function windowsIn(host: string): string[] {
 /** The names of a host's windows, in window order — what a human reads. */
 function windowNames(host: string): string[] {
   return tmux('list-windows', '-t', `=${host}:`, '-F', '#{window_name}')
+    .split('\n')
+    .filter((line) => line !== '');
+}
+
+/** The command each pane of a host was started with, in window order. */
+function startCommands(host: string): string[] {
+  return tmux('list-panes', '-s', '-t', `=${host}`, '-F', '#{pane_start_command}')
     .split('\n')
     .filter((line) => line !== '');
 }

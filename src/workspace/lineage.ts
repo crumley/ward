@@ -375,8 +375,16 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '9765a59300f689a15883aa7beff9251b1818dadb02e62a951f8d1018abe486d3',
         era: 'design 0068 (bulk session resume)',
       },
-      // Current since design 0077: `ward project open SLUG --floor N` opens a
-      // floor at a number never spent, and doctor reports two floors on one.
+      // design 0077 — `ward project open SLUG --floor N` opens a floor at a
+      // number never spent, and doctor reports two floors on one. A task's
+      // window was still `t<room> <slug>` on its own floor.
+      {
+        sha256: 'b87ca192617b4425f141721c6adee31b4fbf8233b6dc0f24aed9b2586971ca9c',
+        era: 'design 0077 (a floor at a chosen number)',
+      },
+      // Current since design 0078: a floor's session names the task it is
+      // working (`--task`, `ward session task`), a task's window is its full
+      // address in every host, and the harness run wears the same name.
     ],
   },
 ];

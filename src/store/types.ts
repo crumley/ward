@@ -420,11 +420,30 @@ export type HostedKind = z.infer<typeof hostedKindSchema>;
  * whose re-attach keeps failing is indistinguishable from one that is open and
  * healthy. `attached` and `observed` (design/0031-detached-session-hosting/)
  * record a human joining a hosted run — taking part, or watching read-only —
- * so the trail says who looked, not only who started it.
+ * so the trail says who looked, not only who started it. `task-named` and
+ * `task-cleared` (design/0078-task-named-windows/) record a floor's session
+ * taking up one of its floor's tasks and setting it down: appended, never
+ * overwritten, so the trail says what the session worked and when.
  */
 export const sessionEventSchema = z.object({
-  event: z.enum(['opened', 'resumed', 'resume-failed', 'attached', 'observed', 'closed']),
+  event: z.enum([
+    'opened',
+    'resumed',
+    'resume-failed',
+    'attached',
+    'observed',
+    'task-named',
+    'task-cleared',
+    'closed',
+  ]),
   at: z.string().min(1),
+  /**
+   * The task a `task-named` event names (design/0078-task-named-windows/):
+   * its slug-qualified address (`f7t54-task-named-windows`), which names one
+   * task for good — a room passes to whoever holds it next, a room and slug
+   * together do not. Present exactly on `task-named`.
+   */
+  task: z.string().min(1).optional(),
   /**
    * Why it failed — on `resume-failed`, per the intent's "with its cause". A
    * `resumed` event may carry one too (design/0031-detached-session-hosting/):

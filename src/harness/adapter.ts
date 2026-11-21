@@ -45,6 +45,14 @@ export interface StartRequest {
   readonly nativeId: string;
   readonly model?: string | undefined;
   readonly effort?: string | undefined;
+  /**
+   * The name the run's own surfaces show for it — its prompt box, its resume
+   * picker (design/0078-task-named-windows/) — passed where the harness takes
+   * one, and omitted entirely when absent, like model and effort. Ward's
+   * flags come before the human's `agent.args`, so a name a human passes
+   * there has the last word.
+   */
+  readonly name?: string | undefined;
   /** Extra arguments, appended verbatim and last (agent.args). */
   readonly args: readonly string[];
 }
@@ -131,8 +139,12 @@ export interface HarnessAdapter {
   nativeId(handle: string): string | null;
   /** The argv of a fresh run, without the command that starts the CLI. */
   startArgv(request: StartRequest): string[];
-  /** The argv of a resumed run — no model or effort (see each adapter). */
-  resumeArgv(nativeId: string, args: readonly string[]): string[];
+  /**
+   * The argv of a resumed run — no model or effort (see each adapter), and
+   * the run's `name` again when given, so a name that changed since the last
+   * launch is what the resumed run shows (design/0078-task-named-windows/).
+   */
+  resumeArgv(nativeId: string, args: readonly string[], name?: string): string[];
   /** Resolve a native id to its history on THIS machine — found, or gone. */
   locate(nativeId: string, cwd: string, env?: Env): LocateResult;
 }

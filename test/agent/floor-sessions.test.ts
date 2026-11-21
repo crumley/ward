@@ -12,7 +12,7 @@ import { afterAll, beforeEach, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sessionLocateShape, sessionMutationShape, statusShape } from '../../src/cli/schema.ts';
-import { mungeCwd } from '../../src/harness/claude.ts';
+import { KEEP_DESCRIPTIVE_TITLE, mungeCwd } from '../../src/harness/claude.ts';
 import { sessionSchema } from '../../src/store/types.ts';
 import { openProject } from '../../src/workspace/projects.ts';
 import { defaultFloorSessionPurpose, readSessions } from '../../src/workspace/sessions.ts';
@@ -186,7 +186,14 @@ test('show, locate, resume, close: one floor session through every verb, with --
 
   fabricateTranscript(RUN_ID, ws);
   expect(ward(['session', 'resume', 'f1-1@test']).exitCode).toBe(0);
-  expect(runs()[0]?.argv).toEqual(['--resume', RUN_ID]);
+  expect(runs()[0]?.argv).toEqual([
+    '--resume',
+    RUN_ID,
+    '--name',
+    'f1 alpha',
+    '--settings',
+    KEEP_DESCRIPTIVE_TITLE,
+  ]);
   expect(runs()[0]?.wardAgent).toBe('f1-1@test');
 
   const closed = sessionMutationShape.parse(

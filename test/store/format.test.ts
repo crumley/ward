@@ -171,6 +171,19 @@ test('a shape waits for its level: refused below it with the remedy, written at 
   );
 });
 
+test('a session that names a task needs format 3; one that never did needs nothing', () => {
+  // design/0078-task-named-windows/ — an older Ward rejects the event kind
+  // outright, so the record that carries one waits for the raise.
+  const opened = { event: 'opened', at: 't' };
+  expect(levelNeededBy('session', { events: [opened] })).toBe(0);
+  expect(levelNeededBy('session', {})).toBe(0);
+  expect(
+    levelNeededBy('session', { events: [opened, { event: 'task-named', task: 'f1t1-x' }] }),
+  ).toBe(3);
+  expect(levelNeededBy('session', { events: [opened, { event: 'task-cleared' }] })).toBe(3);
+  expect(levelNeededBy('task', { events: [{ event: 'task-named' }] })).toBe(0);
+});
+
 test('levelsCrossed names each level a raise passes, lowest first', () => {
   expect(levelsCrossed(0, 3, FUTURE).map((entry) => entry.level)).toEqual([1, 2, 3]);
   expect(levelsCrossed(2, 3, FUTURE).map((entry) => entry.level)).toEqual([3]);
