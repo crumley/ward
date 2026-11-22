@@ -389,8 +389,14 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '94cc3a5c8dd86cc66a634e8baaea7eb0fe02359c80bff716a6da085168e403a5',
         era: 'design 0078 (task-named windows)',
       },
-      // Current since design 0080: `ward project rename FLOOR SLUG` gives a
+      // design 0080 — `ward project rename FLOOR SLUG` gives a
       // floor a new slug; its number and every address stay.
+      {
+        sha256: '1f862ae925cd2d57b2556e7413b7244263453cbec7bc103bee7f3edf399f8fa4',
+        era: 'design 0080 (floor rename)',
+      },
+      // Current since design 0088: a floor answers to its slug wherever a
+      // verb takes a floor.
     ],
   },
 ];

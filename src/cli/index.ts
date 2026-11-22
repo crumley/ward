@@ -7,7 +7,7 @@ import { object, or } from '@optique/core/constructs';
 import { message } from '@optique/core/message';
 import { multiple, optional, withDefault } from '@optique/core/modifiers';
 import { argument, command, constant, option } from '@optique/core/primitives';
-import { choice, integer, string } from '@optique/core/valueparser';
+import { choice, string } from '@optique/core/valueparser';
 import { run } from '@optique/run';
 import picocolors from 'picocolors';
 import pkg from '../../package.json' with { type: 'json' };
@@ -89,6 +89,7 @@ import {
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
 import { type IdentityReport, setFloorIdentity } from '../workspace/floor-identity.ts';
 import { type FloorMoveReport, renameFloor } from '../workspace/floor-move.ts';
+import { type FloorsResolved, resolveFloorArgs } from '../workspace/floor-ref.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
 import { closeCommand, rebaseCommand } from '../workspace/next.ts';
 import {
@@ -770,7 +771,7 @@ const task = command(
       object({
         action: constant('task-open'),
         slug: argument(string({ metavar: 'SLUG' })),
-        project: optional(option('--project', integer({ metavar: 'FLOOR' }))),
+        project: optional(option('--project', floorNumber())),
         repo: multiple(option('--repo', repoName())),
         purpose: optional(option('--purpose', string({ metavar: 'TEXT' }))),
         json: jsonFlag(),
@@ -1243,7 +1244,7 @@ async function answer(invoked: Invocation): Promise<void> {
   // (design/0022-shell-completion/). Awaited because the dynamic suggesters in
   // suggest.ts read the record asynchronously, which makes the whole parser
   // async-mode; nothing else about parsing changes.
-  const result = await run(cli, {
+  const parsed = await run(cli, {
     programName: 'ward',
     args: invoked.argv,
     colors: parserColors(invoked),
@@ -1258,6 +1259,9 @@ async function answer(invoked: Invocation): Promise<void> {
   });
 
   try {
+    // A floor named by its slug becomes its number here, once, before any verb
+    // runs (design/0088-floor-by-slug/): every verb below takes numbers.
+    const result = await resolveFloors(parsed);
     if ('action' in result) {
       switch (result.action) {
         case 'workspace-create':
@@ -1765,6 +1769,23 @@ async function answer(invoked: Invocation): Promise<void> {
       console.error(`${pc.red('error:')} ${error.message}`);
       await exitWhenFlushed(1);
     }
+    throw error;
+  }
+}
+
+/**
+ * The parse result with every floor slug resolved to its number
+ * (design/0088-floor-by-slug/), against the workspace the verb itself would
+ * act in. The shell layer's candidate feed is machinery that never errors in
+ * the human's shell mid-keystroke (design/0025-fish-shell-layer/): a slug it
+ * cannot resolve yields an empty feed, not a refusal.
+ */
+async function resolveFloors<T extends object>(parsed: T): Promise<FloorsResolved<T>> {
+  try {
+    return await resolveFloorArgs(parsed, requireWorkspace);
+  } catch (error) {
+    const machinery = 'action' in parsed && parsed.action === 'shell-candidates';
+    if (machinery && error instanceof WardError) await exitWhenFlushed(0);
     throw error;
   }
 }

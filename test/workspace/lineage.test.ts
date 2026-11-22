@@ -161,6 +161,15 @@ test('the AGENTS.md 0029 supersedes is in history — every workspace still on i
   expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
     'b87ca192617b4425f141721c6adee31b4fbf8233b6dc0f24aed9b2586971ca9c', // design 0077
   );
+  // …and the 0078 manifest, superseded by design/0080-floor-rename/'s
+  // bullet on renaming a floor.
+  expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
+    '94cc3a5c8dd86cc66a634e8baaea7eb0fe02359c80bff716a6da085168e403a5', // design 0078
+  );
+  // …and the 0080 manifest, superseded by design 0088's bullet on naming a floor by its slug.
+  expect(lineageOf('AGENTS.md').history.map((v) => v.sha256)).toContain(
+    '1f862ae925cd2d57b2556e7413b7244263453cbec7bc103bee7f3edf399f8fa4', // design 0080
+  );
 });
 
 // The maintenance guard-rail: the lineage's history is maintained by hand, so
@@ -170,7 +179,7 @@ test('the AGENTS.md 0029 supersedes is in history — every workspace still on i
 // exactly the bookkeeping that keeps every shipped default recognizable.
 test('the current defaults are pinned; changing one must move its old hash into history', () => {
   expect(sha256OfText(AGENTS_MD)).toBe(
-    '1f862ae925cd2d57b2556e7413b7244263453cbec7bc103bee7f3edf399f8fa4', // since design 0080 (floor rename)
+    '94d63cfdcca898c4ac45fc17456165a29ff971b44116c8ff0cac9f5d43fee7b9', // since design 0088 (floor by slug)
   );
   expect(sha256OfText(WARD_INTERNAL_README)).toBe(
     '6f10845611635508f006727f83bdc2222d840a9da972393781662c9f6ff04ac4', // since 65f1e8b (0013)

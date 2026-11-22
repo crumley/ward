@@ -24,11 +24,12 @@
 import { message, text } from '@optique/core/message';
 import type { NonEmptyString } from '@optique/core/nonempty';
 import type { Suggestion } from '@optique/core/parser';
-import { integer, string, type ValueParser } from '@optique/core/valueparser';
+import { string, type ValueParser } from '@optique/core/valueparser';
 import { listWorkspaces } from '../global/registry.ts';
 import { repoCandidates } from '../shell/candidates.ts';
 import { formatReadable } from '../store/format.ts';
 import { distinctAddress } from '../workspace/address.ts';
+import { type FloorArg, parseFloorArg } from '../workspace/floor-ref.ts';
 import { git } from '../workspace/git.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
 import { readProjects } from '../workspace/projects.ts';
@@ -135,26 +136,36 @@ export function taskIdentity(metavar: 'ADDRESS' | 'TASK'): ValueParser<'async', 
 }
 
 /**
- * Open floor numbers — the FLOOR a claim is made or dropped on
- * (design/0037-repo-floor-affinity/), with the project's slug as the cue, so
- * the human picks the floor by what it is for rather than by remembering a
- * number. Closed floors are not offered: they take no tasks, so a claim on
- * one routes nothing.
+ * A FLOOR — the floor a verb acts on, named by its number or by its exact
+ * slug (design/0088-floor-by-slug/). The value is a `FloorArg`: digits parse
+ * to the number, anything slug-shaped to a `FloorSlug` the CLI resolves
+ * against the record once, after parsing and before any verb runs, so every
+ * verb still receives a number. Resolution waits until then because it needs
+ * the workspace, and finding the workspace may itself refuse — a refusal that
+ * belongs to the verb, worded as Ward's, not a usage error at parse time.
  *
- * A number-valued argument that suggests: the suggester wraps `integer()`
- * rather than `string()`, so what the verb ACCEPTS is unchanged (a bad value
- * is optique's own parse error) and only the menu is added.
- *
- * `task list --floor` takes `'any'` (design/0049-task-list-filters/): a
- * listing filter reads history, and a closed floor's tasks are exactly the
- * history a reader may be after, so every floor is offered there.
+ * The menu offers both spellings of each floor: the number with the slug as
+ * its cue (design/0037-repo-floor-affinity/: the human picks by what the
+ * floor is for), and the slug with the number as its cue. Closed floors are
+ * not offered by default: they take no tasks, so a claim on one routes
+ * nothing. `'any'` offers every floor, for the verbs that read history
+ * (`task list --floor`, design/0049-task-list-filters/; reflection) — what a
+ * verb ACCEPTS is the same either way.
  */
-export function floorNumber(include: 'open' | 'any' = 'open'): ValueParser<'async', number> {
-  const base = integer({ metavar: 'FLOOR' });
+export function floorNumber(include: 'open' | 'any' = 'open'): ValueParser<'async', FloorArg> {
   return {
-    ...base,
     mode: 'async',
-    parse: (input) => Promise.resolve(base.parse(input)),
+    metavar: 'FLOOR' as NonEmptyString,
+    placeholder: 0,
+    parse: (input) => {
+      const parsed = parseFloorArg(input);
+      return Promise.resolve(
+        typeof parsed === 'object' && 'error' in parsed
+          ? { success: false, error: message`${text(parsed.error)}.` }
+          : { success: true, value: parsed },
+      );
+    },
+    format: (value) => (typeof value === 'number' ? String(value) : value.slug),
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
       let found: readonly Candidate[];
       try {
@@ -164,10 +175,10 @@ export function floorNumber(include: 'open' | 'any' = 'open'): ValueParser<'asyn
             ? []
             : (await readProjects(root))
                 .filter((project) => include === 'any' || project.record.state !== 'closed')
-                .map((project) => ({
-                  text: String(project.record.floor),
-                  description: project.record.slug,
-                }));
+                .flatMap((project) => [
+                  { text: String(project.record.floor), description: project.record.slug },
+                  { text: project.record.slug, description: `floor ${project.record.floor}` },
+                ]);
       } catch {
         return;
       }

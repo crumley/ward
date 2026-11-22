@@ -93,6 +93,9 @@ operated with the \`ward\` CLI and tracked in git.
   the floor or of its tasks is running or works inside what would move, so it is run from the
   coordinator, never from the floor's own session. Other machines follow at their next
   \`ward workspace upgrade\`.
+- **A floor answers to its slug as well as its number** wherever a verb takes one
+  (\`ward task open SLUG --project fantasy-football\`): all digits is a number, anything else is
+  matched exactly against floor slugs, and a renamed floor's old slug names nothing.
 - Work is never committed to a repository's main line directly; changes travel through a worktree
   and a pull request.
 - When a main line moves under work in progress, \`ward worktree rebase\` replays the task's
