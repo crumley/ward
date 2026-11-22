@@ -1,6 +1,7 @@
 // The nudge (design/0067-floor-dispatch/): after a hand-off is recorded, tell
-// the floor it was handed to — one line typed into the window of each of that
-// floor's own sessions whose run is live in a detached host on this machine.
+// the floor it was handed to — one line typed into the window of that floor's
+// attending (design/0089-floor-attending/), when its run is live in a detached
+// host on this machine.
 //
 // It is live delivery, and so it is the optimization the messaging seam says
 // it is (intent/02-subsystems/02-messaging-coordination.md, Recorded-first):
@@ -9,19 +10,20 @@
 // verb that sent it. Every way a nudge does not happen is an answer with its
 // reason, reported beside the hand-off.
 //
-// Who is typed to is decided here, from records: an OPEN session, of PROJECT
-// scope, whose floor is the target. Never the coordinator, never a task's
-// session, never another floor's — a session is typed to only because the
-// record says the floor is its responsibility.
+// Who is typed to is decided here, from records: the floor's ATTENDING on this
+// machine (design/0089-floor-attending/) — its one general session, the
+// coordinator on the ground floor. Never a session working a task, never a
+// second general session, never another floor's — a session is typed to only
+// because the record says the floor is run from it.
 
 import { readMachine } from '../global/machine.ts';
 import { adapterForHandle } from '../harness/index.ts';
 import type { SessionHost } from '../host/host.ts';
-import { type DispatchRecord, sessionScopeOf } from '../store/types.ts';
+import type { DispatchRecord } from '../store/types.ts';
 import { workspaceId } from '../workspace/identity.ts';
 import { type OpenSessionListing, readAllSessions } from '../workspace/sessions.ts';
 import { classify, describeExit, hostedBy, hostOf } from './host.ts';
-import { placementFloor } from './placement.ts';
+import { attendingOf, placementFloor } from './placement.ts';
 
 type Env = Record<string, string | undefined>;
 
@@ -62,21 +64,24 @@ export function dispatchNotice(record: DispatchRecord, slug: string): string {
   );
 }
 
-/** The open sessions responsible for a floor: project scope, that floor. */
+/**
+ * The session a floor's hand-off notice goes to: its attending on `machine`
+ * (design/0089-floor-attending/) — on floor 0 the coordinator. Empty when the
+ * floor has none here, and the hand-off waits in the record.
+ */
 export function floorSessions(
   all: readonly OpenSessionListing[],
   floor: number,
+  machine: string,
 ): OpenSessionListing[] {
-  return all.filter(
-    ({ record }) =>
-      record.state === 'open' && sessionScopeOf(record) === 'project' && record.floor === floor,
-  );
+  const attending = attendingOf(all, floor, machine);
+  return attending === undefined ? [] : [attending];
 }
 
 /**
- * Nudge a floor: type `text` to each of its own open sessions that can be
- * reached. An empty answer means the floor has no open session — the
- * hand-off waits in the record. Never throws: a nudge that could not be
+ * Nudge a floor: type `text` to its attending, when it can be reached. An
+ * empty answer means the floor has no attending here — the hand-off waits in
+ * the record. Never throws: a nudge that could not be
  * attempted is an answer like any other.
  */
 export async function nudgeFloor(
@@ -89,7 +94,7 @@ export async function nudgeFloor(
   const all = await readAllSessions(root);
   const here = (await readMachine()).name;
   const nudges: Nudge[] = [];
-  for (const listing of floorSessions(all, floor)) {
+  for (const listing of floorSessions(all, floor, here)) {
     const session = listing.record.id;
     try {
       nudges.push({ session, ...(await nudgeOne(root, listing, all, here, text, env, host)) });

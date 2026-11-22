@@ -181,8 +181,11 @@ test('placement runs inside the open, after the record is on disk, and asks for 
   });
   // The request carries no word of any other host: placement is one host's business.
   expect(Object.keys(request ?? {}).sort()).toEqual(
-    ['command', 'cwd', 'env', 'group', 'label', 'naming', 'tags', 'version'].sort(),
+    // `first`: the coordinator is floor 0's attending (design/0089-floor-attending/),
+    // so its window is asked to stand first in the host.
+    ['command', 'cwd', 'env', 'first', 'group', 'label', 'naming', 'tags', 'version'].sort(),
   );
+  expect(request?.first).toBe(true);
 });
 
 test("a floor session's placement asks for its own floor's host, and nothing of the coordinator", async () => {

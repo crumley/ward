@@ -48,7 +48,7 @@ import {
   type Subject,
   windowLabel,
 } from './labels.ts';
-import { placementFloor } from './placement.ts';
+import { leadsHost, placementFloor } from './placement.ts';
 
 const PROJECT_DIR = /^projects\/(\d+)-([^/]*)/;
 const TASK_DIR = /(?:^|\/)tasks\/t(\d+)-([^/]+)$/;
@@ -264,6 +264,11 @@ export interface Refreshed {
    * anew before it was renamed.
    */
   readonly restamped: readonly string[];
+  /**
+   * The attendings moved to the front of their floor's host
+   * (design/0089-floor-attending/): "f7-1@mbp now leads main-f7-ward-development".
+   */
+  readonly led?: readonly string[];
 }
 
 /**
@@ -321,6 +326,7 @@ export async function refreshNames(
         .map((listing) => [listing.record.id, listing]),
     );
     const windows: RenameRequest['windows'][number][] = [];
+    const leads: { session: string; window: string; group: string }[] = [];
     for (const window of inventory.windows) {
       // The ownership rule, whole: this session's tag, this launch's epoch,
       // standing in a host stamped for this workspace.
@@ -332,9 +338,40 @@ export async function refreshNames(
         label: naming.label(listing),
         running: !window.dead,
       });
+      // A floor's attending is the first window of its floor's host
+      // (design/0089-floor-attending/): one standing behind another window —
+      // an older Ward's host, an attending opened or resumed late — is moved to
+      // the front, by its id, the rest left in their order.
+      if (!leadsHost(listing, all)) continue;
+      const home = placed(listing.record.id);
+      const floorHost = inventory.groups.find(
+        (group) =>
+          group.viewOf === undefined &&
+          group.stamp?.workspace === workspace &&
+          group.stamp.floor === home &&
+          window.groups.includes(group.name),
+      );
+      const first = floorHost?.first;
+      if (floorHost !== undefined && first !== undefined && first !== window.window) {
+        leads.push({ session: listing.record.id, window: window.window, group: floorHost.name });
+      }
     }
+    const led: string[] = [];
+    const leadFailed: string[] = [];
+    for (const lead of leads) {
+      const moved = host.lead(lead.window, lead.group);
+      if (moved.outcome === 'moved') led.push(`${lead.session} now leads ${lead.group}`);
+      if (moved.outcome === 'unknown') leadFailed.push(`${lead.window}: ${moved.reason}`);
+    }
+    const ledReport = led.length === 0 ? {} : { led };
     if (groups.length === 0 && windows.length === 0) {
-      return { renamed: [], failed: restamp.failed, themed: [], restamped: restamp.done };
+      return {
+        renamed: [],
+        failed: [...restamp.failed, ...leadFailed],
+        themed: [],
+        restamped: restamp.done,
+        ...ledReport,
+      };
     }
     const result = host.rename({
       groups: groups.map(({ name, naming, views }) => ({
@@ -349,8 +386,9 @@ export async function refreshNames(
     const now = new Map(result.groups.map(({ from, to }) => [to, from]));
     return {
       renamed: [...result.groups, ...result.views].map(({ from, to }) => `${from} is now ${to}`),
-      failed: [...restamp.failed, ...result.failed],
+      failed: [...restamp.failed, ...leadFailed, ...result.failed],
       restamped: restamp.done,
+      ...ledReport,
       themed: result.themed.flatMap((dressed) => {
         const asked = now.get(dressed.group) ?? dressed.group;
         const floor = groups.find((group) => group.name === asked)?.floor;

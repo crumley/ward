@@ -1253,6 +1253,65 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     expect(startCommands(f1)[0]).toContain('f1t1 fresh-topic');
   });
 
+  // design/0089-floor-attending/: whatever order things are opened, resumed,
+  // or left in, the floor's attending is window 1 — on a server with no
+  // configuration, and on one that numbers from 1 and renumbers, as a human's
+  // ~/.tmux.conf may (the restarted server after the reboot reads it).
+  test.each([
+    ['no configuration', ''],
+    ['base-index 1 and renumber-windows on', 'set -g base-index 1\nset -g renumber-windows on\n'],
+  ])("the floor's attending is window 1 of its host: %s", async (_name, conf) => {
+    if (conf !== '') {
+      writeFileSync(join(home, '.tmux.conf'), conf);
+      tmux('set-option', '-g', 'base-index', '1');
+      tmux('set-option', '-g', 'renumber-windows', 'on');
+    }
+    await openProject(ws, 'alpha');
+    await openTask(ws, 'work', { floor: 1 });
+    const open = (...at: string[]) =>
+      session(ward(['session', 'open', ...at, '--detach', '--json']));
+    // A task window first; the attending opened after it stands in front of it.
+    const working = open('--task', 'f1t1');
+    const attending = open('--floor', '1');
+    const second = open('--floor', '1');
+    const f1 = `${name}-f1-alpha`;
+    expect(windowsIn(f1)).toEqual([attending.id, working.id, second.id]);
+    // Two general sessions read alike, so each takes its number (0061's rule).
+    expect(windowNames(f1)).toEqual(['alpha 2', 'f1t1 work', 'alpha 3']);
+    expect(session(ward(['session', 'show', attending.id, '--json'])).attending).toBe(true);
+    // What wsa 1 joins: the attending, alone.
+    expect(ward(['shell', 'candidates', 'coordinators', '--floor', '1']).stdout).toBe(
+      `${attending.id}\t${attending.purpose}\n`,
+    );
+
+    // Left behind, as an older Ward's host would have it: the next open into
+    // the floor's host moves the attending back to the front, the same pane.
+    const pane = tmux('display-message', '-p', '-t', attending.live?.window ?? '', '#{pane_id}');
+    tmux('swap-window', '-s', `=${f1}:{start}`, '-t', `=${f1}:{end}`);
+    expect(windowsIn(f1)).toEqual([second.id, working.id, attending.id]);
+    const third = open('--floor', '1');
+    expect(windowsIn(f1)).toEqual([attending.id, second.id, working.id, third.id]);
+    expect(tmux('display-message', '-p', '-t', attending.live?.window ?? '', '#{pane_id}')).toBe(
+      pane,
+    );
+
+    // The reboot: resume --all brings the attending back first, then the rest.
+    for (const each of [working, attending, second, third]) {
+      fabricateTranscript(each.handle?.replace('claude:', '') ?? '');
+    }
+    killServer(SOCKET);
+    const went = bulk(ward(['session', 'resume', '--all', '--go', '--json']));
+    expect(went.sessions.map((s) => [s.id, s.attending, s.outcome])).toEqual([
+      [attending.id, true, 'resumed'],
+      [working.id, false, 'resumed'],
+      [second.id, false, 'resumed'],
+      [third.id, false, 'resumed'],
+    ]);
+    expect(windowsIn(f1)).toEqual([attending.id, working.id, second.id, third.id]);
+    // The restarted server read the configuration, when there was one.
+    expect(tmux('show-options', '-gv', 'base-index').trim()).toBe(conf === '' ? '0' : '1');
+  });
+
   test('resume --all: a floor that cannot be placed fails alone — the next floor still comes back, and a rerun picks up only what is left', async () => {
     await openProject(ws, 'alpha');
     await openProject(ws, 'beta');

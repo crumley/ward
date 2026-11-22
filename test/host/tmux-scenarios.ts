@@ -241,6 +241,73 @@ export const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
+    // design/0089-floor-attending/: the floor's attending is the first window
+    // of its host however it got there — placed first into a host that
+    // already holds windows, or moved to the front where an older Ward (or a
+    // late open) left it behind — on a server with no options, and on one
+    // that numbers from 1 and renumbers, as a human's ~/.tmux.conf may.
+    name: 'the-attending-leads',
+    run(stage) {
+      const host = stage.host();
+      host.prepare();
+      const firstOf = (group: string) => {
+        const inventory = host.inventory();
+        return inventory.outcome === 'answered'
+          ? inventory.groups.find((g) => g.name === group)?.first
+          : undefined;
+      };
+
+      // Task windows opened before the attending; the attending placed first.
+      host.place(request(stage, 'task-a', { floor: 1 }));
+      host.place(request(stage, 'task-b', { floor: 1 }));
+      const attending = host.place({ ...request(stage, 'attending', { floor: 1 }), first: true });
+      expect(attending).toMatchObject({ group: F1, createdGroup: false });
+      expect(windowsIn(stage, F1)).toEqual(['attending', 'task-a', 'task-b']);
+      expect(firstOf(F1)).toBe(attending.window);
+      // Everything placed after it still goes last.
+      host.place(request(stage, 'task-c', { floor: 1 }));
+      expect(windowsIn(stage, F1)).toEqual(['attending', 'task-a', 'task-b', 'task-c']);
+
+      // A host minted by its attending: the placeholder goes, the attending stays first.
+      const minted = host.place({ ...request(stage, 'beta', { floor: 2 }), first: true });
+      expect(minted).toMatchObject({ group: F2, createdGroup: true });
+      expect(windowsIn(stage, F2)).toEqual(['beta']);
+
+      // An attending left behind (placed by an older Ward): moved to the front by
+      // its id, the same pane and run, the others in their order.
+      host.place(request(stage, 'beta-task', { floor: 2 }));
+      stage.tmux('swap-window', '-s', `=${F2}:{start}`, '-t', `=${F2}:{end}`);
+      expect(windowsIn(stage, F2)).toEqual(['beta-task', 'beta']);
+      const pane = stage.tmux('display-message', '-p', '-t', minted.window, '#{pane_id}');
+      expect(firstOf(F2)).not.toBe(minted.window);
+      expect(host.lead(minted.window, F2)).toEqual({ outcome: 'moved' });
+      expect(windowsIn(stage, F2)).toEqual(['beta', 'beta-task']);
+      expect(firstOf(F2)).toBe(minted.window);
+      expect(stage.tmux('display-message', '-p', '-t', minted.window, '#{pane_id}')).toBe(pane);
+      // A window tmux does not hold is nothing to move.
+      expect(host.lead('@999', F2)).toEqual({ outcome: 'absent' });
+
+      // A server that numbers from 1 and renumbers: window 1 is still the first.
+      stage.tmux('set-option', '-g', 'base-index', '1');
+      stage.tmux('set-option', '-g', 'renumber-windows', 'on');
+      const helper = host.place(request(stage, 'helper'));
+      host.place(request(stage, 'helper-2'));
+      const coord = host.place({ ...request(stage, 'coord'), first: true });
+      expect(windowsIn(stage, F0)).toEqual(['coord', 'helper', 'helper-2']);
+      expect(windowIndexes(stage, F0)).toEqual(['1', '2', '3']);
+      expect(firstOf(F0)).toBe(coord.window);
+      // Behind another again (a window between them ends, then the order is
+      // turned about by hand): moved forward, numbered from 1 as the server says.
+      stage.tmux('kill-window', '-t', helper.window);
+      stage.tmux('swap-window', '-s', `=${F0}:{start}`, '-t', `=${F0}:{end}`);
+      expect(windowsIn(stage, F0)).toEqual(['helper-2', 'coord']);
+      expect(host.lead(coord.window, F0)).toEqual({ outcome: 'moved' });
+      expect(windowsIn(stage, F0)).toEqual(['coord', 'helper-2']);
+      expect(windowIndexes(stage, F0)).toEqual(['1', '2']);
+      expect(firstOf(F0)).toBe(coord.window);
+    },
+  },
+  {
     name: 'found-by-stamp',
     run(stage) {
       const host = stage.host();
@@ -383,6 +450,8 @@ export const SCENARIOS: readonly Scenario[] = [
             stamp: { workspace: WS, floor: 0 },
             clients: 0,
             windows: 2,
+            // The window standing first, which an attending must be (0089).
+            first: failed.window,
             created: expect.any(Number),
             version: '0.1.0',
           },

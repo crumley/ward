@@ -4,7 +4,9 @@
 > task's name (`f7t54 task-named-windows`), every name derived from the record and given again at
 > every resume, so a restored window comes back as what it was working.
 >
-> **Status:** built — awaiting review · **Started:** 2026-11-20
+> **Status:** built — awaiting review · **Started:** 2026-11-20 · **Partly superseded:** the floor's
+> attending never names a task (`session task` refuses it), so it takes a hand-off up by opening the
+> task's own session, by [0089](../0089-floor-attending/README.md)
 
 [0061](../0061-host-names-and-titles/README.md) named a window for what its session _is_: `coord`, a
 floor's slug, `t<room> <slug>`. In a workspace run through floor hosts nearly every hosted window is

@@ -24,6 +24,7 @@ import {
 import { moveSession } from '../agent/move.ts';
 import { type Dressed, dressFloor, refreshHosted } from '../agent/naming.ts';
 import { dispatchNotice, type Nudge, nudgeFloor } from '../agent/nudge.ts';
+import { isAttending } from '../agent/placement.ts';
 import {
   type EnactedSession,
   enactResumeAll,
@@ -137,6 +138,7 @@ import {
   openFloorSession,
   openSession,
   openWorkspaceSession,
+  readAllSessions,
   readOpenSessions,
 } from '../workspace/sessions.ts';
 import {
@@ -558,10 +560,9 @@ const shellCandidates = command(
   object({
     action: constant('shell-candidates'),
     kind: argument(choice([...CANDIDATE_KINDS], { metavar: 'KIND' })),
-    // Narrows `coordinators` to one floor's own sessions, for `wsa N`
-    // (design/0059-session-shorthands/), listed first window first so `wsa N`
-    // can take the top line (design/0079-wsa-floor-first-window/); the other
-    // kinds ignore it.
+    // Narrows `coordinators` to one floor's attending, for `wsa N`
+    // (design/0059-session-shorthands/, design/0089-floor-attending/): one
+    // line or none, so `wsa N` never picks; the other kinds ignore it.
     floor: optional(option('--floor', floorNumber())),
   }),
   {
@@ -4086,8 +4087,9 @@ async function cmdSessionShow(id: string, json: boolean): Promise<void> {
   // from the host itself (design/0031-detached-session-hosting/).
   const live = await liveStateOf(root, listing);
   const workingOn = workingOnOf(record, await readTasks(root));
+  const attending = isAttending(record, await readAllSessions(root));
   if (json) {
-    printJson(sessionMutationJson(record, { live, workingOn }));
+    printJson(sessionMutationJson(record, { live, workingOn, attending }));
     return;
   }
   const state = record.state === 'open' ? pc.green('open') : pc.dim('closed');
@@ -4103,6 +4105,14 @@ async function cmdSessionShow(id: string, json: boolean): Promise<void> {
   const successor = continuedBy(record);
   if (successor !== undefined) row('moved', `to ${successor}, which continues it`);
   if (workingOn !== undefined) row('working', `${workingOn.address} ${workingOn.slug}`);
+  if (attending) {
+    row(
+      'attends',
+      record.floor === undefined
+        ? "floor 0 — the coordinator is the ground floor's attending, window 1 of the floor-0 host"
+        : `floor ${record.floor} — its attending, window 1 of its host, what wsa ${record.floor} joins`,
+    );
+  }
   row('opened', record.openedAt);
   if (record.closedAt !== undefined) row('closed', record.closedAt);
   if (live !== undefined) row('live', describeLive(live));
@@ -4620,8 +4630,9 @@ function renderSessionRow(here: string, session: SessionStatus): string {
     session.workingOn === undefined
       ? ''
       : `${pc.cyan(`working ${session.workingOn.address} ${session.workingOn.slug}`)} · `;
+  const attending = session.attending === true ? `${pc.green('attending')} · ` : '';
   return (
-    `${pc.bold(session.id)} — ${working}${session.purpose} ` +
+    `${pc.bold(session.id)} — ${attending}${working}${session.purpose} ` +
     pc.dim(`(${sessionNote(here, session)})`)
   );
 }

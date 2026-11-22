@@ -20,7 +20,7 @@ import type { HostedKind, SessionEvent, SessionRecord } from '../store/types.ts'
 import { workspaceId } from '../workspace/identity.ts';
 import { closeSession, type OpenSessionListing, readAllSessions } from '../workspace/sessions.ts';
 import { readNaming, refreshNames } from './naming.ts';
-import { placementFloor } from './placement.ts';
+import { leadsHost, placementFloor } from './placement.ts';
 import type { AgentHost, Resolved } from './settings.ts';
 
 type Env = Record<string, string | undefined>;
@@ -159,6 +159,9 @@ export async function placeLaunch(
     env: { WARD_AGENT: launched.record.id },
     command: [...harnessCommand(run.harness, run.configuredCommand, env).command, ...run.argv],
     version: pkg.version,
+    // The floor's attending stands first in its host whenever it is placed
+    // (design/0089-floor-attending/); every other window goes after the last.
+    ...(leadsHost(launched, all) ? { first: true } : {}),
   });
   return {
     floor,

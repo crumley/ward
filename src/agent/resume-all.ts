@@ -23,7 +23,7 @@ import { sessionScopeOf } from '../store/types.ts';
 import { workspaceId } from '../workspace/identity.ts';
 import { type OpenSessionListing, readAllSessions } from '../workspace/sessions.ts';
 import { classify, describeExit, hostedBy, hostOf, type LiveState } from './host.ts';
-import { isCoordinator, placementFloor } from './placement.ts';
+import { isAttending, isCoordinator, placementFloor } from './placement.ts';
 import { type LaunchedSession, resumeSession } from './run.ts';
 
 type Env = Record<string, string | undefined>;
@@ -48,6 +48,12 @@ export interface PlannedSession {
   readonly floor: number;
   /** Whether it is the coordinator — resumed first. */
   readonly coordinator: boolean;
+  /**
+   * Whether it is its floor's attending (design/0089-floor-attending/) —
+   * resumed before the floor's other sessions, so it is the first window of
+   * the floor's host. The coordinator is floor 0's.
+   */
+  readonly attending: boolean;
   readonly step: PlanStep;
   /** One clause saying why the step is what it is. */
   readonly detail: string;
@@ -121,6 +127,7 @@ export async function planResumeAll(root: string, options: PlanOptions = {}): Pr
       record,
       floor,
       coordinator: isCoordinator(record),
+      attending: isAttending(record, all),
       live,
       ...stepOf(root, listing, live, machine),
     });
@@ -184,15 +191,18 @@ function stepOf(
 }
 
 /**
- * Coordinator first, then floor by floor; within a floor, the floor's own
- * session before the sessions placed beside it, and each of those in the
- * order they were opened — so a floor's host is minted by the session that
- * answers for the floor, and a rerun reads in the same order as the last.
+ * Coordinator first, then floor by floor; within a floor, the floor's
+ * attending first (design/0089-floor-attending/), so a floor's host is minted
+ * by the session the floor is run from and its window is the host's first,
+ * then the floor's other own sessions before the sessions placed beside them,
+ * each in the order they were opened — so a rerun reads in the same order as
+ * the last.
  */
 function inResumeOrder(a: PlannedSession, b: PlannedSession): number {
   return (
     Number(b.coordinator) - Number(a.coordinator) ||
     a.floor - b.floor ||
+    Number(b.attending) - Number(a.attending) ||
     Number(ownsFloor(b)) - Number(ownsFloor(a)) ||
     a.record.openedAt.localeCompare(b.record.openedAt) ||
     a.record.id.localeCompare(b.record.id)

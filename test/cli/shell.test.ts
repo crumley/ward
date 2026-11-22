@@ -5,7 +5,7 @@
 // inside the human's shell, so the bar is the same as completion's: never
 // hang, never prompt, never fail cryptically, and never be counted as usage.
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runCli } from '../../src/cli/in-process.ts';
 import { verbPath } from '../../src/cli/telemetry.ts';
@@ -187,10 +187,11 @@ test('`shell candidates coordinators` offers the coordinators this machine can j
     ['workspace-1@test', 'first'],
     ['workspace-2@test', 'second'],
   ]);
-  // With a floor: that floor's own sessions instead, and nothing for a floor
-  // that has none.
+  // With a floor: that floor's attending alone (design/0089-floor-attending/) —
+  // on floor 0 the coordinator, never floor 0's own session — and nothing for
+  // a floor that has none.
   expect(rows(await ward(['shell', 'candidates', 'coordinators', '--floor', '0'], alpha))).toEqual([
-    ['f0-1@test', 'f0'],
+    ['workspace-1@test', 'first'],
   ]);
   expect((await ward(['shell', 'candidates', 'coordinators', '--floor', '3'], alpha)).stdout).toBe(
     '',
@@ -442,6 +443,8 @@ test('wsa joins the coordinator — opening it detached first when none is open 
       `  "session open --detach") printf 'workspace-9@test\\tCoordinating work\\n' > ${feed} ;;`,
       `  "shell candidates coordinators --floor 7") [ -f ${feed}-7 ] && while IFS= read -r l; do printf '%s\\n' "$l"; done < ${feed}-7; exit 0 ;;`,
       `  "session open --floor 7 --detach") printf 'f7-1@test\\tCoordinating floor 7\\n' > ${feed}-7 ;;`,
+      // Floor 0's attending is the coordinator: the first coordinator, alone.
+      `  "shell candidates coordinators --floor 0") [ -f ${feed} ] && IFS= read -r l < ${feed} && printf '%s\\n' "$l"; exit 0 ;;`,
       'esac',
       'exit 0',
       '',
@@ -523,9 +526,9 @@ test('wsa joins the coordinator — opening it detached first when none is open 
   expect(fish(`source ${script}; wsa 7`, `${stub}:${tmuxBin}:${toolBin}`).exitCode).toBe(0);
   expect(calls()).toEqual(['shell candidates coordinators --floor 7', 'session attach f7-1@test']);
 
-  // Several open on the floor: never a pick, with a picker or without one —
-  // the feed lists them first window first, and the first is joined
-  // (design/0079-wsa-floor-first-window/).
+  // The floor feed answers the attending alone (design/0089-floor-attending/);
+  // should it ever carry several lines, wsa N still never picks: the first is
+  // joined, with a picker or without one.
   writeFileSync(`${feed}-7`, 'f7-4@test\tsecond window\nf7-1@test\tthird window\n');
   for (const path of [
     `${pickBin}:${stub}:${tmuxBin}:${toolBin}`,
@@ -539,6 +542,28 @@ test('wsa joins the coordinator — opening it detached first when none is open 
       'session attach f7-4@test',
     ]);
   }
+
+  // wsa 0 lands where bare wsa does: floor 0's attending is the coordinator,
+  // so with none open it opens one at workspace scope — never a floor-0
+  // session — and with several open it joins the first without a pick.
+  rmSync(feed);
+  const ground = fish(`source ${script}; wsa 0`, `${pickBin}:${stub}:${tmuxBin}:${toolBin}`);
+  expect(ground.stderr).toBe('');
+  expect(ground.exitCode).toBe(0);
+  expect(calls()).toEqual([
+    'shell candidates coordinators --floor 0',
+    'session open --detach',
+    'shell candidates coordinators --floor 0',
+    'session attach workspace-9@test',
+  ]);
+  writeFileSync(feed, 'workspace-9@test\tCoordinating work\nworkspace-12@test\tother\n');
+  expect(fish(`source ${script}; wsa 0`, `${pickBin}:${stub}:${tmuxBin}:${toolBin}`).exitCode).toBe(
+    0,
+  );
+  expect(calls()).toEqual([
+    'shell candidates coordinators --floor 0',
+    'session attach workspace-9@test',
+  ]);
 });
 
 test('wso, wsr, wsc, and ws forward everything to their verb', async () => {

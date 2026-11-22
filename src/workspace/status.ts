@@ -9,6 +9,7 @@
 // you` items — nothing stored either way.
 
 import { resolve } from 'node:path';
+import { isAttending } from '../agent/placement.ts';
 import { WardError } from '../errors.ts';
 import type { PrForgeState } from '../forge/gh.ts';
 import { type ForgeProbe, prBelongsToRemote, probeForge } from '../forge/gh.ts';
@@ -42,7 +43,7 @@ import { type FoundProject, readProjects } from './projects.ts';
 import { unreflectedCount } from './reflection.ts';
 import { listRepositories } from './repos.ts';
 import { ambiguous, type FoundTask, readTasks } from './scan.ts';
-import { readSessions, workingTaskOf } from './sessions.ts';
+import { readAllSessions, readSessions, workingTaskOf } from './sessions.ts';
 import { type WorktreeStatus, worktreeStatuses } from './worktrees.ts';
 
 /**
@@ -358,6 +359,12 @@ export interface SessionStatus {
   readonly history: SessionHistory;
   /** The task a floor's session is working now (design/0078-task-named-windows/). */
   readonly workingOn?: WorkingOn;
+  /**
+   * Whether it is its floor's attending (design/0089-floor-attending/): the
+   * floor's general session, the first window of its host — the coordinator
+   * on floor 0. Present only when true.
+   */
+  readonly attending?: true;
 }
 
 /**
@@ -433,12 +440,26 @@ export async function statusReport(
   const probe = await probeForge(openPrUrls(tasks.map((task) => task.record)));
   const now = Date.now();
 
+  // Which open sessions are their floor's attendings (design/0089-floor-attending/):
+  // derived over every scope at once, since the coordinator, floor 0's
+  // attending, is recorded at workspace scope.
+  const everySession = await readAllSessions(root);
+  const attendings = new Set(
+    everySession
+      .filter(({ record }) => isAttending(record, everySession))
+      .map(({ record }) => record.id),
+  );
   const projectStatuses: ProjectStatus[] = [];
   let hiddenTasks = 0;
   let hiddenProjects = 0;
   for (const project of projects) {
     const own = tasks.filter((task) => task.dir.startsWith(`${project.dir}/`));
-    const sessions = openSessionStatuses(root, await readSessions(root, project.dir), tasks);
+    const sessions = openSessionStatuses(
+      root,
+      await readSessions(root, project.dir),
+      tasks,
+      attendings,
+    );
     const derived = projectState(
       project.record,
       own.map((task) => task.record.state),
@@ -501,21 +522,11 @@ export async function statusReport(
     projects: projectStatuses,
     bareTasks: bareStatuses,
     machine: (await readMachine()).name,
-    sessions: workspaceSessions(root, await readSessions(root, '')),
+    sessions: openSessionStatuses(root, await readSessions(root, ''), [], attendings),
     ...(probe.live ? { needsYou: deriveNeedsYou(all, repositories) } : {}),
     dispatches: (await listDispatches(root, {}, options, now)).dispatches,
     hidden: { tasks: hiddenTasks, projects: hiddenProjects, settledAfterDays: SETTLED_AFTER_DAYS },
   };
-}
-
-/**
- * The open workspace-scope sessions, each with the one derived fact that says
- * what can be done about it: whether its history is here. Closed sessions are
- * left out — closed stays closed, and a list that grew forever would stop
- * being read (that is what makes this a status line and not a session log).
- */
-function workspaceSessions(root: string, records: readonly SessionRecord[]): SessionStatus[] {
-  return openSessionStatuses(root, records);
 }
 
 /**
@@ -528,6 +539,7 @@ function openSessionStatuses(
   root: string,
   records: readonly SessionRecord[],
   tasks: readonly FoundTask[] = [],
+  attendings: ReadonlySet<string> = new Set(),
 ): SessionStatus[] {
   return records
     .filter((record) => record.state === 'open')
@@ -540,6 +552,7 @@ function openSessionStatuses(
         openedAt: record.openedAt,
         history: sessionHistory(root, record),
         ...(workingOn === undefined ? {} : { workingOn }),
+        ...(attendings.has(record.id) ? { attending: true as const } : {}),
       };
     });
 }

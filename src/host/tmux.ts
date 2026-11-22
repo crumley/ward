@@ -47,6 +47,7 @@ import type {
   Inventory,
   InventoryGroup,
   InventoryWindow,
+  LeadResult,
   Placement,
   PlaceRequest,
   Renamed,
@@ -258,16 +259,20 @@ export function createGroupArgv(
  * placeholder's, or an ended run's) to the next window placed — in front of
  * windows placed before it — unless the server happens to renumber.
  */
-export function createWindowArgv(group: string, label: string): string[] {
+export function createWindowArgv(group: string, label: string, first = false): string[] {
   return [
     'new-window',
     '-d',
-    '-a',
+    // The floor's attending (design/0089-floor-attending/) goes BEFORE the
+    // host's first window instead (`-b` on `{start}`), whatever index that
+    // window has: a server's base-index and renumber-windows decide the
+    // numbers, never which window stands first.
+    first ? '-b' : '-a',
     '-P',
     '-F',
     ['#{window_id}', '#{pane_id}'].join(FIELD),
     '-t',
-    windowTarget(group, '{end}'),
+    windowTarget(group, first ? '{start}' : '{end}'),
     '-n',
     label,
     ...HOLD,
@@ -643,6 +648,26 @@ export function windowTagArgv(window: string): string[] {
   return ['display-message', '-p', '-t', window, ['#{window_id}', '#{@ward_session}'].join(FIELD)];
 }
 
+/**
+ * Move a window to the front of a host (design/0089-floor-attending/): before
+ * the host's first window, by the window's id, the others keeping their
+ * order. The source is qualified by the host, because a window in a host's
+ * session group (an attach view's) is otherwise resolved through whichever
+ * member tmux finds first, and tmux refuses a move between grouped sessions.
+ * Never sent for a window that is already first: tmux moves a window placed
+ * before itself, and leaves a gap where it stood.
+ */
+export function leadArgv(window: string, group: string): string[] {
+  return [
+    'move-window',
+    '-b',
+    '-s',
+    windowTarget(group, window),
+    '-t',
+    windowTarget(group, '{start}'),
+  ];
+}
+
 export function killWindowArgv(window: string): string[] {
   return ['kill-window', '-t', window];
 }
@@ -904,6 +929,25 @@ export function parseInventoryWindows(stdout: string): InventoryWindow[] {
     byWindow.set(window, found);
   }
   return [...byWindow.values()];
+}
+
+/**
+ * The window standing first in each tmux session, by session name: the one
+ * with the lowest index among every pane `list-panes -a` lists — Ward's or
+ * not — read off the index the listing ends with.
+ */
+export function firstWindows(stdout: string): Map<string, string> {
+  const lowest = new Map<string, { window: string; index: number }>();
+  for (const line of lines(stdout)) {
+    const fields = line.split(FIELD);
+    const group = fields[0] ?? '';
+    const window = fields[1] ?? '';
+    const index = Number.parseInt(fields.at(-1) ?? '', 10);
+    if (window === '' || Number.isNaN(index)) continue;
+    const seen = lowest.get(group);
+    if (seen === undefined || index < seen.index) lowest.set(group, { window, index });
+  }
+  return new Map([...lowest].map(([group, { window }]) => [group, window]));
 }
 
 /** The names `show-environment -g` sets — a `-NAME` line marks a removal, not a value. */
@@ -1200,7 +1244,7 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
         ).trim();
       }
       const [window = '', pane = ''] = must(
-        createWindowArgv(group, request.label),
+        createWindowArgv(group, request.label, request.first === true),
         `create a window in ${group}`,
       )
         .trim()
@@ -1527,6 +1571,17 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
         if (sessionId !== '') call(endViewArgv(sessionId));
       }
     },
+    lead(window: string, group: string): LeadResult {
+      const moved = call(leadArgv(window, group));
+      if (moved.ok) return { outcome: 'moved' };
+      if (
+        moved.noServer ||
+        /can't find (window|session)|no such (window|session)/.test(moved.stderr)
+      ) {
+        return { outcome: 'absent' };
+      }
+      return { outcome: 'unknown', reason: moved.stderr || 'tmux gave no reason' };
+    },
     inventory(): Inventory {
       const sessions = call(listGroupsArgv());
       if (!sessions.ok) {
@@ -1537,6 +1592,7 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
       if (!listed.ok) return { outcome: 'unknown', reason: listed.reason };
       const parsed = parseGroups(sessions.stdout);
       const hosts = viewHosts(parsed);
+      const leading = firstWindows(listed.stdout);
       const rows = parsed.map(
         (row): InventoryGroup => ({
           name: row.name,
@@ -1545,6 +1601,7 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
           ...viewHostOf(hosts.get(row.name)),
           clients: row.clients,
           windows: row.windows,
+          ...firstOf(leading.get(row.name)),
           created: row.created,
           ...(row.version === '' ? {} : { version: row.version }),
         }),
@@ -1583,6 +1640,10 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
   function command(args: readonly string[]): string {
     return [program, ...prefix, ...args].map(shellQuote).join(' ');
   }
+}
+
+function firstOf(window: string | undefined): { first?: string } {
+  return window === undefined ? {} : { first: window };
 }
 
 function viewHostOf(host: string | undefined): { viewHost?: string } {

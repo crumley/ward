@@ -9,6 +9,7 @@ import type {
   InheritedEnv,
   Inventory,
   InventoryGroup,
+  LeadResult,
   Placement,
   PlaceRequest,
   Renamed,
@@ -30,7 +31,11 @@ export interface FakeHost extends SessionHost {
   /** Every restamp asked: the group by name, and the floor it was stamped with. */
   readonly restamps: { group: string; floor: number }[];
   readonly typed: TypeRequest[];
+  /** Every `lead` asked: the window, and the group it was moved to the front of. */
+  readonly leads: { window: string; group: string }[];
   readonly finds: number;
+  /** The tagged windows standing in a group, front first, by session. */
+  order(group: string): string[];
 }
 
 export interface FakeHostOptions {
@@ -64,11 +69,18 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
       ? group
       : { ...group, stamp: { ...group.stamp, floor } };
   };
+  const leads: { window: string; group: string }[] = [];
   let finds = 0;
   let next = 100;
   const groups = (): InventoryGroup[] => {
     const named = new Map<string, InventoryGroup>();
-    for (const group of options.groups ?? []) named.set(group.name, group);
+    // The window standing first in a group: the earliest in `windows` that
+    // stands in it — the fake keeps each group's windows in that one order.
+    const first = (name: string) => windows.find((w) => w.groups.some((g) => g.name === name));
+    for (const group of options.groups ?? []) {
+      const leading = group.first ?? first(group.name)?.window;
+      named.set(group.name, leading === undefined ? group : { ...group, first: leading });
+    }
     for (const window of windows) {
       for (const group of window.groups) {
         if (named.has(group.name)) continue;
@@ -77,6 +89,7 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
           ...(group.stamp === undefined ? {} : { stamp: group.stamp }),
           clients: 0,
           windows: windows.filter((w) => w.groups.some((g) => g.name === group.name)).length,
+          first: first(group.name)?.window ?? '',
           created: 0,
         });
       }
@@ -92,6 +105,9 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
     renames,
     restamps,
     typed,
+    leads,
+    order: (group: string) =>
+      windows.filter((w) => w.groups.some((g) => g.name === group)).map((w) => w.tags.session),
     get finds() {
       return finds;
     },
@@ -104,12 +120,14 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
       placed.push(request);
       const group = request.naming.name;
       const window = `@${next++}`;
-      windows.push({
+      const created: FoundWindow = {
         window,
         groups: [{ name: group, stamp: request.group }],
         tags: request.tags,
         dead: false,
-      });
+      };
+      if (request.first === true) windows.unshift(created);
+      else windows.push(created);
       return { group, window, createdGroup: true };
     },
     find(session: string): FindResult {
@@ -174,6 +192,14 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
       }
       restamped.set(group, floor);
       return { outcome: 'restamped' };
+    },
+    lead(window: string, group: string): LeadResult {
+      leads.push({ window, group });
+      const index = windows.findIndex((w) => w.window === window);
+      if (index < 0) return { outcome: 'absent' };
+      const [moved] = windows.splice(index, 1);
+      if (moved !== undefined) windows.unshift(moved);
+      return { outcome: 'moved' };
     },
     view(request: ViewRequest): View {
       views.push(request);

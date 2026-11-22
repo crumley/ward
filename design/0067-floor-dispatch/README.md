@@ -4,7 +4,9 @@
 > handed it over, in one commit; Ward then types a one-line notice into that floor's own session
 > when it is running where Ward can reach it, and anyone can ask where a hand-off stands.
 >
-> **Status:** built — awaiting review · **Started:** 2026-11-16
+> **Status:** built — awaiting review · **Started:** 2026-11-16 · **Partly superseded:** the notice
+> goes to the floor's attending alone (the coordinator on floor 0), not to each of its sessions, by
+> [0089](../0089-floor-attending/README.md)
 
 A workspace with several floors has several sessions responsible for them
 ([0051](../0051-floor-scope-sessions/README.md)), each hosted where it outlives a terminal

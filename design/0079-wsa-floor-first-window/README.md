@@ -3,7 +3,9 @@
 > `wsa N` never asks which of a floor's sessions to join: the floor's candidate feed lists them in
 > the order their windows stand in the floor's host, and `wsa N` takes the first.
 >
-> **Status:** built — awaiting review · **Started:** 2026-11-22
+> **Status:** built — awaiting review · **Started:** 2026-11-22 · **Superseded:** `wsa N` now joins
+> the floor's attending, and the floor feed answers it alone, by
+> [0089](../0089-floor-attending/README.md); the window index on `FoundGroup` stays
 
 [0059](../0059-session-shorthands/README.md) gave `wsa N` the same shape as bare `wsa`: one open
 session is joined, several are a pick. For the coordinator that pick chooses something real. For a

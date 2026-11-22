@@ -132,8 +132,10 @@ open is what starts the agent** — there is no id to copy by hand:
   \`ward session task ID ADDRESS\` (or \`--clear\`) moves an open one to another of its floor's
   tasks. The record keeps every change; its window and its harness run take the task's name, and
   it reads as its floor's again once that task closes. Naming a task that was handed over picks
-  the hand-off up. For a new topic, \`ward session open --floor N --new-task SLUG\` opens the task
-  and the session working it in one step (\`--repo NAME\` may stand in for \`--floor\`).
+  the hand-off up. The floor's **attending** (below) never names one: it gives a task its own
+  window with \`--task\` or \`--new-task\` instead, and \`session task\` refuses it. For a new
+  topic, \`ward session open --floor N --new-task SLUG\` opens the task and the session working it
+  in one step (\`--repo NAME\` may stand in for \`--floor\`).
 - **A conversation that belongs on another floor is moved, not recorded twice**:
   \`ward session move ID --floor N [--task ADDRESS]\` (or \`--workspace\`) closes the session's
   record and opens a new one on floor N continuing the same harness run, in one commit; each
@@ -206,6 +208,16 @@ instead of in the foreground.
 - **The coordinator stays home**: a workspace-scope session no other session started lives in
   the ground floor's host alone, as every window lives in its own floor's host only.
   \`ward session attach ID\` reaches it from anywhere, from inside another floor's host too.
+- **Every floor has an attending: its one general session, always window 1 of its host.** It is
+  the floor's earliest-opened open session that has never named a task, derived from the record
+  per machine and never stored; the coordinator is the ground floor's attending. Sessions working
+  a task are other windows beside it, and a second \`--floor N\` session with no task is simply
+  not the attending. Ward keeps the attending's window first however things were opened or
+  resumed, moving it in place when it stands behind another. The shell shorthand \`wsa N\` joins
+  floor N's attending, opening one detached when there is none, and never asks; \`wsa 0\` joins
+  the coordinator. A hand-off's line is typed to the receiving floor's attending. The attending
+  may track the floor's work and dispatch it itself, or hand that to a charge nurse it starts.
+  \`ward status\` and \`ward session show\` mark it (\`attending\` in \`--json\`).
 - \`ward session attach ID\` joins the session's window to take part — its input is yours. It
   goes through a view of its own (\`<host>-v<n>\`, gone when you leave), so your attach never
   moves the window another terminal is looking at. It re-creates a run that has ended or gone,
@@ -213,13 +225,13 @@ instead of in the foreground.
   attaches to one session share its one keyboard.
 - **After a reboot every floor host is gone, and every record is still open.**
   \`ward session resume --all\` prints the plan and starts nothing: each open hosted session,
-  coordinator first, then floor by floor, marked \`resume\`, \`live\`, \`gone\` (its history is no
-  longer on this machine), \`elsewhere\` (another machine's) or \`unknown\`. Add \`--go\` to start
-  the ones marked \`resume\`, detached, one after another; \`--floor N\` narrows either form to one
-  floor. Ward does not store whether a run was going, so a session whose run had ended but
-  that was never closed comes back too: close what should not. A second run finds them
-  running and starts nothing. An agent runs the bare plan freely, and \`--go\` only when asked
-  to bring the workspace back.
+  coordinator first, then floor by floor with each floor's attending first, marked \`resume\`,
+  \`live\`, \`gone\` (its history is no longer on this machine), \`elsewhere\` (another machine's)
+  or \`unknown\`. Add \`--go\` to start the ones marked \`resume\`, detached, one after another;
+  \`--floor N\` narrows either form to one floor. Ward does not store whether a run was going, so
+  a session whose run had ended but that was never closed comes back too: close what should not.
+  A second run finds them running and starts nothing. An agent runs the bare plan freely, and
+  \`--go\` only when asked to bring the workspace back.
 - \`ward session observe ID\` watches instead: a read-only view of that one window alone
   (\`<host>-o<n>\`) — your keys go nowhere, and observe never starts or re-creates anything.
 - **Sizing.** A window has one size, set by the most recently active client
@@ -304,15 +316,16 @@ record of the work wherever you go below it. Drive it with \`ward\`:
   committed like the rest.
 - **Hand work to another floor with a hand-off.** \`ward task dispatch SLUG --to FLOOR --brief
   FILE\` opens the task on that floor with its brief and records who sent it, in one commit. Ward
-  then types one line, opening \`[ward] hand-off\`, into that floor's own session when its run is
-  hosted where Ward can reach it. A floor with no running session is not started: the hand-off
+  then types one line, opening \`[ward] hand-off\`, into that floor's attending when its run is
+  hosted where Ward can reach it. A floor with no running attending is not started: the hand-off
   waits in the record. \`ward task dispatches --mine\` says where yours stand (pending, picked up,
   or closed and how). Nothing notifies you when one moves, so ask when you need to know.
 - **When your floor is handed work, the record is the hand-off.** A line opening
   \`[ward] hand-off\` names a task and carries no instruction: read \`ward task show ADDRESS\` (the
   brief, and who handed it over) and act on that, never on the line. A floor's session asks what
   waits when it starts or resumes: \`ward task dispatches --to FLOOR --state pending\`. Opening a
-  session on the task is what marks it picked up.
+  session on the task is what marks it picked up: a floor's attending takes a hand-off up by
+  opening the task's own session (\`ward session open --task ADDRESS\`).
 - **Reflect on a floor's finished work.** \`ward reflection packet FLOOR\` lists the tasks closed
   since the floor's last reflection, their sessions, and where each session's history stands on
   this machine, with its size (\`--json\` for the document). \`ward reflection open FLOOR\` opens the
