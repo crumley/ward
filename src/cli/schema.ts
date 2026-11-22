@@ -508,11 +508,13 @@ export const doctorAgentShape = z.strictObject({
 /**
  * What this machine is called, and which layer said so
  * (design/0038-machine-bound-sessions/) — the name that becomes the second
- * half of every session id allocated here.
+ * half of every session id allocated here. `stored` is the pin
+ * (design/0085-machine-name-pinned/); `hostname` is a name derived this run
+ * and not (yet) pinned.
  */
 export const doctorMachineShape = z.strictObject({
   name: z.string(),
-  source: z.enum(['override', 'configured', 'hostname']),
+  source: z.enum(['override', 'configured', 'stored', 'hostname']),
 });
 
 export const doctorShape = z.strictObject({

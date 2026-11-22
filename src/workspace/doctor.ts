@@ -20,7 +20,7 @@ import {
   globalConfigType,
   inspectConfig,
 } from '../global/config.ts';
-import { type MachineName, machineName } from '../global/machine.ts';
+import { inspectMachine, type MachineInspection, type MachineName } from '../global/machine.ts';
 import { configDir } from '../global/paths.ts';
 import {
   listWorkspaces,
@@ -148,8 +148,9 @@ export async function runDoctor(cwd: string): Promise<DoctorReport> {
   // state, and the workspace section resolves the agent block out of it
   // against the workspace record. Two reads could disagree; one cannot.
   const config = await inspectConfig(configDir());
-  const name = machineName(config.config.machine);
-  const machine = await machineChecks(cwd, config, name);
+  const inspection = await inspectMachine(config.config.machine);
+  const name = inspection.name;
+  const machine = await machineChecks(cwd, config, inspection);
   const workspaceRoot = discoverWorkspace(cwd);
   // A workspace that needs a newer Ward gets one finding and no others
   // (design/0066-workspace-format-guard/): every other check reads a record
@@ -190,10 +191,11 @@ type ConfigInspection = { config: GlobalConfig; read: GlobalRead<GlobalConfigRec
 async function machineChecks(
   cwd: string,
   config: ConfigInspection,
-  name: MachineName,
+  inspection: MachineInspection,
 ): Promise<Finding[]> {
   const findings: Finding[] = [];
-  findings.push(machineNameFinding(name));
+  findings.push(machineNameFinding(inspection));
+  findings.push(...machinePinFindings(inspection));
   if (gitAvailable()) {
     const version = git(cwd, '--version')
       .stdout.trim()
@@ -237,19 +239,64 @@ async function machineChecks(
  * the second half of every session id allocated here (`workspace-7@gcp`), so
  * "what would my next session be called, and why?" must be answerable without
  * opening a session to find out. Never worse than `ok` — the name always
- * resolves, by construction.
+ * resolves, by construction. Doctor only reads: a name not yet pinned is
+ * reported as the one the next verb that names this machine will store
+ * (design/0085-machine-name-pinned/).
  */
-function machineNameFinding(name: MachineName): Finding {
+function machineNameFinding({ name, pin, pinPath, derived }: MachineInspection): Finding {
   const origin = {
     override: 'from WARD_MACHINE',
     configured: 'configured',
-    hostname: "from this machine's hostname",
+    stored: `pinned in ${pinPath}`,
+    hostname:
+      pin.state === 'unreadable'
+        ? `from this machine's ${derived.from}, because the pin cannot be read`
+        : `from this machine's ${derived.from}; the first verb that names this machine pins it in ${pinPath}`,
   }[name.source];
   return {
     check: 'machine',
     severity: 'ok',
     message: `named '${name.name}' (${origin}) — session ids allocated here end '@${name.name}'`,
   };
+}
+
+/**
+ * The pin's own conditions (design/0085-machine-name-pinned/), said only when
+ * the pin is what names the machine — under `WARD_MACHINE` or a configured
+ * name it answers nothing, so nothing about it is worth a line. Two are
+ * worth one, both `warn` and never `error`, because the name still resolves:
+ * this machine now derives a different name than the one pinned (a
+ * deliberate rename, or a host reading that moved), and a pin that cannot be
+ * read (the name is then derived on every run, and can follow the network
+ * again). Each names `machine:` as the way to choose the name on purpose.
+ */
+function machinePinFindings({ name, pin, pinPath, derived }: MachineInspection): Finding[] {
+  const check = 'machine pin';
+  const choose = `set machine: in ${globalConfigPath()} to name this machine on purpose`;
+  if (name.source === 'stored' && pin.state === 'read' && derived.name !== pin.name) {
+    return [
+      {
+        check,
+        severity: 'warn',
+        message:
+          `this machine's ${derived.from} now reads '${derived.host}', but its name stays ` +
+          `pinned as '${pin.name}' (${pinPath}, derived from its ${pin.from} '${pin.host}'); ` +
+          `session ids keep '@${pin.name}' — ${choose}`,
+      },
+    ];
+  }
+  if (name.source === 'hostname' && pin.state === 'unreadable') {
+    return [
+      {
+        check,
+        severity: 'warn',
+        message:
+          `${pinPath} cannot be read — ${pin.reason}; the name is derived on every run, so it ` +
+          `can change with the network — ${choose}, or delete the file to pin a name again`,
+      },
+    ];
+  }
+  return [];
 }
 
 /**

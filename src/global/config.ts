@@ -111,7 +111,8 @@ export interface GlobalConfig {
   /**
    * The machine name AS WRITTEN — the second subtree this file does not
    * resolve, for a variation on the same reason: its default is not a
-   * constant but a reading of THIS machine (the hostname), which belongs
+   * constant but a reading of THIS machine (the pinned name, else the host
+   * reading; design/0085-machine-name-pinned/), which belongs
    * where the ladder and the override live (src/global/machine.ts), not in a
    * table of Ward's opinions.
    */

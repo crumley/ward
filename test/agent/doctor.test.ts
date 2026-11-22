@@ -10,7 +10,7 @@
 // directory exactly as the CLI does — and the spawned CLI given the same pair
 // explicitly.
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AgentSettings } from '../../src/agent/settings.ts';
 import { doctorShape } from '../../src/cli/schema.ts';
@@ -208,6 +208,72 @@ test('doctor names this machine, and the layer that named it', async () => {
   expect(derived.machineName.name).toMatch(/^[a-z0-9-]+$/);
 });
 
+test('doctor reports the pin: not yet stored, stored, moved under it, and unreadable', async () => {
+  // design/0085-machine-name-pinned/. Doctor only reads: an unpinned name is
+  // reported as the one the next verb will store, and nothing is written.
+  const env = { WARD_MACHINE: '', WARD_STATE_DIR: stateHome };
+  const pinFile = join(stateHome, 'machine.md');
+  const unpinned = await runDoctor(scratch, env);
+  expect(unpinned.machineName.source).toBe('hostname');
+  expect(finding(unpinned.machine, 'machine').message).toContain(
+    `the first verb that names this machine pins it in ${pinFile}`,
+  );
+  expect(unpinned.machine.some((entry) => entry.check === 'machine pin')).toBe(false);
+  expect(existsSync(pinFile)).toBe(false);
+
+  // A pin that agrees with this machine: one ok line, no warning.
+  const here = unpinned.machineName.name;
+  writePin(here);
+  const agreed = await runDoctor(scratch, env);
+  expect(agreed.machineName).toEqual({ name: here, source: 'stored' });
+  expect(finding(agreed.machine, 'machine').message).toContain(`(pinned in ${pinFile})`);
+  expect(agreed.machine.some((entry) => entry.check === 'machine pin')).toBe(false);
+
+  // The machine now derives another name than the pin: a warning, never an
+  // error, naming machine: as the way to rename on purpose.
+  writePin('zz-elsewhere');
+  const moved = await runDoctor(scratch, env);
+  expect(moved.machineName).toEqual({ name: 'zz-elsewhere', source: 'stored' });
+  const warning = finding(moved.machine, 'machine pin');
+  expect(warning.severity).toBe('warn');
+  expect(warning.message).toContain("its name stays pinned as 'zz-elsewhere'");
+  expect(warning.message).toContain(`set machine: in ${join(configHome, 'config.md')}`);
+  expect(moved.healthy).toBe(true);
+
+  // Under a configured name the pin answers nothing, so it earns no line.
+  mkdirSync(configHome, { recursive: true });
+  writeFileSync(join(configHome, 'config.md'), '---\ntype: ward-config\nmachine: box\n---\n');
+  const configured = await runDoctor(scratch, env);
+  expect(configured.machine.some((entry) => entry.check === 'machine pin')).toBe(false);
+  writeFileSync(join(configHome, 'config.md'), '---\ntype: ward-config\n---\n');
+
+  // An unreadable pin: derived every run, said so, and the file left alone.
+  writeFileSync(pinFile, 'not front matter');
+  const broken = await runDoctor(scratch, env);
+  expect(broken.machineName.source).toBe('hostname');
+  expect(finding(broken.machine, 'machine').message).toContain('because the pin cannot be read');
+  expect(finding(broken.machine, 'machine pin')).toMatchObject({ severity: 'warn' });
+  expect(finding(broken.machine, 'machine pin').message).toContain('delete the file');
+  expect(readFileSync(pinFile, 'utf8')).toBe('not front matter');
+
+  // The JSON carries the stored source, and the schema admits it.
+  writePin('zz-elsewhere');
+  const json = doctorShape.parse(
+    JSON.parse(ward(['doctor', '--json'], scratch, configHome, '').stdout),
+  );
+  expect(json.machineName).toEqual({ name: 'zz-elsewhere', source: 'stored' });
+});
+
+/** A pin written as Ward writes one. */
+function writePin(name: string): void {
+  mkdirSync(stateHome, { recursive: true });
+  writeFileSync(
+    join(stateHome, 'machine.md'),
+    `---\ntype: ward-machine\nname: ${name}\npinnedAt: 2026-11-22T12:00:00.000Z\n` +
+      'from: hostname\nhost: somewhere\n---\n',
+  );
+}
+
 // -- setup -----------------------------------------------------------------
 
 let scratch: string;
@@ -275,7 +341,7 @@ async function writeWorkspaceAgent(agent: AgentSettings): Promise<void> {
 }
 
 /** The CLI, with this case's global directories and a hermetic environment. */
-function ward(argv: string[], cwd: string, config: string = configHome) {
+function ward(argv: string[], cwd: string, config: string = configHome, machine?: string) {
   const result = Bun.spawnSync(['bun', cliPath, ...argv], {
     cwd,
     env: {
@@ -284,6 +350,7 @@ function ward(argv: string[], cwd: string, config: string = configHome) {
       WARD_GH: NO_GH,
       WARD_CONFIG_DIR: config,
       WARD_STATE_DIR: stateHome,
+      ...(machine === undefined ? {} : { WARD_MACHINE: machine }),
       WARD_AGENT: undefined,
       WARD_CLAUDE_BIN: undefined,
     },
