@@ -40,7 +40,7 @@ import type { CreateReport } from '../workspace/create.ts';
 import type { DispatchReport, DispatchStanding } from '../workspace/dispatch.ts';
 import type { DoctorReport } from '../workspace/doctor.ts';
 import { type IdentityReport, identityOf } from '../workspace/floor-identity.ts';
-import type { FloorMoveReport } from '../workspace/floor-move.ts';
+import type { FloorMoveReport, MovedWorktree } from '../workspace/floor-move.ts';
 import type { FloorNoteReport } from '../workspace/projects.ts';
 import type {
   ReflectionHint,
@@ -59,6 +59,7 @@ import type {
   WorkingOn,
 } from '../workspace/status.ts';
 import type { MergeReport } from '../workspace/steward.ts';
+import type { TaskMoveReport } from '../workspace/task-move.ts';
 import type { CloseReport } from '../workspace/tasks.ts';
 import type { UpgradeReport } from '../workspace/upgrade.ts';
 import type { RebaseReport, WorktreeListing, WorktreeStatus } from '../workspace/worktrees.ts';
@@ -96,6 +97,7 @@ import type {
   TaskDispatchesShape,
   TaskDispatchShape,
   TaskListShape,
+  TaskMoveShape,
   TaskMutationShape,
   TaskShape,
   TaskShowShape,
@@ -231,6 +233,7 @@ export function dispatchJson(standing: DispatchStanding): DispatchShape {
     address: standing.address,
     slug: task.record.slug,
     to: record.to,
+    ...(standing.floor === undefined ? {} : { floor: standing.floor }),
     ...(record.fromSession === undefined ? {} : { fromSession: record.fromSession }),
     ...(record.fromFloor === undefined ? {} : { fromFloor: record.fromFloor }),
     sentAt: record.sentAt,
@@ -655,20 +658,50 @@ function floorMoveJson(
   return {
     outcome: report.outcome,
     records: [...report.records],
-    worktrees: report.worktrees.map((worktree) => ({
-      address: worktree.address,
-      branch: worktree.branch,
-      path: worktree.path,
-      outcome: worktree.outcome,
-      ...(worktree.from === undefined ? {} : { from: worktree.from }),
-      ...(worktree.reason === undefined ? {} : { reason: worktree.reason }),
-    })),
+    worktrees: movedWorktreesJson(report.worktrees),
     view: {
       dir: report.view.dir,
       retired: [...report.view.retired],
       residue: report.view.residue.map((item) => ({ ...item })),
     },
   };
+}
+
+/** `task move` (design/0082-task-move/) — each task's two addresses, the commit's records, the disk half. */
+export function taskMoveJson(report: TaskMoveReport): TaskMoveShape {
+  return {
+    floor: report.floor,
+    slug: report.slug,
+    outcome: report.outcome,
+    tasks: report.tasks.map((task) => ({
+      slug: task.slug,
+      state: task.state,
+      from: { ...task.from },
+      to: { ...task.to },
+      room: task.room,
+      outcome: task.outcome,
+    })),
+    records: [...report.records],
+    cleared: report.cleared.map((entry) => ({ ...entry })),
+    worktrees: movedWorktreesJson(report.worktrees),
+    unlinked: [...report.unlinked],
+    ...(report.hosts === undefined
+      ? {}
+      : { hosts: { renamed: [...report.hosts.renamed], failed: [...report.hosts.failed] } }),
+    next: [...report.next],
+  };
+}
+
+/** What became of each worktree a move asked about, as a rename, renumber and task move report it. */
+function movedWorktreesJson(worktrees: readonly MovedWorktree[]): ProjectRenameShape['worktrees'] {
+  return worktrees.map((worktree) => ({
+    address: worktree.address,
+    branch: worktree.branch,
+    path: worktree.path,
+    outcome: worktree.outcome,
+    ...(worktree.from === undefined ? {} : { from: worktree.from }),
+    ...(worktree.reason === undefined ? {} : { reason: worktree.reason }),
+  }));
 }
 
 /** `project note` — the appended bullet, as the report carries it. */

@@ -55,6 +55,7 @@ const REFUSED: ReadonlyArray<readonly [action: string, argv: readonly string[]]>
   ['task-brief', ['task', 'brief', 'f0t1', 'workspace.md']],
   ['task-close', ['task', 'close', 'f0t1', '--outcome', 'abandoned']],
   ['task-dispatch', ['task', 'dispatch', 'handed', '--to', '0', '--brief', 'workspace.md']],
+  ['task-move', ['task', 'move', 'f0t1', '--to', '1']],
   ['task-dispatches', ['task', 'dispatches']],
   ['task-dispatches', ['task', 'dispatches', '--mine', '--json']],
   ['worktree-list', ['worktree', 'list']],

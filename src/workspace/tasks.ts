@@ -103,30 +103,7 @@ export async function writeOpenedTask(
   options: OpenTaskOptions,
 ): Promise<FoundTask> {
   const container = await taskContainer(root, options.floor);
-  // Rooms run as a per-container sequence in opening order
-  // (design/0036-floor-addressed-tasks/): every floor has its own, and so
-  // does the legacy bare pool, which is read but never written again
-  // (design/0041-ground-floor/). The cursor is the container's most recently opened
-  // task — open or closed, because the sequence is about the order rooms
-  // were HANDED OUT, not about what is in flight — and it is read from the
-  // records, never stored (§17).
-  const own = (await readTasks(root)).filter((task) => task.dir.startsWith(`${container}/`));
-  const cursor = mostRecentRoom(own);
-  const room = nextRoom(
-    {
-      ...(cursor === undefined ? {} : { mostRecentRoom: cursor }),
-      occupied: own
-        .filter((task) => task.record.state !== 'closed')
-        .flatMap((task) => taskRoom(task) ?? []),
-    },
-    // A closed task's records SURVIVE at `<code>-<slug>/`, so a free room
-    // can still name a directory that is occupied, and writing there would
-    // overwrite a closed task's record with a new one (§17, and the record
-    // is the truth, §16). Only ever reachable when the same slug comes round
-    // again, which is exactly what a DERIVED slug does
-    // (design/0030-upgrade-self-service/).
-    (candidate) => existsSync(join(root, `${container}/t${candidate}-${slug}`)),
-  );
+  const room = await allocateRoom(root, container, slug);
   if (room === 0) {
     throw new WardError(
       `floor ${options.floor} has no free room — every one of the ` +
@@ -160,6 +137,40 @@ export async function writeOpenedTask(
       'at the leaf.',
   });
   return { dir, record };
+}
+
+/**
+ * The next room in a container's sequence for a task of `slug` — 0 when every
+ * room is held. Shared by an open and by a task moved onto a floor
+ * (design/0082-task-move/), so a task arriving on a floor takes its room by
+ * the same rule as one opened there.
+ *
+ * Rooms run as a per-container sequence in opening order
+ * (design/0036-floor-addressed-tasks/): every floor has its own, and so does
+ * the legacy bare pool, which is read but never written again
+ * (design/0041-ground-floor/). The cursor is the container's most recently
+ * opened task — open or closed, because the sequence is about the order rooms
+ * were HANDED OUT, not about what is in flight — and it is read from the
+ * records, never stored (§17).
+ */
+export async function allocateRoom(root: string, container: string, slug: string): Promise<number> {
+  const own = (await readTasks(root)).filter((task) => task.dir.startsWith(`${container}/`));
+  const cursor = mostRecentRoom(own);
+  return nextRoom(
+    {
+      ...(cursor === undefined ? {} : { mostRecentRoom: cursor }),
+      occupied: own
+        .filter((task) => task.record.state !== 'closed')
+        .flatMap((task) => taskRoom(task) ?? []),
+    },
+    // A closed task's records SURVIVE at `<code>-<slug>/`, so a free room
+    // can still name a directory that is occupied, and writing there would
+    // overwrite a closed task's record with a new one (§17, and the record
+    // is the truth, §16). Only ever reachable when the same slug comes round
+    // again, which is exactly what a DERIVED slug does
+    // (design/0030-upgrade-self-service/).
+    (candidate) => existsSync(join(root, `${container}/t${candidate}-${slug}`)),
+  );
 }
 
 /**

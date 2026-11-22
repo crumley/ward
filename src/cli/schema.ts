@@ -185,6 +185,11 @@ export const dispatchShape = z.strictObject({
   slug: z.string(),
   /** The floor the work was handed to. */
   to: z.number().int().nonnegative(),
+  /**
+   * The floor the task stands on now — present exactly when it was moved off
+   * `to` since (design/0082-task-move/). `--to` filters on it.
+   */
+  floor: z.number().int().nonnegative().optional(),
   /** The recorded session that sent it — absent when a human at a terminal did. */
   fromSession: z.string().optional(),
   /** The floor the sender is responsible for or works on — absent above the floors. */
@@ -775,6 +780,41 @@ export const projectRenumberShape = z.strictObject({
     .optional(),
 });
 export type ProjectRenumberShape = z.infer<typeof projectRenumberShape>;
+
+const taskPlaceShape = z.strictObject({ address: z.string(), dir: z.string() });
+
+/**
+ * `task move` (design/0082-task-move/): the floor moved to, and per task the
+ * address and record directory it had and has — `room` says whether its room
+ * number came along — then the record files the journal commit wrote, the
+ * floor sessions set down because they were working the task, and, for an
+ * open task, what became of its worktrees and of the links left in the view it
+ * left. `next` holds whole command lines left to the caller. `satisfied`:
+ * every task already stood on the floor; nothing was committed.
+ */
+export const taskMoveShape = z.strictObject({
+  floor: z.number().int().nonnegative(),
+  slug: z.string(),
+  outcome: z.enum(['moved', 'satisfied']),
+  tasks: z.array(
+    z.strictObject({
+      slug: z.string(),
+      state: workStateSchema,
+      from: taskPlaceShape,
+      to: taskPlaceShape,
+      room: z.enum(['kept', 'new']),
+      outcome: z.enum(['moved', 'satisfied']),
+    }),
+  ),
+  records: z.array(z.string()),
+  cleared: z.array(z.strictObject({ session: z.string(), task: z.string() })),
+  worktrees: projectRenameShape.shape.worktrees,
+  unlinked: z.array(z.string()),
+  /** Absent when no host was asked: a closed task's move, or no host usable here. */
+  hosts: projectRenameShape.shape.hosts,
+  next: z.array(z.string()),
+});
+export type TaskMoveShape = z.infer<typeof taskMoveShape>;
 
 /**
  * `project note` (design/0055-floor-manifests/): the one bullet appended to a
@@ -1606,6 +1646,7 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'worktree create': worktreeCreateShape,
   'task brief': taskBriefShape,
   'task dispatch': taskDispatchShape,
+  'task move': taskMoveShape,
   'worktree rebase': worktreeRebaseShape,
   'session open': sessionMutationShape,
   'session resume': sessionResumeShape,

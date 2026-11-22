@@ -63,7 +63,7 @@ import { checkoutLabel, resolveCheckout, unboundMessage } from './checkouts.ts';
 import { type CommandKind, unknownPlaceholders } from './commands.ts';
 import { identityClashes } from './floor-identity.ts';
 import { carriesManifest, floorManifestPaths } from './floor-manifest.ts';
-import { orphanFloorDirs, staleViews } from './floor-move.ts';
+import { orphanFloorDirs, staleViews, strayOutsideLinks } from './floor-move.ts';
 import { carriesView, floorViewDir, floorViewGaps } from './floor-views.ts';
 import { git, gitAvailable, gitIdentityConfigured, hasCommits } from './git.ts';
 import {
@@ -808,6 +808,7 @@ async function workspaceChecks(
 
   findings.push(...(await worktreeChecks(root)));
   findings.push(...(await worktreePlacementFindings(root)));
+  findings.push(...(await strayLinkFindings(root)));
 
   return { findings, agent, workspaceId: record?.id ?? null };
 }
@@ -1922,6 +1923,26 @@ async function worktreePlacementFindings(root: string): Promise<Finding[]> {
     throw error;
   }
   return findings;
+}
+
+/**
+ * Links onto an outside worktree left in a view its task no longer stands
+ * in (design/0082-task-move/): what a moved task leaves on a machine that has
+ * not yet converged. `info`, since the link at the task's placement now is
+ * what the floor's path reads, and the upgrade removes the old one.
+ */
+async function strayLinkFindings(root: string): Promise<Finding[]> {
+  let stray: string[];
+  try {
+    stray = await strayOutsideLinks(root);
+  } catch {
+    return []; // an unreadable record is reported above
+  }
+  return stray.map((path) => ({
+    check: 'outside worktree links',
+    severity: 'info' as const,
+    message: `${path} links onto a worktree whose task has moved off this floor — remove it: ward workspace upgrade`,
+  }));
 }
 
 /**

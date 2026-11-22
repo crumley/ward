@@ -24,9 +24,22 @@ import {
   sessionScopeOf,
   type TaskRecord,
 } from '../store/types.ts';
-import { distinctAddress, parseTaskAddress, qualifiedAddress, taskAddress } from './address.ts';
+import {
+  distinctAddress,
+  parseTaskAddress,
+  qualifiedAddress,
+  taskAddress,
+  taskFloor,
+} from './address.ts';
 import { briefBody, writeBrief } from './briefs.ts';
-import { commitRecords, type FoundTask, readTasks, requireSlug } from './scan.ts';
+import {
+  commitRecords,
+  dirFloor,
+  type FoundTask,
+  projectDirs,
+  readTasks,
+  requireSlug,
+} from './scan.ts';
 import { findSession, type OpenSessionListing, readSessions } from './sessions.ts';
 import { writeOpenedTask } from './tasks.ts';
 
@@ -245,6 +258,12 @@ export interface DispatchStanding {
   readonly task: FoundTask;
   /** The address that names the task now (design/0058-room-collisions/). */
   readonly address: string;
+  /**
+   * The floor the task stands on now, present exactly when it is not the one
+   * the hand-off went to: the task was moved since (design/0082-task-move/).
+   * `to` stays what the sender wrote.
+   */
+  readonly floor?: number;
   readonly state: DispatchState;
   readonly pickedUp?: PickUp;
 }
@@ -263,19 +282,57 @@ export async function dispatchOf(
   const record = (await readDocument(root, type)).data;
   // The task's own sessions, and its floor's, which may have named it (0078).
   const floorDir = FLOOR_OF_TASK.exec(task.dir)?.[1];
-  const sessions = [
-    ...(await readSessions(root, task.dir)),
-    ...(floorDir === undefined ? [] : await readSessions(root, floorDir)),
-  ];
+  const own = await readSessions(root, task.dir);
+  const here = floorDir === undefined ? [] : await readSessions(root, floorDir);
   const named = qualifiedAddress(task);
-  const pickedUp = pickUpOf(sessions, named);
+  // A task moved off the floor it was handed to (design/0082-task-move/) may
+  // have been picked up there, by a floor session that named it under the
+  // address it was sent with — its room on that floor and its slug, which
+  // together name it for good among that floor's sessions.
+  const away = await sentFloorSessions(root, record, floorDir);
+  const pickedUp = earliest(
+    pickUpOf([...own, ...here], named),
+    away.length === 0 ? undefined : pickUpOf(away, sentName(record, task)),
+  );
+  const floor = taskFloor(task);
   return {
     record,
     task,
     address: distinctAddress(task, everyone),
-    state: dispatchState(task.record, sessions, named),
+    ...(floor === undefined || floor === record.to ? {} : { floor }),
+    state:
+      task.record.state === 'closed' ? 'closed' : pickedUp === undefined ? 'pending' : 'picked-up',
     ...(pickedUp === undefined ? {} : { pickedUp }),
   };
+}
+
+/**
+ * The floor sessions of the floor a hand-off was sent to, when the task no
+ * longer stands there — every directory on that number, since two floors can
+ * share one until a renumber settles them; none when the task never moved.
+ */
+async function sentFloorSessions(
+  root: string,
+  record: DispatchRecord,
+  floorDir: string | undefined,
+): Promise<SessionRecord[]> {
+  if (floorDir !== undefined && dirFloor(floorDir) === record.to) return [];
+  const dirs = projectDirs(root).filter((dir) => dir !== floorDir && dirFloor(dir) === record.to);
+  const sessions: SessionRecord[] = [];
+  for (const dir of dirs) sessions.push(...(await readSessions(root, dir)));
+  return sessions.filter((session) => sessionScopeOf(session) === 'project');
+}
+
+/** The task's slug-qualified address as it was when sent: the hand-off's `task`, with the slug. */
+function sentName(record: DispatchRecord, task: FoundTask): string {
+  const sent = parseTaskAddress(record.task);
+  return sent?.slug === undefined ? `${record.task}-${task.record.slug}` : record.task;
+}
+
+function earliest(a: PickUp | undefined, b: PickUp | undefined): PickUp | undefined {
+  if (a === undefined) return b;
+  if (b === undefined) return a;
+  return b.at < a.at ? b : a;
 }
 
 /** Every hand-off in the workspace, oldest first. A read: takes no lock. */
@@ -298,10 +355,16 @@ export interface DispatchFilter {
   readonly session?: string;
 }
 
+/**
+ * Whether a hand-off passes a filter. `to` asks where the work is now: a task
+ * moved since it was handed over (design/0082-task-move/) answers for the
+ * floor it stands on, which is the floor that has it to do; the record's `to`
+ * keeps saying where it was sent.
+ */
 export function matchesDispatchFilter(standing: DispatchStanding, filter: DispatchFilter): boolean {
   const { record } = standing;
   if (filter.from !== undefined && record.fromFloor !== filter.from) return false;
-  if (filter.to !== undefined && record.to !== filter.to) return false;
+  if (filter.to !== undefined && (standing.floor ?? record.to) !== filter.to) return false;
   if (filter.state !== undefined && standing.state !== filter.state) return false;
   if (filter.session !== undefined && record.fromSession !== filter.session) return false;
   return true;

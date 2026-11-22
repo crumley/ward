@@ -41,7 +41,13 @@ import {
   requireGroundFloor,
   resolveProject,
 } from './projects.ts';
-import { commitRecords, type FoundTask, readTasks, resolvableAddress } from './scan.ts';
+import {
+  commitRecords,
+  type FoundTask,
+  projectDirs,
+  readTasks,
+  resolvableAddress,
+} from './scan.ts';
 import { continuedBy, findSession, readSessions } from './sessions.ts';
 import { refuseStewardshipCopy, resolveWorkspaceMainLine } from './steward.ts';
 import { openTask } from './tasks.ts';
@@ -100,13 +106,29 @@ interface Cursor {
   readonly settled: ReadonlySet<string>;
 }
 
+/**
+ * The floor's own reflections give its last and the sessions it settled. The
+ * tasks covered are read from every floor's reflections
+ * (design/0083-reflection-coverage-across-floors/): a closed task moved here
+ * from a floor that had already reflected on it (design/0082-task-move/) is
+ * covered by that reflection, which names it by its directory now, and is not
+ * offered a second time.
+ */
 async function readCursor(root: string, projectDir: string, except?: string): Promise<Cursor> {
   const reflections = (await readReflections(root, projectDir)).filter(
     (found) => found.path !== except,
   );
+  const everywhere: FoundReflection[] = [];
+  for (const dir of projectDirs(root)) {
+    everywhere.push(
+      ...(dir === projectDir ? reflections : await readReflections(root, dir)).filter(
+        (found) => found.path !== except,
+      ),
+    );
+  }
   return {
     last: reflections.at(-1),
-    covered: new Set(reflections.flatMap((found) => found.record.tasks.map((task) => task.dir))),
+    covered: new Set(everywhere.flatMap((found) => found.record.tasks.map((task) => task.dir))),
     settled: new Set(
       reflections.flatMap((found) =>
         found.record.sessions

@@ -100,6 +100,16 @@ operated with the \`ward\` CLI and tracked in git.
   session's id keeps the number it was minted with. It is refused as a rename is, and for a floor
   renumbered before. Of two floors on one number, name the one to renumber by its directory:
   \`ward project renumber projects/7-alpha 22\`.
+- **A task can move to another floor**: \`ward task move ADDRESS --to FLOOR\`. An open task moves
+  alone, with its brief, hand-off, sessions and worktrees, and takes the next room there, so its
+  address changes and the old one names nothing. It is refused while its checkout is dirty, while
+  a session of it is running or works inside what would move, and while a floor session working
+  it is running; one that is not running is set down. To carry that floor session along, move it
+  after the task: \`ward session move ID --floor N --task ADDRESS\`. Closed tasks are re-homed in
+  batches, records only, each keeping its room where it can: name them (a closed task answers to
+  its room while that names it alone, else to its slug-qualified address, \`f0t33-old-work\`), or
+  choose them with \`--slug TEXT --from FLOOR\`. A hand-off reads under the floor the task stands
+  on now. Other machines follow at their next \`ward workspace upgrade\`.
 - **A floor answers to its slug as well as its number** wherever a verb takes one
   (\`ward task open SLUG --project fantasy-football\`): all digits is a number, anything else is
   matched exactly against floor slugs, and a renamed floor's old slug names nothing.
@@ -142,7 +152,7 @@ open is what starts the agent** — there is no id to copy by hand:
   record names the other. When the old run was live in its host, its window is ended and the
   new session resumed in floor N's host. One conversation is one open workspace or floor
   session: \`ward session open --handle\` refuses a handle another one holds. A task session is
-  moved by moving its task, and a session cannot move itself — run the move from another
+  moved by moving its task (\`ward task move\`), and a session cannot move itself — run the move from another
   terminal.
 - **A session id names the machine it ran on**, and a number is never reused:
   \`workspace-7@mbp\` is workspace session seven, on \`mbp\`. A session is bound to the computer
