@@ -15,7 +15,7 @@
 // workspace's own main line directly, as one journal commit, the way every
 // mutation verb's bookkeeping does (design/0019-stewardship-worktrees/).
 
-import { existsSync, readdirSync, renameSync, rmdirSync } from 'node:fs';
+import { existsSync, readdirSync, rmdirSync } from 'node:fs';
 import { appendFile, mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
@@ -36,8 +36,9 @@ import { sha256OfFile } from './baselines.ts';
 import { checkoutLabel, resolveCheckout } from './checkouts.ts';
 import { convergeIdentities, type IdentityConvergence } from './floor-identity.ts';
 import { carriesManifest, establishFloorManifest } from './floor-manifest.ts';
+import { foldOrphanFloorDirs, linkOutsideWorktrees, retireStaleViews } from './floor-move.ts';
 import { establishFloorViews } from './floor-views.ts';
-import { git, gitAvailable, gitOrThrow, hasCommits } from './git.ts';
+import { git, gitAvailable, gitOrThrow, hasCommits, moveTracked } from './git.ts';
 import { mintWorkspaceId } from './identity.ts';
 import {
   IGNORE_LINES,
@@ -141,6 +142,7 @@ export async function convergeWorkspace(root: string): Promise<ConvergeReport> {
     steps.push(await establishClaudeGuidance(ctx));
     steps.push(await establishIgnorePolicy(ctx));
     steps.push(await establishScopeDirs(ctx));
+    steps.push(await foldOrphanedFloors(ctx));
     steps.push(await establishStandingProject(ctx));
     steps.push(await establishFloorIdentities(ctx));
     steps.push(await establishFloorManifests(ctx));
@@ -155,6 +157,8 @@ export async function convergeWorkspace(root: string): Promise<ConvergeReport> {
     // `/floors/` is in the committed ignore list, so nothing moved under it
     // can surface as untracked.
     steps.push(await placeWorktrees(ctx));
+    steps.push(await linkOutsideWorktreesStep(ctx));
+    steps.push(await retireStaleViewsStep(ctx));
     steps.push(await retireWorktreesDir(ctx));
   });
   return { root, steps };
@@ -460,21 +464,38 @@ async function relocateStandingProject(
 }
 
 /**
- * Move a record directory within the workspace, through git when git already
- * tracks it so the journal reads as a rename, and through the filesystem
- * otherwise (a workspace being created has no repository yet, and an uncommitted
- * directory has nothing for git to rename).
+ * A floor directory with no project record (design/0080-floor-rename/): what a
+ * write made under a floor's old name on another machine leaves once it meets
+ * the rename — a task opened there before the two synced. The number is the
+ * floor's identity, so its contents belong to the floor holding that number:
+ * folded in file by file, a file the floor already holds identically dropped,
+ * one that differs left where it is and named. Runs ahead of every step that
+ * reads the floors, since a directory without its record is one no reader of
+ * the floors can get past. Rides the run's one journal commit.
  */
-function moveTracked(root: string, from: string, to: string): void {
-  const tracked =
-    existsSync(join(root, '.git')) &&
-    hasCommits(root) &&
-    git(root, 'ls-files', '--error-unmatch', '--', from).exitCode === 0;
-  if (tracked) {
-    gitOrThrow(root, 'mv', from, to);
-    return;
+async function foldOrphanedFloors(ctx: ConvergeContext): Promise<StepReport> {
+  const step = 'orphaned floor directories';
+  const { folded, paths, residue } = await foldOrphanFloorDirs(ctx.root);
+  if (residue.length > 0) {
+    // Every step after this one reads the floors, and none can get past a
+    // directory without its record: what was folded is journaled now, and
+    // the run stops naming what is left.
+    if (paths.length > 0) {
+      requireGitIdentity(ctx.root);
+      commitRecords(ctx.root, 'Fold orphaned floor directories', ...paths);
+    }
+    throw new WardError(
+      'a floor directory without its record could not be folded whole — clear each, then run ' +
+        `it again:\n${residue.map((item) => `  - ${item.path}: ${item.reason}`).join('\n')}`,
+    );
   }
-  renameSync(join(root, from), join(root, to));
+  ctx.establishedPaths.push(...paths.filter((path) => !ctx.establishedPaths.includes(path)));
+  if (folded.length === 0) return { step, outcome: 'satisfied', detail: 'none' };
+  return {
+    step,
+    outcome: 'established',
+    detail: folded.map(({ from, into }) => `${from}/ folded into ${into}/`).join(', '),
+  };
 }
 
 /**
@@ -629,6 +650,46 @@ async function placeWorktrees(ctx: ConvergeContext): Promise<StepReport> {
     step,
     outcome: moved > 0 ? 'established' : 'satisfied',
     detail: parts.join(', '),
+    ...(residue.length === 0 ? {} : { residue }),
+  };
+}
+
+/**
+ * Every open floor task's outside worktree linked from its placement
+ * (design/0080-floor-rename/): a floor that moved — here, or on another machine
+ * whose commit this one pulled — has its outside worktrees' links at the old
+ * view; the link at the new placement is written where it is free. Nothing is
+ * journaled: the links stand under the ignored `floors/`.
+ */
+async function linkOutsideWorktreesStep(ctx: ConvergeContext): Promise<StepReport> {
+  const step = 'outside worktree links';
+  const { linked } = await linkOutsideWorktrees(ctx.root);
+  if (linked.length === 0) return { step, outcome: 'satisfied', detail: 'every one linked' };
+  return { step, outcome: 'established', detail: linked.join(', ') };
+}
+
+/**
+ * Views that match no open floor (design/0080-floor-rename/): the view a
+ * renamed floor left behind, with its three links dangling. One that holds
+ * only Ward's own links is retired — each link removed, then the directory with
+ * `rmdir`, never recursively; one holding anything else is kept whole and its
+ * contents named, since a checkout left there may hold the only copy of some
+ * work. Runs after the placement steps, which empty the old view of what they
+ * can move.
+ */
+async function retireStaleViewsStep(ctx: ConvergeContext): Promise<StepReport> {
+  const step = 'retire stale floor views';
+  const { retired, residue } = await retireStaleViews(ctx.root);
+  const parts = [
+    ...(retired.length === 0 ? [] : [`${retired.map((dir) => `${dir}/`).join(', ')} retired`]),
+    ...(residue.length === 0
+      ? []
+      : [`${residue.length} thing${residue.length === 1 ? '' : 's'} kept`]),
+  ];
+  return {
+    step,
+    outcome: retired.length > 0 ? 'established' : 'satisfied',
+    detail: parts.length === 0 ? 'every view matches an open floor' : parts.join(', '),
     ...(residue.length === 0 ? {} : { residue }),
   };
 }

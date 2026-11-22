@@ -39,6 +39,7 @@ const REFUSED: ReadonlyArray<readonly [action: string, argv: readonly string[]]>
   ['project-claim', ['project', 'claim', '0', 'demo']],
   ['project-release', ['project', 'release', '0', 'demo']],
   ['project-identity', ['project', 'identity', '0', '--color', 'blue']],
+  ['project-rename', ['project', 'rename', '1', 'later']],
   ['project-note', ['project', 'note', '0', 'a note']],
   ['reflection-packet', ['reflection', 'packet', '0']],
   ['reflection-open', ['reflection', 'open', '0']],

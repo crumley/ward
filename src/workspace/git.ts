@@ -1,5 +1,7 @@
 // Git operations shell out to the system git (ADR 0005): the workspace's own
 // version control is plumbing, not domain logic.
+import { existsSync, renameSync } from 'node:fs';
+import { join } from 'node:path';
 import { WardError } from '../errors.ts';
 
 export interface GitResult {
@@ -73,4 +75,24 @@ export function gitIdentityConfigured(cwd: string): boolean {
 
 export function hasCommits(cwd: string): boolean {
   return git(cwd, 'rev-parse', '--verify', 'HEAD').exitCode === 0;
+}
+
+/**
+ * Move a record directory within the workspace, through git when git already
+ * tracks it so the journal reads as a rename, and through the filesystem
+ * otherwise (a workspace being created has no repository yet, and an uncommitted
+ * directory has nothing for git to rename). Shared by the ground floor's
+ * relocation (design/0041-ground-floor/) and a floor's rename
+ * (design/0080-floor-rename/).
+ */
+export function moveTracked(root: string, from: string, to: string): void {
+  const tracked =
+    existsSync(join(root, '.git')) &&
+    hasCommits(root) &&
+    git(root, 'ls-files', '--error-unmatch', '--', from).exitCode === 0;
+  if (tracked) {
+    gitOrThrow(root, 'mv', from, to);
+    return;
+  }
+  renameSync(join(root, from), join(root, to));
 }
