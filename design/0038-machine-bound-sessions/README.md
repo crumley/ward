@@ -5,7 +5,9 @@
 > `ward status` are made honest about which machine holds a session's history — and when a
 > foreground run exits at a terminal, Ward asks the human once whether the thread is done.
 >
-> **Status:** built — awaiting review · **Started:** 2026-09-04
+> **Status:** built — awaiting review · **Started:** 2026-09-04 · **Partly superseded:** the
+> machine-name ladder, which gains a stored name above the hostname, by
+> [0085](../0085-machine-name-pinned/README.md)
 
 A session id is allocated as the smallest number no **open** session holds, and the record is
 written at `sessions/<id>.md`. Both halves of that are load-bearing in ways the allocation rule does

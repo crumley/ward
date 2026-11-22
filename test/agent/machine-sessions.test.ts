@@ -42,6 +42,27 @@ test('the id names the machine, the record states it, and --json carries it', as
   expect(document).toMatchObject({ id: 'workspace-2@mbp', machine: 'mbp' });
 });
 
+test('with nothing naming the machine, the first open pins the derived name and ids keep it', async () => {
+  // design/0085-machine-name-pinned/: the spawned CLI, this machine's real
+  // host reading, and a state directory of the case's own.
+  const state = join(scratch, `state-${caseId}`);
+  const first = ward(['session', 'open', '--purpose', 'first', '--json'], { machine: '', state });
+  expect(first.exitCode).toBe(0);
+  const pinned = readFileSync(join(state, 'machine.md'), 'utf8').match(/^name: (.+)$/m)?.[1];
+  expect(pinned).toMatch(/^[a-z0-9-]+$/);
+  expect(sessionMutationShape.parse(JSON.parse(first.stdout)).id).toBe(`workspace-1@${pinned}`);
+
+  // The pin answers the next run, whatever the host reads by then: a pin
+  // naming another machine is what the second open allocates under.
+  writeFileSync(
+    join(state, 'machine.md'),
+    '---\ntype: ward-machine\nname: pinned-box\npinnedAt: 2026-11-22T12:00:00.000Z\n' +
+      'from: hostname\nhost: pinned-box\n---\n',
+  );
+  const second = ward(['session', 'open', '--purpose', 'second', '--json'], { machine: '', state });
+  expect(sessionMutationShape.parse(JSON.parse(second.stdout)).id).toBe('workspace-1@pinned-box');
+});
+
 test('two machines allocate side by side — the sync has nothing to collide over', async () => {
   ward(['session', 'open', '--purpose', 'laptop'], { machine: 'mbp' });
   // The other machine's clone, allocating from the same records: its own
@@ -241,7 +262,10 @@ let stub: string;
 let caseId = 0;
 
 /** One CLI invocation: the stub harness, and the machine this run believes it is on. */
-function ward(argv: string[], options: { machine?: string; exitCode?: number } = {}): CliResult {
+function ward(
+  argv: string[],
+  options: { machine?: string; exitCode?: number; state?: string } = {},
+): CliResult {
   const bin =
     options.exitCode === undefined
       ? stub
@@ -255,6 +279,7 @@ function ward(argv: string[], options: { machine?: string; exitCode?: number } =
       CLAUDE_CONFIG_DIR: claudeHome,
       WARD_CONFIG_DIR: configHome,
       ...(options.machine === undefined ? {} : { WARD_MACHINE: options.machine }),
+      ...(options.state === undefined ? {} : { WARD_STATE_DIR: options.state }),
     },
   });
   return {
