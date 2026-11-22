@@ -853,6 +853,8 @@ export interface SessionOverlay {
   readonly teardown?: Teardown | undefined;
   /** The task a floor's session is working now (design/0078-task-named-windows/). */
   readonly workingOn?: WorkingOn | undefined;
+  /** The task `session open --new-task` opened for the session to work (0078). */
+  readonly openedTask?: TaskMutationShape | undefined;
 }
 
 export function sessionMutationJson(
@@ -890,6 +892,7 @@ export function sessionMutationJson(
     ...(record.closedAt === undefined ? {} : { closedAt: record.closedAt }),
     ...(overlay.live === undefined ? {} : { live: liveJson(overlay.live) }),
     ...(overlay.workingOn === undefined ? {} : { workingOn: { ...overlay.workingOn } }),
+    ...(overlay.openedTask === undefined ? {} : { openedTask: overlay.openedTask }),
     ...(overlay.teardown === undefined
       ? {}
       : {

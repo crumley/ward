@@ -61,10 +61,10 @@ import {
 import { CANDIDATE_KINDS, candidates, renderCandidates } from '../shell/candidates.ts';
 import { emitShellLayer } from '../shell/layer.ts';
 import { FISH_SHORTHAND_NAMES, findShorthand } from '../shell/shorthands.ts';
-import { requireReadableFormat } from '../store/format.ts';
+import { requireFormatFor, requireReadableFormat } from '../store/format.ts';
 import type { SessionRecord, TaskRecord, WorkState } from '../store/types.ts';
 import { FLOOR_COLORS, type FloorColor, INK, PALETTE, POOL_COLORS } from '../theme/palette.ts';
-import { distinctAddress, taskAddress, taskFloor } from '../workspace/address.ts';
+import { distinctAddress, qualifiedAddress, taskAddress, taskFloor } from '../workspace/address.ts';
 import {
   type ClaimReport,
   claimRepository,
@@ -118,16 +118,23 @@ import {
   removeRepository,
 } from '../workspace/repos.ts';
 import { restoreConverged, restoreWorkspace } from '../workspace/restore.ts';
-import { readTasks, resolvableAddress, resolveOpenTask } from '../workspace/scan.ts';
+import {
+  type FoundTask,
+  readTasks,
+  resolvableAddress,
+  resolveOpenTask,
+} from '../workspace/scan.ts';
 import { scopeFromCwd } from '../workspace/scope.ts';
 import {
   closeSession,
   describeScope,
   findSession,
+  namedTaskOf,
   nameSessionTask,
   openFloorSession,
   openSession,
   openWorkspaceSession,
+  readOpenSessions,
 } from '../workspace/sessions.ts';
 import {
   filterLiftsWindow,
@@ -203,6 +210,7 @@ import {
   repoPathJson,
   repoRefreshJson,
   repoRemoveJson,
+  type SessionOverlay,
   sessionLocateJson,
   sessionMutationJson,
   sessionResumeAllJson,
@@ -1035,6 +1043,16 @@ const session = command(
             description: message`Open a floor's session working this open task of its floor: its window and its harness run take the task's name. Implies --floor.`,
           }),
         ),
+        newTask: optional(
+          option('--new-task', string({ metavar: 'SLUG' }), {
+            description: message`Open a task on the floor first, then the floor's session working it, in one step: --purpose is both of theirs. Needs --floor, or a --repo that a floor claims.`,
+          }),
+        ),
+        repo: multiple(
+          option('--repo', repoName(), {
+            description: message`With --new-task: a registered repository the new task touches (repeatable) — and, with no --floor, the floor that claims it.`,
+          }),
+        ),
         handle: optional(option('--handle', string({ metavar: 'TEXT' }))),
         dir: optional(option('--dir', string({ metavar: 'PATH' }))),
         detach: detachFlag(),
@@ -1698,6 +1716,7 @@ async function answer(invoked: Invocation): Promise<void> {
             result.task,
             result.floor,
             result.working,
+            { slug: result.newTask, repo: result.repo },
             result.purpose,
             result.handle,
             result.dir,
@@ -3419,11 +3438,134 @@ async function cmdWorktreeList(json: boolean): Promise<void> {
  * workspace". A task session names its task, which is also what a declared
  * agent was always required to do. A session has one scope, so TASK and
  * `--floor` together are refused rather than resolved.
+ *
+ * `--new-task SLUG` (design/0078-task-named-windows/, build log 2026-11-22)
+ * puts one step in front of the floor paths: the task is opened first — its
+ * own commit, because the launch's name is worked out from the record before
+ * the session exists — and the floor's session is then opened working it,
+ * exactly as `--task` opens one. A failure after the task's commit leaves the
+ * task open, and the refusal says so and names it.
  */
 async function cmdSessionOpen(
   task: string | undefined,
   given: number | undefined,
   working: string | undefined,
+  fresh: FreshTask,
+  purpose: string | undefined,
+  handle: string | undefined,
+  dir: string | undefined,
+  hostFlag: HostFlag | undefined,
+  onExit: OnExit,
+  json: boolean,
+): Promise<void> {
+  const rest = [purpose, handle, dir, hostFlag, onExit, json] as const;
+  if (fresh.slug === undefined) {
+    if (fresh.repo.length > 0) {
+      throw new WardError(
+        '--repo names what a new task touches — it goes with --new-task SLUG; a task that is ' +
+          'already open records its repositories where it was opened',
+      );
+    }
+    await openSessionAt(task, given, working, undefined, ...rest);
+    return;
+  }
+  if (task !== undefined || working !== undefined) {
+    const named = task ?? working;
+    throw new WardError(
+      `--new-task opens the task the session works, and ${task === undefined ? '--task' : 'a TASK'} ` +
+        `names one already open — open a session on ${named} without --new-task, or a new task ` +
+        'without naming another',
+    );
+  }
+  // Refused here as well as below, because below is after the task's commit.
+  if (hostFlag !== undefined && handle !== undefined) {
+    throw new WardError(
+      `--${hostFlag} chooses where a launched run is hosted — a session opened with --handle ` +
+        'records a run Ward does not start',
+    );
+  }
+  const root = await requireMutableWorkspace();
+  const opened = await openFreshTask(root, fresh.slug, fresh.repo, given, purpose);
+  const address = taskAddress(opened.task);
+  if (!json) {
+    console.log(
+      `${pc.green('opened')} ${pc.bold(address)} — ${opened.task.record.slug}` +
+        renderPlacement(opened.placement, opened.task.record.floor),
+    );
+  }
+  try {
+    await openSessionAt(undefined, opened.task.record.floor, address, opened.task, ...rest);
+  } catch (error) {
+    // The session may have been recorded before the failure (a run that did
+    // not start): then its own message already says how to resume it, and
+    // offering to open another would leave two sessions on one task. Past
+    // the record, only Ward's own refusals are restated — anything else (an
+    // exit the run took) is not a failure of the open.
+    const qualified = qualifiedAddress(opened.task);
+    const recorded = await readOpenSessions(root).then(
+      (listings) => listings.some((listing) => namedTaskOf(listing.record) === qualified),
+      () => false,
+    );
+    if (recorded && !(error instanceof WardError)) throw error;
+    const why = error instanceof Error ? error.message : String(error);
+    throw new WardError(
+      `task ${address} ${opened.task.record.slug} is opened and stays open — ${why}` +
+        (recorded
+          ? ''
+          : `; open its floor's session on it with: ward session open --task ${address}`),
+    );
+  }
+}
+
+/** What `session open` was given toward a new task: `--new-task SLUG` and its `--repo`s. */
+interface FreshTask {
+  readonly slug: string | undefined;
+  readonly repo: readonly string[];
+}
+
+/**
+ * Open the task a `session open --new-task` works. The floor is `--floor`'s,
+ * or — with none — the one that claims the `--repo`s named, as `task open`
+ * routes (design/0037-repo-floor-affinity/). Unlike `task open` there is no
+ * ground-floor fallback: a bare `session open` means workspace scope, so a
+ * floor that nothing named would be a session the caller did not ask for.
+ * Everything the session open would refuse for the workspace as a whole is
+ * checked BEFORE the task's commit, so a refusal there writes nothing.
+ */
+async function openFreshTask(
+  root: string,
+  slug: string,
+  repositories: readonly string[],
+  given: number | undefined,
+  purpose: string | undefined,
+): Promise<{ readonly task: FoundTask; readonly placement: Placement }> {
+  for (const name of repositories) requireRegistered(root, name);
+  const placement = await placeTask(root, given, repositories);
+  if (placement.floor === undefined) {
+    throw new WardError(
+      '--new-task opens its task on a floor, and none was named — name it with --floor N' +
+        (repositories.length === 0
+          ? ', or route it with --repo NAME, a repository a floor claims'
+          : ` (${placement.note ?? `no floor claims ${repositories.join(', ')}`})`),
+    );
+  }
+  // The session will carry a `task-named` event, which needs format 3: an
+  // older workspace refuses it now rather than after the task is written.
+  requireFormatFor(root, 'session', { events: [{ event: 'task-named' }] });
+  const task = await openTask(root, slug, {
+    floor: placement.floor,
+    ...(repositories.length === 0 ? {} : { repositories }),
+    ...(purpose === undefined ? {} : { purpose }),
+  });
+  return { task, placement };
+}
+
+/** `session open` once any new task is opened: the three paths described above. */
+async function openSessionAt(
+  task: string | undefined,
+  given: number | undefined,
+  working: string | undefined,
+  created: FoundTask | undefined,
   purpose: string | undefined,
   handle: string | undefined,
   dir: string | undefined,
@@ -3432,6 +3574,11 @@ async function cmdSessionOpen(
   json: boolean,
 ): Promise<void> {
   const root = await requireMutableWorkspace();
+  // The task the session opened, carried on its report (`openedTask`).
+  const overlay: SessionOverlay =
+    created === undefined
+      ? {}
+      : { openedTask: taskMutationJson(created.record, taskAddress(created)) };
   if (working !== undefined && task !== undefined) {
     throw new WardError(
       `a session has one scope — a task session is its task's (ward session open ${task}); ` +
@@ -3474,6 +3621,7 @@ async function cmdSessionOpen(
         ...started,
       }),
       json,
+      overlay,
     );
     return;
   }
@@ -3491,6 +3639,7 @@ async function cmdSessionOpen(
         ? await openWorkspaceSession(root, purpose, options)
         : await openFloorSession(root, floor, purpose, options),
       json,
+      overlay,
     );
     return;
   }
@@ -3507,7 +3656,7 @@ async function cmdSessionOpen(
     dir,
     startedBy,
     (opened) => {
-      if (json) printJson(sessionMutationJson(opened));
+      if (json) printJson(sessionMutationJson(opened, overlay));
       else {
         console.log(
           `${pc.green('opened')} session ${pc.bold(opened.id)} ` +
@@ -3521,7 +3670,7 @@ async function cmdSessionOpen(
     { hostFlag, onNotice: warnNotice },
   );
   if ('hosted' in launched) {
-    renderHosted('opened', launched.record, launched.hosted, json);
+    renderHosted('opened', launched.record, launched.hosted, json, overlay);
     return;
   }
   const { record, run } = launched;
@@ -4026,10 +4175,11 @@ function renderHosted(
   record: SessionRecord,
   hosted: HostedRun,
   json: boolean,
+  overlay: SessionOverlay = {},
 ): void {
   const live = hosted.live === undefined ? undefined : { ...hosted.live, join: hosted.join };
   if (json) {
-    printJson(sessionMutationJson(record, { live }));
+    printJson(sessionMutationJson(record, { ...overlay, live }));
     return;
   }
   console.log(
@@ -4090,9 +4240,13 @@ function describeLive(live: LiveState): string {
   }
 }
 
-function renderSessionOpened(record: SessionRecord, json: boolean): void {
+function renderSessionOpened(
+  record: SessionRecord,
+  json: boolean,
+  overlay: SessionOverlay = {},
+): void {
   if (json) {
-    printJson(sessionMutationJson(record));
+    printJson(sessionMutationJson(record, overlay));
     return;
   }
   console.log(

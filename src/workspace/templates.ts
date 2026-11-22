@@ -125,7 +125,8 @@ open is what starts the agent** — there is no id to copy by hand:
   \`ward session task ID ADDRESS\` (or \`--clear\`) moves an open one to another of its floor's
   tasks. The record keeps every change; its window and its harness run take the task's name, and
   it reads as its floor's again once that task closes. Naming a task that was handed over picks
-  the hand-off up.
+  the hand-off up. For a new topic, \`ward session open --floor N --new-task SLUG\` opens the task
+  and the session working it in one step (\`--repo NAME\` may stand in for \`--floor\`).
 - **A session id names the machine it ran on**, and a number is never reused:
   \`workspace-7@mbp\` is workspace session seven, on \`mbp\`. A session is bound to the computer
   holding its harness history while this record travels, so two machines sharing one workspace
