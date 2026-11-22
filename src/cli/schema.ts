@@ -162,6 +162,12 @@ export const statusSessionShape = z.strictObject({
   history: z.enum(['found', 'gone', 'unlocatable']),
   /** The task a floor's session is working now (0078). */
   workingOn: workingOnShape.optional(),
+  /**
+   * Present, and true, on the floor's attending (design/0089-floor-attending/):
+   * its general session, the first window of its host — on floor 0 the
+   * coordinator. Derived from the records, per machine; never stored.
+   */
+  attending: z.literal(true).optional(),
 });
 export type StatusSessionShape = z.infer<typeof statusSessionShape>;
 
@@ -1323,6 +1329,8 @@ export const sessionMutationShape = z.strictObject({
   live: sessionLiveShape.optional(),
   /** The task a floor's session is working now (0078) — derived from the trail. */
   workingOn: workingOnShape.optional(),
+  /** Present, and true, on a floor's attending (0089) — derived from the records, per machine. */
+  attending: z.literal(true).optional(),
   /** On `session open --new-task` alone: the task opened for the session to work, as `task open` reports it. */
   openedTask: taskMutationShape.optional(),
   /** What `session close` did to the live half (0031): present when the latest launch was hosted. */
@@ -1393,6 +1401,12 @@ export const sessionResumeAllShape = z.strictObject({
        * while it was linked into every floor host.
        */
       coordinator: z.boolean(),
+      /**
+       * Its floor's attending (design/0089-floor-attending/): resumed before the
+       * floor's other sessions, as the first window of the floor's host. The
+       * coordinator is floor 0's.
+       */
+      attending: z.boolean(),
       step: z.enum(['resume', 'live', 'gone', 'elsewhere', 'unknown']),
       /** Why the step is what it is. */
       detail: z.string(),

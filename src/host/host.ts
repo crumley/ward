@@ -51,6 +51,13 @@ export interface PlaceRequest {
   readonly command: readonly string[];
   /** The Ward version, stamped on a group this placement creates. */
   readonly version: string;
+  /**
+   * Stand the window FIRST in the group, before every window already there —
+   * the floor's attending (design/0089-floor-attending/). Without it the window
+   * goes after the group's last (design/0086-coordinator-stays-home/). Either
+   * way the windows already standing keep their order.
+   */
+  readonly first?: boolean;
 }
 
 /**
@@ -253,6 +260,12 @@ export interface InventoryGroup {
   readonly clients: number;
   /** How many windows it shows, Ward's or not (a human's own shell counts). */
   readonly windows: number;
+  /**
+   * The window standing first in it, Ward's or not — what a human reads as
+   * window 1 whatever the host numbers it (design/0089-floor-attending/).
+   * Absent when the host did not say.
+   */
+  readonly first?: string;
   readonly created: number;
   /** The Ward version that created a floor host. */
   readonly version?: string;
@@ -314,6 +327,12 @@ export type TypeResult =
   /** No such window, or no server: nothing to type into. */
   | { readonly outcome: 'absent' }
   /** The host could not say what happened; `reason` says what may be left behind. */
+  | { readonly outcome: 'unknown'; readonly reason: string };
+
+export type LeadResult =
+  | { readonly outcome: 'moved' }
+  /** No such window or group: nothing to move. */
+  | { readonly outcome: 'absent' }
   | { readonly outcome: 'unknown'; readonly reason: string };
 
 /** A detached host, in host terms. */
@@ -381,6 +400,14 @@ export interface SessionHost {
    * switched to the view). The exit code of the client.
    */
   enter(view: View): Promise<number>;
+  /**
+   * Move one window to the front of one group it stands in, by its id, the
+   * other windows left in their order (design/0089-floor-attending/). The
+   * window is moved, never re-created: its run goes on, and whoever is looking
+   * at it keeps looking. Asked only of a window that is not already first.
+   * Never throws.
+   */
+  lead(window: string, group: string): LeadResult;
   /** Every group and every tagged window, for hygiene's whole-record join. */
   inventory(): Inventory;
   /** What every new window inherits from the host — read, never changed. */

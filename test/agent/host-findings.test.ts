@@ -19,6 +19,7 @@ import {
   openFloorSession,
   openWorkspaceSession,
 } from '../../src/workspace/sessions.ts';
+import { openTask } from '../../src/workspace/tasks.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
 import { preparedWorkspace } from '../prepared.ts';
 import { type FakeHostOptions, fakeHost } from './fake-host.ts';
@@ -206,6 +207,42 @@ const rows: Row[] = [
       ],
     }),
     expected: [info('floor hosts', "ward-other-f0 is not this workspace's", 'left alone')],
+  },
+  {
+    name: 'a floor host whose windows work tasks, with no attending, is information (0089)',
+    arrange: async () => {
+      await openProject(ws, 'alpha');
+      await openTask(ws, 'work', { floor: 1 });
+      const working = await openFloorSession(ws, 1, 'on it', {
+        handle: 'claude:t',
+        host: 'tmux',
+        task: 'f1t1',
+      });
+      return { windows: [win(working, ['f1'])] };
+    },
+    expected: [
+      info(
+        'host windows',
+        "floor 1's host holds",
+        'but no attending',
+        'wsa 1 (ward session open --floor 1 --detach)',
+      ),
+    ],
+  },
+  {
+    name: 'a floor host with its attending beside its task windows: a clean bill (0089)',
+    arrange: async () => {
+      await openProject(ws, 'alpha');
+      await openTask(ws, 'work', { floor: 1 });
+      const attending = await hostedFloor(1);
+      const working = await openFloorSession(ws, 1, 'on it', {
+        handle: 'claude:t',
+        host: 'tmux',
+        task: 'f1t1',
+      });
+      return { windows: [win(attending, ['f1'], '@1'), win(working, ['f1'], '@2')] };
+    },
+    expected: [ok('host windows', '1 floor host, 2 windows')],
   },
   {
     name: 'version skew is information',

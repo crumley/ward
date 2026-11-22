@@ -23,7 +23,7 @@ import type { Finding } from '../workspace/doctor.ts';
 import { readProjects, renumberedFloors } from '../workspace/projects.ts';
 import { type OpenSessionListing, readAllSessions } from '../workspace/sessions.ts';
 import { hostedBy, hostOf, latestLaunch } from './host.ts';
-import { placementFloor } from './placement.ts';
+import { attendingOf, placementFloor } from './placement.ts';
 import type { AgentHost, Resolved } from './settings.ts';
 
 type Env = Record<string, string | undefined>;
@@ -239,6 +239,8 @@ function inventoryFindings(
     }
   }
 
+  findings.push(...attendingFindings(sessions, kind));
+
   // Several at once is what a reboot leaves: one line names the bulk verb,
   // whose bare form only prints what would come back
   // (design/0068-bulk-session-resume/). One alone has its attach line above.
@@ -384,6 +386,37 @@ function hostShapeFindings(
  * undefined when it does (its record is open, hosted, and the window's epoch
  * is that record's latest launch).
  */
+/**
+ * A floor whose host holds sessions but no attending
+ * (design/0089-floor-attending/): windows working tasks, say, with the general
+ * session the floor is run from closed. `info`: nothing is wrong with the
+ * windows, but window 1 of the host is not the floor's own session, and
+ * `wsa N` would open one. Per machine, as an attending is.
+ */
+function attendingFindings(sessions: readonly OpenSessionListing[], kind: HostedKind): Finding[] {
+  const lacking = new Map<number, string[]>();
+  for (const listing of sessions) {
+    const { record } = listing;
+    if (record.state !== 'open' || hostedBy(record) !== kind) continue;
+    const floor = placementFloor(listing, sessions);
+    if (attendingOf(sessions, floor, record.machine) !== undefined) continue;
+    lacking.set(floor, [...(lacking.get(floor) ?? []), record.id]);
+  }
+  return [...lacking]
+    .sort(([a], [b]) => a - b)
+    .map(([floor, ids]) => ({
+      check: WINDOWS,
+      severity: 'info' as const,
+      message:
+        `floor ${floor}'s host holds ${ids.join(', ')} but no attending — ` +
+        (floor === 0
+          ? "the coordinator is the ground floor's attending and none is open; open one: wsa 0 " +
+            '(ward session open --detach)'
+          : `the floor's general session, window 1 of its host; open one: wsa ${floor} ` +
+            `(ward session open --floor ${floor} --detach)`),
+    }));
+}
+
 function unexplained(
   record: SessionRecord | undefined,
   window: InventoryWindow,

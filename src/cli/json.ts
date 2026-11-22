@@ -219,6 +219,7 @@ function statusSessionJson(session: SessionStatus): StatusSessionShape {
     openedAt: session.openedAt,
     history: session.history,
     ...(session.workingOn === undefined ? {} : { workingOn: { ...session.workingOn } }),
+    ...(session.attending === true ? { attending: true as const } : {}),
   };
 }
 
@@ -889,6 +890,8 @@ export interface SessionOverlay {
   readonly workingOn?: WorkingOn | undefined;
   /** The task `session open --new-task` opened for the session to work (0078). */
   readonly openedTask?: TaskMutationShape | undefined;
+  /** Whether the session is its floor's attending (design/0089-floor-attending/). */
+  readonly attending?: boolean | undefined;
 }
 
 export function sessionMutationJson(
@@ -928,6 +931,7 @@ export function sessionMutationJson(
     ...(record.closedAt === undefined ? {} : { closedAt: record.closedAt }),
     ...(overlay.live === undefined ? {} : { live: liveJson(overlay.live) }),
     ...(overlay.workingOn === undefined ? {} : { workingOn: { ...overlay.workingOn } }),
+    ...(overlay.attending === true ? { attending: true as const } : {}),
     ...(overlay.openedTask === undefined ? {} : { openedTask: overlay.openedTask }),
     ...(overlay.teardown === undefined
       ? {}
@@ -961,6 +965,7 @@ export function sessionResumeAllJson(
       ...(session.record.machine === undefined ? {} : { machine: session.record.machine }),
       floor: session.floor,
       coordinator: session.coordinator,
+      attending: session.attending,
       step: session.step,
       detail: session.detail,
       ...(session.outcome === undefined ? {} : { outcome: session.outcome }),

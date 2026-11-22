@@ -212,6 +212,25 @@ test('close, packet, open, propose, record, preview, merge: the cursor advances 
   expect((await packetOf(0)).tasks).toEqual([]);
 });
 
+// -- the ground floor's attending (design/0089-floor-attending/) ------------------
+
+test("floor 0's packet reads the coordinator's sessions, recorded at workspace scope", async () => {
+  await openProject(ws, 'demo');
+  for (const argv of [
+    ['session', 'open', '--purpose', 'coordinate', '--handle', 'claude:coord-1'],
+    ['session', 'open', '--floor', '0', '--purpose', 'ground', '--handle', 'claude:ground-1'],
+    ['session', 'open', '--floor', '1', '--purpose', 'the floor', '--handle', 'claude:floor-1'],
+  ]) {
+    expect((await callWard(argv, ws)).exitCode).toBe(0);
+  }
+  expect((await packetOf(0)).floorSessions.map((session) => session.id).sort()).toEqual([
+    'f0-1@test',
+    'workspace-1@test',
+  ]);
+  // Another floor's packet never carries the workspace's sessions.
+  expect((await packetOf(1)).floorSessions.map((session) => session.id)).toEqual(['f1-1@test']);
+});
+
 // -- declining ----------------------------------------------------------------
 
 test('declined: never merged, the cursor stays and the next reflection covers the same work', async () => {

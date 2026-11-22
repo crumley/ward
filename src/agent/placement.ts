@@ -6,7 +6,8 @@
 // that do not change over a session's life (its scope, its task's floor, its
 // recorded parent), so a re-created window lands where the first one did, and
 // a reboot reassembles every floor exactly as it stood without anything
-// having remembered a window.
+// having remembered a window. Which session is a floor's attending, the first
+// window of its host (design/0089-floor-attending/), is derived here too.
 import { type SessionRecord, sessionScopeOf } from '../store/types.ts';
 import type { OpenSessionListing } from '../workspace/sessions.ts';
 
@@ -69,4 +70,99 @@ export function placementFloor(
  */
 export function isCoordinator(record: SessionRecord): boolean {
   return sessionScopeOf(record) === 'workspace' && record.parent === undefined;
+}
+
+// -- the floor's attending (design/0089-floor-attending/) ------------------------
+
+/**
+ * Whether a floor session is a GENERAL one: a floor's own session (floor
+ * scope) whose trail has never named a task. A session opened with `--task`
+ * or `--new-task` names one at its open, and one that has named a task since
+ * is a task session for good, even after it set the task down or the task
+ * closed: the attending's place is never gained by a task ending, so the attending only
+ * changes when general sessions open and close.
+ */
+export function isGeneralFloorSession(record: SessionRecord): boolean {
+  return (
+    sessionScopeOf(record) === 'project' &&
+    record.floor !== undefined &&
+    !(record.events ?? []).some((event) => event.event === 'task-named')
+  );
+}
+
+/**
+ * The floor a session would be the attending of, were it the earliest of its
+ * kind: the coordinator stands for floor 0, a general floor session for its
+ * own floor above 0. Undefined for everything else — a task session, a
+ * helper, a floor session working a task, and a general session of floor 0,
+ * where the coordinator is the attending and there is no other.
+ */
+export function attendingFloorOf(record: SessionRecord): number | undefined {
+  if (isCoordinator(record)) return 0;
+  if (!isGeneralFloorSession(record) || record.floor === 0) return undefined;
+  return record.floor;
+}
+
+/**
+ * Two records' machines may be the same one: equal, or either unrecorded (a
+ * record from before design/0038, which is never guessed to be another's).
+ */
+function sameMachine(a: string | undefined, b: string | undefined): boolean {
+  return a === undefined || b === undefined || a === b;
+}
+
+/**
+ * A floor's attending (design/0089-floor-attending/): the one general session
+ * the floor is run from, the first window of its host. Derived, never
+ * stored: the earliest-opened OPEN session that could be the floor's
+ * ({@link attendingFloorOf}) on `machine` — the coordinator on floor 0. A host
+ * is one machine's, so who is the attending is asked per machine: two machines sharing a
+ * workspace each run the floor from their own. Ties in the opening instant
+ * fall to the lower session number. A continuation (design/0084-session-move/)
+ * is judged by its own opening, like any new record, and inherits nothing from
+ * the session it continues. Undefined when the floor has none.
+ */
+export function attendingOf(
+  all: readonly OpenSessionListing[],
+  floor: number,
+  machine: string | undefined,
+): OpenSessionListing | undefined {
+  const number = (id: string) => Number.parseInt(/-(\d+)(?:@|$)/.exec(id)?.[1] ?? '', 10);
+  return all
+    .filter(
+      ({ record }) =>
+        record.state === 'open' &&
+        attendingFloorOf(record) === floor &&
+        sameMachine(record.machine, machine),
+    )
+    .sort(
+      (a, b) =>
+        a.record.openedAt.localeCompare(b.record.openedAt) ||
+        (number(a.record.id) || 0) - (number(b.record.id) || 0) ||
+        a.record.id.localeCompare(b.record.id),
+    )[0];
+}
+
+/** Whether the session is its floor's attending, on the machine it ran on. */
+export function isAttending(record: SessionRecord, all: readonly OpenSessionListing[]): boolean {
+  if (record.state !== 'open') return false;
+  const floor = attendingFloorOf(record);
+  if (floor === undefined) return false;
+  return attendingOf(all, floor, record.machine)?.record.id === record.id;
+}
+
+/**
+ * Whether the session's window leads its host: it is the attending, and it
+ * stands in its own floor's host. A floor session a session of another floor
+ * started is placed beside its parent ({@link placementFloor}); it is still
+ * its floor's attending, but it is not that host's, and leads nothing there.
+ */
+export function leadsHost(
+  listing: OpenSessionListing,
+  all: readonly OpenSessionListing[],
+): boolean {
+  return (
+    isAttending(listing.record, all) &&
+    placementFloor(listing, all) === attendingFloorOf(listing.record)
+  );
 }

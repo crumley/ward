@@ -468,7 +468,12 @@ async function readWindow(
       ),
     });
   }
-  const floorSessions = (await readSessions(root, project.dir))
+  // On the ground floor the coordinator is the floor's attending
+  // (design/0089-floor-attending/), and its sessions — with the helpers it
+  // started — are recorded at workspace scope, not under floor 0: read both,
+  // or a ground-floor reflection would never see the work its attending did.
+  const ground = project.record.floor === 0 ? await readSessions(root, '') : [];
+  const floorSessions = [...(await readSessions(root, project.dir)), ...ground]
     .filter((session) => !cursor.settled.has(session.id))
     .map((session) => packetSession(root, session, machine));
   return { machine, cursor, tasks, floorSessions };

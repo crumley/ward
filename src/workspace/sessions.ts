@@ -7,6 +7,7 @@
 // (intent/01-concepts/02-sessions-and-lifecycle.md).
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { isAttending } from '../agent/placement.ts';
 import { WardError } from '../errors.ts';
 import { readMachine } from '../global/machine.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
@@ -519,6 +520,17 @@ export async function nameSessionTask(
         sessionRecordType(scopeDir, id).relPath,
       );
       return { record: cleared, scopeDir, changed: true };
+    }
+    // The floor's attending stays general (design/0089-floor-attending/): it is
+    // the first window of the floor's host and what `wsa N` joins, so a task
+    // is given a window of its own beside it rather than taking the attending's.
+    if (isAttending(record, await readAllSessions(root))) {
+      throw new WardError(
+        `session ${id} is floor ${record.floor}'s attending — the floor's general session, ` +
+          'window 1 of its host — and stays general. Give the task its own window: ' +
+          `ward session open --task ${address.toLowerCase()} (or, for a new task, ` +
+          `ward session open --floor ${record.floor} --new-task SLUG)`,
+      );
     }
     const task = await floorTask(root, record.floor, address);
     if (current?.dir === task.dir) return { record, scopeDir, changed: false, task };

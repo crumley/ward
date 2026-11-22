@@ -419,8 +419,14 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '3d4142d5dd26e5da864fbaeac357edc5be25b398797da1c17593addf5cd50dca',
         era: 'design 0081 (floor renumber)',
       },
-      // Current since design 0084: a conversation is moved to another floor
-      // with ward session move, and one handle is one open session.
+      // Design 0084: a conversation is moved to another floor with ward
+      // session move, and one handle is one open session.
+      {
+        sha256: 'e5e54c0cb7aca0a2d780fc3eefafba25125214847a478d21dbcab4b885ab7a9c',
+        era: 'design 0084 (session move)',
+      },
+      // Current since design 0089: every floor has an attending, window 1 of
+      // its host, and wsa N joins it.
     ],
   },
 ];

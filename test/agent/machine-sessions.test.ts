@@ -152,7 +152,9 @@ test('status names the open workspace sessions, each with what to do about it', 
   expect(shown).toContain('workspace-1@test — here and now (history here)');
   expect(shown).toContain('workspace-1@mbp — on the laptop (on mbp — resume it there)');
   expect(shown).toContain(
-    'workspace-9 — legacy (machine unrecorded · history gone — ' +
+    // Recorded before machines were, so it counts on this one too, and it is
+    // the earliest coordinator: the ground floor's attending (design/0089).
+    'workspace-9 — attending · legacy (machine unrecorded · history gone — ' +
       'close with: ward session close workspace-9)',
   );
 
@@ -173,7 +175,13 @@ test('status names the open workspace sessions, each with what to do about it', 
       openedAt: expect.any(String),
       history: 'found',
     },
-    { id: 'workspace-9', purpose: 'legacy', openedAt: expect.any(String), history: 'gone' },
+    {
+      id: 'workspace-9',
+      purpose: 'legacy',
+      openedAt: expect.any(String),
+      history: 'gone',
+      attending: true,
+    },
   ]);
 
   // A closed session leaves the block: closed stays closed, and a list that

@@ -216,26 +216,33 @@ end`,
 
 const wsa: Shorthand = {
   name: 'wsa',
-  summary: 'attach to a session — the coordinator, a floor N, or an id — opened first if none is',
+  summary:
+    "attach to a session — the coordinator, a floor N's attending, or an id — opened first if none is",
   needs: [picker.name, pickerPresent.name],
   // One path in, whatever the machine has been through: `ward session attach`
   // joins a live window and re-creates one that ended or went with a reboot,
-  // so the only state this function must tell apart is "is there a
-  // coordinator to join at all?". `wsa N` never picks: the feed orders the
-  // floor's sessions by where their windows stand, and the first is joined
-  // (design/0079-wsa-floor-first-window/).
-  body: `function wsa --description 'Attach to a session: the coordinator, a floor N, or an id — opened first if none is'
-    # A floor number means that floor's own session; anything else is an id,
+  // so the only state this function must tell apart is "is there a session
+  // to join at all?". `wsa N` never picks: it joins the floor's attending, the
+  // first window of the floor's host, and opens one when there is none
+  // (design/0089-floor-attending/). The coordinator is the ground floor's attending.
+  body: `function wsa --description "Attach to a session: the coordinator, a floor N's attending, or an id — opened first if none is"
+    # A floor number means that floor's attending; anything else is an id,
     # which goes straight through: attach joins a live window, and re-creates
     # one that has ended or gone, from its record.
     set -l feed coordinators
     set -l scope
     set -l label coordinator
+    set -l floor
     if test (count $argv) -gt 0
         if string match -qr '^[0-9]+$' -- $argv[1]
-            set feed coordinators --floor $argv[1]
-            set scope --floor $argv[1]
-            set label "floor $argv[1] session"
+            set floor $argv[1]
+            set feed coordinators --floor $floor
+            # Floor 0's attending is the coordinator: opening one is opening
+            # the coordinator, at workspace scope.
+            if test "$floor" -ne 0
+                set scope --floor $floor
+                set label "floor $floor attending"
+            end
         else
             command ward session attach $argv
             return $status
@@ -255,10 +262,8 @@ const wsa: Shorthand = {
         set open (command ward shell candidates $feed)
     end
     set -l id
-    if test (count $open) -eq 1; or set -q scope[1]
-        # A floor's sessions all stand in its one host, so which to join only
-        # sets the window in front: the feed lists them first window first,
-        # and the first is taken without asking.
+    if test (count $open) -eq 1; or set -q floor[1]
+        # A floor's feed is its attending alone, so it is taken without asking.
         set id (string split -m1 -f1 -- \\t $open[1])
     else if test (count $open) -gt 1
         # Several coordinators open: which one is a choice, so ask for it —

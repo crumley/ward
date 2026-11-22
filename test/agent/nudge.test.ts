@@ -1,6 +1,7 @@
 // The nudge (design/0067-floor-dispatch/), against a fake host: who is typed
-// to — only an open session of the target floor's own, whose run is live in a
-// host on this machine and whose harness Ward can read — what the line says,
+// to — the target floor's attending alone (design/0089-floor-attending/), the
+// coordinator on floor 0, whose run is live in a host on this machine and
+// whose harness Ward can read — what the line says,
 // and that every way a nudge does not happen is an answer rather than a
 // failure. The typing itself, on a real tmux, is test/host/tmux-live.test.ts's.
 import { afterAll, beforeEach, expect, test } from 'bun:test';
@@ -77,30 +78,53 @@ test.each<[string, DispatchRecord, string, string]>([
 
 // -- who is typed to -------------------------------------------------------------
 
-test('only the open sessions of the target floor itself are typed to', async () => {
-  const target = await openFloorSession(ws, 2, undefined, hostedRun());
-  const second = await openFloorSession(ws, 2, undefined, hostedRun());
+test("the target floor's attending alone is typed to", async () => {
   const gone = await openFloorSession(ws, 2, undefined, hostedRun());
   await closeSession(ws, gone.id);
+  await openTask(ws, 'work', { floor: 2 });
+  // Opened before the attending, but working a task from its open: a task window.
+  const working = await openFloorSession(ws, 2, undefined, { ...hostedRun(), task: 'f2t1' });
+  const attending = await openFloorSession(ws, 2, undefined, hostedRun());
+  const second = await openFloorSession(ws, 2, undefined, hostedRun());
   // Everyone a nudge to floor 2 must never reach, each live in a host:
   const coordinator = await openWorkspaceSession(ws, undefined, hostedRun());
   const otherFloor = await openFloorSession(ws, 1, undefined, hostedRun());
-  await openTask(ws, 'work', { floor: 2 });
   const worker = await openSession(ws, 'f2t1', 'work on floor 2', { handle: 'claude:w' });
   const host = fakeHost({
-    windows: await windowsFor(target, second, gone, coordinator, otherFloor, worker),
+    windows: await windowsFor(gone, working, attending, second, coordinator, otherFloor, worker),
   });
 
   const nudges = await nudgeFloor(ws, 2, TEXT, {}, host);
   expect(nudges.map(({ session, outcome }) => [session, outcome])).toEqual([
-    [target.id, 'typed'],
-    [second.id, 'typed'],
+    [attending.id, 'typed'],
   ]);
-  expect(host.typed.map((request) => request.session)).toEqual([target.id, second.id]);
-  for (const request of host.typed) {
-    expect(request.text).toBe(TEXT);
-    expect(request.inputLine).toBe(claudeInputLine);
-  }
+  expect(host.typed.map((request) => request.session)).toEqual([attending.id]);
+  expect(host.typed[0]?.text).toBe(TEXT);
+  expect(host.typed[0]?.inputLine).toBe(claudeInputLine);
+
+  // With the attending closed, the next general session is the floor's attending.
+  await closeSession(ws, attending.id);
+  const next = await nudgeFloor(ws, 2, TEXT, {}, host);
+  expect(next.map(({ session }) => session)).toEqual([second.id]);
+});
+
+test('a hand-off to the ground floor is typed to the coordinator, its attending', async () => {
+  const coordinator = await openWorkspaceSession(ws, undefined, hostedRun());
+  const later = await openWorkspaceSession(ws, undefined, hostedRun());
+  const groundSession = await openFloorSession(ws, 0, undefined, hostedRun());
+  const host = fakeHost({ windows: await windowsFor(coordinator, later, groundSession) });
+  const nudges = await nudgeFloor(ws, 0, TEXT, {}, host);
+  expect(nudges.map(({ session, outcome }) => [session, outcome])).toEqual([
+    [coordinator.id, 'typed'],
+  ]);
+});
+
+test('a floor whose only sessions work tasks has no attending: the hand-off waits', async () => {
+  await openTask(ws, 'work', { floor: 2 });
+  const working = await openFloorSession(ws, 2, undefined, { ...hostedRun(), task: 'f2t1' });
+  const host = fakeHost({ windows: await windowsFor(working) });
+  expect(await nudgeFloor(ws, 2, TEXT, {}, host)).toEqual([]);
+  expect(host.typed).toEqual([]);
 });
 
 test('a floor with no open session is typed to by nobody: an empty answer, not a failure', async () => {
@@ -109,7 +133,7 @@ test('a floor with no open session is typed to by nobody: an empty answer, not a
   const host = fakeHost({ windows: await windowsFor(closed) });
   expect(await nudgeFloor(ws, 2, TEXT, {}, host)).toEqual([]);
   expect(host.typed).toEqual([]);
-  expect(floorSessions([], 2)).toEqual([]);
+  expect(floorSessions([], 2, 'test')).toEqual([]);
 });
 
 // -- every way it does not happen is an answer ----------------------------------
@@ -182,7 +206,7 @@ test('a host that cannot answer, or is not usable, is an answer too', async () =
   ]);
 });
 
-test('a session on another machine is never typed to from here', async () => {
+test("an attending on another machine is not this one's: the hand-off waits here", async () => {
   const session = await openFloorSession(ws, 2, undefined, hostedRun());
   const file = join(ws, 'projects/2-beta/sessions', `${session.id}.md`);
   await Bun.write(
@@ -190,9 +214,7 @@ test('a session on another machine is never typed to from here', async () => {
     (await Bun.file(file).text()).replace(/^machine: .*$/m, 'machine: elsewhere'),
   );
   const host = fakeHost({ windows: await windowsFor(session) });
-  expect(await nudgeFloor(ws, 2, TEXT, {}, host)).toEqual([
-    { session: session.id, outcome: 'unreachable', detail: 'it runs on elsewhere' },
-  ]);
+  expect(await nudgeFloor(ws, 2, TEXT, {}, host)).toEqual([]);
   expect(host.typed).toEqual([]);
 });
 
