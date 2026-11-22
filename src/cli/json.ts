@@ -40,6 +40,7 @@ import type { CreateReport } from '../workspace/create.ts';
 import type { DispatchReport, DispatchStanding } from '../workspace/dispatch.ts';
 import type { DoctorReport } from '../workspace/doctor.ts';
 import { type IdentityReport, identityOf } from '../workspace/floor-identity.ts';
+import type { FloorMoveReport } from '../workspace/floor-move.ts';
 import type { FloorNoteReport } from '../workspace/projects.ts';
 import type {
   ReflectionHint,
@@ -74,6 +75,7 @@ import type {
   ProjectListShape,
   ProjectNoteShape,
   ProjectOpenShape,
+  ProjectRenameShape,
   RepoAddShape,
   RepoListShape,
   RepoPathShape,
@@ -604,6 +606,33 @@ export function projectClaimJson(
       slug: task.slug,
       ...(task.floor === undefined ? {} : { floor: task.floor }),
     })),
+  };
+}
+
+/** `project rename` — the move, as the report carries it. */
+export function projectRenameJson(report: FloorMoveReport): ProjectRenameShape {
+  return {
+    floor: report.floor,
+    from: { ...report.from },
+    to: { ...report.to },
+    outcome: report.outcome,
+    records: [...report.records],
+    worktrees: report.worktrees.map((worktree) => ({
+      address: worktree.address,
+      branch: worktree.branch,
+      path: worktree.path,
+      outcome: worktree.outcome,
+      ...(worktree.from === undefined ? {} : { from: worktree.from }),
+      ...(worktree.reason === undefined ? {} : { reason: worktree.reason }),
+    })),
+    view: {
+      dir: report.view.dir,
+      retired: [...report.view.retired],
+      residue: report.view.residue.map((item) => ({ ...item })),
+    },
+    ...(report.hosts === undefined
+      ? {}
+      : { hosts: { renamed: [...report.hosts.renamed], failed: [...report.hosts.failed] } }),
   };
 }
 

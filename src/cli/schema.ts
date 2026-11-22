@@ -701,6 +701,41 @@ export const projectIdentityShape = z.strictObject({
 export type ProjectIdentityShape = z.infer<typeof projectIdentityShape>;
 
 /**
+ * `project rename` (design/0080-floor-rename/): where the floor stood and
+ * stands, the record files the journal commit rewrote, what became of each
+ * open task's worktree on this machine, the view, and the hosts renamed.
+ * `satisfied` says the floor already stood at that slug: nothing was
+ * committed, and the disk half was asked again.
+ */
+export const projectRenameShape = z.strictObject({
+  floor: z.number().int().nonnegative(),
+  from: z.strictObject({ slug: z.string(), dir: z.string() }),
+  to: z.strictObject({ slug: z.string(), dir: z.string() }),
+  outcome: z.enum(['moved', 'satisfied']),
+  records: z.array(z.string()),
+  worktrees: z.array(
+    z.strictObject({
+      address: z.string(),
+      branch: z.string(),
+      path: z.string(),
+      outcome: z.enum(['moved', 'linked', 'recorded', 'placed', 'left']),
+      from: z.string().optional(),
+      reason: z.string().optional(),
+    }),
+  ),
+  view: z.strictObject({
+    dir: z.string(),
+    retired: z.array(z.string()),
+    residue: z.array(
+      z.strictObject({ path: z.string(), reason: z.string(), command: z.string().optional() }),
+    ),
+  }),
+  /** Absent when no host is usable on this machine. */
+  hosts: z.strictObject({ renamed: z.array(z.string()), failed: z.array(z.string()) }).optional(),
+});
+export type ProjectRenameShape = z.infer<typeof projectRenameShape>;
+
+/**
  * `project note` (design/0055-floor-manifests/): the one bullet appended to a
  * floor's `notes.md`, and where. `seeded` says the file had to be created
  * first — a floor the backfill had not yet reached.
@@ -1465,6 +1500,7 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'project claim': projectClaimShape,
   'project release': projectClaimShape,
   'project identity': projectIdentityShape,
+  'project rename': projectRenameShape,
   'project note': projectNoteShape,
   'reflection open': reflectionOpenShape,
   'reflection record': reflectionRecordShape,

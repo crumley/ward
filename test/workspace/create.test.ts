@@ -7,25 +7,38 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { existsSync, lstatSync, mkdirSync, readlinkSync, rmSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import { convergeWorkspace } from '../../src/workspace/converge.ts';
+import { convergeWorkspace, type StepOutcome } from '../../src/workspace/converge.ts';
 import { createWorkspace } from '../../src/workspace/create.ts';
 import { git } from '../../src/workspace/git.ts';
 import { discoverWorkspace } from '../../src/workspace/layout.ts';
 import { findStandingProject, openProject } from '../../src/workspace/projects.ts';
 import { applyGitTestEnv, makeTempDir, removeDir } from '../helpers.ts';
 
-// The two layout-migration steps (design/0057-context-from-root/) close the
-// list; on a fresh workspace there is nothing to move and nothing to retire.
-const MIGRATION_STEPS = ['worktree placement', 'retire worktrees/'];
+// The layout-migration steps (design/0057-context-from-root/) and the steps
+// that finish a floor's move (design/0080-floor-rename/) close the list; on a
+// fresh workspace there is nothing to move and nothing to retire.
+const MIGRATION_STEPS = [
+  'worktree placement',
+  'outside worktree links',
+  'retire stale floor views',
+  'retire worktrees/',
+];
+// Nothing to fold on a fresh workspace either: the step that folds a floor
+// directory left without its record runs ahead of the standing project.
+const FOLD_STEP = 'orphaned floor directories';
+
+/** Every step established, except the fold and the migration tail: satisfied. */
+function freshOutcomes(steps: readonly { step: string }[]): StepOutcome[] {
+  return steps.map((step) =>
+    step.step === FOLD_STEP || MIGRATION_STEPS.includes(step.step) ? 'satisfied' : 'established',
+  );
+}
 
 test('a fresh create establishes every step and commits once', async () => {
   const report = await createWorkspace(root);
-  expect(report.steps.map((step) => step.outcome)).toEqual([
-    ...Array(18).fill('established'),
-    'satisfied',
-    'satisfied',
-  ]);
-  expect(report.steps.slice(-2).map((step) => step.step)).toEqual(MIGRATION_STEPS);
+  expect(report.steps).toHaveLength(23);
+  expect(report.steps.map((step) => step.outcome)).toEqual(freshOutcomes(report.steps));
+  expect(report.steps.slice(-4).map((step) => step.step)).toEqual(MIGRATION_STEPS);
   for (const file of [
     'workspace.md',
     'catalog.md',
@@ -45,7 +58,7 @@ test('a fresh create establishes every step and commits once', async () => {
 test('re-converging an existing workspace is satisfied throughout and changes nothing', async () => {
   await createWorkspace(root);
   const report = await convergeWorkspace(root);
-  expect(report.steps.map((step) => step.outcome)).toEqual(Array(19).fill('satisfied'));
+  expect(report.steps.map((step) => step.outcome)).toEqual(Array(22).fill('satisfied'));
   expect(commitCount()).toBe(1);
   expect(git(root, 'status', '--porcelain').stdout).toBe('');
 });
@@ -76,7 +89,9 @@ test('create still succeeds on an absent path and on an existing empty directory
   ] as const) {
     const report = await createWorkspace(path);
     expect(report.steps[0]).toMatchObject({ step: 'root directory', outcome: first });
-    expect(report.steps.slice(1, -2).every((step) => step.outcome === 'established')).toBe(true);
+    expect(report.steps.slice(1).map((step) => step.outcome)).toEqual(
+      freshOutcomes(report.steps.slice(1)),
+    );
     expect(existsSync(join(path, 'projects/0-workspace/project.md'))).toBe(true);
   }
 });
@@ -87,11 +102,8 @@ test('a run interrupted after the marker is finished by a converge, not by a sec
   mkdirSync(join(root, '.ward', 'tmp'), { recursive: true });
   expect(createWorkspace(root)).rejects.toThrow(/already a Ward workspace/);
   const report = await convergeWorkspace(root);
-  expect(report.steps.map((step) => step.outcome)).toEqual([
-    ...Array(17).fill('established'),
-    'satisfied',
-    'satisfied',
-  ]);
+  expect(report.steps).toHaveLength(22);
+  expect(report.steps.map((step) => step.outcome)).toEqual(freshOutcomes(report.steps));
   expect(existsSync(join(root, 'projects/0-workspace/project.md'))).toBe(true);
   expect(commitCount()).toBe(1);
   expect(git(root, 'status', '--porcelain').stdout).toBe('');

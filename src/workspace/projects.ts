@@ -308,6 +308,14 @@ export async function findStandingProject(root: string): Promise<FoundProject | 
 export async function readProjects(root: string): Promise<FoundProject[]> {
   const projects: FoundProject[] = [];
   for (const dir of projectDirs(root)) {
+    if (!existsSync(join(root, projectRecordType(dir).relPath))) {
+      // A directory without its record (design/0080-floor-rename/): named, with
+      // the act that settles it, rather than a bare missing-file error.
+      throw new WardError(
+        `${dir}/ holds no project.md — a write under a floor's old name, met by its rename; ` +
+          'ward workspace upgrade folds it into the floor holding its number (see: ward doctor)',
+      );
+    }
     projects.push({ dir, record: (await readDocument(root, projectRecordType(dir))).data });
   }
   // A stable sort over the directory order: a record on the number its

@@ -54,11 +54,18 @@ test('workspace create --json: the establishment report, one document alone on s
   expect(result.exitCode).toBe(0);
   const report = validated('workspace create', workspaceCreateShape, result.stdout);
   expect(report.root).toBe(ws);
-  expect(report.steps.length).toBe(20); // through 0066: views, placement, retirement, identities, format
-  // Nothing to move and nothing to retire on a fresh workspace: the two
-  // migration steps are the satisfied tail (design/0057-context-from-root/).
-  expect(report.steps.slice(0, -2).every((step) => step.outcome === 'established')).toBe(true);
-  expect(report.steps.slice(-2).map((step) => step.outcome)).toEqual(['satisfied', 'satisfied']);
+  expect(report.steps.length).toBe(23); // through 0080: the fold, outside links, stale views
+  // Nothing to fold, move or retire on a fresh workspace: the fold
+  // (design/0080-floor-rename/) and the four migration steps are satisfied
+  // (design/0057-context-from-root/), everything else established.
+  const satisfied = report.steps.filter((step) => step.outcome === 'satisfied').map((s) => s.step);
+  expect(satisfied).toEqual([
+    'orphaned floor directories',
+    'worktree placement',
+    'outside worktree links',
+    'retire stale floor views',
+    'retire worktrees/',
+  ]);
 });
 
 test('workspace upgrade --json: the converge steps ride the document, satisfied and legible', async () => {
@@ -72,7 +79,7 @@ test('workspace upgrade --json: the converge steps ride the document, satisfied 
   const report = validated('workspace upgrade', workspaceUpgradeShape, result.stdout);
   expect(report.vehicle).toBe('none'); // no default moved, so no vehicle
   expect(report.outcome).toBe('current');
-  expect(report.converged.length).toBe(19);
+  expect(report.converged.length).toBe(22);
   expect(report.converged.every((step) => step.outcome === 'satisfied')).toBe(true);
   expect(report.converged.map((step) => step.step)).toContain('standing project');
 });

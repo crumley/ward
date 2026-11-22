@@ -87,6 +87,12 @@ operated with the \`ward\` CLI and tracked in git.
   reused, and a chosen one counts: the next floor opened without \`--floor\` takes one past the
   highest number ever spent. Two machines that each open the same number before their records sync
   leave two floors on it: \`ward doctor\` reports it, naming each by its directory.
+- **A floor's number is its identity; its slug is a name it can change**: \`ward project rename
+  FLOOR SLUG\` moves its record and its view, its open tasks' worktrees, and its host's name to
+  the new slug in one commit, and every address stays as it was. It is refused while a session of
+  the floor or of its tasks is running or works inside what would move, so it is run from the
+  coordinator, never from the floor's own session. Other machines follow at their next
+  \`ward workspace upgrade\`.
 - Work is never committed to a repository's main line directly; changes travel through a worktree
   and a pull request.
 - When a main line moves under work in progress, \`ward worktree rebase\` replays the task's

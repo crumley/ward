@@ -88,6 +88,7 @@ import {
 } from '../workspace/dispatch.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
 import { type IdentityReport, setFloorIdentity } from '../workspace/floor-identity.ts';
+import { type FloorMoveReport, renameFloor } from '../workspace/floor-move.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
 import { closeCommand, rebaseCommand } from '../workspace/next.ts';
 import {
@@ -192,6 +193,7 @@ import {
   projectListJson,
   projectNoteJson,
   projectOpenJson,
+  projectRenameJson,
   reflectionOpenJson,
   reflectionPacketJson,
   reflectionRecordJson,
@@ -685,6 +687,18 @@ const project = command(
       }),
       {
         brief: message`Set a floor's color or emoji, and dress its host in them. With neither, re-dress the host.`,
+      },
+    ),
+    command(
+      'rename',
+      object({
+        action: constant('project-rename'),
+        floor: argument(floorNumber()),
+        slug: argument(string({ metavar: 'SLUG' })),
+        json: jsonFlag(),
+      }),
+      {
+        brief: message`Give a floor a new slug: its record, its view, its tasks' worktrees and its host follow. Its number and addresses stay.`,
       },
     ),
     command(
@@ -1392,6 +1406,19 @@ async function answer(invoked: Invocation): Promise<void> {
             break;
           }
           renderIdentity(report, hosts);
+          break;
+        }
+        case 'project-rename': {
+          const root = await requireMutableWorkspace();
+          const caller = declaredSession();
+          const report = await renameFloor(root, result.floor, result.slug, {
+            ...(caller === undefined ? {} : { caller }),
+          });
+          if (result.json) {
+            printJson(projectRenameJson(report));
+            break;
+          }
+          renderRename(report);
           break;
         }
         case 'project-note': {
@@ -2719,6 +2746,51 @@ function renderIdentity(report: IdentityReport, hosts: Dressed): void {
     );
   } else {
     console.log(pc.dim('no host is standing for this floor — the next one opens wearing it'));
+  }
+}
+
+function renderRename(report: FloorMoveReport): void {
+  const floor = pc.bold(String(report.floor));
+  console.log(
+    report.outcome === 'moved'
+      ? `${pc.green('renamed')} floor ${floor} — ${report.from.slug} → ${report.to.slug} ` +
+          pc.dim(`(${report.to.dir}/)`)
+      : pc.dim(`floor ${report.floor} is already ${report.to.slug} (${report.to.dir}/)`),
+  );
+  for (const worktree of report.worktrees) {
+    const at = `${worktree.address} ${worktree.branch}`;
+    switch (worktree.outcome) {
+      case 'moved':
+        console.log(`  ${pc.green('moved')}  ${at} → ${worktree.path}`);
+        break;
+      case 'linked':
+        console.log(`  ${pc.green('linked')}  ${at} ${pc.dim(`(outside: ${worktree.path})`)}`);
+        break;
+      case 'recorded':
+        console.log(
+          `  ${pc.dim('recorded')}  ${at} → ${worktree.path} ${pc.dim('(no checkout here)')}`,
+        );
+        break;
+      case 'placed':
+        break;
+      case 'left':
+        console.log(
+          `  ${pc.yellow('left')}  ${at} at ${worktree.path} — ${worktree.reason ?? ''} ` +
+            pc.dim('(then: ward workspace upgrade)'),
+        );
+        break;
+    }
+  }
+  for (const dir of report.view.retired) console.log(pc.dim(`retired ${dir}/`));
+  for (const item of report.view.residue) {
+    console.log(pc.yellow(`kept ${item.path} — ${item.reason}`));
+  }
+  for (const line of report.hosts?.renamed ?? []) console.log(pc.dim(line));
+  for (const line of report.hosts?.failed ?? []) {
+    console.log(pc.yellow(`could not rename a host (${line}) — it is renamed at the next attach`));
+  }
+  if (report.outcome === 'moved') {
+    console.log(pc.dim('other machines follow at their next pull: ward workspace upgrade there'));
   }
 }
 

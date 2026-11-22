@@ -63,6 +63,7 @@ import { checkoutLabel, resolveCheckout, unboundMessage } from './checkouts.ts';
 import { type CommandKind, unknownPlaceholders } from './commands.ts';
 import { identityClashes } from './floor-identity.ts';
 import { carriesManifest, floorManifestPaths } from './floor-manifest.ts';
+import { orphanFloorDirs, staleViews } from './floor-move.ts';
 import { carriesView, floorViewDir, floorViewGaps } from './floor-views.ts';
 import { git, gitAvailable, gitIdentityConfigured, hasCommits } from './git.ts';
 import {
@@ -693,6 +694,8 @@ async function workspaceChecks(
   findings.push(...(await floorIdentityFindings(root)));
   findings.push(...(await floorManifestFindings(root)));
   findings.push(...(await floorViewFindings(root)));
+  findings.push(...(await orphanFloorFindings(root)));
+  findings.push(...(await staleViewFindings(root)));
   findings.push(...(await briefFindings(root)));
 
   // The agent configuration, resolved from the record just validated above
@@ -1131,6 +1134,60 @@ async function floorViewFindings(root: string): Promise<Finding[]> {
       message: `${floors.length} open floor${floors.length === 1 ? '' : 's'} viewed under floors/`,
     },
   ];
+}
+
+/**
+ * Floor directories with no project record (design/0080-floor-rename/): a
+ * write under a floor's old name, made on another machine before its rename
+ * reached it. Every reader of the floors stops at one, so it is a `warn` with
+ * the act that settles it: the upgrade folds it into the floor holding its
+ * number, or — with no single floor on that number — it is the human's.
+ */
+async function orphanFloorFindings(root: string): Promise<Finding[]> {
+  const check = 'floor records';
+  return (await orphanFloorDirs(root)).map((orphan) => ({
+    check,
+    severity: 'warn' as const,
+    message:
+      orphan.into === undefined
+        ? `${orphan.dir}/ holds no project.md, and no single floor stands on its number to ` +
+          'fold it into — give it its record back, or move what it holds onto a floor by hand'
+        : `${orphan.dir}/ holds no project.md — a write under floor ${orphan.floor}'s old name; ` +
+          `fold it into ${orphan.into}/: ward workspace upgrade`,
+  }));
+}
+
+/**
+ * Directories under `floors/` that are no open floor's view
+ * (design/0080-floor-rename/): what a rename leaves behind on a machine that
+ * has not yet converged. Only Ward's links in it is `info` — the upgrade
+ * retires it; anything else is a `warn` naming each thing, since the upgrade
+ * keeps the view while it holds what may be someone's only copy of some work.
+ * Silent when every view matches an open floor.
+ */
+async function staleViewFindings(root: string): Promise<Finding[]> {
+  const check = 'stale floor views';
+  let views: Awaited<ReturnType<typeof staleViews>>;
+  try {
+    views = await staleViews(root);
+  } catch {
+    return []; // an unreadable floor record is reported above
+  }
+  return views.map((view) =>
+    view.others.length === 0
+      ? {
+          check,
+          severity: 'info' as const,
+          message: `${view.dir}/ matches no open floor and holds only Ward's links — retire it: ward workspace upgrade`,
+        }
+      : {
+          check,
+          severity: 'warn' as const,
+          message:
+            `${view.dir}/ matches no open floor, and holds what is not Ward's: ` +
+            `${view.others.join(', ')} — move or remove each, then: ward workspace upgrade`,
+        },
+  );
 }
 
 /**

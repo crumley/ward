@@ -131,7 +131,7 @@ export function inspectOutsideLink(root: string, placement: string, target: stri
 }
 
 /** Put the link in place where the placement is free; anything already there is left alone. */
-function establishOutsideLink(root: string, placement: string, target: string): void {
+export function establishOutsideLink(root: string, placement: string, target: string): void {
   if (inspectOutsideLink(root, placement, target) !== 'absent') return;
   symlinkSync(target, join(root, placement));
 }

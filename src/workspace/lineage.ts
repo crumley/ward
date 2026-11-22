@@ -382,9 +382,15 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: 'b87ca192617b4425f141721c6adee31b4fbf8233b6dc0f24aed9b2586971ca9c',
         era: 'design 0077 (a floor at a chosen number)',
       },
-      // Current since design 0078: a floor's session names the task it is
-      // working (`--task`, `ward session task`), a task's window is its full
-      // address in every host, and the harness run wears the same name.
+      // design 0078 — a floor's session names the task it is working
+      // (`--task`, `ward session task`), a task's window is its full address
+      // in every host, and the harness run wears the same name.
+      {
+        sha256: '94cc3a5c8dd86cc66a634e8baaea7eb0fe02359c80bff716a6da085168e403a5',
+        era: 'design 0078 (task-named windows)',
+      },
+      // Current since design 0080: `ward project rename FLOOR SLUG` gives a
+      // floor a new slug; its number and every address stay.
     ],
   },
 ];
