@@ -414,7 +414,13 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: 'b124fbe897b86da72a917af075279f3d72bb80c3f1afe5fa1b5b0363ac2bbaeb',
         era: 'design 0086 (the coordinator stays home)',
       },
-      // Current since design 0081: a floor can be renumbered, once.
+      // design 0081 — a floor can be renumbered, once.
+      {
+        sha256: '3d4142d5dd26e5da864fbaeac357edc5be25b398797da1c17593addf5cd50dca',
+        era: 'design 0081 (floor renumber)',
+      },
+      // Current since design 0084: a conversation is moved to another floor
+      // with ward session move, and one handle is one open session.
     ],
   },
 ];

@@ -31,6 +31,7 @@ import {
   doctorShape,
   type SessionMutationShape,
   type SessionResumeAllShape,
+  sessionMoveShape,
   sessionMutationShape,
   sessionResumeAllShape,
 } from '../../src/cli/schema.ts';
@@ -1198,6 +1199,45 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     // …and the run is resumed under the task it works now.
     expect(startCommands(f1)[0]).toContain('f1t2 next-thing');
     expect(startCommands(f1)[0]).toContain('--resume');
+  });
+
+  test('a session moved to another floor: its window ends in the old host and its run resumes in the new one, under the task it works', async () => {
+    // design/0084-session-move/
+    await openProject(ws, 'alpha');
+    await openProject(ws, 'beta');
+    await openTask(ws, 'land-it', { floor: 2 });
+    const old = session(ward(['session', 'open', '--floor', '1', '--detach', '--json']));
+    fabricateTranscript(old.handle?.replace('claude:', '') ?? '');
+    expect(await runsSoon(1)).toHaveLength(1);
+    const f1 = `${name}-f1-alpha`;
+    const f2 = `${name}-f2-beta`;
+    expect(windowsIn(f1)).toEqual([old.id]);
+
+    const moved = sessionMoveShape.parse(
+      JSON.parse(
+        ward(['session', 'move', old.id, '--floor', '2', '--task', 'f2t1', '--json']).stdout,
+      ),
+    );
+    expect(moved.from).toMatchObject({ id: old.id, state: 'closed' });
+    expect(moved.from.teardown?.outcome).toBe('closed');
+    expect(moved.to).toMatchObject({ floor: 2, handle: old.handle, continues: old.id });
+    expect(moved.hosted?.group).toBe(f2);
+    expect(moved.next).toBeUndefined();
+    // The old host held only the old window, so tmux ended it with it.
+    expect(hostsOf(await workspaceId(ws)).map((host) => host.name)).toEqual([f2]);
+    expect(windowsIn(f2)).toEqual([moved.to.id]);
+    expect(windowNames(f2)).toEqual(['f2t1 land-it']);
+    // The same conversation, resumed — not a fresh one started.
+    expect(startCommands(f2)[0]).toContain(`--resume ${old.handle?.replace('claude:', '')}`);
+    expect(eventsOf(moved.to.id)).toEqual(['opened', 'task-named', 'resumed']);
+    expect(await runsSoon(2)).toEqual([
+      `agent=${old.id} seen=yes`,
+      `agent=${moved.to.id} seen=yes`,
+    ]);
+    // After a reboot only the continuation comes back.
+    killServer(SOCKET);
+    const plan = bulk(ward(['session', 'resume', '--all', '--json']));
+    expect(plan.sessions.map((s) => [s.id, s.step])).toEqual([[moved.to.id, 'resume']]);
   });
 
   test('a topic session in one step: --new-task --detach stands in a window named for the task it opened', async () => {

@@ -97,6 +97,26 @@ export const FORMAT_LEVELS: readonly FormatLevel[] = [
         (event) => event.event === 'task-named' || event.event === 'task-cleared',
       ),
   },
+  {
+    level: 4,
+    entry: '0084-session-move',
+    introduces:
+      "a session moved to another scope: the closed record's `continued` event and its " +
+      "successor's `continues`, one conversation carried from one record to the next",
+    older:
+      'a ward that reads only format 3 refuses this workspace until it is updated; a ward from ' +
+      'before the guard (design 0066) is not stopped, and fails on a moved session record ' +
+      'wherever it lists sessions, and drops `continues` from any session it rewrites — ' +
+      'update ward on every machine that shares this workspace',
+    needs: (type, data) => {
+      if (type !== 'session') return false;
+      const session = data as { continues?: unknown; events?: { event?: unknown }[] };
+      return (
+        session.continues !== undefined ||
+        (session.events ?? []).some((event) => event.event === 'continued')
+      );
+    },
+  },
 ];
 
 /** The highest level this Ward reads and writes. */

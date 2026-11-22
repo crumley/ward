@@ -156,7 +156,10 @@ interface Ids {
 
 async function everyScope(): Promise<Ids> {
   return {
-    workspace: sessionOf(await ward(['session', 'open', ...RECORDED])).id,
+    // A run of its own: one handle is one open session (design/0084-session-move/).
+    workspace: sessionOf(
+      await ward(['session', 'open', '--handle', 'claude:ws', '--purpose', 'p', '--json']),
+    ).id,
     floor: sessionOf(await ward(['session', 'open', '--floor', '1', ...RECORDED])).id,
     task: sessionOf(await ward(['session', 'open', 'f1t1', ...RECORDED])).id,
   };

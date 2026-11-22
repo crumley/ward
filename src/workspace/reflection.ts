@@ -42,7 +42,7 @@ import {
   resolveProject,
 } from './projects.ts';
 import { commitRecords, type FoundTask, readTasks, resolvableAddress } from './scan.ts';
-import { findSession, readSessions } from './sessions.ts';
+import { continuedBy, findSession, readSessions } from './sessions.ts';
 import { refuseStewardshipCopy, resolveWorkspaceMainLine } from './steward.ts';
 import { openTask } from './tasks.ts';
 import { createWorkspaceWorktree, readTaskWorktrees, worktreeDir } from './worktrees.ts';
@@ -312,6 +312,14 @@ export interface PacketSession {
   readonly openedAt: string;
   readonly closedAt?: string;
   readonly events: readonly SessionEvent[];
+  /**
+   * The pair a move made (design/0084-session-move/): the session this one
+   * continues, and the one that continues it. Both share one harness history,
+   * so a reader takes from it only the stretch between this record's open and
+   * its close.
+   */
+  readonly continues?: string;
+  readonly continuedBy?: string;
   readonly history: PacketHistory;
 }
 
@@ -479,6 +487,7 @@ function packetTaskFacts(dir: string, record: TaskRecord): Omit<PacketTask, 'ses
 }
 
 function packetSession(root: string, record: SessionRecord, machine: string): PacketSession {
+  const successor = continuedBy(record);
   return {
     id: record.id,
     purpose: record.purpose,
@@ -487,6 +496,8 @@ function packetSession(root: string, record: SessionRecord, machine: string): Pa
     openedAt: record.openedAt,
     ...(record.closedAt === undefined ? {} : { closedAt: record.closedAt }),
     events: record.events ?? [],
+    ...(record.continues === undefined ? {} : { continues: record.continues }),
+    ...(successor === undefined ? {} : { continuedBy: successor }),
     history: historyOf(root, record, machine),
   };
 }

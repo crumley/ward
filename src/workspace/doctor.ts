@@ -76,7 +76,7 @@ import {
 import { findStandingProject, GROUND_FLOOR, readProjects } from './projects.ts';
 import { listRepositoryNames, remoteKey } from './repos.ts';
 import { dirFloor, type FoundTask, projectDirs, readTasks } from './scan.ts';
-import { readOpenSessions } from './sessions.ts';
+import { readOpenSessions, sharedHandles } from './sessions.ts';
 import {
   absentBecause,
   inspectOutsideLink,
@@ -736,6 +736,7 @@ async function workspaceChecks(
   findings.push(await standingProjectFinding(root));
   findings.push(...(await legacyBareTaskFinding(root)));
   findings.push(...(await roomCollisionFindings(root)));
+  findings.push(...(await sharedHandleFindings(root)));
   findings.push(...(await floorCollisionFindings(root)));
   findings.push(...(await claimFindings(root)));
   findings.push(...(await floorIdentityFindings(root)));
@@ -1366,6 +1367,35 @@ async function roomCollisionFindings(root: string): Promise<Finding[]> {
           `(ward task show ${named[0]}); the room clears when all but one close`,
       };
     });
+  } catch (error) {
+    if (!(error instanceof WardError)) throw error;
+    return [{ check, severity: 'error', message: error.message }];
+  }
+}
+
+/**
+ * One conversation held by two open records (design/0084-session-move/): two
+ * open workspace- or floor-scope sessions carrying the same harness handle,
+ * which `ward session resume --all` would bring back as two runs of one
+ * conversation. Ward's own verbs no longer make one — `session open --handle`
+ * refuses a held handle, and `session move` closes the old record in the
+ * commit that opens the new — but a record written by an older Ward, or by two
+ * machines, can. Warn, and name the records and both remedies; nothing is
+ * closed on the session's behalf. Task sessions sharing their conversation's
+ * handle are not counted: an agent records each task it works from one run.
+ */
+async function sharedHandleFindings(root: string): Promise<Finding[]> {
+  const check = 'shared handles';
+  try {
+    return sharedHandles(await readOpenSessions(root)).map(({ handle, ids }) => ({
+      check,
+      severity: 'warn' as const,
+      message:
+        `handle ${handle} is held by ${ids.length} open sessions: ${ids.join(', ')} — one ` +
+        'conversation recorded twice, which resume --all would start twice. Keep the one ' +
+        `that belongs and close the rest (ward session close ${ids[0]}), or carry one to ` +
+        `another floor with: ward session move ${ids[0]} --floor N`,
+    }));
   } catch (error) {
     if (!(error instanceof WardError)) throw error;
     return [{ check, severity: 'error', message: error.message }];

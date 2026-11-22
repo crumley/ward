@@ -184,6 +184,26 @@ test('a session that names a task needs format 3; one that never did needs nothi
   expect(levelNeededBy('task', { events: [{ event: 'task-named' }] })).toBe(0);
 });
 
+test('a moved session needs format 4, on either side of the move', () => {
+  // design/0084-session-move/ — an older Ward rejects the `continued` event
+  // and strips `continues` from a record it rewrites.
+  const opened = { event: 'opened', at: 't' };
+  const closed = { event: 'closed', at: 't' };
+  expect(
+    levelNeededBy('session', {
+      events: [opened, { event: 'continued', at: 't', session: 'f2-1@m' }, closed],
+    }),
+  ).toBe(4);
+  expect(levelNeededBy('session', { continues: 'f1-1@m', events: [opened] })).toBe(4);
+  expect(
+    levelNeededBy('session', {
+      continues: 'f1-1@m',
+      events: [opened, { event: 'task-named', task: 'f2t1-x' }],
+    }),
+  ).toBe(4);
+  expect(levelNeededBy('session', { events: [opened, closed] })).toBe(0);
+});
+
 test('levelsCrossed names each level a raise passes, lowest first', () => {
   expect(levelsCrossed(0, 3, FUTURE).map((entry) => entry.level)).toEqual([1, 2, 3]);
   expect(levelsCrossed(2, 3, FUTURE).map((entry) => entry.level)).toEqual([3]);

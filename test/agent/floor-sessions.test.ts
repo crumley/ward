@@ -148,17 +148,20 @@ test('inside a harness run, a floor or workspace open with no --handle still lau
 });
 
 test('inside a harness run, --handle records only, at floor and workspace scope', async () => {
-  const ambient = { CLAUDE_CODE_SESSION_ID: RUN_ID };
-  for (const args of [['--floor', '1'], []]) {
-    const result = ward(['session', 'open', ...args, '--handle', `claude:${RUN_ID}`, '--json'], {
-      env: ambient,
+  // Two runs, since one handle is one open session (design/0084-session-move/).
+  for (const [args, run] of [
+    [['--floor', '1'], RUN_ID],
+    [[], '7c9e6679-7425-40de-944b-e07fc1f90ae7'],
+  ] as const) {
+    const result = ward(['session', 'open', ...args, '--handle', `claude:${run}`, '--json'], {
+      env: { CLAUDE_CODE_SESSION_ID: run },
     });
     expect(result.exitCode).toBe(0);
-    expect(sessionMutationShape.parse(JSON.parse(result.stdout)).handle).toBe(`claude:${RUN_ID}`);
+    expect(sessionMutationShape.parse(JSON.parse(result.stdout)).handle).toBe(`claude:${run}`);
   }
   // --handle names the run, whichever it is — not the ambient one by default.
   const named = ward(['session', 'open', '--floor', '1', '--handle', 'pi:abc', '--json'], {
-    env: ambient,
+    env: { CLAUDE_CODE_SESSION_ID: RUN_ID },
   });
   expect(sessionMutationShape.parse(JSON.parse(named.stdout)).handle).toBe('pi:abc');
   expect(runs()).toEqual([]);
@@ -240,11 +243,20 @@ test('show, locate, resume, close: one floor session through every verb, with --
 
 test('floor ids climb per floor and never repeat', async () => {
   for (const purpose of ['one', 'two']) {
-    ward(['session', 'open', '--floor', '1', '--purpose', purpose, '--handle', 'claude:x']);
+    ward([
+      'session',
+      'open',
+      '--floor',
+      '1',
+      '--purpose',
+      purpose,
+      '--handle',
+      `claude:${purpose}`,
+    ]);
   }
   ward(['session', 'close', 'f1-1@test']);
-  ward(['session', 'open', '--floor', '1', '--purpose', 'three', '--handle', 'claude:x']);
-  ward(['session', 'open', '--floor', '0', '--purpose', 'ground', '--handle', 'claude:x']);
+  ward(['session', 'open', '--floor', '1', '--purpose', 'three', '--handle', 'claude:three']);
+  ward(['session', 'open', '--floor', '0', '--purpose', 'ground', '--handle', 'claude:ground']);
   expect((await readSessions(ws, FLOOR_DIR)).map((record) => record.id)).toEqual([
     'f1-1@test',
     'f1-2@test',

@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { WardError } from '../errors.ts';
 import { readMachine } from '../global/machine.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
+import { requireFormatFor } from '../store/format.ts';
 import { withStoreLock } from '../store/lock.ts';
 import {
   type HostedKind,
@@ -414,9 +415,12 @@ export async function requireOpenSession(root: string, id: string): Promise<Open
   const closed = matches.at(-1)?.record;
   if (closed !== undefined) {
     const when = closed.closedAt === undefined ? '' : ` at ${closed.closedAt}`;
+    const successor = continuedBy(closed);
     throw new WardError(
       `session '${id}' is already closed${when} — closed stays closed; ` +
-        `its record: ward session show ${id}`,
+        (successor === undefined
+          ? `its record: ward session show ${id}`
+          : `its conversation continues as ${successor}: ward session show ${successor}`),
     );
   }
   throw new WardError(`no session has id '${id}' — ids are bare; see: ward status`);
@@ -551,6 +555,226 @@ async function floorTask(root: string, floor: number, address: string): Promise<
   return task;
 }
 
+// -- one conversation, one open record (design/0084-session-move/) --------------
+
+/**
+ * Whether a session is one a run is resumed into: a workspace or floor
+ * session. A task session may share its conversation's handle — an agent
+ * records each task episode it works from inside one run, and a task session
+ * is never hosted, so nothing resumes it in bulk — and is outside the rule.
+ */
+function holdsConversation(record: SessionRecord): boolean {
+  return record.state === 'open' && sessionScopeOf(record) !== 'task';
+}
+
+/**
+ * The open workspace- and floor-scope sessions that hold one handle between
+ * them, by handle — each entry a violation of the one-open-record-per-handle
+ * rule, which `ward session resume --all` would turn into two runs of one
+ * conversation. Ward's own writes never make one; a record written by an
+ * older Ward, or two machines each recording the same handle, can.
+ */
+export function sharedHandles(
+  sessions: readonly OpenSessionListing[],
+): { readonly handle: string; readonly ids: readonly string[] }[] {
+  const byHandle = new Map<string, string[]>();
+  for (const { record } of sessions) {
+    if (!holdsConversation(record) || record.handle === undefined) continue;
+    byHandle.set(record.handle, [...(byHandle.get(record.handle) ?? []), record.id]);
+  }
+  return [...byHandle.entries()]
+    .filter(([, ids]) => ids.length > 1)
+    .map(([handle, ids]) => ({ handle, ids }));
+}
+
+/**
+ * Refuse to record a workspace or floor session over a handle another open
+ * one already holds: two open records of one conversation are resumed into
+ * two runs of it. The refusal names the holder and the verb that carries a
+ * conversation to another floor, which is what such a second record is
+ * usually reaching for.
+ */
+function requireUnheldHandle(
+  sessions: readonly OpenSessionListing[],
+  handle: string | undefined,
+): void {
+  if (handle === undefined) return;
+  const holder = sessions.find(
+    ({ record }) => holdsConversation(record) && record.handle === handle,
+  )?.record;
+  if (holder === undefined) return;
+  throw new WardError(
+    `handle ${handle} is already held by open session ${holder.id} (${describeScope(holder)}) ` +
+      '— one conversation is one open session, or resuming would start it twice. To carry it ' +
+      `to another floor: ward session move ${holder.id} --floor N; to end that record first: ` +
+      `ward session close ${holder.id}`,
+  );
+}
+
+/** The session that continues a closed one — named on its `continued` event. */
+export function continuedBy(record: SessionRecord): string | undefined {
+  return record.events?.find((event) => event.event === 'continued')?.session;
+}
+
+/** Where a continuation stands: the workspace itself, or a floor (and a task of it). */
+export type ContinuationScope =
+  | { readonly scope: 'workspace' }
+  | { readonly scope: 'project'; readonly floor: number; readonly task?: string | undefined };
+
+export interface ContinueOptions {
+  /** The new record's purpose; the old one's when absent (a default is restated for the new scope). */
+  readonly purpose?: string | undefined;
+}
+
+/** The two records a continuation wrote, in the one commit. */
+export interface Continuation {
+  readonly from: OpenSessionListing;
+  readonly to: OpenSessionListing;
+}
+
+/**
+ * Carry an open session's conversation to another scope
+ * (design/0084-session-move/): close its record with a `continued` event
+ * naming the successor, and open the successor at the new scope with the same
+ * handle, working directory, model and effort, `continues` naming the old id —
+ * both records in ONE journal commit, so no reader ever sees the handle held
+ * twice or not at all. Ids stay permanent and each scope's log stays true: the
+ * episode on the old scope ended, one on the new scope began. Nothing is
+ * started or ended here; the run's half is src/agent/move.ts's.
+ *
+ * The successor records no `parent`: it was not started by a run but carries
+ * one on, so who opened the conversation is read through `continues` — and a
+ * parent would pull its window back to the parent's floor (placement), which
+ * is the opposite of a move.
+ */
+export async function continueSession(
+  root: string,
+  id: string,
+  target: ContinuationScope,
+  options: ContinueOptions = {},
+): Promise<Continuation> {
+  return withStoreLock(root, `session move ${id}`, async () => {
+    const open = await requireOpenSession(root, id);
+    const { record } = open;
+    const from = describeScope(record);
+    if (sessionScopeOf(record) === 'task') {
+      throw new WardError(
+        `session ${id} is at ${from} — a task-scope session is moved by moving its task, not by ` +
+          'this verb',
+      );
+    }
+    if (record.handle === undefined) {
+      throw new WardError(
+        `session ${id} records no harness handle, so there is no conversation to carry — close ` +
+          'it, and open a session where the work belongs',
+      );
+    }
+    const machine = (await readMachine()).name;
+    if (record.machine !== undefined && record.machine !== machine) {
+      throw new WardError(
+        `session ${id} ran on ${record.machine}, and this is ${machine} — move it on ` +
+          `${record.machine}, where its run and its window are`,
+      );
+    }
+    const at = await continuationScope(root, record, target);
+    const successor = await allocateId(root, at.slug, machine);
+    const now = new Date().toISOString();
+    const closed = withEvent(
+      withEvent(
+        { ...record, state: 'closed', closedAt: now },
+        { event: 'continued', at: now, session: successor },
+      ),
+      { event: 'closed', at: now },
+    );
+    const opened = openedRecord(
+      {
+        id: successor,
+        scope: at.scope,
+        ...(at.floor === undefined ? {} : { floor: at.floor }),
+        ...(at.named === undefined ? {} : { named: at.named }),
+        machine,
+        purpose: options.purpose ?? restatedPurpose(record),
+        workingDirectory: record.workingDirectory,
+        handle: record.handle,
+        ...(record.model === undefined ? {} : { model: record.model }),
+        ...(record.effort === undefined ? {} : { effort: record.effort }),
+        continues: id,
+        subject: '',
+      },
+      undefined,
+      now,
+    );
+    // Both shapes need the same level; asked before either is written, so a
+    // workspace below it is refused with nothing on disk.
+    requireFormatFor(root, 'session', closed);
+    await writeSession(root, open.scopeDir, closed);
+    await writeSession(root, at.dir, opened);
+    commitRecords(
+      root,
+      `Move session ${id} to ${describeScope(opened)} as ${successor}`,
+      sessionRecordType(open.scopeDir, id).relPath,
+      sessionRecordType(at.dir, successor).relPath,
+    );
+    return {
+      from: { scopeDir: open.scopeDir, record: closed },
+      to: { scopeDir: at.dir, record: opened },
+    };
+  });
+}
+
+/** The scope a continuation opens at, checked: where it lives, its id slug, its fields. */
+async function continuationScope(
+  root: string,
+  record: SessionRecord,
+  target: ContinuationScope,
+): Promise<{
+  readonly scope: 'workspace' | 'project';
+  readonly dir: string;
+  readonly slug: string;
+  readonly floor?: number;
+  readonly named?: string;
+}> {
+  if (target.scope === 'workspace') {
+    if (sessionScopeOf(record) === 'workspace') {
+      throw new WardError(`session ${record.id} is already at workspace scope — nothing to move`);
+    }
+    return { scope: 'workspace', dir: WORKSPACE_SCOPE_DIR, slug: WORKSPACE_SESSION_SLUG };
+  }
+  const { floor } = target;
+  if (sessionScopeOf(record) === 'project' && record.floor === floor) {
+    throw new WardError(
+      `session ${record.id} is already floor ${floor}'s — to work another of its tasks: ` +
+        `ward session task ${record.id} ADDRESS`,
+    );
+  }
+  const project = await resolveProject(root, floor);
+  if (project.record.state === 'closed') {
+    throw new WardError(`project on floor ${floor} is closed — a session cannot move onto it`);
+  }
+  const named = target.task === undefined ? undefined : await floorTask(root, floor, target.task);
+  return {
+    scope: 'project',
+    dir: project.dir,
+    slug: floorSessionSlug(floor),
+    floor,
+    ...(named === undefined ? {} : { named: qualifiedAddress(named) }),
+  };
+}
+
+/**
+ * The purpose a continuation carries: the old record's — unless that is the
+ * one Ward stated for its kind of session ("Coordinating floor 7 · opened
+ * …"), which would be false at the new scope. Left undefined then, so the
+ * open states the new scope's own.
+ */
+function restatedPurpose(record: SessionRecord): string | undefined {
+  const stated =
+    record.floor === undefined
+      ? defaultWorkspaceSessionPurpose(record.openedAt)
+      : defaultFloorSessionPurpose(record.floor, record.openedAt);
+  return record.purpose === stated ? undefined : record.purpose;
+}
+
 function sessionsDir(scopeDir: string): string {
   return scopeDir === '' ? 'sessions' : `${scopeDir}/sessions`;
 }
@@ -631,6 +855,8 @@ interface OpenedFields {
   /** The caller's declared session, not yet checked against the store. */
   readonly startedBy?: string;
   readonly host?: HostedKind;
+  /** The session a continuation carries on from (design/0084-session-move/). */
+  readonly continues?: string;
   readonly withinLock?: (opened: OpenSessionListing) => Promise<void>;
   readonly subject: string;
 }
@@ -676,12 +902,26 @@ async function writeOpened(
   scopeDir: string,
   fields: OpenedFields,
 ): Promise<SessionRecord> {
+  const sessions = await readAllSessions(root);
+  if (fields.scope !== 'task') requireUnheldHandle(sessions, fields.handle);
   const parent =
     fields.startedBy === undefined
       ? undefined
-      : parentOf(await readAllSessions(root), fields.startedBy, fields.handle);
-  const openedAt = new Date().toISOString();
-  const record: SessionRecord = {
+      : parentOf(sessions, fields.startedBy, fields.handle);
+  const record = openedRecord(fields, parent, new Date().toISOString());
+  await writeSession(root, scopeDir, record);
+  commitRecords(root, fields.subject, sessionRecordType(scopeDir, fields.id).relPath);
+  await fields.withinLock?.({ scopeDir, record });
+  return record;
+}
+
+/** The record an open writes, with its `opened` event (and a `task-named` beside it). */
+function openedRecord(
+  fields: OpenedFields,
+  parent: string | undefined,
+  openedAt: string,
+): SessionRecord {
+  return {
     type: 'session',
     id: fields.id,
     scope: fields.scope,
@@ -698,6 +938,7 @@ async function writeOpened(
     ...(fields.model === undefined ? {} : { model: fields.model }),
     ...(fields.effort === undefined ? {} : { effort: fields.effort }),
     ...(parent === undefined ? {} : { parent }),
+    ...(fields.continues === undefined ? {} : { continues: fields.continues }),
     state: 'open',
     events: [
       {
@@ -711,10 +952,6 @@ async function writeOpened(
     ],
     openedAt,
   };
-  await writeSession(root, scopeDir, record);
-  commitRecords(root, fields.subject, sessionRecordType(scopeDir, fields.id).relPath);
-  await fields.withinLock?.({ scopeDir, record });
-  return record;
 }
 
 /** Write a session record with the body its scope gives it — no commit: the caller's. */
