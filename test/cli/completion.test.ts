@@ -108,9 +108,12 @@ test('`task list` filters complete: every state, registered repos, every floor',
   expect(await offers(['task', 'list', '--repo', ''])).toEqual([
     { text: 'demo', description: 'main' },
   ]);
+  // Both spellings of each floor (design/0088-floor-by-slug/), each cueing the other.
   expect(await offers(['task', 'list', '--floor', ''])).toEqual([
     { text: String(GROUND_FLOOR), description: 'workspace' },
+    { text: 'workspace', description: `floor ${GROUND_FLOOR}` },
   ]);
+  expect(await words(['task', 'list', '--floor', 'w'])).toEqual(['workspace']);
 });
 
 test('`session close|resume ID` complete to OPEN session ids — closed stays closed', async () => {
