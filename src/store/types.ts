@@ -144,13 +144,16 @@ export const projectSchema = z
      */
     standing: z.literal(true).optional(),
     /**
-     * The floor this project stood on before it was relocated to the ground
-     * floor (design/0041-ground-floor/). Written only by the converge step
-     * that moves a pre-0041 standing project down to floor 0, and read only
-     * by the allocator: floor numbers are monotonic and never reused
+     * The floor this project stood on before it moved: to the ground floor
+     * (design/0041-ground-floor/), written by the converge step that moves a
+     * pre-0041 standing project down to floor 0, or to the number a renumber
+     * gave it (design/0081-floor-renumber/), which is why a floor is
+     * renumbered once. Floor numbers are never reused
      * (intent/01-concepts/00-domain-model.md, Identity), so the number the
      * project vacated has to stay retired, and the record is the only place
-     * that can still say it once the directory is gone.
+     * that can still say it once the directory is gone. Read by the
+     * allocator, and by the name refresh that restamps a host still stamped
+     * with the old number.
      */
     previousFloor: z.number().int().positive().optional(),
     /**

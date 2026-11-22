@@ -221,6 +221,15 @@ export interface Renamed {
   readonly themed: readonly { readonly group: string; readonly views: readonly string[] }[];
 }
 
+/**
+ * What giving a group another floor number came to
+ * (design/0081-floor-renumber/): the stamp now says the floor's new number, or
+ * why it does not.
+ */
+export type RestampResult =
+  | { readonly outcome: 'restamped' }
+  | { readonly outcome: 'failed'; readonly reason: string };
+
 /** A per-client view: a host-side object that exists while one client looks through it. */
 export interface View {
   readonly name: string;
@@ -349,6 +358,14 @@ export interface SessionHost {
    * throws: what it could not do is in the answer.
    */
   rename(request: RenameRequest): Renamed;
+  /**
+   * Stamp a standing group with another floor number, in place — its windows,
+   * clients and name stay (the next `rename` names it for its floor). For a
+   * floor that was renumbered (design/0081-floor-renumber/): a group is found
+   * by its stamp, so one still stamped with the old number would be found by
+   * nothing. Never throws.
+   */
+  restamp(group: string, floor: number): RestampResult;
   /**
    * Make a view for one client: for `attach`, a view of the whole group with
    * `window` current in it, so attaching never moves another client's current

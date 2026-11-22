@@ -13,6 +13,7 @@ import type {
   PlaceRequest,
   Renamed,
   RenameRequest,
+  RestampResult,
   SessionHost,
   TypeRequest,
   TypeResult,
@@ -26,6 +27,8 @@ export interface FakeHost extends SessionHost {
   readonly views: ViewRequest[];
   readonly entered: View[];
   readonly renames: RenameRequest[];
+  /** Every restamp asked: the group by name, and the floor it was stamped with. */
+  readonly restamps: { group: string; floor: number }[];
   readonly typed: TypeRequest[];
   readonly finds: number;
 }
@@ -52,6 +55,15 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
   const entered: View[] = [];
   const renames: RenameRequest[] = [];
   const typed: TypeRequest[] = [];
+  const restamps: { group: string; floor: number }[] = [];
+  // A restamp changes the stamp the group answers with, as a real host's would.
+  const restamped = new Map<string, number>();
+  const stamped = <T extends { name: string; stamp?: InventoryGroup['stamp'] }>(group: T): T => {
+    const floor = restamped.get(group.name);
+    return floor === undefined || group.stamp === undefined
+      ? group
+      : { ...group, stamp: { ...group.stamp, floor } };
+  };
   let finds = 0;
   let next = 100;
   const groups = (): InventoryGroup[] => {
@@ -69,7 +81,7 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
         });
       }
     }
-    return [...named.values()];
+    return [...named.values()].map(stamped);
   };
   return {
     kind: 'tmux',
@@ -78,6 +90,7 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
     views,
     entered,
     renames,
+    restamps,
     typed,
     get finds() {
       return finds;
@@ -102,7 +115,12 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
     find(session: string): FindResult {
       finds += 1;
       if (options.unknown !== undefined) return { outcome: 'unknown', reason: options.unknown };
-      return { outcome: 'answered', windows: windows.filter((w) => w.tags.session === session) };
+      return {
+        outcome: 'answered',
+        windows: windows
+          .filter((w) => w.tags.session === session)
+          .map((w) => ({ ...w, groups: w.groups.map(stamped) })),
+      };
     },
     close(window: string): CloseResult {
       if (options.refuseClose !== undefined)
@@ -148,6 +166,14 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
         failed: [],
         themed,
       };
+    },
+    restamp(group: string, floor: number): RestampResult {
+      restamps.push({ group, floor });
+      if (!groups().some((g) => g.name === group)) {
+        return { outcome: 'failed', reason: `can't find session: ${group}` };
+      }
+      restamped.set(group, floor);
+      return { outcome: 'restamped' };
     },
     view(request: ViewRequest): View {
       views.push(request);

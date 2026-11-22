@@ -717,7 +717,12 @@ async function writeOpened(
   return record;
 }
 
-async function writeSession(root: string, scopeDir: string, record: SessionRecord): Promise<void> {
+/** Write a session record with the body its scope gives it — no commit: the caller's. */
+export async function writeSession(
+  root: string,
+  scopeDir: string,
+  record: SessionRecord,
+): Promise<void> {
   await writeDocument(root, sessionRecordType(scopeDir, record.id), {
     data: record,
     body: sessionBody(record),

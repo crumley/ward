@@ -737,6 +737,39 @@ export const projectRenameShape = z.strictObject({
 });
 export type ProjectRenameShape = z.infer<typeof projectRenameShape>;
 
+const floorPlaceShape = z.strictObject({
+  floor: z.number().int().nonnegative(),
+  slug: z.string(),
+  dir: z.string(),
+});
+
+/**
+ * `project renumber` (design/0081-floor-renumber/): the rename's report, with
+ * the number on each side. `floor` is the number the floor holds now.
+ * `named` lists the floor's open sessions given a fresh `task-named` event,
+ * each with the task it works by its address now. `hosts.restamped` names the
+ * hosts found stamped with the old number and stamped anew.
+ */
+export const projectRenumberShape = z.strictObject({
+  floor: z.number().int().nonnegative(),
+  from: floorPlaceShape,
+  to: floorPlaceShape,
+  outcome: projectRenameShape.shape.outcome,
+  records: z.array(z.string()),
+  named: z.array(z.strictObject({ session: z.string(), task: z.string() })),
+  worktrees: projectRenameShape.shape.worktrees,
+  view: projectRenameShape.shape.view,
+  /** Absent when no host is usable on this machine. */
+  hosts: z
+    .strictObject({
+      restamped: z.array(z.string()),
+      renamed: z.array(z.string()),
+      failed: z.array(z.string()),
+    })
+    .optional(),
+});
+export type ProjectRenumberShape = z.infer<typeof projectRenumberShape>;
+
 /**
  * `project note` (design/0055-floor-manifests/): the one bullet appended to a
  * floor's `notes.md`, and where. `seeded` says the file had to be created
@@ -1509,6 +1542,7 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'project release': projectClaimShape,
   'project identity': projectIdentityShape,
   'project rename': projectRenameShape,
+  'project renumber': projectRenumberShape,
   'project note': projectNoteShape,
   'reflection open': reflectionOpenShape,
   'reflection record': reflectionRecordShape,

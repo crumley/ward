@@ -183,7 +183,8 @@ test('two machines that each open the next floor leave two on one number; doctor
   );
   expect(findings[0]?.message).toContain('a verb given floor 1 reaches projects/1-distill');
   expect(findings[0]?.message).toContain(
-    'The collision stands until all but one of them holds a number other than 1',
+    'The collision stands until all but one of them holds a number other than 1 — give the ' +
+      'other a number never spent: ward project renumber projects/1-rituals N',
   );
   // Both floors are listed, in directory order, and the next floor clears both.
   const listed = projectListShape.parse(

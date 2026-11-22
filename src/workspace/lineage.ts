@@ -408,8 +408,13 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: 'bcbc6883c45592c0237978e811452ec0428c77c03124bcafe8fbc0991576d4ec',
         era: "0078's --new-task",
       },
-      // Current since design 0086: the coordinator stays in the ground
-      // floor's host, linked into no other.
+      // Design 0086: the coordinator stays in the ground floor's host,
+      // linked into no other.
+      {
+        sha256: 'b124fbe897b86da72a917af075279f3d72bb80c3f1afe5fa1b5b0363ac2bbaeb',
+        era: 'design 0086 (the coordinator stays home)',
+      },
+      // Current since design 0081: a floor can be renumbered, once.
     ],
   },
 ];

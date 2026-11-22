@@ -183,7 +183,8 @@ export function requireFloorChoice(input: string): number {
  * What spent a floor number (design/0077-floor-chosen-number/):
  * - `held` — a floor's record stands on it, open or closed;
  * - `retired` — a floor's record names it as `previousFloor`, the number the
- *   standing project vacated when it moved to the ground floor (0041);
+ *   standing project vacated when it moved to the ground floor (0041), or
+ *   the one a floor left when it was renumbered (0081);
  * - `directory` — a `projects/<N>-*` directory whose record does not read, or
  *   whose record names another floor: the directory still roots addresses.
  */
@@ -243,25 +244,65 @@ export async function spentFloors(root: string): Promise<SpentFloors> {
  * or none — and the refusal says which one leaving `--floor` out would take.
  */
 function requireUnspent(floor: number, spent: SpentFloors): number {
-  const by = spent.get(floor)?.[0];
-  if (by === undefined) return floor;
-  const instead =
+  const refusal = spentRefusal(
+    floor,
+    spent,
     'a floor number is never reused; choose one never spent, or leave --floor out and the ' +
-    `floor takes the next (${nextFrom(spent)})`;
+      `floor takes the next (${nextFrom(spent)})`,
+  );
+  if (refusal !== undefined) throw new WardError(refusal);
+  return floor;
+}
+
+/**
+ * What spent `floor`, as one sentence ending in `instead` — undefined while
+ * nothing has. Shared by a chosen number at open and a renumber's target
+ * (design/0081-floor-renumber/), so both say what spent a number the same way.
+ */
+export function spentRefusal(
+  floor: number,
+  spent: SpentFloors,
+  instead: string,
+): string | undefined {
+  const by = spent.get(floor)?.[0];
+  if (by === undefined) return undefined;
   switch (by.kind) {
     case 'held':
-      throw new WardError(`floor ${floor} is held by ${by.slug} (${by.dir}) — ${instead}`);
+      return `floor ${floor} is held by ${by.slug} (${by.dir}) — ${instead}`;
     case 'retired':
-      throw new WardError(
+      return (
         `floor ${floor} was retired by ${by.slug} (${by.dir}), which stood on floor ${floor} ` +
-          `before it moved to floor ${by.floor} — ${instead}`,
+        `before it moved to floor ${by.floor} — ${instead}`
       );
     case 'directory':
-      throw new WardError(
+      return (
         `floor ${floor} is spent by ${by.dir}, whose record does not read as floor ${floor} ` +
-          `(see: ward doctor) — ${instead}`,
+        `(see: ward doctor) — ${instead}`
       );
   }
+}
+
+/** The next number a floor opened without a choice would take — what a refusal offers instead. */
+export function nextUnspent(spent: SpentFloors): number {
+  return nextFrom(spent);
+}
+
+/**
+ * Where each retired number went (design/0081-floor-renumber/): the number a
+ * floor vacated, from its record's `previousFloor`, to the number it holds
+ * now — what a host stamped with the old number is restamped by, on any
+ * machine, at any later time. A vacated number another floor still holds (a
+ * collision that was ended by renumbering one of the two) is left out: its
+ * host is that floor's.
+ */
+export function renumberedFloors(projects: readonly FoundProject[]): ReadonlyMap<number, number> {
+  const held = new Set(projects.map((project) => project.record.floor));
+  const moves = new Map<number, number>();
+  for (const { record } of projects) {
+    if (record.previousFloor === undefined || held.has(record.previousFloor)) continue;
+    moves.set(record.previousFloor, record.floor);
+  }
+  return moves;
 }
 
 /** The slug creation gives the standing workspace project. */

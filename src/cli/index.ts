@@ -88,7 +88,7 @@ import {
 } from '../workspace/dispatch.ts';
 import { type Finding, runDoctor } from '../workspace/doctor.ts';
 import { type IdentityReport, setFloorIdentity } from '../workspace/floor-identity.ts';
-import { type FloorMoveReport, renameFloor } from '../workspace/floor-move.ts';
+import { type FloorMoveReport, renameFloor, renumberFloor } from '../workspace/floor-move.ts';
 import { type FloorsResolved, resolveFloorArgs } from '../workspace/floor-ref.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
 import { closeCommand, rebaseCommand } from '../workspace/next.ts';
@@ -202,6 +202,7 @@ import {
   projectNoteJson,
   projectOpenJson,
   projectRenameJson,
+  projectRenumberJson,
   reflectionOpenJson,
   reflectionPacketJson,
   reflectionRecordJson,
@@ -708,6 +709,20 @@ const project = command(
       }),
       {
         brief: message`Give a floor a new slug: its record, its view, its tasks' worktrees and its host follow. Its number and addresses stay.`,
+      },
+    ),
+    command(
+      'renumber',
+      object({
+        action: constant('project-renumber'),
+        // A string, not a floor reference: of two floors on one number, only
+        // the directory names one, and Ward reads that itself.
+        floor: argument(string({ metavar: 'FLOOR' })),
+        number: argument(string({ metavar: 'N' })),
+        json: jsonFlag(),
+      }),
+      {
+        brief: message`Give a floor another number, once: its record, tasks, sessions, hand-offs, view, worktrees and host follow. Old addresses name nothing afterwards.`,
       },
     ),
     command(
@@ -1443,6 +1458,19 @@ async function answer(invoked: Invocation): Promise<void> {
           renderRename(report);
           break;
         }
+        case 'project-renumber': {
+          const root = await requireMutableWorkspace();
+          const caller = declaredSession();
+          const report = await renumberFloor(root, result.floor, result.number, {
+            ...(caller === undefined ? {} : { caller }),
+          });
+          if (result.json) {
+            printJson(projectRenumberJson(report));
+            break;
+          }
+          renderRenumber(report);
+          break;
+        }
         case 'project-note': {
           const root = await requireMutableWorkspace();
           const report = await appendFloorNote(root, result.floor, result.text);
@@ -2011,6 +2039,13 @@ async function cmdWorkspaceUpgrade(task: string | undefined, json: boolean): Pro
         })
       : await upgradeWorkspace(root, code);
   renderUpgrade(report, json);
+  // A floor renumbered elsewhere leaves this machine's host stamped with the
+  // number it left (design/0081-floor-renumber/): the name refresh restamps
+  // it from the record, as an attach or a launch here would.
+  const refreshed = await refreshHosted(root, hostOf('tmux'), 'tmux');
+  for (const line of [...(refreshed?.restamped ?? []), ...(refreshed?.renamed ?? [])]) {
+    echo(pc.dim(line));
+  }
 }
 
 /**
@@ -2797,6 +2832,34 @@ function renderRename(report: FloorMoveReport): void {
           pc.dim(`(${report.to.dir}/)`)
       : pc.dim(`floor ${report.floor} is already ${report.to.slug} (${report.to.dir}/)`),
   );
+  renderFloorMove(report);
+}
+
+/** `project renumber` (design/0081-floor-renumber/): the rename's lines, with the numbers. */
+function renderRenumber(report: FloorMoveReport): void {
+  console.log(
+    report.outcome === 'moved'
+      ? `${pc.green('renumbered')} ${report.to.slug} — floor ${report.from.floor} → ` +
+          `${pc.bold(String(report.to.floor))} ${pc.dim(`(${report.to.dir}/)`)}`
+      : pc.dim(`${report.to.slug} is already floor ${report.to.floor} (${report.to.dir}/)`),
+  );
+  for (const { session, task } of report.named) {
+    console.log(pc.dim(`session ${session} works ${task}`));
+  }
+  for (const line of report.hosts?.restamped ?? []) console.log(pc.dim(line));
+  renderFloorMove(report);
+  if (report.outcome === 'moved') {
+    console.log(
+      pc.dim(
+        `addresses under floor ${report.from.floor} name nothing now: its tasks are ` +
+          `f${report.to.floor}t<room>`,
+      ),
+    );
+  }
+}
+
+/** What a rename and a renumber both report: the worktrees, the view, the hosts. */
+function renderFloorMove(report: FloorMoveReport): void {
   for (const worktree of report.worktrees) {
     const at = `${worktree.address} ${worktree.branch}`;
     switch (worktree.outcome) {

@@ -76,6 +76,7 @@ import type {
   ProjectNoteShape,
   ProjectOpenShape,
   ProjectRenameShape,
+  ProjectRenumberShape,
   RepoAddShape,
   RepoListShape,
   RepoPathShape,
@@ -613,8 +614,44 @@ export function projectClaimJson(
 export function projectRenameJson(report: FloorMoveReport): ProjectRenameShape {
   return {
     floor: report.floor,
+    from: { slug: report.from.slug, dir: report.from.dir },
+    to: { slug: report.to.slug, dir: report.to.dir },
+    ...floorMoveJson(report),
+    ...(report.hosts === undefined
+      ? {}
+      : { hosts: { renamed: [...report.hosts.renamed], failed: [...report.hosts.failed] } }),
+  };
+}
+
+/**
+ * `project renumber` (design/0081-floor-renumber/) — the move as a rename
+ * reports it, with the number each side stood on, the sessions given a
+ * fresh `task-named`, and the hosts restamped.
+ */
+export function projectRenumberJson(report: FloorMoveReport): ProjectRenumberShape {
+  return {
+    floor: report.floor,
     from: { ...report.from },
     to: { ...report.to },
+    ...floorMoveJson(report),
+    named: report.named.map((entry) => ({ ...entry })),
+    ...(report.hosts === undefined
+      ? {}
+      : {
+          hosts: {
+            restamped: [...report.hosts.restamped],
+            renamed: [...report.hosts.renamed],
+            failed: [...report.hosts.failed],
+          },
+        }),
+  };
+}
+
+/** What a rename and a renumber report alike: the commit's records, the worktrees, the view. */
+function floorMoveJson(
+  report: FloorMoveReport,
+): Pick<ProjectRenameShape, 'outcome' | 'records' | 'worktrees' | 'view'> {
+  return {
     outcome: report.outcome,
     records: [...report.records],
     worktrees: report.worktrees.map((worktree) => ({
@@ -630,9 +667,6 @@ export function projectRenameJson(report: FloorMoveReport): ProjectRenameShape {
       retired: [...report.view.retired],
       residue: report.view.residue.map((item) => ({ ...item })),
     },
-    ...(report.hosts === undefined
-      ? {}
-      : { hosts: { renamed: [...report.hosts.renamed], failed: [...report.hosts.failed] } }),
   };
 }
 

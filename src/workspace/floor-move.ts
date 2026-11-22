@@ -6,6 +6,13 @@
 // carries, so a rename changes no address and the old slug resolves nothing
 // afterwards.
 //
+// A renumber (design/0081-floor-renumber/) is the same move with the number
+// changed too, done once in a floor's life: every record that says the
+// floor's number is rewritten with it, the old number is retired in the
+// project record's `previousFloor`, and every address under the old number
+// goes dead. Hosts stamped with the old number are restamped wherever they
+// stand, by any later name refresh.
+//
 // A move has two halves, kept apart on purpose:
 //
 // - the RECORD half is one journal commit under the store lock: the directory
@@ -40,18 +47,31 @@ import type { SessionHost } from '../host/host.ts';
 import { readDocument, writeDocument } from '../store/document.ts';
 import { withStoreLock } from '../store/lock.ts';
 import {
+  dispatchRecordType,
   type ProjectRecord,
   projectRecordType,
   reflectionRecordType,
+  type SessionRecord,
   sessionScopeOf,
+  taskRecordType,
   worktreeRecordType,
 } from '../store/types.ts';
-import { taskAddress, taskFloor } from './address.ts';
+import { GROUND_IDENTITY } from '../theme/palette.ts';
+import { parseTaskAddress, qualifiedAddress, taskAddress, taskFloor, taskRoom } from './address.ts';
 import type { StepResidue } from './converge.ts';
+import { floorBySlug } from './floor-ref.ts';
 import { carriesView, establishFloorView, floorViewDir } from './floor-views.ts';
 import { git, gitOrThrow, hasCommits, moveTracked } from './git.ts';
 import { FLOORS_DIR } from './layout.ts';
-import { type FoundProject, GROUND_FLOOR, readProjects, resolveProject } from './projects.ts';
+import {
+  CHOSEN_FLOOR_CEILING,
+  type FoundProject,
+  GROUND_FLOOR,
+  readProjects,
+  resolveProject,
+  spentFloors,
+  spentRefusal,
+} from './projects.ts';
 import { findOpenReflection, readReflections } from './reflection.ts';
 import {
   commitRecords,
@@ -61,7 +81,14 @@ import {
   readTasks,
   requireSlug,
 } from './scan.ts';
-import { type OpenSessionListing, readOpenSessions } from './sessions.ts';
+import {
+  namedTaskOf,
+  type OpenSessionListing,
+  readOpenSessions,
+  readSessions,
+  withEvent,
+  writeSession,
+} from './sessions.ts';
 import {
   establishOutsideLink,
   openWorktreeClaims,
@@ -76,13 +103,21 @@ import {
 type Env = Record<string, string | undefined>;
 
 /**
- * Where a floor is to stand. Only the slug moves today; the number is the
- * renumbering entry's to add (design/0080-floor-rename/, What a renumber adds),
- * through this same function.
+ * Where a floor is to stand: its slug, and — for a renumber
+ * (design/0081-floor-renumber/) — the number it is to hold. Left out, the
+ * floor keeps its number, which is a rename.
  */
 export interface FloorTarget {
   readonly slug: string;
+  readonly floor?: number;
 }
+
+/**
+ * The floor a move is asked of: its number, or its record directory — the
+ * one way to say which of two floors on one number is meant
+ * (design/0077-floor-chosen-number/, collisions).
+ */
+export type FloorRef = number | { readonly dir: string };
 
 export interface FloorMoveOptions {
   /** The host whose standing hosts and windows are asked and renamed (the tests' fake). */
@@ -113,14 +148,27 @@ export interface MovedWorktree {
   readonly reason?: string;
 }
 
-export interface FloorMoveReport {
+/** Where a floor stood or stands: its number, its slug, its record directory. */
+export interface FloorPlace {
   readonly floor: number;
-  readonly from: { readonly slug: string; readonly dir: string };
-  readonly to: { readonly slug: string; readonly dir: string };
+  readonly slug: string;
+  readonly dir: string;
+}
+
+export interface FloorMoveReport {
+  /** The floor's number now — the target's, after a renumber. */
+  readonly floor: number;
+  readonly from: FloorPlace;
+  readonly to: FloorPlace;
   /** `satisfied`: the floor already stood there; only the disk half was asked. */
   readonly outcome: 'moved' | 'satisfied';
   /** Record files the journal commit rewrote, besides the directory's move. */
   readonly records: readonly string[];
+  /**
+   * The floor's open sessions whose trail was given a fresh `task-named` event
+   * (a renumber only): the task each works, by its address now.
+   */
+  readonly named: readonly { readonly session: string; readonly task: string }[];
   readonly worktrees: readonly MovedWorktree[];
   readonly view: {
     readonly dir: string;
@@ -128,8 +176,8 @@ export interface FloorMoveReport {
     readonly retired: readonly string[];
     readonly residue: readonly StepResidue[];
   };
-  /** What the host refresh renamed; undefined when no host is usable here. */
-  readonly hosts?: Pick<Refreshed, 'renamed' | 'failed'>;
+  /** What the host refresh restamped and renamed; undefined when no host is usable here. */
+  readonly hosts?: Pick<Refreshed, 'renamed' | 'failed' | 'restamped'>;
 }
 
 /** Give a floor a new slug: `ward project rename FLOOR SLUG`. */
@@ -143,59 +191,207 @@ export async function renameFloor(
 }
 
 /**
- * Re-place floor `floor` at `target`: refuse while anything would be moved out
+ * Give a floor another number: `ward project renumber FLOOR N`
+ * (design/0081-floor-renumber/). `floorInput` is a number, a slug, or a
+ * record directory (`projects/7-alpha`, or `7-alpha`) — the directory being
+ * how one of two floors on one number is named. Asked again with the number
+ * the floor left, it answers for the floor that left it: the record half is
+ * done, and only the disk half is asked again.
+ */
+export async function renumberFloor(
+  root: string,
+  floorInput: string,
+  numberInput: string,
+  options: FloorMoveOptions = {},
+): Promise<FloorMoveReport> {
+  const number = requireRenumberTarget(numberInput);
+  const project = await floorToRenumber(root, floorInput.trim(), number);
+  return moveFloor(
+    root,
+    { dir: project.dir },
+    { slug: project.record.slug, floor: number },
+    options,
+  );
+}
+
+/**
+ * Read the number a floor is to take: a whole number from 1 to the ceiling
+ * `project open --floor` has (design/0077-floor-chosen-number/), for the same
+ * reasons — every address composes with it. Refused before the lock.
+ */
+export function requireRenumberTarget(input: string): number {
+  const text = input.trim();
+  if (!/^\d+$/.test(text)) {
+    throw new WardError(
+      `a floor is renumbered to a whole number from 1 to ${CHOSEN_FLOOR_CEILING} — '${input}' is not one`,
+    );
+  }
+  const floor = Number.parseInt(text, 10);
+  if (floor === GROUND_FLOOR) {
+    throw new WardError(
+      `floor ${GROUND_FLOOR} is the ground floor's, reserved in every workspace — choose 1 or above`,
+    );
+  }
+  if (floor > CHOSEN_FLOOR_CEILING) {
+    throw new WardError(
+      `floor ${floor} is above ${CHOSEN_FLOOR_CEILING}, the highest floor a number is chosen for — ` +
+        `choose one from 1 to ${CHOSEN_FLOOR_CEILING}`,
+    );
+  }
+  return floor;
+}
+
+const FLOOR_DIR = /^(?:projects\/)?(\d+-[a-z0-9][a-z0-9-]*)\/?$/i;
+
+/**
+ * The floor a renumber names. A number shared by two floors names neither:
+ * the refusal names each by its directory, which is how one is then chosen.
+ * A number a floor already left names that floor when the renumber asked of
+ * it is the one it already made, so asking again finishes the disk half.
+ */
+async function floorToRenumber(root: string, input: string, number: number): Promise<FoundProject> {
+  const projects = await readProjects(root);
+  const dir = FLOOR_DIR.exec(input)?.[1];
+  if (dir !== undefined) {
+    const found = projects.find((project) => project.dir === `projects/${dir.toLowerCase()}`);
+    if (found === undefined) {
+      throw new WardError(`no floor stands at projects/${dir}/ — see: ward project list`);
+    }
+    return found;
+  }
+  if (/^\d+$/.test(input)) {
+    const floor = Number.parseInt(input, 10);
+    const on = projects.filter((project) => project.record.floor === floor);
+    const [only, ...others] = on;
+    if (only !== undefined && others.length === 0) return only;
+    if (only !== undefined) {
+      throw new WardError(
+        `floor ${floor} is held by ${on.length} floors (${on.map((p) => p.dir).join(', ')}) — ` +
+          `name the one to renumber by its directory: ward project renumber ${on[1]?.dir ?? only.dir} ${number}`,
+      );
+    }
+    const left = projects.find((project) => project.record.previousFloor === floor);
+    if (left !== undefined && left.record.floor === number) return left;
+    if (left !== undefined) {
+      throw new WardError(
+        `no floor stands on ${floor}: ${left.record.slug} left it for floor ${left.record.floor} ` +
+          `(${left.dir}), and ${floor} stays retired — every address under it names nothing`,
+      );
+    }
+    return resolveProject(root, floor);
+  }
+  const floor = floorBySlug(projects, input);
+  const found = projects.find(
+    (project) => project.record.floor === floor && project.record.slug === input.toLowerCase(),
+  );
+  if (found === undefined) throw new WardError(`no floor wears the slug '${input}'`);
+  return found;
+}
+
+/**
+ * Re-place a floor at `target`: refuse while anything would be moved out
  * from under work in flight, then the record half (one commit), then the disk
- * half, then the hosts' names. A floor already at `target` commits nothing and
- * still runs the disk half, so asking again finishes a move cut short.
+ * half, then the hosts' stamps and names. A floor already at `target` commits
+ * nothing and still runs the disk half, so asking again finishes a move cut
+ * short.
  */
 export async function moveFloor(
   root: string,
-  floor: number,
+  ref: FloorRef,
   target: FloorTarget,
   options: FloorMoveOptions = {},
 ): Promise<FloorMoveReport> {
   const env = options.env ?? process.env;
   const host = options.host ?? hostOf('tmux', env);
-  const report = await withStoreLock(root, `project rename ${floor}`, async () => {
-    const project = await resolveProject(root, floor);
-    if (floor === GROUND_FLOOR) {
+  const verb = target.floor === undefined ? 'rename' : 'renumber';
+  const asked = typeof ref === 'number' ? String(ref) : ref.dir;
+  const report = await withStoreLock(root, `project ${verb} ${asked}`, async () => {
+    const project = await resolveRef(root, ref);
+    const fromFloor = project.record.floor;
+    if (fromFloor === GROUND_FLOOR) {
       throw new WardError(
         `floor ${GROUND_FLOOR} is the ground floor, which stands at projects/0-workspace/ in ` +
-          'every workspace — its name is not changed',
+          `every workspace — its ${verb === 'rename' ? 'name' : 'number'} is not changed`,
       );
     }
+    const toFloor = target.floor ?? fromFloor;
     const fromDir = project.dir;
-    const toDir = `projects/${floor}-${target.slug}`;
-    const from = { slug: project.record.slug, dir: fromDir };
-    const to = { slug: target.slug, dir: toDir };
+    const toDir = `projects/${toFloor}-${target.slug}`;
+    const from = { floor: fromFloor, slug: project.record.slug, dir: fromDir };
+    const to = { floor: toFloor, slug: target.slug, dir: toDir };
     if (fromDir === toDir) {
-      const settled = await settleFloor(root, floor);
-      return { floor, from, to, outcome: 'satisfied' as const, records: [], ...settled };
+      const settled = await settleFloor(root, toFloor);
+      return {
+        floor: toFloor,
+        from,
+        to,
+        outcome: 'satisfied' as const,
+        records: [],
+        named: [],
+        ...settled,
+      };
     }
-    const refusals = await moveRefusals(root, project, toDir, host, env, options.caller);
+    const refusals = [
+      ...(toFloor === fromFloor ? [] : await renumberRefusals(root, project, toFloor)),
+      ...(await moveRefusals(root, project, toDir, host, env, options.caller, verb)),
+    ];
     if (refusals.length > 0) {
+      const into = toFloor === fromFloor ? target.slug : String(toFloor);
       throw new WardError(
-        `cannot rename floor ${floor} (${project.record.slug}) to ${target.slug}:\n` +
+        `cannot ${verb} floor ${fromFloor} (${project.record.slug}) to ${into}:\n` +
           refusals.map((reason) => `  - ${reason}`).join('\n'),
       );
     }
-    const records = await moveRecords(root, project, toDir, target);
+    const collided = projectDirs(root).filter((dir) => dirFloor(dir) === fromFloor).length > 1;
+    const records = await moveRecords(root, project, toDir, { ...target, floor: toFloor });
+    const renumbered =
+      toFloor === fromFloor
+        ? { written: [], named: [] }
+        : await renumberRecords(root, toDir, fromFloor, toFloor, collided);
     commitRecords(
       root,
-      `Rename floor ${floor} from ${project.record.slug} to ${target.slug}`,
+      toFloor === fromFloor
+        ? `Rename floor ${fromFloor} from ${project.record.slug} to ${target.slug}`
+        : `Renumber floor ${fromFloor} (${project.record.slug}) to ${toFloor}`,
       toDir,
+      ...renumbered.written.filter((path) => !within(path, toDir)),
     );
-    const settled = await settleFloor(root, floor);
-    return { floor, from, to, outcome: 'moved' as const, records, ...settled };
+    const settled = await settleFloor(root, toFloor);
+    return {
+      floor: toFloor,
+      from,
+      to,
+      outcome: 'moved' as const,
+      records: [...records, ...renumbered.written],
+      named: renumbered.named,
+      ...settled,
+    };
   });
   // The live half, after the lock: hosts are found by their stamps and named
-  // from the records on every call, so asking them to catch up is all a
-  // rename needs of them — no stamp changes. A running harness keeps the name
-  // it was started with until it is next resumed.
+  // from the records on every call. A rename needs only the names to catch
+  // up; a renumber's hosts still carry the old number, and the same refresh
+  // restamps them from the record's `previousFloor` before it names them —
+  // here now, and on any other machine at its next attach, launch or
+  // upgrade. A running harness keeps the name it was started with until it is
+  // next resumed.
   const refreshed = await refreshHosted(root, host, 'tmux');
   return refreshed === undefined
     ? report
-    : { ...report, hosts: { renamed: refreshed.renamed, failed: refreshed.failed } };
+    : {
+        ...report,
+        hosts: {
+          renamed: refreshed.renamed,
+          failed: refreshed.failed,
+          restamped: refreshed.restamped,
+        },
+      };
+}
+
+async function resolveRef(root: string, ref: FloorRef): Promise<FoundProject> {
+  if (typeof ref === 'number') return resolveProject(root, ref);
+  const found = (await readProjects(root)).find((project) => project.dir === ref.dir);
+  if (found === undefined) throw new WardError(`no floor stands at ${ref.dir}/`);
+  return found;
 }
 
 // -- refusals ------------------------------------------------------------------
@@ -211,6 +407,7 @@ async function moveRefusals(
   host: SessionHost,
   env: Env,
   caller: string | undefined,
+  verb: 'rename' | 'renumber',
 ): Promise<string[]> {
   const floor = project.record.floor;
   const fromDir = project.dir;
@@ -233,9 +430,8 @@ async function moveRefusals(
   }
 
   const open = await readOpenSessions(root);
-  const ofFloor = open.filter((listing) => sessionOfFloor(listing, floor, fromDir));
-  const coordinate =
-    'a floor is renamed from the coordinator or a terminal, never from a session of its own';
+  const ofFloor = open.filter((listing) => sessionOfFloor(listing, fromDir));
+  const coordinate = `a floor is ${verb === 'rename' ? 'renamed' : 'renumbered'} from the coordinator or a terminal, never from a session of its own`;
   if (caller !== undefined && ofFloor.some((listing) => listing.record.id === caller)) {
     refusals.push(`this is session ${caller}, one of the floor's own — ${coordinate}`);
   }
@@ -290,10 +486,75 @@ async function moveRefusals(
   return refusals;
 }
 
-/** Whether an open session is the floor's own, or a session of one of its tasks. */
-function sessionOfFloor(listing: OpenSessionListing, floor: number, fromDir: string): boolean {
-  if (sessionScopeOf(listing.record) === 'project') return listing.record.floor === floor;
+/**
+ * Whether an open session is the floor's own, or a session of one of its
+ * tasks — by where its record stands, so that of two floors on one number
+ * only the one being moved is asked about.
+ */
+function sessionOfFloor(listing: OpenSessionListing, fromDir: string): boolean {
+  if (sessionScopeOf(listing.record) === 'project') return listing.scopeDir === fromDir;
   return listing.scopeDir.startsWith(`${fromDir}/tasks/`);
+}
+
+/**
+ * What a renumber alone is refused for (design/0081-floor-renumber/), beside
+ * every refusal a rename has: a floor that was renumbered before, since its
+ * record keeps one retired number; a number the record has spent; and a move
+ * that would change which floor keeps a shared emoji.
+ */
+async function renumberRefusals(
+  root: string,
+  project: FoundProject,
+  toFloor: number,
+): Promise<string[]> {
+  const refusals: string[] = [];
+  const { floor, slug, previousFloor } = project.record;
+  if (previousFloor !== undefined) {
+    refusals.push(
+      `floor ${floor} (${slug}) already left floor ${previousFloor}, which its record keeps ` +
+        'retired — a floor is renumbered once; it keeps the number it has',
+    );
+  }
+  const spent = spentRefusal(
+    toFloor,
+    await spentFloors(root),
+    'a floor number is never reused; choose one never spent',
+  );
+  if (spent !== undefined) refusals.push(spent);
+  const emoji = emojiRefusal(await readProjects(root), project, toFloor);
+  if (emoji !== undefined) refusals.push(emoji);
+  return refusals;
+}
+
+/**
+ * Of two open floors wearing one emoji, the lower-numbered keeps it and the
+ * other is given another at the next upgrade (src/workspace/converge.ts). A
+ * renumber across the other wearer would change which that is, taking an
+ * emoji from a floor that has worn it, with nobody having asked: refused,
+ * naming the verb that settles it first.
+ */
+function emojiRefusal(
+  projects: readonly FoundProject[],
+  project: FoundProject,
+  toFloor: number,
+): string | undefined {
+  const emoji = project.record.emoji;
+  if (emoji === undefined || emoji === GROUND_IDENTITY.emoji) return undefined;
+  const others = projects.filter(
+    (other) =>
+      other.dir !== project.dir && other.record.state !== 'closed' && other.record.emoji === emoji,
+  );
+  if (others.length === 0) return undefined;
+  const lowest = others.reduce((a, b) => (b.record.floor < a.record.floor ? b : a));
+  const keeps = (floor: number) => floor < lowest.record.floor;
+  if (keeps(project.record.floor) === keeps(toFloor)) return undefined;
+  const settle = `give one of them another first: ward project identity FLOOR --emoji EMOJI`;
+  const other = `floor ${lowest.record.floor} (${lowest.record.slug})`;
+  return keeps(project.record.floor)
+    ? `${other} also wears ${emoji}, and on floor ${toFloor} this floor would lose it there at ` +
+        `the next upgrade (the lower floor keeps a shared emoji) — ${settle}`
+    : `this floor and ${other} both wear ${emoji}, and on floor ${toFloor} this floor would take ` +
+        `it from ${other} at the next upgrade (the lower floor keeps a shared emoji) — ${settle}`;
 }
 
 /** The floor's tasks that are not closed, by their record directories. */
@@ -311,38 +572,56 @@ function within(inner: string, outer: string): boolean {
 
 /**
  * Move the directory and rewrite every record that spells where it stood.
- * Task records need nothing: a task's address composes from the directory it
- * stands in, and its floor number has not changed. Closed tasks' worktree
- * records keep the paths they had — they are history, and nothing stands
- * there to move. No commit: the caller's, so the move is one journal entry.
+ * Task records need nothing for a rename: a task's address composes from the
+ * directory it stands in, and its floor number has not changed (a renumber's
+ * rewrites are `renumberRecords`). Closed tasks' worktree records keep the
+ * paths they had — they are history, and nothing stands there to move. No
+ * commit: the caller's, so the move is one journal entry.
  */
 async function moveRecords(
   root: string,
   project: FoundProject,
   toDir: string,
-  target: FloorTarget,
+  target: Required<FloorTarget>,
 ): Promise<string[]> {
   const fromDir = project.dir;
   const fromView = floorViewDir(fromDir);
   const toView = floorViewDir(toDir);
+  const fromFloor = project.record.floor;
   moveTracked(root, fromDir, toDir);
   const written: string[] = [];
 
   const type = projectRecordType(toDir);
   const document = await readDocument(root, type);
   const old = document.data.slug;
+  const renumbered = target.floor !== fromFloor;
+  // The body's opening line spells the slug, and the number; a line the
+  // human rewrote is left as they wrote it.
+  let body = document.body.replaceAll(`the \`${old}\` project`, `the \`${target.slug}\` project`);
+  if (renumbered) body = body.replace(new RegExp(`^Floor ${fromFloor}:`), `Floor ${target.floor}:`);
   await writeDocument(root, type, {
-    data: { ...document.data, slug: target.slug },
-    // The body's opening line spells the slug; a line the human rewrote is
-    // left as they wrote it.
-    body: document.body.replaceAll(`the \`${old}\` project`, `the \`${target.slug}\` project`),
+    data: {
+      ...document.data,
+      slug: target.slug,
+      // The number left is retired here, the one place that can still say it
+      // once the directory is gone (design/0081-floor-renumber/).
+      ...(renumbered ? { floor: target.floor, previousFloor: fromFloor } : {}),
+    },
+    body,
   });
   written.push(type.relPath);
 
   for (const task of floorTasks(await readTasks(root), toDir)) {
+    const was: FoundTask = { dir: fromDir + task.dir.slice(toDir.length), record: task.record };
     for (const entry of await readTaskWorktreeEntries(root, task.dir)) {
       if (standsOutside(entry.record) || !within(entry.record.path, fromView)) continue;
-      const path = toView + entry.record.path.slice(fromView.length);
+      // A worktree at its placement goes to its placement under the new name
+      // — whose leaf carries the address, so a renumber changes it too; one
+      // standing elsewhere in the view keeps its place in it.
+      const path =
+        entry.record.path === worktreePlacement(was, entry.record.branch)
+          ? worktreePlacement(task, entry.record.branch)
+          : toView + entry.record.path.slice(fromView.length);
       const worktree = worktreeRecordType(task.dir, entry.fileName);
       await writeDocument(root, worktree, { data: { ...entry.record, path }, body: entry.body });
       written.push(worktree.relPath);
@@ -351,21 +630,144 @@ async function moveRecords(
 
   // The reflection cursor is the set of task directories the floor's
   // reflections name: left spelling the old directory, every covered task
-  // would read as unreflected again.
+  // would read as unreflected again. A renumber rewrites the floor each says.
   for (const found of await readReflections(root, toDir)) {
     const tasks = found.record.tasks.map((task) =>
       within(task.dir, fromDir) ? { ...task, dir: toDir + task.dir.slice(fromDir.length) } : task,
     );
-    if (tasks.every((task, index) => task.dir === found.record.tasks[index]?.dir)) continue;
+    const sameTasks = tasks.every((task, index) => task.dir === found.record.tasks[index]?.dir);
+    if (sameTasks && found.record.floor === target.floor) continue;
     const reflection = reflectionRecordType(toDir, found.record.number);
     const current = await readDocument(root, reflection);
     await writeDocument(root, reflection, {
-      data: { ...current.data, tasks },
+      data: { ...current.data, tasks, floor: target.floor },
       body: current.body,
     });
     written.push(reflection.relPath);
   }
   return written;
+}
+
+/**
+ * What a renumber rewrites beyond a rename (design/0081-floor-renumber/),
+ * after the directory has moved: every record that says the floor's number.
+ *
+ * - `floor` on every task of the floor, open and closed — the 0041 move's
+ *   precedent: no record is left saying the floor is where it is not.
+ * - `floor` on the floor's own sessions, open and closed. Their ids keep the
+ *   number they were minted with: an id names one session for good.
+ * - A fresh `task-named` event on each open floor session working a task,
+ *   naming it by its address now. The trail is append-only, so the old
+ *   address stays as it was said.
+ * - `to` on the hand-offs of this floor's tasks, and `fromFloor` on the
+ *   hand-offs this floor sent, wherever they went — the keys `ward task
+ *   dispatches --to/--from` filter on. On a number two floors shared, a sent
+ *   hand-off is this floor's only when its sending session is.
+ * - `reflects` on the ground floor's reflection tasks of this floor — on a
+ *   shared number, only those this floor's reflections name.
+ *
+ * Quotations of what was said at the time — a hand-off's `task`, a brief's
+ * `for`, the trail's old `task-named` events — are left as they were. No
+ * commit: the caller's.
+ */
+async function renumberRecords(
+  root: string,
+  toDir: string,
+  fromFloor: number,
+  toFloor: number,
+  collided: boolean,
+): Promise<{
+  written: string[];
+  named: { readonly session: string; readonly task: string }[];
+}> {
+  const written: string[] = [];
+  const named: { session: string; task: string }[] = [];
+  const everyone = await readTasks(root);
+  const ours = everyone.filter((task) => task.dir.startsWith(`${toDir}/tasks/`));
+
+  for (const task of ours) {
+    if (task.record.floor === undefined || task.record.floor === toFloor) continue;
+    const type = taskRecordType(task.dir);
+    const current = await readDocument(root, type);
+    await writeDocument(root, type, {
+      data: { ...current.data, floor: toFloor },
+      body: current.body,
+    });
+    written.push(type.relPath);
+  }
+
+  const floorSessions = await readSessions(root, toDir);
+  for (const record of floorSessions) {
+    const working = record.state === 'open' ? namedOn(record, ours) : undefined;
+    let next: SessionRecord = { ...record, floor: toFloor };
+    if (working !== undefined) {
+      const task = qualifiedAddress(working);
+      next = withEvent(next, { event: 'task-named', at: new Date().toISOString(), task });
+      named.push({ session: record.id, task });
+    }
+    await writeSession(root, toDir, next);
+    written.push(`${toDir}/sessions/${record.id}.md`);
+  }
+
+  // Sessions that speak for this floor: its own, and its tasks'.
+  const speakers = new Set(floorSessions.map((record) => record.id));
+  for (const task of ours) {
+    for (const record of await readSessions(root, task.dir)) speakers.add(record.id);
+  }
+  for (const task of everyone) {
+    const type = dispatchRecordType(task.dir);
+    if (!existsSync(join(root, type.relPath))) continue;
+    const current = await readDocument(root, type);
+    const mine = ours.includes(task);
+    const to = mine && current.data.to === fromFloor;
+    const sent =
+      current.data.fromFloor === fromFloor &&
+      (!collided ||
+        (current.data.fromSession !== undefined && speakers.has(current.data.fromSession)));
+    if (!to && !sent) continue;
+    await writeDocument(root, type, {
+      data: {
+        ...current.data,
+        ...(to ? { to: toFloor } : {}),
+        ...(sent ? { fromFloor: toFloor } : {}),
+      },
+      body: current.body,
+    });
+    written.push(type.relPath);
+  }
+
+  const reflectionTasks = new Set(
+    (await readReflections(root, toDir)).map((found) => found.record.task),
+  );
+  for (const task of everyone) {
+    if (task.record.stewardship !== 'reflection' || task.record.reflects !== fromFloor) continue;
+    if (collided && !reflectionTasks.has(task.dir)) continue;
+    const type = taskRecordType(task.dir);
+    const current = await readDocument(root, type);
+    await writeDocument(root, type, {
+      data: { ...current.data, reflects: toFloor },
+      body: current.body,
+    });
+    written.push(type.relPath);
+  }
+  return { written: [...new Set(written)], named };
+}
+
+/**
+ * The open task of this floor a floor session's trail names, matched by room
+ * and slug — the floor half of the address it was named by is the number the
+ * floor just left.
+ */
+function namedOn(record: SessionRecord, tasks: readonly FoundTask[]): FoundTask | undefined {
+  const said = namedTaskOf(record);
+  const wanted = said === undefined ? null : parseTaskAddress(said);
+  if (wanted === null || wanted.slug === undefined) return undefined;
+  return tasks.find(
+    (task) =>
+      task.record.state !== 'closed' &&
+      taskRoom(task) === wanted.room &&
+      task.record.slug === wanted.slug,
+  );
 }
 
 // -- the disk half -----------------------------------------------------------------
