@@ -1316,8 +1316,12 @@ export const sessionResumeAllShape = z.strictObject({
       machine: z.string().optional(),
       /** The floor whose host its window belongs in. */
       floor: z.number().int().nonnegative(),
-      /** The coordinator: linked into every floor host, resumed first. */
-      floats: z.boolean(),
+      /**
+       * The coordinator: resumed first. Its window stands in the floor-0 host
+       * alone (design/0086-coordinator-stays-home/); this field was `floats`
+       * while it was linked into every floor host.
+       */
+      coordinator: z.boolean(),
       step: z.enum(['resume', 'live', 'gone', 'elsewhere', 'unknown']),
       /** Why the step is what it is. */
       detail: z.string(),

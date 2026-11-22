@@ -18,7 +18,6 @@ import {
   exitRuleArgv,
   insideServer,
   leftViewsArgv,
-  linkWindowArgv,
   MINIMUM_VERSION,
   mintGroupName,
   namedFor,
@@ -137,23 +136,6 @@ test('every name target is exact-match; windows and panes are addressed by id', 
   expect(sessionTarget('ward-main-f0')).toBe('=ward-main-f0');
   expect(windowTarget('ward-main-f0')).toBe('=ward-main-f0:');
   expect(windowTarget('ward-main-f0', '3')).toBe('=ward-main-f0:3');
-  expect(linkWindowArgv('@4', 'ward-main-f2', '0')).toEqual([
-    'link-window',
-    '-d',
-    '-k',
-    '-s',
-    '@4',
-    '-t',
-    '=ward-main-f2:0',
-  ]);
-  expect(linkWindowArgv('@4', 'ward-main-f2')).toEqual([
-    'link-window',
-    '-d',
-    '-s',
-    '@4',
-    '-t',
-    '=ward-main-f2:',
-  ]);
 });
 
 test('the hygiene preamble carries no path, and keeps an empty server alive', () => {
@@ -592,6 +574,8 @@ test('remedies are whole commands, on the configured server', () => {
   const host = tmuxHost({ WARD_TMUX_SOCKET: 'try' });
   expect(host.closeCommand('@4')).toBe('tmux -L try kill-window -t @4');
   expect(host.endGroupCommand('ward-a-f2')).toBe('tmux -L try kill-session -t =ward-a-f2');
+  // Out of the one host only: the window stays in its own.
+  expect(host.unlinkCommand('@4', 'ward-a-f2')).toBe('tmux -L try unlink-window -t =ward-a-f2:@4');
   expect(host.forgetEnvCommand('CLAUDECODE')).toBe('tmux -L try set-environment -gu CLAUDECODE');
 });
 

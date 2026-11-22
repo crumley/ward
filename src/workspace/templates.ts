@@ -188,12 +188,13 @@ instead of in the foreground.
   set on them, so renaming one by hand breaks nothing — and Ward names it back the next time a
   session is opened into, or attached through, the workspace's hosts. A window's session id is
   \`tmux display-message -p '#{@ward_session}'\`; \`ward status\` lists every id.
-- **The coordinator floats**: a workspace-scope session no other session started is linked into
-  every floor host, so it is a keystroke away wherever you stand.
+- **The coordinator stays home**: a workspace-scope session no other session started lives in
+  the ground floor's host alone, as every window lives in its own floor's host only.
+  \`ward session attach ID\` reaches it from anywhere, from inside another floor's host too.
 - \`ward session attach ID\` joins the session's window to take part — its input is yours. It
   goes through a view of its own (\`<host>-v<n>\`, gone when you leave), so your attach never
   moves the window another terminal is looking at. It re-creates a run that has ended or gone,
-  from its record, and relinks a missing coordinator. Leave with the tmux prefix, then \`d\`. Two
+  from its record. Leave with the tmux prefix, then \`d\`. Two
   attaches to one session share its one keyboard.
 - **After a reboot every floor host is gone, and every record is still open.**
   \`ward session resume --all\` prints the plan and starts nothing: each open hosted session,
@@ -207,8 +208,8 @@ instead of in the foreground.
 - \`ward session observe ID\` watches instead: a read-only view of that one window alone
   (\`<host>-o<n>\`) — your keys go nowhere, and observe never starts or re-creates anything.
 - **Sizing.** A window has one size, set by the most recently active client
-  (\`window-size latest\`). Two terminals of different sizes on one window — the coordinator seen
-  from two floor hosts, say — take turns resizing it, and the agent reflows, looking padded or
+  (\`window-size latest\`). Two terminals of different sizes on one window — two attaches to
+  one session, say — take turns resizing it, and the agent reflows, looking padded or
   clipped to the other until it acts. An observer never resizes a window someone is attached to;
   watching alone, it does, until a participant returns.
 - **A run that exits cleanly closes its own window**; the session stays open, and \`attach\` or

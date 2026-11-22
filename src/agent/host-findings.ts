@@ -9,7 +9,7 @@
 // The severities follow from what each state means. A stray window, a
 // duplicate floor host or window, and a host environment carrying a run's
 // identity are `warn`: something is live or inherited that nothing accounts
-// for. Gone, exited, misplaced, missing links, idle hosts, leftover views,
+// for. Gone, exited, misplaced, linked elsewhere, idle hosts, leftover views,
 // foreign hosts, and version skew are `info`: "gone" is the normal state of
 // every detached session after a reboot, and of any session whose run exited
 // cleanly (its window closes itself, design/0070-clean-exit-closes-window/),
@@ -22,7 +22,7 @@ import type { HostedKind, SessionRecord } from '../store/types.ts';
 import type { Finding } from '../workspace/doctor.ts';
 import { type OpenSessionListing, readAllSessions } from '../workspace/sessions.ts';
 import { hostedBy, hostOf, latestLaunch } from './host.ts';
-import { floats, placementFloor } from './placement.ts';
+import { placementFloor } from './placement.ts';
 import type { AgentHost, Resolved } from './settings.ts';
 
 type Env = Record<string, string | undefined>;
@@ -116,7 +116,7 @@ function inventoryFindings(
         severity: 'warn',
         message:
           `could not determine what the host holds (${inventory.reason}) — strays, gone ` +
-          'sessions, and floating links are unchecked; this is not a clean bill',
+          'sessions, and misplaced windows are unchecked; this is not a clean bill',
       },
     ];
   }
@@ -207,17 +207,22 @@ function inventoryFindings(
           `not floor ${floor}'s host — attach follows it wherever it is`,
       });
     }
-    if (floats(record)) {
-      const missing = ours.hosts.map((g) => g.name).filter((name) => !standing.includes(name));
-      if (missing.length > 0) {
-        findings.push({
-          check: WINDOWS,
-          severity: 'info',
-          message:
-            `coordinator ${record.id}'s window is not linked into ${missing.join(', ')} — ` +
-            `attach repairs it: ward session attach ${record.id}`,
-        });
-      }
+    // Ward links no window into a second host
+    // (design/0086-coordinator-stays-home/); an older Ward linked the
+    // coordinator into every floor host, and those links stay until its run
+    // ends and takes the window with it. Named, with the way to take each out
+    // now, and never undone here.
+    const beyond = standing.filter((name) => !home.includes(name));
+    if (beyond.length > 0 && beyond.length < standing.length) {
+      findings.push({
+        check: WINDOWS,
+        severity: 'info',
+        message:
+          `session ${record.id}'s window ${window.window} is also linked into ` +
+          `${beyond.join(', ')} (an older Ward linked the coordinator into every floor host) — ` +
+          'the links go when its run ends; to take them out now: ' +
+          beyond.map((name) => host.unlinkCommand(window.window, name)).join('; '),
+      });
     }
   }
 
@@ -234,7 +239,12 @@ function inventoryFindings(
     });
   }
 
-  findings.push(...hostShapeFindings(host, inventory.groups, inOurs, ours, byId, workspace));
+  const home = new Map(
+    sessions
+      .filter(({ record }) => record.state === 'open')
+      .map((listing) => [listing.record.id, placementFloor(listing, sessions)]),
+  );
+  findings.push(...hostShapeFindings(host, inventory.groups, inOurs, ours, home, workspace));
   if (findings.length === 0) {
     const windows = inOurs.length;
     findings.push({
@@ -256,7 +266,7 @@ function hostShapeFindings(
   groups: readonly InventoryGroup[],
   inOurs: readonly InventoryWindow[],
   ours: Ours,
-  byId: ReadonlyMap<string, OpenSessionListing>,
+  home: ReadonlyMap<string, number>,
   workspace: string,
 ): Finding[] {
   const findings: Finding[] = [];
@@ -278,21 +288,24 @@ function hostShapeFindings(
         `the others: ${rest.map((g) => host.endGroupCommand(g.name)).join('; ')}`,
     });
   }
+  // A host left holding only links to windows that live in another host — an
+  // older Ward's coordinator — is kept by tmux for them alone.
   for (const group of ours.hosts) {
-    if ((group.stamp?.floor ?? 0) === 0) continue;
+    const floor = group.stamp?.floor ?? 0;
     const shown = inOurs.filter((window) => window.groups.includes(group.name));
-    const floating = shown.filter((window) => {
-      const record = byId.get(window.tags.session)?.record;
-      return record !== undefined && floats(record);
+    const linked = shown.filter((window) => {
+      const placed = home.get(window.tags.session);
+      const hosts = window.groups.filter((name) => ours.names.has(name));
+      return placed !== undefined && placed !== floor && hosts.length > 1;
     });
-    if (group.windows > 0 && floating.length === group.windows) {
+    if (group.windows > 0 && linked.length === group.windows) {
       findings.push({
         check: HOSTS,
         severity: 'info',
         message:
-          `${group.name} holds nothing of floor ${group.stamp?.floor}'s own — only the ` +
-          "coordinator's link, so tmux keeps it. If you are done with it, " +
-          `${host.endGroupCommand(group.name)} only unlinks the coordinator`,
+          `${group.name} holds nothing of floor ${floor}'s own — only links to windows that ` +
+          'live in another host, so tmux keeps it. If you are done with it, ' +
+          `${host.endGroupCommand(group.name)} only unlinks them`,
       });
     }
   }

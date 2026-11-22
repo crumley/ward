@@ -40,7 +40,7 @@
         "40",
         "-P",
         "-F",
-        "#{window_id}\t#{window_index}",
+        "#{window_id}",
         "cat",
         ";",
         "set-option",
@@ -80,7 +80,7 @@
         "#{window_name} · main f0#{?#{||:#{==:#{pane_title},},#{||:#{==:#{pane_title},#{host}},#{==:#{pane_title},#{host_short}}}},, · #{pane_title}}"
       ],
       "exit": 0,
-      "stdout": "@1\t0\n",
+      "stdout": "@1\n",
       "stderr": ""
     },
     {
@@ -261,7 +261,7 @@
         "40",
         "-P",
         "-F",
-        "#{window_id}\t#{window_index}",
+        "#{window_id}",
         "cat",
         ";",
         "set-option",
@@ -301,7 +301,7 @@
         "#{window_name} · main f0#{?#{||:#{==:#{pane_title},},#{||:#{==:#{pane_title},#{host}},#{==:#{pane_title},#{host_short}}}},, · #{pane_title}}"
       ],
       "exit": 0,
-      "stdout": "@3\t0\n",
+      "stdout": "@3\n",
       "stderr": ""
     },
     {

@@ -12,7 +12,7 @@
 // (intent/02-subsystems/07-human-shell.md, and 0022's IF-002).
 import { resolve } from 'node:path';
 import { classify, hostedBy, hostOf } from '../agent/host.ts';
-import { floats } from '../agent/placement.ts';
+import { isCoordinator } from '../agent/placement.ts';
 import { searchOrder } from '../global/locate.ts';
 import { readMachine } from '../global/machine.ts';
 import { listWorkspaces, resolutionOrder } from '../global/registry.ts';
@@ -118,9 +118,11 @@ export async function workspaceCandidates(): Promise<readonly Candidate[]> {
  * The workspace is the one a human-run session verb would act on: the one
  * underfoot, else the registry's best answer — `requireWorkspace`'s ladder
  * for a human caller, so what is offered here is what `ward session attach`
- * will then find. A coordinator is the one session that floats
- * (`floats`, design/0031-detached-session-hosting/): workspace scope, started
- * by no other session. Its helpers are not offered — joining the workspace is
+ * will then find. A coordinator (`isCoordinator`) is a workspace-scope
+ * session started by no other session; its window stands in the ground
+ * floor's host (design/0086-coordinator-stays-home/), and attach reaches it
+ * from anywhere — from inside another floor's host too, by switching the
+ * terminal there. Its helpers are not offered — joining the workspace is
  * joining the session responsible for it, not the last thing it delegated.
  *
  * This machine only, plus records that predate the machine field: a session
@@ -152,7 +154,7 @@ export async function coordinatorCandidates(
     .map((listing) => listing.record)
     .filter((record) =>
       floor === undefined
-        ? floats(record)
+        ? isCoordinator(record)
         : sessionScopeOf(record) === 'project' && record.floor === floor,
     )
     .filter((record) => record.machine === undefined || record.machine === here)

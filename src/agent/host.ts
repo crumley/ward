@@ -1,9 +1,8 @@
 // The Ward-shaped half of detached hosting (design/0031-detached-session-hosting/):
 // everything that reads a record — which host a launch selects, which floor a
-// window is placed on and whether it floats, whether a window found by its
-// tag is the record's OWN, what resume must refuse, and what close tears
-// down. The host itself (src/host/) knows none of this; it is handed a floor,
-// a list of tags, and a command.
+// window is placed on, whether a window found by its tag is the record's OWN,
+// what resume must refuse, and what close tears down. The host itself
+// (src/host/) knows none of this; it is handed a floor, tags, and a command.
 //
 // Ownership is the rule this module exists to keep: a window found carrying a
 // session's tag is that session's live half only when its epoch equals the
@@ -15,13 +14,13 @@ import pkg from '../../package.json' with { type: 'json' };
 import { WardError } from '../errors.ts';
 import { harnessCommand } from '../harness/adapter.ts';
 import { withoutRunIdentity } from '../harness/index.ts';
-import type { CloseResult, FoundWindow, SessionHost, WindowTags } from '../host/host.ts';
+import type { CloseResult, FoundWindow, SessionHost } from '../host/host.ts';
 import { hostFor } from '../host/index.ts';
 import type { HostedKind, SessionEvent, SessionRecord } from '../store/types.ts';
 import { workspaceId } from '../workspace/identity.ts';
 import { closeSession, type OpenSessionListing, readAllSessions } from '../workspace/sessions.ts';
 import { readNaming, refreshNames } from './naming.ts';
-import { floats, placementFloor } from './placement.ts';
+import { placementFloor } from './placement.ts';
 import type { AgentHost, Resolved } from './settings.ts';
 
 type Env = Record<string, string | undefined>;
@@ -120,7 +119,6 @@ export interface PlacedRun {
   readonly group: string;
   readonly window: string;
   readonly createdGroup: boolean;
-  readonly linkedInto: readonly string[];
   /** The command a human runs to join the floor's host. */
   readonly join: string;
 }
@@ -160,11 +158,6 @@ export async function placeLaunch(
     cwd: resolve(root, launched.record.workingDirectory),
     env: { WARD_AGENT: launched.record.id },
     command: [...harnessCommand(run.harness, run.configuredCommand, env).command, ...run.argv],
-    floats: floats(launched.record),
-    floating: floatingTags(
-      all.filter(({ record }) => record.id !== launched.record.id),
-      choice.kind,
-    ),
     version: pkg.version,
   });
   return {
@@ -172,19 +165,8 @@ export async function placeLaunch(
     group: placement.group,
     window: placement.window,
     createdGroup: placement.createdGroup,
-    linkedInto: placement.linkedInto,
     join: choice.host.joinCommand(placement.group),
   };
-}
-
-/** The tags of every open floating session whose latest launch this host holds. */
-export function floatingTags(all: readonly OpenSessionListing[], kind: HostedKind): WindowTags[] {
-  return all
-    .filter(({ record }) => record.state === 'open' && floats(record) && hostedBy(record) === kind)
-    .flatMap(({ record }) => {
-      const epoch = latestLaunch(record)?.at;
-      return epoch === undefined ? [] : [{ session: record.id, epoch }];
-    });
 }
 
 // -- the live half, read -------------------------------------------------------
@@ -202,7 +184,10 @@ export interface LiveState {
   readonly state: 'live' | 'exited' | 'gone' | 'unknown';
   /** The placement floor, derived from the records. */
   readonly floor: number;
-  /** The host the window stands in — the placement floor's when it is linked into several. */
+  /**
+   * The host the window stands in — the placement floor's when it is linked
+   * into several (an older Ward's floating coordinator).
+   */
   readonly group?: string;
   readonly window?: string;
   readonly exitStatus?: number;

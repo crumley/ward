@@ -12,7 +12,8 @@
 > name and the window's label, by
 > [`0061-host-names-and-titles/`](../0061-host-names-and-titles/README.md); keeping the window of a
 > run that exited cleanly, by
-> [`0070-clean-exit-closes-window/`](../0070-clean-exit-closes-window/README.md)
+> [`0070-clean-exit-closes-window/`](../0070-clean-exit-closes-window/README.md); the floating
+> coordinator, by [`0086-coordinator-stays-home/`](../0086-coordinator-stays-home/README.md)
 
 [0029](../0029-launched-sessions/README.md) made Ward launch agents — foreground, in the caller's
 terminal, dying with it — and its IF-002, since adjudicated into the

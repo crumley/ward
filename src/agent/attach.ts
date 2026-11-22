@@ -7,7 +7,7 @@
 // The asymmetry is the seam's (intent/02-subsystems/01-session-multiplexer.md):
 // attach is interactive by default and re-creates a run that has gone, because
 // attaching is most often done to take part; observe is the deliberate extra
-// act, and it never starts, re-creates, or repairs anything — watching must
+// act, and it never starts or re-creates anything — watching must
 // not disturb. Both verify the window is the record's own before showing it.
 import { WardError } from '../errors.ts';
 import type { FoundWindow, SessionHost, View, ViewRequest } from '../host/host.ts';
@@ -21,7 +21,7 @@ import {
 } from '../workspace/sessions.ts';
 import { classify, describeExit, hostedBy, hostOf, type LiveState } from './host.ts';
 import { readNaming, refreshNames } from './naming.ts';
-import { floats, placementFloor } from './placement.ts';
+import { placementFloor } from './placement.ts';
 import { resumeSession } from './run.ts';
 
 type Env = Record<string, string | undefined>;
@@ -43,10 +43,6 @@ export interface Prepared {
   readonly view: View;
   /** True when attach found the run gone (or ended) and re-created it first. */
   readonly recreated: boolean;
-  /** Floating links attach put back ("workspace-1@mbp into main-f3-alpha"). */
-  readonly repaired: readonly string[];
-  /** Repairs that failed — reported, never a reason to refuse the attach. */
-  readonly unrepaired: readonly string[];
   /** Hosts, and views of them, attach renamed in place ("ward-main-f3 is now main-f3-alpha"). */
   readonly renamed: readonly string[];
 }
@@ -115,10 +111,6 @@ export async function attachSession(root: string, id: string, options: JoinOptio
   if (own === undefined || live.group === undefined || live.window === undefined) {
     throw new WardError(`session ${id}: the host answered without a window to show`);
   }
-  const { repaired, unrepaired } = await repairFloating(root, open, own, live.group, host, {
-    workspace,
-    kind,
-  });
   const view = host.view({
     group: live.group,
     window: live.window,
@@ -129,8 +121,6 @@ export async function attachSession(root: string, id: string, options: JoinOptio
   return join(root, id, 'attached', view, host, options, {
     live,
     recreated,
-    repaired,
-    unrepaired,
     renamed,
   });
 }
@@ -170,8 +160,6 @@ export async function observeSession(root: string, id: string, options: JoinOpti
   const joined = await join(root, id, 'observed', view, host, options, {
     live,
     recreated: false,
-    repaired: [],
-    unrepaired: [],
     renamed: [],
   });
   // The host returns an observer's terminal when the watched window goes
@@ -205,7 +193,8 @@ async function endedUnder(
 /**
  * Where a view of `group` says its terminal stands, and what it wears
  * (design/0060-floor-identity/): those of the floor the group is stamped for —
- * which is not the session's own when its window was moved, or floats.
+ * which is not the session's own when its window was moved, or was linked
+ * into other hosts by an older Ward.
  */
 async function viewNaming(
   root: string,
@@ -309,55 +298,4 @@ function refuseUnknownOrStranger(
         `or start a second run beside it. Look at it; if nothing in it matters, end it: ${remedies}`,
     );
   }
-}
-
-/**
- * Put back any floating link missing from where the human is about to stand:
- * every live floating window (the coordinator) into the host being attached,
- * and — when the session attached IS a floating one — its window into every
- * floor host of this workspace. Additive only: a link is added, never removed,
- * and a failed repair is reported rather than blocking the attach.
- */
-async function repairFloating(
-  root: string,
-  open: OpenSessionListing,
-  own: FoundWindow,
-  group: string,
-  host: SessionHost,
-  context: { workspace: string; kind: HostedKind },
-): Promise<{ repaired: string[]; unrepaired: string[] }> {
-  const repaired: string[] = [];
-  const unrepaired: string[] = [];
-  const link = (session: string, window: string, into: string) => {
-    try {
-      host.link(window, into);
-      repaired.push(`${session} into ${into}`);
-    } catch (error) {
-      unrepaired.push(`${session} into ${into}: ${error instanceof Error ? error.message : error}`);
-    }
-  };
-  const all = await readAllSessions(root);
-  for (const listing of all) {
-    const { record } = listing;
-    if (record.id === open.record.id || record.state !== 'open' || !floats(record)) continue;
-    if (hostedBy(record) !== context.kind) continue;
-    const floating = classify(record, host.find(record.id), context.workspace, 0, context.kind);
-    const window = floating.own;
-    if (window === undefined || window.dead) continue;
-    if (!window.groups.some((g) => g.name === group)) link(record.id, window.window, group);
-  }
-  if (floats(open.record)) {
-    const inventory = host.inventory();
-    if (inventory.outcome === 'answered') {
-      for (const floorHost of inventory.groups) {
-        if (floorHost.viewOf !== undefined || floorHost.stamp?.workspace !== context.workspace) {
-          continue;
-        }
-        if (!own.groups.some((g) => g.name === floorHost.name)) {
-          link(open.record.id, own.window, floorHost.name);
-        }
-      }
-    }
-  }
-  return { repaired, unrepaired };
 }

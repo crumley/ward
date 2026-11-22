@@ -1,6 +1,8 @@
 // Placement (design/0031-detached-session-hosting/): which floor's host a
-// session's window belongs in, and whether it floats — both pure functions of
-// records, recomputed on every launch and never stored. Placement reads facts
+// session's window belongs in — a pure function of records, recomputed on
+// every launch and never stored. Every window lives in that one host alone:
+// the coordinator, too, stays in the ground floor's host
+// (design/0086-coordinator-stays-home/). Placement reads facts
 // that do not change over a session's life (its scope, its task's floor, its
 // recorded parent), so a re-created window lands where the first one did, and
 // a reboot reassembles every floor exactly as it stood without anything
@@ -58,11 +60,13 @@ export function placementFloor(
 }
 
 /**
- * Whether the session's window floats — is linked into every floor host. Only
- * the coordinator does: a workspace-scope session no other session started.
- * Its helpers, a ground-floor task session, and floor 0's own session sit in
- * the floor-0 host alone.
+ * Whether the session is the workspace's coordinator: a workspace-scope
+ * session no other session started. Its window stands in the floor-0 host,
+ * like its helpers', a ground-floor task session's, and floor 0's own
+ * session's (design/0086-coordinator-stays-home/); being the coordinator only
+ * decides what bare `wsa` offers, what the window is called, and that
+ * `resume --all` brings it back first.
  */
-export function floats(record: SessionRecord): boolean {
+export function isCoordinator(record: SessionRecord): boolean {
   return sessionScopeOf(record) === 'workspace' && record.parent === undefined;
 }

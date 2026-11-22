@@ -223,7 +223,7 @@ test.each<[string, InventoryGroup[], string[][], Record<string, StandingView[]>]
     { 'main-f7-x': [{ name: 'ward-main-f7-o1', mode: 'observe' }] },
   ],
   [
-    'a floating window: the host on the floor its session is placed on, not the first that shows it',
+    'a window an older Ward linked into several hosts: the host on its placement floor, not the first that shows it',
     [
       { name: 'main-f7-x', stamp: stamp(7), ...standing() },
       { name: 'main-f0-w', stamp: stamp(0), ...standing() },

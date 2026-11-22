@@ -3821,7 +3821,7 @@ async function cmdSessionResumeAll(
   let heading: string | undefined;
   const row = (session: EnactedSession) => {
     if (json) return;
-    const under = session.floats
+    const under = session.coordinator
       ? 'coordinator'
       : `floor ${session.floor} — ${floors.get(session.floor) ?? '?'}`;
     if (under !== heading) console.log(pc.bold(under));
@@ -4114,8 +4114,6 @@ async function cmdSessionJoin(verb: 'attach' | 'observe', id: string): Promise<v
         console.error(pc.dim(`re-created session ${id} from its record (it was not running)`));
       }
       for (const moved of prepared.renamed) console.error(pc.dim(`renamed: ${moved}`));
-      for (const link of prepared.repaired) console.error(pc.dim(`relinked ${link}`));
-      for (const link of prepared.unrepaired) console.error(pc.yellow(`could not relink ${link}`));
       const how = verb === 'observe' ? 'watching read-only' : 'attaching';
       console.error(
         pc.dim(
@@ -4193,9 +4191,6 @@ function renderHosted(
         ' — WARD_AGENT is set in its pane',
     ),
   );
-  if (hosted.linkedInto.length > 0) {
-    console.log(pc.dim(`linked into every floor host: ${hosted.linkedInto.join(', ')}`));
-  }
   if (hosted.live?.state === 'gone') {
     // A run that exits cleanly closes its window, and its floor host goes with
     // its last one: there may be nothing left to join, so the join command is

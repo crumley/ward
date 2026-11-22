@@ -7,7 +7,7 @@
 // caller's own terminal, and needs none of this.
 //
 // What stays OUTSIDE this interface is everything that reads a record:
-// which floor a session belongs on, whether it floats, whether a found window
+// which floor a session belongs on, whether a found window
 // is the record's own (src/agent/host.ts). A host is handed a floor number and
 // a list of tags, and never learns why — so a second host (a terminal app
 // that hosts sessions itself) is one more implementation of this interface
@@ -49,17 +49,6 @@ export interface PlaceRequest {
   readonly env: Readonly<Record<string, string>>;
   /** The whole command: program, then its arguments. */
   readonly command: readonly string[];
-  /**
-   * Whether this window FLOATS — is linked into every other group of the
-   * workspace as well as living in its own.
-   */
-  readonly floats: boolean;
-  /**
-   * The tags of the windows that float, so a group created by this placement
-   * links them in. Each is found by its tags; one that is missing, dead, or of
-   * another generation is skipped.
-   */
-  readonly floating: readonly WindowTags[];
   /** The Ward version, stamped on a group this placement creates. */
   readonly version: string;
 }
@@ -105,14 +94,15 @@ export interface Placement {
   readonly window: string;
   /** True when this placement created the group. */
   readonly createdGroup: boolean;
-  /** Further groups the window was linked into (a floating window). */
-  readonly linkedInto: readonly string[];
 }
 
 /** One window found carrying a session tag. */
 export interface FoundWindow {
   readonly window: string;
-  /** Every group the window appears in — several when it is linked. */
+  /**
+   * Every group the window appears in — several only when something linked it
+   * (an older Ward's floating coordinator, design/0086-coordinator-stays-home/).
+   */
   readonly groups: readonly FoundGroup[];
   readonly tags: WindowTags;
   /**
@@ -350,11 +340,6 @@ export interface SessionHost {
    */
   typeLine(request: TypeRequest): TypeResult;
   /**
-   * Show a window in a further group as well — additive, never destructive.
-   * A window already in the group is left as it is.
-   */
-  link(window: string, group: string): void;
-  /**
    * Bring names and titles up to date in place: rename each group to the name
    * wanted (left as it is when another group already wears that name), title
    * it, dress it in the identity given, bring each view named with it after
@@ -389,6 +374,11 @@ export interface SessionHost {
   closeCommand(window: string): string;
   /** The command that ends one group (only unlinking what other groups also show). */
   endGroupCommand(group: string): string;
+  /**
+   * The command that takes one window out of one group it is linked into,
+   * leaving it standing in the others — for a finding's remedy.
+   */
+  unlinkCommand(window: string, group: string): string;
   /** The command that stops new windows inheriting one variable from the host. */
   forgetEnvCommand(name: string): string;
 }

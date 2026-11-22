@@ -3,7 +3,7 @@
 // fabricates one state and says what doctor must report — and every finding
 // that names something live carries the command that would end it, for a
 // human to run. Nothing here is ever ended: the fake records every close and
-// link it is asked for, and the suite asserts it was asked for none.
+// placement it is asked for, and the suite asserts it was asked for none.
 import { afterAll, beforeEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
@@ -118,20 +118,47 @@ const rows: Row[] = [
     expected: [info('host windows', 'stands in', "not floor 1's host — attach follows it")],
   },
   {
-    name: "the coordinator's missing link: attach repairs it",
+    name: 'the coordinator in its own host alone, with other floor hosts standing: a clean bill',
     arrange: async () => {
+      await openProject(ws, 'alpha');
       const c = await hosted();
-      return { windows: [win(c, ['f0'])], groups: [floorHost('f3')] };
+      const f = await hostedFloor(1);
+      return { windows: [win(c, ['f0'], '@1'), win(f, ['f1'], '@2')], groups: [floorHost('f3')] };
     },
-    expected: [info('host windows', 'not linked into', host('f3'), 'attach repairs it')],
+    expected: [ok('host windows', '2 windows — every window answers to an open record')],
   },
   {
-    name: 'an idle host: only the coordinator, so tmux keeps it — kill-session named as an option',
+    name: "an older Ward's coordinator links: named, with the unlink for each, never undone",
+    arrange: async () => {
+      await openProject(ws, 'alpha');
+      const c = await hosted();
+      const f = await hostedFloor(1);
+      return { windows: [win(c, ['f0', 'f1'], '@1'), win(f, ['f1'], '@2')] };
+    },
+    expected: [
+      info(
+        'host windows',
+        `window @1 is also linked into ${host('f1')}`,
+        'the links go when its run ends',
+        `fake unlink @1 from ${host('f1')}`,
+      ),
+    ],
+  },
+  {
+    name: 'an idle host: only an older link to the coordinator, so tmux keeps it — kill-session named',
     arrange: async () => {
       const c = await hosted();
       return { windows: [win(c, ['f0', 'f3'])] };
     },
-    expected: [info('floor hosts', `${host('f3')} holds nothing of floor 3's own`, 'fake end')],
+    expected: [
+      info('host windows', `also linked into ${host('f3')}`, `fake unlink @1 from ${host('f3')}`),
+      info(
+        'floor hosts',
+        `${host('f3')} holds nothing of floor 3's own`,
+        'only links to windows that live in another host',
+        `fake end ${host('f3')}`,
+      ),
+    ],
   },
   {
     name: 'two hosts for one floor: the oldest is used, the other named with its remedy',
@@ -211,7 +238,7 @@ test.each(rows)('$name', async (row) => {
   expect(rest).toHaveLength(row.expected.length);
   expect(findings.some((finding) => finding.severity === 'error')).toBe(false);
   expect(host.closed).toEqual([]); // hygiene reports; it never ends anything
-  expect(host.links).toEqual([]);
+  expect(host.placed).toEqual([]);
 });
 
 test.each<[string, Resolved<AgentHost>, Finding['severity']]>([

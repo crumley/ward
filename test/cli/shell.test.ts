@@ -151,7 +151,7 @@ test('a registry that will not parse degrades to no candidates, never to shell n
   }
 });
 
-test('`shell candidates coordinators` offers the floating sessions this machine can join', async () => {
+test('`shell candidates coordinators` offers the coordinators this machine can join', async () => {
   await register(beta); // beta first, so it is the default
   await register(alpha);
   const open = async (cwd: string, purpose: string, env: Record<string, string> = {}) => {

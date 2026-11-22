@@ -401,8 +401,15 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '94d63cfdcca898c4ac45fc17456165a29ff971b44116c8ff0cac9f5d43fee7b9',
         era: 'design 0088 (floor by slug)',
       },
-      // Current since 0078's --new-task (build log 2026-11-22): a topic
-      // session opens its task and the session working it in one step.
+      // 0078's --new-task (build log 2026-11-22): a topic session opens its
+      // task and the session working it in one step. The coordinator still
+      // floated into every floor host.
+      {
+        sha256: 'bcbc6883c45592c0237978e811452ec0428c77c03124bcafe8fbc0991576d4ec',
+        era: "0078's --new-task",
+      },
+      // Current since design 0086: the coordinator stays in the ground
+      // floor's host, linked into no other.
     ],
   },
 ];

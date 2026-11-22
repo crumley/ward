@@ -158,7 +158,7 @@ test('plan: the coordinator, then floor by floor — a floor’s own session bef
 
   const plan = await planResumeAll(ws, { host: fakeHost() });
 
-  expect(plan.sessions.map((s) => [s.record.id, s.floor, s.floats])).toEqual([
+  expect(plan.sessions.map((s) => [s.record.id, s.floor, s.coordinator])).toEqual([
     [coordinator.id, 0, true],
     [ground.id, 0, false],
     [alphaTwo.id, 1, false],
@@ -359,7 +359,6 @@ function placed(session: string, live: Pick<LiveState, 'state' | 'exitStatus'>):
       group: 'host-0',
       window: '@7',
       createdGroup: false,
-      linkedInto: [],
       join: 'fake join host-0',
       live: { kind: 'tmux', floor: 0, window: '@7', strangers: [], ...live },
     },
