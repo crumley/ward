@@ -13,6 +13,7 @@
 import { expect } from 'bun:test';
 import { claudeInputLine } from '../../src/harness/claude.ts';
 import type { GroupIdentity, PlaceRequest, SessionHost } from '../../src/host/host.ts';
+import { eraseArgv, typeArgv } from '../../src/host/tmux.ts';
 import type { Scenario, Stage } from './scripted-tmux.ts';
 
 export const WS = 'ws-conformance';
@@ -595,9 +596,21 @@ export const SCENARIOS: readonly Scenario[] = [
         claudeInputLine(stage.peek('capture-pane', '-p', '-t', pane))?.text ?? null;
       const type = (text: string, session = 'target', window = target.window) =>
         host.typeLine({ window, session, text, inputLine: claudeInputLine });
+      // The stand-in's answers to the host's keys — the echo of a typed line,
+      // the redraw once one is submitted, the line after an erase — reach the
+      // screen before the host reads it again (see sameCall, below).
+      const answers = (
+        ...screens: [match: (argv: readonly string[]) => boolean, line: string][]
+      ) => {
+        for (const [match, wanted] of screens) {
+          stage.settleAfter(match, () => line() === wanted);
+        }
+      };
+      const typing = (text: string) => sameCall(typeArgv(pane, text));
       stage.waitFor('the prompt', () => line() === '');
 
       // Typed, read back alone on the line, submitted once.
+      answers([typing('hello there'), 'hello there'], [submitting, '']);
       expect(type('hello there')).toEqual({ outcome: 'typed' });
       stage.waitFor('the line to be read', () => stage.read('typed.log') !== '');
       if (stage.live) expect(stage.read('typed.log')).toBe('target: hello there\n');
@@ -606,6 +619,7 @@ export const SCENARIOS: readonly Scenario[] = [
       // specially survives the check tmux makes before it sends the key.
       stage.waitFor('the prompt again', () => line() === '');
       const awkward = '[ward] a,b}{#x (y) $z ^q |r *s +t ?u .v \\\\w #{session_name} ....';
+      answers([typing(awkward), awkward], [submitting, '']);
       expect(type(awkward)).toEqual({ outcome: 'typed' });
       stage.waitFor('the awkward line to be read', () => stage.read('typed.log').includes('....'));
       if (stage.live) {
@@ -616,6 +630,10 @@ export const SCENARIOS: readonly Scenario[] = [
       stage.waitFor('the prompt again', () => line() === '');
       stage.tmux('send-keys', '-t', pane, '-l', '--', 'half a thought');
       stage.waitFor('the words on the line', () => line() === 'half a thought');
+      answers(
+        [typing('hello'), 'half a thoughthello'],
+        [sameCall(eraseArgv(pane, 'hello'.length)), 'half a thought'],
+      );
       expect(type('hello')).toEqual({
         outcome: 'withheld',
         reason: 'its input line already held text — put back as it was',
@@ -680,6 +698,11 @@ export const SCENARIOS: readonly Scenario[] = [
       const pane = windowOption(stage, target.window, '@ward_pane');
       const screen = () => stage.peek('capture-pane', '-p', '-t', pane);
       stage.waitFor('the prompt', () => claudeInputLine(screen())?.text === '');
+      // The echo is on the screen before the host reads the line back (see sameCall, below).
+      stage.settleAfter(
+        sameCall(typeArgv(pane, 'hello there')),
+        () => claudeInputLine(screen())?.text === 'hello there',
+      );
       stage.holdBefore(
         (argv) => argv.some((arg) => arg.includes('Enter')),
         () => {
@@ -708,6 +731,29 @@ export const SCENARIOS: readonly Scenario[] = [
     },
   },
 ];
+
+// -- a pane's answers, settled ----------------------------------------------------
+
+// A stand-in answers a key a moment after tmux sends it: the terminal echoes
+// typed characters, and a submitted line is read and the screen redrawn. The
+// host reads the screen back in a poll (typeLine), and the recording keeps
+// every read that differs from the one before — so a read that landed before
+// the answer, and the poll after it, would be in a slow machine's recording
+// and not in a quick one's. `stage.settleAfter` lets each of these calls
+// return only once its answer is on the screen: the host's next read is then
+// the settled one on every machine. That the host waits out a slow answer is
+// shown by fault cases in tmux-scripted.test.ts, where the number of polls is
+// the script's to set.
+
+/** A host call equal to `argv`. */
+function sameCall(argv: readonly string[]): (call: readonly string[]) => boolean {
+  return (call) => call.length === argv.length && call.every((word, i) => word === argv[i]);
+}
+
+/** The host's submitting call (submitArgv): the guarded Enter. */
+function submitting(call: readonly string[]): boolean {
+  return call[0] === 'if-shell' && call.some((word) => word.includes(' Enter'));
+}
 
 // -- reads of tmux, as the scenario's own ----------------------------------------
 

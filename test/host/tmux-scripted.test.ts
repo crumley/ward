@@ -480,6 +480,53 @@ describe('typeLine', () => {
       },
       20,
     ],
+    // A pane answers keys a moment after they are sent; under load the
+    // host's first read can come before the answer, and it polls on. (The
+    // live scenarios let each answer settle first — tmux-scenarios.ts,
+    // settleAfter — so these are the cases that show the polls.)
+    [
+      'the echo of the typed line reaches the screen a poll late: typed',
+      [
+        ...tagged(),
+        capture(prompt('')),
+        call(typeArgv('%1', TEXT)),
+        capture(prompt('')),
+        capture(prompt('hel')),
+        capture(prompt(TEXT)),
+        submit(prompt(TEXT)),
+        capture(prompt('')),
+      ],
+      { outcome: 'typed' },
+      2,
+    ],
+    [
+      'the line is cleared a poll after the key: typed',
+      [
+        ...tagged(),
+        capture(prompt('')),
+        call(typeArgv('%1', TEXT)),
+        capture(prompt(TEXT)),
+        submit(prompt(TEXT)),
+        capture(prompt(TEXT)),
+        capture(prompt('')),
+      ],
+      { outcome: 'typed' },
+      1,
+    ],
+    [
+      'held text: the erase reaches the screen a poll late, then reads as it was',
+      [
+        ...tagged(),
+        capture(prompt('draft')),
+        call(typeArgv('%1', TEXT)),
+        capture(prompt(`draft ${TEXT}`)),
+        call(eraseArgv('%1', TEXT.length)),
+        capture(prompt(`draft ${TEXT}`)),
+        capture(prompt('draft')),
+      ],
+      { outcome: 'withheld', reason: 'its input line already held text — put back as it was' },
+      21,
+    ],
     [
       'the screen leaves its input line once submitted (a turn begins): typed',
       [

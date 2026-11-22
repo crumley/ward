@@ -91,6 +91,16 @@ export interface Stage {
    * made deterministic on a real tmux. Played back, nothing races.
    */
   holdBefore(match: (argv: readonly string[]) => boolean, done: () => boolean): void;
+  /**
+   * Let the host's next call matching `match` return only once `done` holds:
+   * what the call set off in a pane (the terminal's echo of typed keys, a
+   * stand-in's redraw after a submitted line) is on the screen before the
+   * host reads it again. A real pane answers a key a moment later, so without
+   * this the host's first read after it may come before or after the answer,
+   * and how many polls it took — which the recording keeps — would depend on
+   * the machine's load. Played back, the recorded reads already show it.
+   */
+  settleAfter(match: (argv: readonly string[]) => boolean, done: () => boolean): void;
 }
 
 export interface Scenario {
@@ -143,15 +153,24 @@ export function playback(name: string, steps: readonly Step[]): Playback {
   const kills: string[] = [];
   let strayed: string | undefined;
   const take = <K extends Step['kind']>(kind: K, argv: readonly string[]) => {
-    // A screen read asked again at once is answered again: the recording
-    // kept one of a run of identical reads (see normalize).
+    const step = steps[next];
+    // A screen read asked again at once is answered again — the recording
+    // kept one of a run of identical reads (see normalize) — unless the
+    // transcript goes on with the same read: the screen moved while the host
+    // polled, and the next answer is the moved one.
     const held = steps[next - 1];
-    if (held?.kind === 'run' && kind === 'run' && isScreenRead(argv) && sameArgv(held.argv, argv)) {
+    const ahead = step?.kind === kind && sameArgv(step.argv, argv);
+    if (
+      !ahead &&
+      held?.kind === 'run' &&
+      kind === 'run' &&
+      isScreenRead(argv) &&
+      sameArgv(held.argv, argv)
+    ) {
       return held as Extract<Step, { kind: K }>;
     }
-    const step = steps[next];
     const wanted = step === undefined ? 'nothing more' : `${step.kind} ${show(step.argv)}`;
-    if (step?.kind !== kind || !sameArgv(step.argv, argv)) {
+    if (!ahead || step === undefined) {
       strayed ??=
         `${name}, step ${next + 1}: the host sent ${kind} ${show(argv)}, ` +
         `but the transcript has ${wanted} — re-record it (WARD_RECORD_TMUX=1 bun test ` +
@@ -206,6 +225,7 @@ export function playback(name: string, steps: readonly Step[]): Playback {
     touch: () => {},
     read: () => '',
     holdBefore: () => {},
+    settleAfter: () => {},
   };
   return {
     stage,
@@ -231,7 +251,10 @@ export interface Recording {
   readonly stage: Stage;
   /** Everything recorded so far, normalized: what the transcript would hold. */
   transcript(): Transcript;
-  /** Wait for any client the host started, so its exit is in the transcript. */
+  /**
+   * Wait for any client the host started, so its exit is in the transcript;
+   * throws when a hold or a settle the scenario set never met its call.
+   */
   settled(): Promise<void>;
 }
 
@@ -248,7 +271,9 @@ export function recording(
   env: Record<string, string>,
 ): Recording {
   const steps: Step[] = [];
-  const holds: { match: (argv: readonly string[]) => boolean; done: () => boolean }[] = [];
+  type Hold = { match: (argv: readonly string[]) => boolean; done: () => boolean };
+  const holds: Hold[] = [];
+  const settles: Hold[] = [];
   const clients: Promise<unknown>[] = [];
   const spawn = (argv: readonly string[]): TmuxReply => {
     const result = Bun.spawnSync([tmuxBin, '-L', socket, ...argv], {
@@ -271,6 +296,11 @@ export function recording(
         waitSync(`the hold before ${show(argv)}`, done);
       }
       const reply = spawn(argv);
+      const settle = settles.findIndex((each) => each.match(argv));
+      if (settle !== -1) {
+        const [{ done } = { done: () => true }] = settles.splice(settle, 1);
+        waitSync(`the pane to answer ${show(argv)}`, done);
+      }
       steps.push({
         kind: 'run',
         argv: [...argv],
@@ -351,6 +381,9 @@ export function recording(
     holdBefore: (match, done) => {
       holds.push({ match, done });
     },
+    settleAfter: (match, done) => {
+      settles.push({ match, done });
+    },
   };
   return {
     stage,
@@ -361,6 +394,11 @@ export function recording(
     }),
     settled: async () => {
       await Promise.all(clients);
+      if (holds.length + settles.length > 0) {
+        throw new Error(
+          `${name}: ${holds.length} hold(s) and ${settles.length} settle(s) met no call of the host's`,
+        );
+      }
     },
   };
 }
