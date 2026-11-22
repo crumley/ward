@@ -663,9 +663,15 @@ async function placeWorktrees(ctx: ConvergeContext): Promise<StepReport> {
  */
 async function linkOutsideWorktreesStep(ctx: ConvergeContext): Promise<StepReport> {
   const step = 'outside worktree links';
-  const { linked } = await linkOutsideWorktrees(ctx.root);
-  if (linked.length === 0) return { step, outcome: 'satisfied', detail: 'every one linked' };
-  return { step, outcome: 'established', detail: linked.join(', ') };
+  const { linked, unlinked } = await linkOutsideWorktrees(ctx.root);
+  if (linked.length === 0 && unlinked.length === 0) {
+    return { step, outcome: 'satisfied', detail: 'every one linked' };
+  }
+  const parts = [
+    ...(linked.length === 0 ? [] : [linked.join(', ')]),
+    ...(unlinked.length === 0 ? [] : [`${unlinked.join(', ')} removed (its task moved)`]),
+  ];
+  return { step, outcome: 'established', detail: parts.join('; ') };
 }
 
 /**

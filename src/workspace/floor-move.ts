@@ -343,7 +343,7 @@ export async function moveFloor(
       );
     }
     const collided = projectDirs(root).filter((dir) => dirFloor(dir) === fromFloor).length > 1;
-    const records = await moveRecords(root, project, toDir, { ...target, floor: toFloor });
+    const moved = await moveRecords(root, project, toDir, { ...target, floor: toFloor });
     const renumbered =
       toFloor === fromFloor
         ? { written: [], named: [] }
@@ -354,7 +354,7 @@ export async function moveFloor(
         ? `Rename floor ${fromFloor} from ${project.record.slug} to ${target.slug}`
         : `Renumber floor ${fromFloor} (${project.record.slug}) to ${toFloor}`,
       toDir,
-      ...renumbered.written.filter((path) => !within(path, toDir)),
+      ...[...moved, ...renumbered.written].filter((path) => !within(path, toDir)),
     );
     const settled = await settleFloor(root, toFloor);
     return {
@@ -362,7 +362,7 @@ export async function moveFloor(
       from,
       to,
       outcome: 'moved' as const,
-      records: [...records, ...renumbered.written],
+      records: [...moved, ...renumbered.written],
       named: renumbered.named,
       ...settled,
     };
@@ -628,22 +628,28 @@ async function moveRecords(
     }
   }
 
-  // The reflection cursor is the set of task directories the floor's
-  // reflections name: left spelling the old directory, every covered task
-  // would read as unreflected again. A renumber rewrites the floor each says.
-  for (const found of await readReflections(root, toDir)) {
-    const tasks = found.record.tasks.map((task) =>
-      within(task.dir, fromDir) ? { ...task, dir: toDir + task.dir.slice(fromDir.length) } : task,
-    );
-    const sameTasks = tasks.every((task, index) => task.dir === found.record.tasks[index]?.dir);
-    if (sameTasks && found.record.floor === target.floor) continue;
-    const reflection = reflectionRecordType(toDir, found.record.number);
-    const current = await readDocument(root, reflection);
-    await writeDocument(root, reflection, {
-      data: { ...current.data, tasks, floor: target.floor },
-      body: current.body,
-    });
-    written.push(reflection.relPath);
+  // The reflection cursor is the set of task directories the reflections
+  // name: left spelling the old directory, every covered task would read as
+  // unreflected again. Every floor's reflections are asked, since a task moved
+  // here from another floor is covered by that floor's
+  // (design/0083-reflection-coverage-across-floors/). A renumber rewrites the
+  // floor this floor's own reflections say.
+  for (const dir of projectDirs(root)) {
+    for (const found of await readReflections(root, dir)) {
+      const tasks = found.record.tasks.map((task) =>
+        within(task.dir, fromDir) ? { ...task, dir: toDir + task.dir.slice(fromDir.length) } : task,
+      );
+      const sameTasks = tasks.every((task, index) => task.dir === found.record.tasks[index]?.dir);
+      const floor = dir === toDir ? target.floor : found.record.floor;
+      if (sameTasks && found.record.floor === floor) continue;
+      const reflection = reflectionRecordType(dir, found.record.number);
+      const current = await readDocument(root, reflection);
+      await writeDocument(root, reflection, {
+        data: { ...current.data, tasks, floor },
+        body: current.body,
+      });
+      written.push(reflection.relPath);
+    }
   }
   return written;
 }
@@ -719,7 +725,10 @@ async function renumberRecords(
     if (!existsSync(join(root, type.relPath))) continue;
     const current = await readDocument(root, type);
     const mine = ours.includes(task);
-    const to = mine && current.data.to === fromFloor;
+    // A hand-off sent here whose task has since moved to another floor
+    // (design/0082-task-move/) still names this floor as where it was sent;
+    // its pick-up is read from this floor's sessions by that number.
+    const to = (mine || !collided) && current.data.to === fromFloor;
     const sent =
       current.data.fromFloor === fromFloor &&
       (!collided ||
@@ -784,12 +793,41 @@ async function settleFloor(
 ): Promise<Pick<FloorMoveReport, 'worktrees' | 'view'>> {
   const project = await resolveProject(root, floor);
   if (carriesView(project)) await establishFloorView(root, project);
+  const { worktrees, rewritten } = await placeTaskWorktrees(
+    root,
+    floorTasks(await readTasks(root), project.dir),
+  );
+  // A worktree record the move did not already rewrite — one standing away
+  // from its placement before the rename — journals as the placement step
+  // journals it.
+  if (rewritten.length > 0) {
+    commitRecords(
+      root,
+      `Move worktrees of floor ${floor} to ${floorViewDir(project.dir)}/`,
+      ...rewritten,
+    );
+  }
+  const { retired, residue } = await retireStaleViews(root);
+  return { worktrees, view: { dir: floorViewDir(project.dir), retired, residue } };
+}
+
+/**
+ * Bring each task's worktrees to their placements on this machine: a checkout
+ * moved with `git worktree move`, an outside worktree linked from its
+ * placement, a record left behind rewritten (returned in `rewritten`, for the
+ * caller's commit). Shared by a floor's move and a task's
+ * (design/0082-task-move/), so the two settle a checkout the same way.
+ */
+export async function placeTaskWorktrees(
+  root: string,
+  tasks: readonly FoundTask[],
+): Promise<{ readonly worktrees: MovedWorktree[]; readonly rewritten: string[] }> {
   const sessions = (await readOpenSessions(root)).map((listing) => listing.record);
   const claims = await openWorktreeClaims(root);
   const machine = (await readMachine()).name;
   const worktrees: MovedWorktree[] = [];
   const rewritten: string[] = [];
-  for (const task of floorTasks(await readTasks(root), project.dir)) {
+  for (const task of tasks) {
     for (const entry of await readTaskWorktreeEntries(root, task.dir)) {
       const base = { address: taskAddress(task), branch: entry.record.branch };
       if (standsOutside(entry.record)) {
@@ -820,18 +858,7 @@ async function settleFloor(
       }
     }
   }
-  // A worktree record the move did not already rewrite — one standing away
-  // from its placement before the rename — journals as the placement step
-  // journals it.
-  if (rewritten.length > 0) {
-    commitRecords(
-      root,
-      `Move worktrees of floor ${floor} to ${floorViewDir(project.dir)}/`,
-      ...rewritten,
-    );
-  }
-  const { retired, residue } = await retireStaleViews(root);
-  return { worktrees, view: { dir: floorViewDir(project.dir), retired, residue } };
+  return { worktrees, rewritten };
 }
 
 /**
@@ -842,8 +869,16 @@ async function settleFloor(
  */
 export async function linkOutsideWorktrees(
   root: string,
-): Promise<{ readonly linked: readonly string[] }> {
+): Promise<{ readonly linked: readonly string[]; readonly unlinked: readonly string[] }> {
   const machine = (await readMachine()).name;
+  // A link a task moved off its floor left in that floor's view
+  // (design/0082-task-move/) goes first, so the placement it may share with
+  // the task now in that room is free.
+  const unlinked: string[] = [];
+  for (const stray of await strayOutsideLinks(root)) {
+    unlinkSync(join(root, stray));
+    unlinked.push(stray);
+  }
   const linked: string[] = [];
   for (const task of await readTasks(root)) {
     if (task.record.state === 'closed' || taskFloor(task) === undefined) continue;
@@ -859,7 +894,40 @@ export async function linkOutsideWorktrees(
       linked.push(placement);
     }
   }
-  return { linked };
+  return { linked, unlinked };
+}
+
+/**
+ * Links in an open floor's view onto an outside worktree an open task records,
+ * standing where no open task places that worktree — what a task moved to
+ * another floor leaves in the view it left, here or on any machine that
+ * pulled the move (design/0082-task-move/). Workspace-relative. Read-only:
+ * doctor names them, and the outside-links step removes them. A link onto
+ * anything else is not one Ward can tell it made, and is never named.
+ */
+export async function strayOutsideLinks(root: string): Promise<string[]> {
+  const placements = new Map<string, Set<string>>();
+  for (const { task, record } of await openWorktreeClaims(root)) {
+    if (!standsOutside(record)) continue;
+    const target = resolve(record.path);
+    const set = placements.get(target) ?? new Set<string>();
+    set.add(worktreePlacement(task, record.branch));
+    placements.set(target, set);
+  }
+  if (placements.size === 0) return [];
+  const stray: string[] = [];
+  for (const project of (await readProjects(root)).filter(carriesView)) {
+    const view = floorViewDir(project.dir);
+    if (!existsSync(join(root, view))) continue;
+    for (const entry of readdirSync(join(root, view)).sort()) {
+      const path = `${view}/${entry}`;
+      const at = join(root, path);
+      if (!lstatOrUndefined(at)?.isSymbolicLink()) continue;
+      const own = placements.get(resolve(dirname(at), readlinkSync(at)));
+      if (own !== undefined && !own.has(path)) stray.push(path);
+    }
+  }
+  return stray;
 }
 
 // -- stale views -------------------------------------------------------------------

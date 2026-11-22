@@ -425,8 +425,14 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: 'e5e54c0cb7aca0a2d780fc3eefafba25125214847a478d21dbcab4b885ab7a9c',
         era: 'design 0084 (session move)',
       },
-      // Current since design 0089: every floor has an attending, window 1 of
+      // design 0089 — every floor has an attending, window 1 of
       // its host, and wsa N joins it.
+      {
+        sha256: '5be5a3cd7ee174f0c002539b1bdb5e422f8839b86b014cfe1f72707bf57fc3d1',
+        era: "design 0089 (the floor's attending)",
+      },
+      // Current since design 0082: a task is moved to another floor with
+      // ward task move.
     ],
   },
 ];

@@ -169,6 +169,7 @@ import {
   refuseStewardshipCopy,
   stewardshipEnclosure,
 } from '../workspace/steward.ts';
+import { moveTasks, type TaskMoveReport } from '../workspace/task-move.ts';
 import {
   addTaskPr,
   type CloseReport,
@@ -227,6 +228,7 @@ import {
   taskDispatchesJson,
   taskDispatchJson,
   taskListJson,
+  taskMoveJson,
   taskMutationJson,
   taskShowJson,
   workspaceCreateJson,
@@ -974,6 +976,33 @@ const task = command(
         brief: message`Where hand-offs between floors stand: pending, picked up, or closed and how.`,
       },
     ),
+    // Moving tasks between floors (design/0082-task-move/): one open task with
+    // everything it holds, taking the next room on the target floor, or any
+    // number of closed ones, re-homed with their rooms where they can keep them.
+    command(
+      'move',
+      object({
+        action: constant('task-move'),
+        codes: multiple(argument(taskIdentity('ADDRESS'))),
+        to: option('--to', floorNumber(), {
+          description: message`The floor the task moves to.`,
+        }),
+        slug: optional(
+          option('--slug', string({ metavar: 'TEXT' }), {
+            description: message`With --from: also every closed task on that floor whose slug contains TEXT.`,
+          }),
+        ),
+        from: optional(
+          option('--from', floorNumber('any'), {
+            description: message`The floor --slug chooses closed tasks from.`,
+          }),
+        ),
+        json: jsonFlag(),
+      }),
+      {
+        brief: message`Move a task to another floor: an open one with its worktrees and sessions, taking the next room there; closed ones in batches, keeping their rooms. A floor session working it follows with: ward session move ID --floor N --task ADDRESS.`,
+      },
+    ),
     command(
       'close',
       object({
@@ -1703,6 +1732,21 @@ async function answer(invoked: Invocation): Promise<void> {
             result.json,
           );
           break;
+        case 'task-move': {
+          const root = await requireMutableWorkspace();
+          const caller = declaredSession();
+          const report = await moveTasks(root, result.codes, result.to, {
+            ...(caller === undefined ? {} : { caller }),
+            ...(result.slug === undefined ? {} : { slug: result.slug }),
+            ...(result.from === undefined ? {} : { from: result.from }),
+          });
+          if (result.json) {
+            printJson(taskMoveJson(report));
+            break;
+          }
+          renderTaskMove(report);
+          break;
+        }
         case 'task-close':
           await cmdTaskClose(result.code, result.outcome, result.json);
           break;
@@ -2901,8 +2945,42 @@ function renderRenumber(report: FloorMoveReport): void {
   }
 }
 
+/** `task move` (design/0082-task-move/): each task's old and new address, then the disk half. */
+function renderTaskMove(report: TaskMoveReport): void {
+  for (const task of report.tasks) {
+    if (task.outcome === 'satisfied') {
+      console.log(pc.dim(`${task.to.address} ${task.slug} is already on floor ${report.floor}`));
+      continue;
+    }
+    console.log(
+      `${pc.green('moved')} ${task.from.address} ${task.slug} → ${pc.bold(task.to.address)} ` +
+        pc.dim(`(floor ${report.floor}, ${task.room === 'kept' ? 'room kept' : 'next room'})`),
+    );
+  }
+  for (const { session, task } of report.cleared) {
+    console.log(pc.dim(`session ${session} no longer works ${task}`));
+  }
+  renderFloorMove({
+    outcome: report.outcome,
+    worktrees: report.worktrees,
+    view: { dir: '', retired: [], residue: [] },
+    ...(report.hosts === undefined ? {} : { hosts: { ...report.hosts, restamped: [] } }),
+  });
+  for (const path of report.unlinked) console.log(pc.dim(`removed ${path}`));
+  const moved = report.tasks.filter((task) => task.outcome === 'moved');
+  const open = moved.find((task) => task.state !== 'closed');
+  if (open !== undefined) {
+    console.log(
+      pc.dim(`${open.from.address} no longer names it: the task is ${open.to.address} now`),
+    );
+  }
+  for (const line of report.next) console.log(pc.dim(`next: ${line}`));
+}
+
 /** What a rename and a renumber both report: the worktrees, the view, the hosts. */
-function renderFloorMove(report: FloorMoveReport): void {
+function renderFloorMove(
+  report: Pick<FloorMoveReport, 'outcome' | 'worktrees' | 'view' | 'hosts'>,
+): void {
   for (const worktree of report.worktrees) {
     const at = `${worktree.address} ${worktree.branch}`;
     switch (worktree.outcome) {
@@ -3263,8 +3341,9 @@ function renderDispatch(standing: DispatchStanding): string {
     record.fromFloor !== undefined
       ? `floor ${record.fromFloor}`
       : (record.fromSession ?? 'a human');
+  const moved = standing.floor === undefined ? '' : `, now on floor ${standing.floor}`;
   return (
-    `${pc.bold(standing.address)} ${task.record.slug} ${pc.dim(`${from} → floor ${record.to}`)} ` +
+    `${pc.bold(standing.address)} ${task.record.slug} ${pc.dim(`${from} → floor ${record.to}${moved}`)} ` +
     `[${renderDispatchState(standing)}]`
   );
 }

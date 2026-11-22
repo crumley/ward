@@ -671,8 +671,8 @@ export async function continueSession(
     const from = describeScope(record);
     if (sessionScopeOf(record) === 'task') {
       throw new WardError(
-        `session ${id} is at ${from} — a task-scope session is moved by moving its task, not by ` +
-          'this verb',
+        `session ${id} is at ${from} — a task-scope session is moved by moving its task (ward task move), ` +
+          'not by this verb',
       );
     }
     if (record.handle === undefined) {
