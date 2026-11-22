@@ -142,6 +142,7 @@ test('a refresh renames only what is verifiably this workspace’s own, and neve
     // The host is dressed as its floor in the same pass, by its new name
     // (0060), and the view with it, by its own.
     themed: [{ floor: 0, names: [`${name}-f0-workspace`, `${name}-f0-workspace-v1`] }],
+    restamped: [],
   });
   expect(host.renames).toEqual([
     {
@@ -165,6 +166,7 @@ test('a refresh renames only what is verifiably this workspace’s own, and neve
     renamed: [],
     failed: [],
     themed: [],
+    restamped: [],
   });
   expect(silent.renames).toEqual([]);
 });

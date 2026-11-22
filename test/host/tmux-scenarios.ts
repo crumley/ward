@@ -265,6 +265,39 @@ export const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
+    name: 'restamp-a-host',
+    run(stage) {
+      const host = stage.host();
+      host.prepare();
+      const alpha = host.place(request(stage, 'alpha', { floor: 1 }));
+      // A renumbered floor's host takes its new number in place
+      // (design/0081-floor-renumber/): the same session, the same window.
+      expect(host.restamp(F1, 22)).toEqual({ outcome: 'restamped' });
+      expect(sessionOption(stage, F1, '@ward_floor')).toBe('22');
+      expect(sessionOption(stage, F1, '@ward_workspace')).toBe(WS);
+      // Found by the new number: the floor's next run joins it.
+      const next = host.place(request(stage, 'alpha-2', { floor: 22, name: 'main-f22-alpha' }));
+      expect(next).toMatchObject({ group: F1, createdGroup: false });
+      expect(host.find('alpha')).toEqual({
+        outcome: 'answered',
+        windows: [
+          {
+            window: alpha.window,
+            groups: [{ name: F1, stamp: { workspace: WS, floor: 22 }, index: 1 }],
+            tags: { session: 'alpha', epoch: epoch('alpha') },
+            dead: false,
+          },
+        ],
+      });
+      // A host the server does not hold is not stamped, and nothing is made.
+      expect(host.restamp('main-f9-x', 9)).toEqual({
+        outcome: 'failed',
+        reason: 'no such session: =main-f9-x:',
+      });
+      expect(groupNames(stage)).toEqual([F1]);
+    },
+  },
+  {
     name: 'close-a-window',
     run(stage) {
       const host = stage.host();

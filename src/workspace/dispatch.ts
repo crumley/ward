@@ -24,7 +24,7 @@ import {
   sessionScopeOf,
   type TaskRecord,
 } from '../store/types.ts';
-import { distinctAddress, qualifiedAddress, taskAddress } from './address.ts';
+import { distinctAddress, parseTaskAddress, qualifiedAddress, taskAddress } from './address.ts';
 import { briefBody, writeBrief } from './briefs.ts';
 import { commitRecords, type FoundTask, readTasks, requireSlug } from './scan.ts';
 import { findSession, type OpenSessionListing, readSessions } from './sessions.ts';
@@ -204,7 +204,25 @@ export function pickUpOf(sessions: readonly SessionRecord[], named?: string): Pi
 function takenUpAt(session: SessionRecord, named: string | undefined): string | undefined {
   if (sessionScopeOf(session) !== 'project') return session.openedAt;
   if (named === undefined) return undefined;
-  return session.events?.find((event) => event.event === 'task-named' && event.task === named)?.at;
+  return session.events?.find(
+    (event) => event.event === 'task-named' && sameRoom(event.task, named),
+  )?.at;
+}
+
+/**
+ * Whether a `task-named` event's address names the task `named` spells. The
+ * sessions asked are the task's floor's own, so the room and slug are enough:
+ * together they name one task on a floor for good. The floor half is not
+ * compared, because a renumber (design/0081-floor-renumber/) changes it while
+ * the trail keeps the address as it was said — and a hand-off picked up
+ * before the renumber was still picked up.
+ */
+function sameRoom(said: string | undefined, named: string): boolean {
+  if (said === undefined) return false;
+  if (said === named) return true;
+  const a = parseTaskAddress(said);
+  const b = parseTaskAddress(named);
+  return a !== null && b !== null && a.slug !== undefined && a.room === b.room && a.slug === b.slug;
 }
 
 /**

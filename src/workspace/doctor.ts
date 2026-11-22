@@ -1403,17 +1403,22 @@ async function floorCollisionFindings(root: string): Promise<Finding[]> {
         'handed out twice, as two machines do when each opens a floor before their records ' +
         'sync. Each is told apart by its directory meanwhile: a verb given floor ' +
         `${floor} reaches ${dirs[0]}, and task addresses f${floor}t<room> name rooms on ` +
-        `every one of them. ${floorCollisionRemedy(floor)}`,
+        `every one of them. ${floorCollisionRemedy(floor, dirs)}`,
     }));
 }
 
 /**
- * How a floor collision ends. One sentence, kept apart so that the verb which
- * gives a floor another number can be named here once it exists; until then
- * the finding says what ends it and promises no verb.
+ * How a floor collision ends: all but one of the floors given another number
+ * (design/0081-floor-renumber/), each named by its directory, since the
+ * number names them all. The number to choose is the human's.
  */
-function floorCollisionRemedy(floor: number): string {
-  return `The collision stands until all but one of them holds a number other than ${floor}`;
+function floorCollisionRemedy(floor: number, dirs: readonly string[]): string {
+  const rest = dirs.slice(1);
+  return (
+    `The collision stands until all but one of them holds a number other than ${floor} — ` +
+    `give ${rest.length === 1 ? 'the other' : 'each other'} a number never spent: ` +
+    rest.map((dir) => `ward project renumber ${dir} N`).join('; ')
+  );
 }
 
 /**

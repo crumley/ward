@@ -27,6 +27,7 @@ import {
 import { taskRoom } from '../workspace/address.ts';
 import { identityOf } from '../workspace/floor-identity.ts';
 import { workspaceId } from '../workspace/identity.ts';
+import { readProjects, renumberedFloors } from '../workspace/projects.ts';
 import { type FoundTask, projectDirs, readTasks, resolveOpenTask } from '../workspace/scan.ts';
 import {
   defaultWorkspaceSessionPurpose,
@@ -257,6 +258,12 @@ export interface Refreshed {
    * then the views of it.
    */
   readonly themed: readonly { readonly floor: number; readonly names: readonly string[] }[];
+  /**
+   * "main-f7-alpha restamped floor 7 → 22" — each host found stamped with a
+   * number its floor has since left (design/0081-floor-renumber/), stamped
+   * anew before it was renamed.
+   */
+  readonly restamped: readonly string[];
 }
 
 /**
@@ -282,7 +289,13 @@ export async function refreshNames(
     const all = await readAllSessions(root);
     const naming = given ?? (await readNaming(root, all));
     const inventory = host.inventory();
-    if (inventory.outcome !== 'answered') return { renamed: [], failed: [], themed: [] };
+    if (inventory.outcome !== 'answered') {
+      return { renamed: [], failed: [], themed: [], restamped: [] };
+    }
+    // A host stamped with a number its floor has left is stamped anew first
+    // (design/0081-floor-renumber/), so the rename below names it for the
+    // floor it now belongs to, and placement finds it again.
+    const restamp = restampRetired(host, inventory, workspace, await retiredStamps(root));
     const placed = (session: string): number | undefined => {
       const listing = all.find(({ record }) => record.id === session);
       return listing === undefined ? undefined : placementFloor(listing, all);
@@ -290,12 +303,15 @@ export async function refreshNames(
     const standing = standingViews(inventory, workspace, placed);
     const groups = inventory.groups
       .filter((group) => group.viewOf === undefined && group.stamp?.workspace === workspace)
-      .map((group) => ({
-        name: group.name,
-        floor: group.stamp?.floor ?? 0,
-        naming: naming.group(group.stamp?.floor ?? 0),
-        views: standing.get(group.name) ?? [],
-      }));
+      .map((group) => {
+        const floor = restamp.floors.get(group.name) ?? group.stamp?.floor ?? 0;
+        return {
+          name: group.name,
+          floor,
+          naming: naming.group(floor),
+          views: standing.get(group.name) ?? [],
+        };
+      });
     const ours = new Set(
       inventory.groups.filter((g) => g.stamp?.workspace === workspace).map((g) => g.name),
     );
@@ -318,7 +334,7 @@ export async function refreshNames(
       });
     }
     if (groups.length === 0 && windows.length === 0) {
-      return { renamed: [], failed: [], themed: [] };
+      return { renamed: [], failed: restamp.failed, themed: [], restamped: restamp.done };
     }
     const result = host.rename({
       groups: groups.map(({ name, naming, views }) => ({
@@ -333,7 +349,8 @@ export async function refreshNames(
     const now = new Map(result.groups.map(({ from, to }) => [to, from]));
     return {
       renamed: [...result.groups, ...result.views].map(({ from, to }) => `${from} is now ${to}`),
-      failed: result.failed,
+      failed: [...restamp.failed, ...result.failed],
+      restamped: restamp.done,
       themed: result.themed.flatMap((dressed) => {
         const asked = now.get(dressed.group) ?? dressed.group;
         const floor = groups.find((group) => group.name === asked)?.floor;
@@ -345,8 +362,50 @@ export async function refreshNames(
       renamed: [],
       failed: [error instanceof Error ? error.message : String(error)],
       themed: [],
+      restamped: [],
     };
   }
+}
+
+/**
+ * Where each retired number went, read from the records — empty when they
+ * cannot be read, since then there is nothing to say a host is stale by.
+ */
+async function retiredStamps(root: string): Promise<ReadonlyMap<number, number>> {
+  try {
+    return renumberedFloors(await readProjects(root));
+  } catch {
+    return new Map();
+  }
+}
+
+/**
+ * Stamp each of this workspace's hosts that still carries a retired number
+ * with the number its floor holds now. Asked of the host one group at a time;
+ * a group that would not take the stamp keeps its old one and is named.
+ */
+function restampRetired(
+  host: SessionHost,
+  inventory: Extract<Inventory, { outcome: 'answered' }>,
+  workspace: string,
+  retired: ReadonlyMap<number, number>,
+): { floors: Map<string, number>; done: string[]; failed: string[] } {
+  const floors = new Map<string, number>();
+  const done: string[] = [];
+  const failed: string[] = [];
+  for (const group of inventory.groups) {
+    if (group.viewOf !== undefined || group.stamp?.workspace !== workspace) continue;
+    const to = retired.get(group.stamp.floor);
+    if (to === undefined) continue;
+    const result = host.restamp(group.name, to);
+    if (result.outcome === 'restamped') {
+      floors.set(group.name, to);
+      done.push(`${group.name} restamped floor ${group.stamp.floor} → ${to}`);
+    } else {
+      failed.push(`${group.name}: ${result.reason}`);
+    }
+  }
+  return { floors, done, failed };
 }
 
 /**

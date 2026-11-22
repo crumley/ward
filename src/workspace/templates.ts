@@ -93,6 +93,13 @@ operated with the \`ward\` CLI and tracked in git.
   the floor or of its tasks is running or works inside what would move, so it is run from the
   coordinator, never from the floor's own session. Other machines follow at their next
   \`ward workspace upgrade\`.
+- **A floor can be renumbered, once**: \`ward project renumber FLOOR N\` gives it a number never
+  spent, from 1 to 999, and retires the one it leaves for good. Its record, its tasks, its
+  sessions' records, its hand-offs, its view, its worktrees and its host follow in one commit.
+  Every address under the old number names nothing afterwards (\`f7t3\` is now \`f22t3\`); a
+  session's id keeps the number it was minted with. It is refused as a rename is, and for a floor
+  renumbered before. Of two floors on one number, name the one to renumber by its directory:
+  \`ward project renumber projects/7-alpha 22\`.
 - **A floor answers to its slug as well as its number** wherever a verb takes one
   (\`ward task open SLUG --project fantasy-football\`): all digits is a number, anything else is
   matched exactly against floor slugs, and a renamed floor's old slug names nothing.

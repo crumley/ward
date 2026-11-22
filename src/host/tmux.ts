@@ -51,6 +51,7 @@ import type {
   PlaceRequest,
   Renamed,
   RenameRequest,
+  RestampResult,
   SessionHost,
   TypeRequest,
   TypeResult,
@@ -168,6 +169,15 @@ export function titleGroupArgv(
   mode: ViewMode = 'attach',
 ): string[] {
   return titleOptions(name, titling, mode).slice(1);
+}
+
+/**
+ * Stamp a floor host with its floor's new number, in place
+ * (design/0081-floor-renumber/): the same option `createGroupArgv` sets, on
+ * the session found by exact name.
+ */
+export function restampGroupArgv(name: string, floor: number): string[] {
+  return ['set-option', '-t', windowTarget(name), '@ward_floor', String(floor)];
 }
 
 export function renameWindowArgv(window: string, label: string): string[] {
@@ -1432,6 +1442,12 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
         if (!relabelled.ok) failed.push(`${window}: ${why(relabelled)}`);
       }
       return { groups: renamed, views: moved, failed, themed };
+    },
+    restamp(group: string, floor: number): RestampResult {
+      const result = call(restampGroupArgv(group, floor));
+      return result.ok
+        ? { outcome: 'restamped' }
+        : { outcome: 'failed', reason: result.stderr || 'tmux gave no reason' };
     },
     view(request: ViewRequest): View {
       // First, the views this workspace's clients left by switching away from

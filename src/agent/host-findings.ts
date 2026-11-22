@@ -20,6 +20,7 @@ import { runIdentityVars } from '../harness/index.ts';
 import type { InventoryGroup, InventoryWindow, SessionHost } from '../host/host.ts';
 import type { HostedKind, SessionRecord } from '../store/types.ts';
 import type { Finding } from '../workspace/doctor.ts';
+import { readProjects, renumberedFloors } from '../workspace/projects.ts';
 import { type OpenSessionListing, readAllSessions } from '../workspace/sessions.ts';
 import { hostedBy, hostOf, latestLaunch } from './host.ts';
 import { placementFloor } from './placement.ts';
@@ -73,8 +74,19 @@ export async function hostFindings(
   ];
   findings.push(...environmentFindings(host));
   if (workspace === undefined) return findings;
-  findings.push(...inventoryFindings(host, workspace, await readAllSessions(root), kind));
+  findings.push(
+    ...inventoryFindings(host, workspace, await readAllSessions(root), kind, await retired(root)),
+  );
   return findings;
+}
+
+/** Where each retired floor number went — empty when the records cannot say. */
+async function retired(root: string): Promise<ReadonlyMap<number, number>> {
+  try {
+    return renumberedFloors(await readProjects(root));
+  } catch {
+    return new Map();
+  }
 }
 
 /** A run's identity in the host's own environment, which every new window inherits. */
@@ -107,6 +119,7 @@ function inventoryFindings(
   workspace: string,
   sessions: readonly OpenSessionListing[],
   kind: HostedKind,
+  renumbered: ReadonlyMap<number, number>,
 ): Finding[] {
   const inventory = host.inventory();
   if (inventory.outcome === 'unknown') {
@@ -245,6 +258,21 @@ function inventoryFindings(
       .map((listing) => [listing.record.id, placementFloor(listing, sessions)]),
   );
   findings.push(...hostShapeFindings(host, inventory.groups, inOurs, ours, home, workspace));
+  // A host stamped with a number its floor has left (design/0081-floor-renumber/):
+  // nothing finds it by that stamp any more, and the next name refresh here
+  // restamps it.
+  for (const group of ours.hosts) {
+    const floor = group.stamp?.floor;
+    const to = floor === undefined ? undefined : renumbered.get(floor);
+    if (to === undefined) continue;
+    findings.push({
+      check: HOSTS,
+      severity: 'warn',
+      message:
+        `${group.name} is stamped floor ${floor}, a number retired when its floor was renumbered ` +
+        `to ${to} — restamp it now: ward workspace upgrade (an attach or launch here does too)`,
+    });
+  }
   if (findings.length === 0) {
     const windows = inOurs.length;
     findings.push({
