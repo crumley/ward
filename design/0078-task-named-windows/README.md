@@ -56,7 +56,8 @@ every host.
     task of its floor (the floor is the task's; `--floor` may say it too, and must agree), on the
     launched and the `--handle` paths alike. `ward session task ID ADDRESS` names a task on an open
     floor session; `ward session task ID --clear` sets it down. Saying what the trail already says
-    writes nothing.
+    writes nothing. `ward session open --floor N --new-task SLUG` opens the task and the session
+    working it in one step (added after the first build; see the build log, 2026-11-22).
   - **Window labels.** A task's window — a task session's, or a floor session working the task — is
     `f<N>t<room> <slug>` in every host; in another floor's host it carries that floor's emoji
     (`🔍f9t6 markup`). `coord`, a floor session with no task, a helper, and a legacy bare task keep

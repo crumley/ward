@@ -395,8 +395,14 @@ export const INSTALLED_ARTIFACT_LINEAGE: readonly ArtifactLineage[] = [
         sha256: '1f862ae925cd2d57b2556e7413b7244263453cbec7bc103bee7f3edf399f8fa4',
         era: 'design 0080 (floor rename)',
       },
-      // Current since design 0088: a floor answers to its slug wherever a
+      // design 0088 — a floor answers to its slug wherever a
       // verb takes a floor.
+      {
+        sha256: '94d63cfdcca898c4ac45fc17456165a29ff971b44116c8ff0cac9f5d43fee7b9',
+        era: 'design 0088 (floor by slug)',
+      },
+      // Current since 0078's --new-task (build log 2026-11-22): a topic
+      // session opens its task and the session working it in one step.
     ],
   },
 ];

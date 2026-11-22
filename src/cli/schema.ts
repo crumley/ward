@@ -1276,6 +1276,8 @@ export const sessionMutationShape = z.strictObject({
   live: sessionLiveShape.optional(),
   /** The task a floor's session is working now (0078) — derived from the trail. */
   workingOn: workingOnShape.optional(),
+  /** On `session open --new-task` alone: the task opened for the session to work, as `task open` reports it. */
+  openedTask: taskMutationShape.optional(),
   /** What `session close` did to the live half (0031): present when the latest launch was hosted. */
   teardown: z
     .strictObject({

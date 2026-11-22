@@ -58,6 +58,36 @@ test('open --floor N: the record beside the project, then the agent, in the work
   expect(record?.handle).toBe(`claude:${run?.argv[1]}`);
 });
 
+test('open --floor N --new-task: the task, then the session working it, then the agent under its name', async () => {
+  // design/0078-task-named-windows/ (build log 2026-11-22)
+  const opened = ward([
+    'session',
+    'open',
+    '--floor',
+    '1',
+    '--new-task',
+    'tidy-docs',
+    '--purpose',
+    'the topic',
+    '--json',
+  ]);
+  expect(opened.exitCode).toBe(0);
+  const report = sessionMutationShape.parse(JSON.parse(opened.stdout));
+  expect(report).toMatchObject({ id: 'f1-1@test', scope: 'project', floor: 1 });
+  expect(report.openedTask).toMatchObject({ address: 'f1t1', slug: 'tidy-docs' });
+  const [record] = await readSessions(ws, FLOOR_DIR);
+  expect(record?.events?.at(-1)).toMatchObject({ event: 'task-named', task: 'f1t1-tidy-docs' });
+  const [run] = runs();
+  expect(run?.recordSeen).toBe(true);
+  // The launch's name is the new task's, worked out before the session existed.
+  expect(run?.argv.slice(2, 6)).toEqual([
+    '--name',
+    'f1t1 tidy-docs',
+    '--settings',
+    KEEP_DESCRIPTIVE_TITLE,
+  ]);
+});
+
 test('the ground floor has its own session, distinct from workspace scope', async () => {
   expect(ward(['session', 'open', '--floor', '0', '--purpose', 'steward']).exitCode).toBe(0);
   expect(ward(['session', 'open', '--purpose', 'route']).exitCode).toBe(0);

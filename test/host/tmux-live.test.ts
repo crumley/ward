@@ -1153,6 +1153,19 @@ describe.skipIf(TMUX === null)('a real tmux, on a private server', () => {
     expect(startCommands(f1)[0]).toContain('--resume');
   });
 
+  test('a topic session in one step: --new-task --detach stands in a window named for the task it opened', async () => {
+    // design/0078-task-named-windows/ (build log 2026-11-22)
+    await openProject(ws, 'alpha');
+    const floor = session(
+      ward(['session', 'open', '--floor', '1', '--new-task', 'fresh-topic', '--detach', '--json']),
+    );
+    expect(floor.openedTask).toMatchObject({ address: 'f1t1', slug: 'fresh-topic' });
+    expect(await runsSoon(1)).toHaveLength(1);
+    const f1 = `${name}-f1-alpha`;
+    expect(windowNames(f1)).toEqual(['f1t1 fresh-topic']);
+    expect(startCommands(f1)[0]).toContain('f1t1 fresh-topic');
+  });
+
   test('resume --all: a floor that cannot be placed fails alone — the next floor still comes back, and a rerun picks up only what is left', async () => {
     await openProject(ws, 'alpha');
     await openProject(ws, 'beta');
