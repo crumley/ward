@@ -256,10 +256,10 @@
         "list-panes",
         "-a",
         "-F",
-        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}"
+        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\nmain-f1-alpha\t@3\t%2\t0\t\t\t\t\t\tws-conformance\t1\n",
+      "stdout": "main-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\nmain-f1-alpha\t@3\t%2\t0\t\t\t\t\t\tws-conformance\t1\t0\n",
       "stderr": ""
     },
     {
@@ -283,10 +283,10 @@
         "list-panes",
         "-a",
         "-F",
-        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}"
+        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\nmain-f1-alpha\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t1\n",
+      "stdout": "main-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\nmain-f1-alpha\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t1\t0\n",
       "stderr": ""
     },
     {
@@ -503,10 +503,10 @@
         "list-panes",
         "-a",
         "-F",
-        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}"
+        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\nmain-f1-alpha\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t1\nmain-f1-alpha\t@4\t%3\t0\t\t\talpha\t2026-11-18T00:00:38.000Z\t%3\tws-conformance\t1\nmain-f2-beta\t@5\t%4\t0\t\t\t\t\t\tws-conformance\t2\n",
+      "stdout": "main-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\nmain-f1-alpha\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t1\t0\nmain-f1-alpha\t@4\t%3\t0\t\t\talpha\t2026-11-18T00:00:38.000Z\t%3\tws-conformance\t1\t1\nmain-f2-beta\t@5\t%4\t0\t\t\t\t\t\tws-conformance\t2\t0\n",
       "stderr": ""
     },
     {
@@ -758,10 +758,10 @@
         "list-panes",
         "-a",
         "-F",
-        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}"
+        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t0\nmain-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\nmain-f1-alpha\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t1\nmain-f1-alpha\t@4\t%3\t0\t\t\talpha\t2026-11-18T00:00:38.000Z\t%3\tws-conformance\t1\nmain-f1-alpha\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t1\nmain-f2-beta\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t2\nmain-f2-beta\t@6\t%5\t0\t\t\tbeta\t2026-11-18T00:00:52.000Z\t%5\tws-conformance\t2\n",
+      "stdout": "main-f0-workspace\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t0\t0\nmain-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\nmain-f1-alpha\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t1\t0\nmain-f1-alpha\t@4\t%3\t0\t\t\talpha\t2026-11-18T00:00:38.000Z\t%3\tws-conformance\t1\t1\nmain-f1-alpha\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t1\t2\nmain-f2-beta\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t2\t0\nmain-f2-beta\t@6\t%5\t0\t\t\tbeta\t2026-11-18T00:00:52.000Z\t%5\tws-conformance\t2\t1\n",
       "stderr": ""
     },
     {
@@ -847,10 +847,10 @@
         "list-panes",
         "-a",
         "-F",
-        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}"
+        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t0\nmain-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\nmain-f2-beta\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t2\nmain-f2-beta\t@6\t%5\t0\t\t\tbeta\t2026-11-18T00:00:52.000Z\t%5\tws-conformance\t2\nmain-f2-beta\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t2\n",
+      "stdout": "main-f0-workspace\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t0\t0\nmain-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\nmain-f2-beta\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t2\t0\nmain-f2-beta\t@6\t%5\t0\t\t\tbeta\t2026-11-18T00:00:52.000Z\t%5\tws-conformance\t2\t1\nmain-f2-beta\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t2\t2\n",
       "stderr": ""
     },
     {
@@ -859,10 +859,10 @@
         "list-panes",
         "-a",
         "-F",
-        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}"
+        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t0\nmain-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\nmain-f2-beta\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t2\nmain-f2-beta\t@6\t%5\t0\t\t\tbeta\t2026-11-18T00:00:52.000Z\t%5\tws-conformance\t2\nmain-f2-beta\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t2\n",
+      "stdout": "main-f0-workspace\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t0\t0\nmain-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\nmain-f2-beta\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t2\t0\nmain-f2-beta\t@6\t%5\t0\t\t\tbeta\t2026-11-18T00:00:52.000Z\t%5\tws-conformance\t2\t1\nmain-f2-beta\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t2\t2\n",
       "stderr": ""
     }
   ]

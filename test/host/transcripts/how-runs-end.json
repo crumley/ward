@@ -283,10 +283,10 @@
         "list-panes",
         "-a",
         "-F",
-        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}"
+        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\t@3\t%2\t0\t\t\tclean\t2026-11-18T00:00:35.000Z\t%2\tws-conformance\t0\nmain-f0-workspace\t@2\t%3\t0\t\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\nmain-f0-workspace\t@2\t%1\t1\t3\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\n",
+      "stdout": "main-f0-workspace\t@3\t%2\t0\t\t\tclean\t2026-11-18T00:00:35.000Z\t%2\tws-conformance\t0\t0\nmain-f0-workspace\t@2\t%3\t0\t\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\t1\nmain-f0-workspace\t@2\t%1\t1\t3\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\t1\n",
       "stderr": ""
     },
     {
@@ -295,10 +295,10 @@
         "list-panes",
         "-a",
         "-F",
-        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}"
+        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\t@2\t%3\t0\t\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\nmain-f0-workspace\t@2\t%1\t1\t3\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\n",
+      "stdout": "main-f0-workspace\t@2\t%3\t0\t\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\t1\nmain-f0-workspace\t@2\t%1\t1\t3\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\t1\n",
       "stderr": ""
     },
     {
@@ -583,10 +583,10 @@
         "list-panes",
         "-a",
         "-F",
-        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}"
+        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\t@2\t%3\t0\t\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\nmain-f0-workspace\t@2\t%1\t1\t3\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\nmain-f0-workspace\t@5\t%5\t1\t0\t\tkept\t2026-11-18T00:00:16.000Z\t%5\tws-conformance\t0\n",
+      "stdout": "main-f0-workspace\t@2\t%3\t0\t\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\t1\nmain-f0-workspace\t@2\t%1\t1\t3\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\t1\nmain-f0-workspace\t@5\t%5\t1\t0\t\tkept\t2026-11-18T00:00:16.000Z\t%5\tws-conformance\t0\t2\n",
       "stderr": ""
     },
     {
@@ -595,10 +595,10 @@
         "list-panes",
         "-a",
         "-F",
-        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}"
+        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\t@2\t%3\t0\t\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\nmain-f0-workspace\t@2\t%1\t1\t3\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\nmain-f0-workspace\t@5\t%5\t1\t0\t\tkept\t2026-11-18T00:00:16.000Z\t%5\tws-conformance\t0\n",
+      "stdout": "main-f0-workspace\t@2\t%3\t0\t\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\t1\nmain-f0-workspace\t@2\t%1\t1\t3\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\t1\nmain-f0-workspace\t@5\t%5\t1\t0\t\tkept\t2026-11-18T00:00:16.000Z\t%5\tws-conformance\t0\t2\n",
       "stderr": ""
     },
     {
@@ -618,10 +618,10 @@
         "list-panes",
         "-a",
         "-F",
-        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}"
+        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\t@2\t%3\t0\t\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\nmain-f0-workspace\t@2\t%1\t1\t3\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\nmain-f0-workspace\t@5\t%5\t1\t0\t\tkept\t2026-11-18T00:00:16.000Z\t%5\tws-conformance\t0\n",
+      "stdout": "main-f0-workspace\t@2\t%3\t0\t\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\t1\nmain-f0-workspace\t@2\t%1\t1\t3\t\tfailed\t2026-11-18T00:00:13.000Z\t%1\tws-conformance\t0\t1\nmain-f0-workspace\t@5\t%5\t1\t0\t\tkept\t2026-11-18T00:00:16.000Z\t%5\tws-conformance\t0\t2\n",
       "stderr": ""
     },
     {

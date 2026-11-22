@@ -6,7 +6,9 @@
 > `ward session attach|observe|resume|close`. A new candidate kind, `coordinators`, is what `wsa`
 > reads to decide.
 >
-> **Status:** built — awaiting review · **Started:** 2026-11-14
+> **Status:** built — awaiting review · **Started:** 2026-11-14 · **Partly superseded:** the pick
+> `wsa N` offered between several floor sessions, and the floor feed's order, by
+> [0079](../0079-wsa-floor-first-window/README.md)
 
 Detached hosting ([0031](../0031-detached-session-hosting/README.md)) put the coordinator (the one
 workspace-scope session no other session started) in a tmux window linked into every floor host, and

@@ -131,6 +131,12 @@ export interface FoundGroup {
   readonly name: string;
   /** The stamps the group carries — absent where it carries none (not Ward's). */
   readonly stamp?: GroupStamp;
+  /**
+   * Where the window stands in this group, left to right — its own per group,
+   * since a linked window stands somewhere in each host that shows it. Absent
+   * when the host did not say.
+   */
+  readonly index?: number;
 }
 
 /**

@@ -306,10 +306,11 @@ test("a window is found by its tag on the agent's own pane, once however many ho
       '%5',
       'ws-id-0123456789ab',
       group.endsWith('f0') ? '0' : '2',
+      extra.index ?? '1',
     ].join('\t');
   const listing = [
     row('ward-main-f0', '%5'),
-    row('ward-main-f2', '%5'), // the same window, linked into floor 2's host
+    row('ward-main-f2', '%5', { index: '4' }), // the same window, linked into floor 2's host, standing elsewhere there
     row('ward-main-f0', '%6'), // a pane a human split off beside the agent's
     row('ward-main-f0', '%8', { tag: 'workspace-2@mbp' }),
   ].join('\n');
@@ -317,8 +318,8 @@ test("a window is found by its tag on the agent's own pane, once however many ho
     {
       window: '@3',
       groups: [
-        { name: 'ward-main-f0', stamp: { workspace: 'ws-id-0123456789ab', floor: 0 } },
-        { name: 'ward-main-f2', stamp: { workspace: 'ws-id-0123456789ab', floor: 2 } },
+        { name: 'ward-main-f0', stamp: { workspace: 'ws-id-0123456789ab', floor: 0 }, index: 1 },
+        { name: 'ward-main-f2', stamp: { workspace: 'ws-id-0123456789ab', floor: 2 }, index: 4 },
       ],
       tags: { session: 'workspace-1@mbp', epoch: '2026-11-08T10:00:00.000Z' },
       dead: false,
@@ -329,6 +330,10 @@ test("a window is found by its tag on the agent's own pane, once however many ho
     'workspace-1@mbp',
   );
   expect(dead[0]).toMatchObject({ dead: true, exitStatus: 3 });
+  // A host that did not say where the window stands leaves the index out.
+  expect(
+    parseWindows(row('ward-main-f0', '%5', { index: '' }), 'workspace-1@mbp')[0]?.groups,
+  ).toEqual([{ name: 'ward-main-f0', stamp: { workspace: 'ws-id-0123456789ab', floor: 0 } }]);
   expect(parseWindows('', 'workspace-1@mbp')).toEqual([]);
 });
 
