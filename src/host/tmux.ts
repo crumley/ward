@@ -592,6 +592,9 @@ export function listPanesArgv(): string[] {
       '#{@ward_pane}',
       '#{@ward_workspace}',
       '#{@ward_floor}',
+      // Last, so every reader before it splits the same fields: where the
+      // window stands in THIS host — a linked window has an index per host.
+      '#{window_index}',
     ].join(FIELD),
   ];
 }
@@ -926,6 +929,7 @@ export function parseWindows(stdout: string, session: string): FoundWindow[] {
       tagPane = '',
       workspace = '',
       floor = '',
+      index = '',
     ] = line.split(FIELD);
     // The session's pane is the one the launch named; a pane a human split
     // off beside it says nothing about the run.
@@ -941,7 +945,12 @@ export function parseWindows(stdout: string, session: string): FoundWindow[] {
         ...(signal === '' ? {} : { exitSignal: signal }),
       },
     };
-    found.groups.push({ name: group, ...stampOf(workspace, floor) });
+    const position = Number.parseInt(index, 10);
+    found.groups.push({
+      name: group,
+      ...stampOf(workspace, floor),
+      ...(Number.isNaN(position) ? {} : { index: position }),
+    });
     byWindow.set(window, found);
   }
   return [...byWindow.values()].map(({ window, groups }) => ({ ...window, groups }));

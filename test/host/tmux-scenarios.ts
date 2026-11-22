@@ -171,7 +171,9 @@ export const SCENARIOS: readonly Scenario[] = [
         windows: [
           {
             window: helper.window,
-            groups: [{ name: F0, stamp: { workspace: WS, floor: 0 } }],
+            // Placed after the coordinator, standing before it: where a window
+            // stands is the host's index, never the order it was placed in.
+            groups: [{ name: F0, stamp: { workspace: WS, floor: 0 }, index: 0 }],
             tags: { session: 'helper', epoch: epoch('helper') },
             dead: false,
           },

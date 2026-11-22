@@ -221,7 +221,9 @@ const wsa: Shorthand = {
   // One path in, whatever the machine has been through: `ward session attach`
   // joins a live window and re-creates one that ended or went with a reboot,
   // so the only state this function must tell apart is "is there a
-  // coordinator to join at all?".
+  // coordinator to join at all?". `wsa N` never picks: the feed orders the
+  // floor's sessions by where their windows stand, and the first is joined
+  // (design/0079-wsa-floor-first-window/).
   body: `function wsa --description 'Attach to a session: the coordinator, a floor N, or an id — opened first if none is'
     # A floor number means that floor's own session; anything else is an id,
     # which goes straight through: attach joins a live window, and re-creates
@@ -253,11 +255,14 @@ const wsa: Shorthand = {
         set open (command ward shell candidates $feed)
     end
     set -l id
-    if test (count $open) -eq 1
+    if test (count $open) -eq 1; or set -q scope[1]
+        # A floor's sessions all stand in its one host, so which to join only
+        # sets the window in front: the feed lists them first window first,
+        # and the first is taken without asking.
         set id (string split -m1 -f1 -- \\t $open[1])
     else if test (count $open) -gt 1
-        # Several open: which one is a choice, so ask for it — or, with no
-        # picker, name them, exactly as __ward_choose degrades.
+        # Several coordinators open: which one is a choice, so ask for it —
+        # or, with no picker, name them, exactly as __ward_choose degrades.
         if not __ward_picker_present
             echo "ward: no picker installed — install fzf, or name one of these:" >&2
             printf '  %s\\n' (string replace -a \\t '  ' -- $open) >&2

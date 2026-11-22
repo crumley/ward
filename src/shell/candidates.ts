@@ -11,15 +11,18 @@
 // writes telemetry, and it never churns the registry's recency
 // (intent/02-subsystems/07-human-shell.md, and 0022's IF-002).
 import { resolve } from 'node:path';
+import { classify, hostedBy, hostOf } from '../agent/host.ts';
 import { floats } from '../agent/placement.ts';
 import { searchOrder } from '../global/locate.ts';
 import { readMachine } from '../global/machine.ts';
 import { listWorkspaces, resolutionOrder } from '../global/registry.ts';
+import type { SessionHost } from '../host/host.ts';
 import { formatReadable } from '../store/format.ts';
-import { sessionScopeOf } from '../store/types.ts';
+import { type HostedKind, type SessionRecord, sessionScopeOf } from '../store/types.ts';
+import { workspaceId } from '../workspace/identity.ts';
 import { discoverWorkspace } from '../workspace/layout.ts';
 import { listRepositoryNames } from '../workspace/repos.ts';
-import { readOpenSessions } from '../workspace/sessions.ts';
+import { parseSessionId, readOpenSessions } from '../workspace/sessions.ts';
 
 /** One thing a human might mean, plus what makes it recognizable as that thing. */
 export interface Candidate {
@@ -45,6 +48,7 @@ export async function candidates(
   kind: CandidateKind,
   from: string,
   floor?: number,
+  host?: (kind: HostedKind) => SessionHost,
 ): Promise<readonly Candidate[]> {
   try {
     switch (kind) {
@@ -53,7 +57,7 @@ export async function candidates(
       case 'workspaces':
         return await workspaceCandidates();
       case 'coordinators':
-        return await coordinatorCandidates(from, floor);
+        return await coordinatorCandidates(from, floor, host);
     }
   } catch {
     return [];
@@ -122,17 +126,29 @@ export async function workspaceCandidates(): Promise<readonly Candidate[]> {
  * This machine only, plus records that predate the machine field: a session
  * whose history is on another computer is one `attach` cannot re-create here,
  * and offering it would make `wsa` after a reboot pick something it then
- * refuses (§17). Oldest first, the order they were opened in.
+ * refuses (§17).
+ *
+ * The coordinators come oldest first, the order they were opened in, and
+ * `wsa` asks the human to pick between several. A floor's sessions come in
+ * the order `wsa N` takes them, because it takes the first and never asks
+ * (design/0079-wsa-floor-first-window/): every one of them stands in the same
+ * floor host, so a pick would only choose which window is in front. First the
+ * ones whose window stands in the floor's host, live or kept dead, left to
+ * right as the host shows them; then the rest, lowest session number first —
+ * the deterministic answer after a reboot, when no window stands and `attach`
+ * re-creates whichever is named. A host that cannot be asked leaves every
+ * session in the second group: the feed still answers.
  */
 export async function coordinatorCandidates(
   from: string,
   floor?: number,
+  host: (kind: HostedKind) => SessionHost = (kind) => hostOf(kind),
 ): Promise<readonly Candidate[]> {
   const root =
     discoverWorkspace(resolve(from)) ?? resolutionOrder(await listWorkspaces())[0]?.path ?? null;
   if (root === null || !formatReadable(root)) return [];
   const here = (await readMachine()).name;
-  return (await readOpenSessions(root))
+  const found = (await readOpenSessions(root))
     .map((listing) => listing.record)
     .filter((record) =>
       floor === undefined
@@ -140,8 +156,55 @@ export async function coordinatorCandidates(
         : sessionScopeOf(record) === 'project' && record.floor === floor,
     )
     .filter((record) => record.machine === undefined || record.machine === here)
-    .sort((a, b) => a.openedAt.localeCompare(b.openedAt))
-    .map((record) => ({ name: record.id, cue: record.purpose.replace(/[\t\r\n]+/g, ' ') }));
+    .sort((a, b) => a.openedAt.localeCompare(b.openedAt));
+  const ordered = floor === undefined ? found : await inHostOrder(root, floor, found, host);
+  return ordered.map((record) => ({
+    name: record.id,
+    cue: record.purpose.replace(/[\t\r\n]+/g, ' '),
+  }));
+}
+
+/**
+ * A floor's sessions in the order their windows stand in the floor's host,
+ * then the ones with no window there by session number — see
+ * {@link coordinatorCandidates}. Only a session whose latest launch was hosted
+ * is looked for, so a floor of foreground sessions never asks the host at all.
+ */
+async function inHostOrder(
+  root: string,
+  floor: number,
+  records: readonly SessionRecord[],
+  host: (kind: HostedKind) => SessionHost,
+): Promise<readonly SessionRecord[]> {
+  let workspace: string | undefined;
+  try {
+    workspace = await workspaceId(root);
+  } catch {
+    workspace = undefined;
+  }
+  const standing = (record: SessionRecord): number | undefined => {
+    const kind = hostedBy(record);
+    if (kind === undefined || workspace === undefined) return undefined;
+    try {
+      const { own } = classify(record, host(kind).find(record.id), workspace, floor, kind);
+      return own?.groups.find(
+        (group) => group.stamp?.workspace === workspace && group.stamp.floor === floor,
+      )?.index;
+    } catch {
+      return undefined;
+    }
+  };
+  const number = (record: SessionRecord): number =>
+    parseSessionId(record.id)?.n ?? Number.MAX_SAFE_INTEGER;
+  return records
+    .map((record) => ({ record, index: standing(record), n: number(record) }))
+    .sort((a, b) => {
+      if (a.index !== undefined && b.index !== undefined) return a.index - b.index;
+      if (a.index !== undefined) return -1;
+      if (b.index !== undefined) return 1;
+      return a.n - b.n;
+    })
+    .map(({ record }) => record);
 }
 
 /**

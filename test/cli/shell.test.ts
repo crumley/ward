@@ -522,6 +522,23 @@ test('wsa joins the coordinator — opening it detached first when none is open 
   ]);
   expect(fish(`source ${script}; wsa 7`, `${stub}:${tmuxBin}:${toolBin}`).exitCode).toBe(0);
   expect(calls()).toEqual(['shell candidates coordinators --floor 7', 'session attach f7-1@test']);
+
+  // Several open on the floor: never a pick, with a picker or without one —
+  // the feed lists them first window first, and the first is joined
+  // (design/0079-wsa-floor-first-window/).
+  writeFileSync(`${feed}-7`, 'f7-4@test\tsecond window\nf7-1@test\tthird window\n');
+  for (const path of [
+    `${pickBin}:${stub}:${tmuxBin}:${toolBin}`,
+    `${stub}:${tmuxBin}:${toolBin}`,
+  ]) {
+    const several = fish(`source ${script}; wsa 7`, path);
+    expect(several.stderr).toBe('');
+    expect(several.exitCode).toBe(0);
+    expect(calls()).toEqual([
+      'shell candidates coordinators --floor 7',
+      'session attach f7-4@test',
+    ]);
+  }
 });
 
 test('wso, wsr, wsc, and ws forward everything to their verb', async () => {

@@ -544,7 +544,9 @@ const shellCandidates = command(
     action: constant('shell-candidates'),
     kind: argument(choice([...CANDIDATE_KINDS], { metavar: 'KIND' })),
     // Narrows `coordinators` to one floor's own sessions, for `wsa N`
-    // (design/0059-session-shorthands/); the other kinds ignore it.
+    // (design/0059-session-shorthands/), listed first window first so `wsa N`
+    // can take the top line (design/0079-wsa-floor-first-window/); the other
+    // kinds ignore it.
     floor: optional(option('--floor', floorNumber())),
   }),
   {
