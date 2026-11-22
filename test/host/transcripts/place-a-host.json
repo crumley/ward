@@ -97,11 +97,12 @@
       "argv": [
         "new-window",
         "-d",
+        "-a",
         "-P",
         "-F",
         "#{window_id}\t#{pane_id}",
         "-t",
-        "=main-f0-workspace:",
+        "=main-f0-workspace:{end}",
         "-n",
         "coord",
         "cat"
@@ -401,11 +402,12 @@
       "argv": [
         "new-window",
         "-d",
+        "-a",
         "-P",
         "-F",
         "#{window_id}\t#{pane_id}",
         "-t",
-        "=main-f0-workspace:",
+        "=main-f0-workspace:{end}",
         "-n",
         "helper",
         "cat"
@@ -484,7 +486,7 @@
         "#{@ward_session}"
       ],
       "exit": 0,
-      "stdout": "helper\ncoord\n",
+      "stdout": "coord\nhelper\n",
       "stderr": ""
     },
     {
@@ -497,7 +499,7 @@
         "#{window_name}"
       ],
       "exit": 0,
-      "stdout": "helper\ncoord\n",
+      "stdout": "coord\nhelper\n",
       "stderr": ""
     },
     {
@@ -509,7 +511,7 @@
         "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\t@3\t%2\t0\t\t\thelper\t2026-11-18T00:00:40.000Z\t%2\tws-conformance\t0\t0\nmain-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\n",
+      "stdout": "main-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\nmain-f0-workspace\t@3\t%2\t0\t\t\thelper\t2026-11-18T00:00:40.000Z\t%2\tws-conformance\t0\t2\n",
       "stderr": ""
     },
     {
@@ -521,7 +523,134 @@
         "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\t@3\t%2\t0\t\t\thelper\t2026-11-18T00:00:40.000Z\t%2\tws-conformance\t0\t0\nmain-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\n",
+      "stdout": "main-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\nmain-f0-workspace\t@3\t%2\t0\t\t\thelper\t2026-11-18T00:00:40.000Z\t%2\tws-conformance\t0\t2\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "kill-window",
+        "-t",
+        "@2"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "list-sessions",
+        "-F",
+        "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
+      ],
+      "exit": 0,
+      "stdout": "main-f0-workspace\tws-conformance\t0\t\t1\t0\t0.1.0\t1\t\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "new-window",
+        "-d",
+        "-a",
+        "-P",
+        "-F",
+        "#{window_id}\t#{pane_id}",
+        "-t",
+        "=main-f0-workspace:{end}",
+        "-n",
+        "third",
+        "cat"
+      ],
+      "exit": 0,
+      "stdout": "@4\t%3\n",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "set-option",
+        "-w",
+        "-t",
+        "@4",
+        "@ward_session",
+        "third",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@4",
+        "@ward_epoch",
+        "2026-11-18T00:00:59.000Z",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@4",
+        "@ward_pane",
+        "%3",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@4",
+        "remain-on-exit",
+        "failed",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@4",
+        "automatic-rename",
+        "off",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        "@4",
+        "allow-rename",
+        "off",
+        ";",
+        "respawn-pane",
+        "-k",
+        "-t",
+        "%3",
+        "-c",
+        "<scratch>",
+        "-e",
+        "WARD_AGENT=third",
+        "sleep",
+        "600"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "list-windows",
+        "-t",
+        "=main-f0-workspace:",
+        "-F",
+        "#{@ward_session}"
+      ],
+      "exit": 0,
+      "stdout": "helper\nthird\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "list-windows",
+        "-t",
+        "=main-f0-workspace:",
+        "-F",
+        "#{window_index}"
+      ],
+      "exit": 0,
+      "stdout": "2\n3\n",
       "stderr": ""
     }
   ]

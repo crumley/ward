@@ -88,11 +88,12 @@
       "argv": [
         "new-window",
         "-d",
+        "-a",
         "-P",
         "-F",
         "#{window_id}\t#{pane_id}",
         "-t",
-        "=main-f0-workspace:",
+        "=main-f0-workspace:{end}",
         "-n",
         "only",
         "cat"
@@ -309,11 +310,12 @@
       "argv": [
         "new-window",
         "-d",
+        "-a",
         "-P",
         "-F",
         "#{window_id}\t#{pane_id}",
         "-t",
-        "=main-f0-workspace:",
+        "=main-f0-workspace:{end}",
         "-n",
         "again",
         "cat"

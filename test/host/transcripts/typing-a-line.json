@@ -88,11 +88,12 @@
       "argv": [
         "new-window",
         "-d",
+        "-a",
         "-P",
         "-F",
         "#{window_id}\t#{pane_id}",
         "-t",
-        "=main-f0-workspace:",
+        "=main-f0-workspace:{end}",
         "-n",
         "target",
         "cat"
@@ -571,11 +572,12 @@
       "argv": [
         "new-window",
         "-d",
+        "-a",
         "-P",
         "-F",
         "#{window_id}\t#{pane_id}",
         "-t",
-        "=main-f0-workspace:",
+        "=main-f0-workspace:{end}",
         "-n",
         "asked",
         "cat"
@@ -699,11 +701,12 @@
       "argv": [
         "new-window",
         "-d",
+        "-a",
         "-P",
         "-F",
         "#{window_id}\t#{pane_id}",
         "-t",
-        "=main-f0-workspace:",
+        "=main-f0-workspace:{end}",
         "-n",
         "ended",
         "cat"

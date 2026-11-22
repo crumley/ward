@@ -156,9 +156,10 @@ export const SCENARIOS: readonly Scenario[] = [
       // The floor's next run joins the host it finds by stamp, which is not dressed again.
       const helper = host.place(request(stage, 'helper', { identity: SILVER }));
       expect(helper).toMatchObject({ group: F0, createdGroup: false });
-      // tmux gives the new window the first free index: the slot the placeholder left.
-      expect(windowsIn(stage, F0)).toEqual(['helper', 'coord']);
-      expect(windowNames(stage, F0)).toEqual(['helper', 'coord']);
+      // Placed after the last window, never in the slot the placeholder left:
+      // a host's windows stand in the order they were placed.
+      expect(windowsIn(stage, F0)).toEqual(['coord', 'helper']);
+      expect(windowNames(stage, F0)).toEqual(['coord', 'helper']);
 
       const found = host.find('helper');
       expect(found).toEqual({
@@ -166,15 +167,22 @@ export const SCENARIOS: readonly Scenario[] = [
         windows: [
           {
             window: helper.window,
-            // Placed after the coordinator, standing before it: where a window
-            // stands is the host's index, never the order it was placed in.
-            groups: [{ name: F0, stamp: { workspace: WS, floor: 0 }, index: 0 }],
+            // Placed after the coordinator, standing after it: the index after
+            // the host's last window, never the placeholder's freed slot (0).
+            groups: [{ name: F0, stamp: { workspace: WS, floor: 0 }, index: 2 }],
             tags: { session: 'helper', epoch: epoch('helper') },
             dead: false,
           },
         ],
       });
       expect(host.find('nobody')).toEqual({ outcome: 'answered', windows: [] });
+
+      // A window that ends leaves a gap; the next placed still goes last, behind
+      // every window placed before it, and the gap stays.
+      stage.tmux('kill-window', '-t', coord.window);
+      host.place(request(stage, 'third'));
+      expect(windowsIn(stage, F0)).toEqual(['helper', 'third']);
+      expect(windowIndexes(stage, F0)).toEqual(['2', '3']);
     },
   },
   {
@@ -200,8 +208,7 @@ export const SCENARIOS: readonly Scenario[] = [
       // A second coordinator opened with floor hosts standing joins floor 0's alone.
       const second = host.place(request(stage, 'coord-2'));
       expect(second).toMatchObject({ group: F0, createdGroup: false });
-      // (The first free index is the slot the host's placeholder left.)
-      expect(windowsIn(stage, F0)).toEqual(['coord-2', 'coord']);
+      expect(windowsIn(stage, F0)).toEqual(['coord', 'coord-2']);
       expect(windowsIn(stage, F1)).toEqual(['alpha']);
       expect(windowsIn(stage, F2)).toEqual(['beta']);
       const found = host.find('coord');
@@ -471,7 +478,7 @@ export const SCENARIOS: readonly Scenario[] = [
         themed: [{ group: F0, views: [`${F0}-v1`, `${F0}-o1`] }],
       });
       expect(groupNames(stage)).toEqual([F0, `${F0}-o1`, `${F0}-v1`]);
-      expect(windowNames(stage, F0)).toEqual(['helper', 'coord']);
+      expect(windowNames(stage, F0)).toEqual(['coord', 'helper']);
       // In place: the same pane, still the same run.
       expect(stage.tmux('display-message', '-p', '-t', coord.window, '#{pane_id}')).toBe(pane);
       expect(sessionOption(stage, `${F0}-o1`, 'set-titles-string')).toStartWith(
@@ -719,6 +726,10 @@ function windowOption(stage: Stage, window: string, option: string): string {
 
 function windowsIn(stage: Stage, group: string): string[] {
   return lines(stage.tmux('list-windows', '-t', `=${group}:`, '-F', '#{@ward_session}'), true);
+}
+
+function windowIndexes(stage: Stage, group: string): string[] {
+  return lines(stage.tmux('list-windows', '-t', `=${group}:`, '-F', '#{window_index}'));
 }
 
 function windowNames(stage: Stage, group: string): string[] {

@@ -88,11 +88,12 @@
       "argv": [
         "new-window",
         "-d",
+        "-a",
         "-P",
         "-F",
         "#{window_id}\t#{pane_id}",
         "-t",
-        "=ward-main-f0:",
+        "=ward-main-f0:{end}",
         "-n",
         "coord",
         "cat"
@@ -188,11 +189,12 @@
       "argv": [
         "new-window",
         "-d",
+        "-a",
         "-P",
         "-F",
         "#{window_id}\t#{pane_id}",
         "-t",
-        "=ward-main-f0:",
+        "=ward-main-f0:{end}",
         "-n",
         "helper",
         "cat"
@@ -712,7 +714,7 @@
         "#{window_name}"
       ],
       "exit": 0,
-      "stdout": "helper\ncoord\n",
+      "stdout": "coord\nhelper\n",
       "stderr": ""
     },
     {

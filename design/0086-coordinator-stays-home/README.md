@@ -75,7 +75,11 @@ hygiene stand.
      =<host>:<window>` for each such host, and that command takes it out
      of the one host while the run goes on (`test/agent/host-findings.test.ts`,
      `test/host/tmux-live.test.ts`).
-  5. `mise run check` passes.
+  5. A host's windows stand in the order they were placed, after the placeholder's slot is freed and
+     after a window between them ends, on a server with no configuration (the `place-a-host`
+     conformance scenario; the resume `--all` live case, whose ward-started server now reads no
+     human's `~/.tmux.conf`).
+  6. `mise run check` passes.
 
 ## Design
 
@@ -121,6 +125,15 @@ hygiene stand.
     `createGroupArgv` now prints only `#{window_id}`, since the placeholder's index was only ever
     used to put a floating window in its slot. Every transcript that creates a host was re-recorded
     on tmux 3.8.
+  - _Window order is placement order._ The run's window is created with `new-window -a` on
+    `=<host>:{end}`, after the host's last window. tmux's default target is the lowest free index,
+    so the slot a window leaves goes to the next one placed. While a floating coordinator took the
+    placeholder's slot in every new floor host, that slot was never free. Without floating, a new
+    host's first window stands at 1 once the placeholder at 0 is cleared, and the second would take
+    0, in front of it. A server that renumbers windows (a human's `renumber-windows on`) hides this,
+    and one without that setting shows it. Appending makes a host's windows stand in the order they
+    were placed, whatever the server's options, so a floor's first session placed is its first
+    window. A gap an ended window leaves stays a gap.
   - _Doctor._ For each open, live, verified window: when it stands in its placement floor's host and
     also in other floor hosts of this workspace, an info finding names those hosts, says the links
     go when the run ends, and gives one `unlink-window` per host. When it stands only elsewhere, the

@@ -240,16 +240,24 @@ export function createGroupArgv(
   ];
 }
 
-/** The window that will hold the run — created holding, not yet running it. */
+/**
+ * The window that will hold the run — created holding, not yet running it —
+ * AFTER the host's last window (`-a` on `{end}`), so a host's windows stand in
+ * the order they were placed (design/0086-coordinator-stays-home/). tmux's own
+ * default is the lowest free index, which hands a slot a window left (the
+ * placeholder's, or an ended run's) to the next window placed — in front of
+ * windows placed before it — unless the server happens to renumber.
+ */
 export function createWindowArgv(group: string, label: string): string[] {
   return [
     'new-window',
     '-d',
+    '-a',
     '-P',
     '-F',
     ['#{window_id}', '#{pane_id}'].join(FIELD),
     '-t',
-    windowTarget(group),
+    windowTarget(group, '{end}'),
     '-n',
     label,
     ...HOLD,

@@ -174,11 +174,12 @@ test('the window is created holding, then tagged, told to keep a failed exit, an
   expect(createWindowArgv('ward-main-f0', 'workspace-1@mbp')).toEqual([
     'new-window',
     '-d',
+    '-a', // after the host's last window: placement order is window order
     '-P',
     '-F',
     '#{window_id}\t#{pane_id}',
     '-t',
-    '=ward-main-f0:',
+    '=ward-main-f0:{end}',
     '-n',
     'workspace-1@mbp',
     'cat',

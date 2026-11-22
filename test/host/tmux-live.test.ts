@@ -1261,6 +1261,7 @@ let ws: string;
 let name: string;
 let claudeHome: string;
 let configHome: string;
+let home: string;
 let runLog: string;
 let staying: string;
 let exiting: string;
@@ -1516,6 +1517,11 @@ function wardEnv(
     WARD_TMUX_SOCKET: SOCKET,
     CLAUDE_CONFIG_DIR: claudeHome,
     WARD_CONFIG_DIR: configHome,
+    // A server a verb starts (after killServer, the reboot) must read no
+    // human's ~/.tmux.conf either: a renumber-windows there once hid a
+    // window-order bug that every runner without one showed.
+    HOME: home,
+    XDG_CONFIG_HOME: join(home, '.config'),
     ...extra,
   };
   delete env.WARD_AGENT;
@@ -1702,6 +1708,8 @@ beforeEach(async () => {
   ws = join(scratch, name);
   claudeHome = join(scratch, `claude-home-${caseId}`);
   configHome = join(scratch, `config-${caseId}`);
+  home = join(scratch, `home-${caseId}`);
+  mkdirSync(home, { recursive: true });
   runLog = join(scratch, `runs-${caseId}.log`);
   // The tmux server's environment is the suite's: the stub finds its log there.
   process.env.WARD_TEST_RUNS = runLog;

@@ -164,11 +164,12 @@
       "argv": [
         "new-window",
         "-d",
+        "-a",
         "-P",
         "-F",
         "#{window_id}\t#{pane_id}",
         "-t",
-        "=main-f1-alpha:",
+        "=main-f1-alpha:{end}",
         "-n",
         "alpha",
         "cat"
@@ -276,11 +277,12 @@
       "argv": [
         "new-window",
         "-d",
+        "-a",
         "-P",
         "-F",
         "#{window_id}\t#{pane_id}",
         "-t",
-        "=renamed-by-hand:",
+        "=renamed-by-hand:{end}",
         "-n",
         "alpha-2",
         "cat"
@@ -359,7 +361,7 @@
         "#{@ward_session}"
       ],
       "exit": 0,
-      "stdout": "alpha-2\nalpha\n",
+      "stdout": "alpha\nalpha-2\n",
       "stderr": ""
     }
   ]
