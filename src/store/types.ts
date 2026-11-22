@@ -427,6 +427,9 @@ export type HostedKind = z.infer<typeof hostedKindSchema>;
  * `task-cleared` (design/0078-task-named-windows/) record a floor's session
  * taking up one of its floor's tasks and setting it down: appended, never
  * overwritten, so the trail says what the session worked and when.
+ * `continued` (design/0084-session-move/) is written on a session as it is
+ * closed because a new record at another scope carries its conversation on:
+ * the episode here ended, and the event names the session that continues it.
  */
 export const sessionEventSchema = z.object({
   event: z.enum([
@@ -437,6 +440,7 @@ export const sessionEventSchema = z.object({
     'observed',
     'task-named',
     'task-cleared',
+    'continued',
     'closed',
   ]),
   at: z.string().min(1),
@@ -447,6 +451,12 @@ export const sessionEventSchema = z.object({
    * together do not. Present exactly on `task-named`.
    */
   task: z.string().min(1).optional(),
+  /**
+   * The session that continues this one, on a `continued` event
+   * (design/0084-session-move/): its bare id, which names one record for good.
+   * Present exactly on `continued`.
+   */
+  session: z.string().min(1).optional(),
   /**
    * Why it failed — on `resume-failed`, per the intent's "with its cause". A
    * `resumed` event may carry one too (design/0031-detached-session-hosting/):
@@ -526,6 +536,14 @@ export const sessionSchema = z
      * a session a human opened.
      */
     parent: z.string().min(1).optional(),
+    /**
+     * The session this one continues (design/0084-session-move/): the bare id
+     * of the record closed when this one opened to carry the same harness
+     * handle at another scope. Recorded on the successor, at its open, as
+     * `parent` is — the predecessor names its successor on its `continued`
+     * event. Absent on every session that began a conversation of its own.
+     */
+    continues: z.string().min(1).optional(),
     state: z.enum(['open', 'closed']),
     /** The append-only lifecycle trail; absent on records written before 0029. */
     events: z.array(sessionEventSchema).optional(),

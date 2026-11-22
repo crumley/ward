@@ -810,8 +810,17 @@ const reflectionSessionShape = z.strictObject({
       at: z.string(),
       cause: z.string().optional(),
       host: z.string().optional(),
+      task: z.string().optional(),
+      session: z.string().optional(),
     }),
   ),
+  /**
+   * A moved session's pair (0084): the session it continues and the one that
+   * continues it. The two share one harness history; each covers the stretch
+   * between its own open and close.
+   */
+  continues: z.string().optional(),
+  continuedBy: z.string().optional(),
   /**
    * Where the harness history stands on the machine asked. `path` and
    * `bytes` are present exactly when `found`: the size is what lets a reader
@@ -1272,6 +1281,8 @@ export const sessionMutationShape = z.strictObject({
   effort: z.string().optional(),
   /** The session that started this one (0052); absent when none did, or before it. */
   parent: z.string().optional(),
+  /** The session this one continues (0084): the record closed when this one took its handle. */
+  continues: z.string().optional(),
   state: z.enum(['open', 'closed']),
   events: z
     .array(
@@ -1284,6 +1295,7 @@ export const sessionMutationShape = z.strictObject({
           'observed',
           'task-named',
           'task-cleared',
+          'continued',
           'closed',
         ]),
         at: z.string(),
@@ -1291,6 +1303,8 @@ export const sessionMutationShape = z.strictObject({
         cause: z.string().optional(),
         /** On `task-named` (0078): the slug-qualified address of the task named. */
         task: z.string().optional(),
+        /** On `continued` (0084): the id of the session that continues this one. */
+        session: z.string().optional(),
         /** The detached host a launch was placed in (0031); absent for a foreground run. */
         host: z.enum(['tmux']).optional(),
       }),
@@ -1322,6 +1336,30 @@ export const sessionMutationShape = z.strictObject({
     .optional(),
 });
 export type SessionMutationShape = z.infer<typeof sessionMutationShape>;
+
+/**
+ * `ward session move` (design/0084-session-move/): the two records the move
+ * wrote in one commit — `from`, closed with its `continued` event (and, when
+ * its latest run was hosted, what ending its window did, as `teardown`), and
+ * `to`, the open continuation (with `live` when its run was resumed in its
+ * new floor's host). `next` is present when the move started nothing and
+ * names what to run, with why.
+ */
+export const sessionMoveShape = z.strictObject({
+  from: sessionMutationShape,
+  to: sessionMutationShape,
+  /** Where the continuation's run was placed, when the move resumed it. */
+  hosted: z
+    .strictObject({
+      group: z.string(),
+      window: z.string(),
+      floor: z.number().int().nonnegative(),
+      join: z.string(),
+    })
+    .optional(),
+  next: z.string().optional(),
+});
+export type SessionMoveShape = z.infer<typeof sessionMoveShape>;
 
 /**
  * `ward session resume --all` (design/0068-bulk-session-resume/): the plan,
@@ -1558,6 +1596,7 @@ export const mutationVerbShapes: Readonly<Record<string, z.ZodType>> = {
   'session open': sessionMutationShape,
   'session resume': sessionResumeShape,
   'session task': sessionMutationShape,
+  'session move': sessionMoveShape,
   'session close': sessionMutationShape,
   'workspace merge': workspaceMergeShape,
   'workspace restore': workspaceRestoreShape,

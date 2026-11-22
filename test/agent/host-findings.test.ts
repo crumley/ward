@@ -306,12 +306,15 @@ function win(record: SessionRecord, floors: string[], window = '@1'): FoundWindo
   };
 }
 
+// Each hosted open is a run of its own: one handle is one open session (0084).
+let runs = 0;
+
 function hosted(): Promise<SessionRecord> {
-  return openWorkspaceSession(ws, 'hosted', { handle: 'claude:h', host: 'tmux' });
+  return openWorkspaceSession(ws, 'hosted', { handle: `claude:h-${++runs}`, host: 'tmux' });
 }
 
 function hostedFloor(floor: number): Promise<SessionRecord> {
-  return openFloorSession(ws, floor, 'hosted', { handle: 'claude:f', host: 'tmux' });
+  return openFloorSession(ws, floor, 'hosted', { handle: `claude:f-${++runs}`, host: 'tmux' });
 }
 
 beforeEach(async () => {

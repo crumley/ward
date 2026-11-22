@@ -910,6 +910,7 @@ export function sessionMutationJson(
     ...(record.model === undefined ? {} : { model: record.model }),
     ...(record.effort === undefined ? {} : { effort: record.effort }),
     ...(record.parent === undefined ? {} : { parent: record.parent }),
+    ...(record.continues === undefined ? {} : { continues: record.continues }),
     state: record.state,
     ...(record.events === undefined
       ? {}
@@ -920,6 +921,7 @@ export function sessionMutationJson(
             ...(event.cause === undefined ? {} : { cause: event.cause }),
             ...(event.host === undefined ? {} : { host: event.host }),
             ...(event.task === undefined ? {} : { task: event.task }),
+            ...(event.session === undefined ? {} : { session: event.session }),
           })),
         }),
     openedAt: record.openedAt,

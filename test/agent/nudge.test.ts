@@ -26,7 +26,11 @@ import { preparedWorkspace } from '../prepared.ts';
 import { fakeHost } from './fake-host.ts';
 
 const TEXT = '[ward] hand-off to floor 2: task f2t1 (x). Read it: ward task show f2t1';
-const HOSTED: OpenSessionOptions = { handle: 'claude:run', host: 'tmux' };
+/** A hosted open's options, each with a run of its own: one handle is one open session (0084). */
+function hostedRun(): OpenSessionOptions {
+  return { handle: `claude:run-${++runs}`, host: 'tmux' };
+}
+let runs = 0;
 
 // -- the line ------------------------------------------------------------------
 
@@ -74,13 +78,13 @@ test.each<[string, DispatchRecord, string, string]>([
 // -- who is typed to -------------------------------------------------------------
 
 test('only the open sessions of the target floor itself are typed to', async () => {
-  const target = await openFloorSession(ws, 2, undefined, HOSTED);
-  const second = await openFloorSession(ws, 2, undefined, HOSTED);
-  const gone = await openFloorSession(ws, 2, undefined, HOSTED);
+  const target = await openFloorSession(ws, 2, undefined, hostedRun());
+  const second = await openFloorSession(ws, 2, undefined, hostedRun());
+  const gone = await openFloorSession(ws, 2, undefined, hostedRun());
   await closeSession(ws, gone.id);
   // Everyone a nudge to floor 2 must never reach, each live in a host:
-  const coordinator = await openWorkspaceSession(ws, undefined, HOSTED);
-  const otherFloor = await openFloorSession(ws, 1, undefined, HOSTED);
+  const coordinator = await openWorkspaceSession(ws, undefined, hostedRun());
+  const otherFloor = await openFloorSession(ws, 1, undefined, hostedRun());
   await openTask(ws, 'work', { floor: 2 });
   const worker = await openSession(ws, 'f2t1', 'work on floor 2', { handle: 'claude:w' });
   const host = fakeHost({
@@ -100,7 +104,7 @@ test('only the open sessions of the target floor itself are typed to', async () 
 });
 
 test('a floor with no open session is typed to by nobody: an empty answer, not a failure', async () => {
-  const closed = await openFloorSession(ws, 2, undefined, HOSTED);
+  const closed = await openFloorSession(ws, 2, undefined, hostedRun());
   await closeSession(ws, closed.id);
   const host = fakeHost({ windows: await windowsFor(closed) });
   expect(await nudgeFloor(ws, 2, TEXT, {}, host)).toEqual([]);
@@ -125,8 +129,8 @@ test.each<[string, OpenSessionOptions, 'own' | 'dead' | 'none', Nudge['outcome']
     'unreachable',
     'harness (pi)',
   ],
-  ['a run that has exited', HOSTED, 'dead', 'not-running', 'exited 3'],
-  ['a window that is gone', HOSTED, 'none', 'not-running', 'no tmux window'],
+  ['a run that has exited', hostedRun(), 'dead', 'not-running', 'exited 3'],
+  ['a window that is gone', hostedRun(), 'none', 'not-running', 'no tmux window'],
 ])('not typed to: %s', async (_name, options, window, outcome, detail) => {
   const session = await openFloorSession(ws, 2, undefined, options);
   const windows = window === 'none' ? [] : await windowsFor(session);
@@ -157,7 +161,7 @@ test.each<[string, TypeResult, Nudge['outcome'], string]>([
     'tmux timed out',
   ],
 ])('reported, never thrown: %s', async (_name, typing, outcome, detail) => {
-  const session = await openFloorSession(ws, 2, undefined, HOSTED);
+  const session = await openFloorSession(ws, 2, undefined, hostedRun());
   const host = fakeHost({ windows: await windowsFor(session), typing });
   expect(await nudgeFloor(ws, 2, TEXT, {}, host)).toEqual([
     { session: session.id, outcome, detail: expect.stringContaining(detail) },
@@ -165,7 +169,7 @@ test.each<[string, TypeResult, Nudge['outcome'], string]>([
 });
 
 test('a host that cannot answer, or is not usable, is an answer too', async () => {
-  const session = await openFloorSession(ws, 2, undefined, HOSTED);
+  const session = await openFloorSession(ws, 2, undefined, hostedRun());
   expect(await nudgeFloor(ws, 2, TEXT, {}, fakeHost({ unknown: 'no reply' }))).toEqual([
     { session: session.id, outcome: 'unknown', detail: expect.stringContaining('no reply') },
   ]);
@@ -179,7 +183,7 @@ test('a host that cannot answer, or is not usable, is an answer too', async () =
 });
 
 test('a session on another machine is never typed to from here', async () => {
-  const session = await openFloorSession(ws, 2, undefined, HOSTED);
+  const session = await openFloorSession(ws, 2, undefined, hostedRun());
   const file = join(ws, 'projects/2-beta/sessions', `${session.id}.md`);
   await Bun.write(
     file,

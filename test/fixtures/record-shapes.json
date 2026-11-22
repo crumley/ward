@@ -1,5 +1,5 @@
 {
-  "format": 3,
+  "format": 4,
   "shapes": {
     "baselines": {
       "type": "object",
@@ -428,6 +428,10 @@
           "type": "string",
           "minLength": 1
         },
+        "continues": {
+          "type": "string",
+          "minLength": 1
+        },
         "state": {
           "type": "string",
           "enum": [
@@ -450,6 +454,7 @@
                   "observed",
                   "task-named",
                   "task-cleared",
+                  "continued",
                   "closed"
                 ]
               },
@@ -458,6 +463,10 @@
                 "minLength": 1
               },
               "task": {
+                "type": "string",
+                "minLength": 1
+              },
+              "session": {
                 "type": "string",
                 "minLength": 1
               },

@@ -21,6 +21,7 @@ import {
   type LiveState,
   liveStateOf,
 } from '../agent/host.ts';
+import { moveSession } from '../agent/move.ts';
 import { type Dressed, dressFloor, refreshHosted } from '../agent/naming.ts';
 import { dispatchNotice, type Nudge, nudgeFloor } from '../agent/nudge.ts';
 import {
@@ -126,7 +127,9 @@ import {
 } from '../workspace/scan.ts';
 import { scopeFromCwd } from '../workspace/scope.ts';
 import {
+  type ContinuationScope,
   closeSession,
+  continuedBy,
   describeScope,
   findSession,
   namedTaskOf,
@@ -237,7 +240,7 @@ import {
 } from './json.ts';
 import { exitWhenFlushed, installPipeSafeConsole, pipeSafeStdout, writeOut } from './output.ts';
 import { refreshDisplay } from './progress.ts';
-import { allSchemasJson, verbSchemaJson } from './schema.ts';
+import { allSchemasJson, type SessionMoveShape, verbSchemaJson } from './schema.ts';
 import { askToClose, type ExitHistory, exitDecision, type OnExit } from './session-exit.ts';
 import {
   anyRepoName,
@@ -1127,6 +1130,35 @@ const session = command(
       },
     ),
     command(
+      'move',
+      object({
+        action: constant('session-move'),
+        id: argument(sessionId()),
+        floor: optional(
+          option('--floor', floorNumber(), {
+            description: message`The floor the conversation moves to: a new floor session continues it there.`,
+          }),
+        ),
+        workspace: option('--workspace', {
+          description: message`Move it to workspace scope instead: a new workspace session continues it.`,
+        }),
+        task: optional(
+          option('--task', taskIdentity('ADDRESS'), {
+            description: message`An open task on the target floor for the new session to work.`,
+          }),
+        ),
+        purpose: optional(
+          option('--purpose', string({ metavar: 'TEXT' }), {
+            description: message`The new record's purpose (default: the old one's).`,
+          }),
+        ),
+        json: jsonFlag(),
+      }),
+      {
+        brief: message`Carry a session's conversation to another floor: its record closes, a new one continues the same run there.`,
+      },
+    ),
+    command(
       'show',
       object({
         action: constant('session-show'),
@@ -1155,7 +1187,7 @@ const session = command(
     ),
   ),
   {
-    brief: message`Open, resume, attach, observe, name the task of, show, locate, and close agent sessions.`,
+    brief: message`Open, resume, attach, observe, name the task of, move, show, locate, and close agent sessions.`,
   },
 );
 const status = command(
@@ -1775,6 +1807,16 @@ async function answer(invoked: Invocation): Promise<void> {
           break;
         case 'session-task':
           await cmdSessionTask(result.id, result.task, result.clear, result.json);
+          break;
+        case 'session-move':
+          await cmdSessionMove(
+            result.id,
+            result.floor,
+            result.workspace,
+            result.task,
+            result.purpose,
+            result.json,
+          );
           break;
         case 'session-show':
           await cmdSessionShow(result.id, result.json);
@@ -3327,7 +3369,13 @@ function renderReflectionPacket(packet: ReflectionPacket): void {
   if (packet.notes !== undefined) console.log(pc.dim(`  notes: ${packet.notes}`));
   const session = (found: ReflectionPacket['floorSessions'][number]): string =>
     `      ${found.id} [${found.state}] ${renderPacketHistory(found.history)} ` +
-    pc.dim(`— ${found.purpose}`);
+    pc.dim(`— ${found.purpose}`) +
+    (found.continues === undefined && found.continuedBy === undefined
+      ? ''
+      : pc.dim(
+          `\n        one conversation with ${[found.continues, found.continuedBy].filter((id) => id !== undefined).join(', ')}` +
+            ` — its history from ${found.openedAt}${found.closedAt === undefined ? '' : ` to ${found.closedAt}`}`,
+        ));
   for (const task of packet.tasks) {
     console.log(
       `\n  ${pc.bold(task.slug)} [${task.outcome ?? 'closed'}] ` +
@@ -4050,6 +4098,10 @@ async function cmdSessionShow(id: string, json: boolean): Promise<void> {
   row('dir', record.workingDirectory);
   row('handle', record.handle ?? pc.dim('none recorded'));
   if (record.parent !== undefined) row('parent', record.parent);
+  // The continuation's link, both ways (design/0084-session-move/).
+  if (record.continues !== undefined) row('moved', `from ${record.continues}, continuing it`);
+  const successor = continuedBy(record);
+  if (successor !== undefined) row('moved', `to ${successor}, which continues it`);
   if (workingOn !== undefined) row('working', `${workingOn.address} ${workingOn.slug}`);
   row('opened', record.openedAt);
   if (record.closedAt !== undefined) row('closed', record.closedAt);
@@ -4060,7 +4112,8 @@ async function cmdSessionShow(id: string, json: boolean): Promise<void> {
       const cause = event.cause === undefined ? '' : pc.dim(` — ${event.cause}`);
       const host = event.host === undefined ? '' : pc.dim(` (in ${event.host})`);
       const task = event.task === undefined ? '' : ` ${event.task}`;
-      console.log(`  ${event.at} ${event.event}${task}${host}${cause}`);
+      const by = event.session === undefined ? '' : ` as ${event.session}`;
+      console.log(`  ${event.at} ${event.event}${task}${by}${host}${cause}`);
     }
   }
 }
@@ -4120,6 +4173,82 @@ async function cmdSessionTask(
       ),
     );
   }
+}
+
+/**
+ * `session move` (design/0084-session-move/): carry a workspace or floor
+ * session's conversation to another floor (or to the workspace) as a
+ * continuation — the old record closed, a new one continuing the same handle,
+ * in one commit — then end the old window and resume the new session in its
+ * floor's host when the old run was live there. src/agent/move.ts holds the
+ * order and the refusals; this renders it.
+ */
+async function cmdSessionMove(
+  id: string,
+  floor: number | undefined,
+  workspace: boolean,
+  task: string | undefined,
+  purpose: string | undefined,
+  json: boolean,
+): Promise<void> {
+  if ((floor === undefined) === !workspace) {
+    throw new WardError(
+      `name where the conversation moves — ward session move ${id} --floor N, or ` +
+        `ward session move ${id} --workspace`,
+    );
+  }
+  if (task !== undefined && floor === undefined) {
+    throw new WardError(
+      "--task names a task on the target floor — a workspace session works no one floor's task",
+    );
+  }
+  const root = await requireMutableWorkspace();
+  const target: ContinuationScope =
+    floor === undefined ? { scope: 'workspace' } : { scope: 'project', floor, task };
+  const caller = { session: declaredSession(), handle: ambientHandle() ?? undefined };
+  const moved = await moveSession(root, id, target, { purpose, caller });
+  const tasks = await readTasks(root);
+  if (json) {
+    const live =
+      moved.hosted?.live === undefined
+        ? undefined
+        : { ...moved.hosted.live, join: moved.hosted.join };
+    printJson({
+      from: sessionMutationJson(moved.from, { teardown: moved.teardown }),
+      to: sessionMutationJson(moved.to, { live, workingOn: workingOnOf(moved.to, tasks) }),
+      ...(moved.hosted === undefined
+        ? {}
+        : {
+            hosted: {
+              group: moved.hosted.group,
+              window: moved.hosted.window,
+              floor: moved.hosted.floor,
+              join: moved.hosted.join,
+            },
+          }),
+      ...(moved.next === undefined ? {} : { next: moved.next }),
+    } satisfies SessionMoveShape);
+    return;
+  }
+  console.log(
+    `${pc.green('moved')} session ${pc.bold(moved.from.id)} → ${pc.bold(moved.to.id)} ` +
+      pc.dim(`(${describeScope(moved.to)}, handle ${moved.to.handle ?? '?'})`),
+  );
+  const working = workingOnOf(moved.to, tasks);
+  if (working !== undefined) console.log(pc.dim(`  working ${working.address} ${working.slug}`));
+  if (moved.teardown !== undefined) {
+    console.log(pc.dim(`  ${moved.teardown.kind}: ${moved.teardown.detail}`));
+  }
+  if (moved.hosted !== undefined) {
+    console.log(
+      pc.dim(
+        `  resumed in host ${moved.hosted.group} (floor ${moved.hosted.floor}), window ` +
+          `${moved.hosted.window}`,
+      ),
+    );
+    console.log(`join it: ${moved.hosted.join}`);
+  }
+  if (moved.next !== undefined) console.log(`next: ${moved.next}`);
 }
 
 /**

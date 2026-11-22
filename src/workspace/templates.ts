@@ -134,6 +134,14 @@ open is what starts the agent** — there is no id to copy by hand:
   it reads as its floor's again once that task closes. Naming a task that was handed over picks
   the hand-off up. For a new topic, \`ward session open --floor N --new-task SLUG\` opens the task
   and the session working it in one step (\`--repo NAME\` may stand in for \`--floor\`).
+- **A conversation that belongs on another floor is moved, not recorded twice**:
+  \`ward session move ID --floor N [--task ADDRESS]\` (or \`--workspace\`) closes the session's
+  record and opens a new one on floor N continuing the same harness run, in one commit; each
+  record names the other. When the old run was live in its host, its window is ended and the
+  new session resumed in floor N's host. One conversation is one open workspace or floor
+  session: \`ward session open --handle\` refuses a handle another one holds. A task session is
+  moved by moving its task, and a session cannot move itself — run the move from another
+  terminal.
 - **A session id names the machine it ran on**, and a number is never reused:
   \`workspace-7@mbp\` is workspace session seven, on \`mbp\`. A session is bound to the computer
   holding its harness history while this record travels, so two machines sharing one workspace
