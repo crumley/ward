@@ -1,5 +1,5 @@
 // The Ward-shaped half of detached hosting (design/0031-detached-session-hosting/),
-// against a FAKE host: placement and floating as pure functions of records,
+// against a FAKE host: placement as a pure function of records,
 // what a hosted launch asks the host for (and when — inside the store write,
 // after the record is on disk), ownership by tag + epoch + workspace stamp,
 // resume's gate, and close's teardown, which ends the session's own window
@@ -19,7 +19,7 @@ import {
   type Teardown,
   teardownSession,
 } from '../../src/agent/host.ts';
-import { floats, placementFloor } from '../../src/agent/placement.ts';
+import { isCoordinator, placementFloor } from '../../src/agent/placement.ts';
 import { locateSession } from '../../src/agent/run.ts';
 import type { AgentHost, Resolved } from '../../src/agent/settings.ts';
 import { sessionLocateJson } from '../../src/cli/json.ts';
@@ -44,7 +44,7 @@ import { fakeHost } from './fake-host.ts';
 const EPOCH = '2026-11-08T10:00:00.000Z';
 const WS = 'ws-0123456789abcdef';
 
-// -- placement and floating: pure over records -------------------------------
+// -- placement, and which session is the coordinator: pure over records ------
 
 const coordinator = listing('', { id: 'workspace-1@t', scope: 'workspace' });
 const floor3 = listing('projects/3-c', { id: 'f3-1@t', scope: 'project', floor: 3 });
@@ -72,13 +72,13 @@ test.each<[string, OpenSessionListing, number, boolean]>([
     false,
   ],
   [
-    'a workspace-scope child of the coordinator: floor 0, and it does not float',
+    'a workspace-scope child of the coordinator: floor 0, a helper, not the coordinator',
     listing('', { id: 'workspace-2@t', scope: 'workspace', parent: 'workspace-1@t' }),
     0,
     false,
   ],
   [
-    "a workspace-scope child of a floor-3 session: floor 3's host, not floating",
+    "a workspace-scope child of a floor-3 session: floor 3's host, not the coordinator",
     listing('', { id: 'workspace-3@t', scope: 'workspace', parent: 'f3-1@t' }),
     3,
     false,
@@ -95,10 +95,10 @@ test.each<[string, OpenSessionListing, number, boolean]>([
     5,
     false,
   ],
-])('%s → floor %p, floats %p', (_name, session, floor, floating) => {
+])('%s → floor %p, coordinator %p', (_name, session, floor, isIt) => {
   const all = [coordinator, floor3, session];
   expect(placementFloor(session, all)).toBe(floor);
-  expect(floats(session.record)).toBe(floating);
+  expect(isCoordinator(session.record)).toBe(isIt);
 });
 
 test('a parent chain that loops (only a hand edit makes one) stops at the loop', () => {
@@ -135,7 +135,7 @@ test.each<[string, FindResult, LiveState['state'], string[]]>([
   expect(live.strangers).toEqual(strangers);
 });
 
-test('a window linked into several hosts reports the one its placement floor names', () => {
+test('a window an older Ward linked into several hosts reports the one its placement floor names', () => {
   const linked = win('@1', { groups: ['ward-a-f2', 'ward-a-f0'] });
   expect(classify(hostedRecord(), answered(linked), WS, 0, 'tmux').live.group).toBe('ward-a-f0');
 });
@@ -178,12 +178,14 @@ test('placement runs inside the open, after the record is on disk, and asks for 
     cwd: ws,
     env: { WARD_AGENT: record.id }, // and nothing else of the caller's
     command: ['/bin/stub', '--session-id', 'abc'],
-    floats: true,
-    floating: [],
   });
+  // The request carries no word of any other host: placement is one host's business.
+  expect(Object.keys(request ?? {}).sort()).toEqual(
+    ['command', 'cwd', 'env', 'group', 'label', 'naming', 'tags', 'version'].sort(),
+  );
 });
 
-test("a floor session's placement links the live coordinator into its floor's new host", async () => {
+test("a floor session's placement asks for its own floor's host, and nothing of the coordinator", async () => {
   const host = fakeHost();
   const choice: HostChoice = { kind: 'tmux', host, workspace: await workspaceId(ws) };
   const place = (opened: OpenSessionListing) =>
@@ -204,10 +206,7 @@ test("a floor session's placement links the live coordinator into its floor's ne
   expect(floorRequest?.group.floor).toBe(1); // the coordinator is a floor-0 parent: no pull
   expect(floorRequest?.naming.name).toBe(`ws-${caseId}-f1-alpha`);
   expect(floorRequest?.label).toBe('alpha');
-  expect(floorRequest?.floats).toBe(false);
-  expect(floorRequest?.floating).toEqual([
-    { session: coordinatorRecord.id, epoch: coordinatorRecord.openedAt },
-  ]);
+  expect(JSON.stringify(floorRequest)).not.toContain(coordinatorRecord.id);
 });
 
 // -- resume's gate -----------------------------------------------------------

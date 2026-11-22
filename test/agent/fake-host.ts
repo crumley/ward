@@ -1,7 +1,6 @@
 // An in-memory session host for the Ward-side suites (design/0031-detached-session-hosting/):
 // it holds the windows and groups it is given, answers every read from them,
-// and records every request — what was placed, closed, linked, viewed, and
-// entered — so a test can assert what Ward ASKED of a host without a real one.
+// and records every request — what was placed, closed, viewed, and entered — so a test can assert what Ward ASKED of a host without a real one.
 import type {
   CloseResult,
   FindResult,
@@ -24,7 +23,6 @@ import type {
 export interface FakeHost extends SessionHost {
   readonly placed: PlaceRequest[];
   readonly closed: string[];
-  readonly links: string[];
   readonly views: ViewRequest[];
   readonly entered: View[];
   readonly renames: RenameRequest[];
@@ -50,7 +48,6 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
   const windows = [...(options.windows ?? [])];
   const placed: PlaceRequest[] = [];
   const closed: string[] = [];
-  const links: string[] = [];
   const views: ViewRequest[] = [];
   const entered: View[] = [];
   const renames: RenameRequest[] = [];
@@ -78,7 +75,6 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
     kind: 'tmux',
     placed,
     closed,
-    links,
     views,
     entered,
     renames,
@@ -101,7 +97,7 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
         tags: request.tags,
         dead: false,
       });
-      return { group, window, createdGroup: true, linkedInto: [] };
+      return { group, window, createdGroup: true };
     },
     find(session: string): FindResult {
       finds += 1;
@@ -113,9 +109,6 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
         return { outcome: 'refused', reason: options.refuseClose };
       closed.push(window);
       return { outcome: 'closed' };
-    },
-    link(window: string, group: string): void {
-      links.push(`${window} into ${group}`);
     },
     typeLine(request: TypeRequest): TypeResult {
       typed.push(request);
@@ -188,6 +181,7 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
     joinCommand: (group: string) => `fake join ${group}`,
     closeCommand: (window: string) => `fake kill ${window}`,
     endGroupCommand: (group: string) => `fake end ${group}`,
+    unlinkCommand: (window: string, group: string) => `fake unlink ${window} from ${group}`,
     forgetEnvCommand: (name: string) => `fake forget ${name}`,
   };
 }

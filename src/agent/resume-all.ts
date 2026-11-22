@@ -23,7 +23,7 @@ import { sessionScopeOf } from '../store/types.ts';
 import { workspaceId } from '../workspace/identity.ts';
 import { type OpenSessionListing, readAllSessions } from '../workspace/sessions.ts';
 import { classify, describeExit, hostedBy, hostOf, type LiveState } from './host.ts';
-import { floats, placementFloor } from './placement.ts';
+import { isCoordinator, placementFloor } from './placement.ts';
 import { type LaunchedSession, resumeSession } from './run.ts';
 
 type Env = Record<string, string | undefined>;
@@ -46,8 +46,8 @@ export interface PlannedSession {
   readonly record: SessionRecord;
   /** The floor whose host the window belongs in, derived from the records. */
   readonly floor: number;
-  /** Whether it is the coordinator — linked into every floor host, and resumed first. */
-  readonly floats: boolean;
+  /** Whether it is the coordinator — resumed first. */
+  readonly coordinator: boolean;
   readonly step: PlanStep;
   /** One clause saying why the step is what it is. */
   readonly detail: string;
@@ -120,7 +120,7 @@ export async function planResumeAll(root: string, options: PlanOptions = {}): Pr
     sessions.push({
       record,
       floor,
-      floats: floats(record),
+      coordinator: isCoordinator(record),
       live,
       ...stepOf(root, listing, live, machine),
     });
@@ -191,7 +191,7 @@ function stepOf(
  */
 function inResumeOrder(a: PlannedSession, b: PlannedSession): number {
   return (
-    Number(b.floats) - Number(a.floats) ||
+    Number(b.coordinator) - Number(a.coordinator) ||
     a.floor - b.floor ||
     Number(ownsFloor(b)) - Number(ownsFloor(a)) ||
     a.record.openedAt.localeCompare(b.record.openedAt) ||

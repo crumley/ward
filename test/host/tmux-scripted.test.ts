@@ -26,7 +26,6 @@ import {
   HELD,
   killWindowArgv,
   leftViewsArgv,
-  linkWindowArgv,
   listGroupsArgv,
   listPanesArgv,
   observeViewArgv,
@@ -54,7 +53,7 @@ import {
   type Step,
   transcriptNames,
 } from './scripted-tmux.ts';
-import { BLUE, epoch, F0, F1, RULE, request, SCENARIOS, SILVER, WS } from './tmux-scenarios.ts';
+import { F0, RULE, request, SCENARIOS, SILVER, WS } from './tmux-scenarios.ts';
 
 describe('every scenario, played back from its transcript', () => {
   test.each(SCENARIOS.map((scenario) => [scenario.name, scenario] as const))(
@@ -177,26 +176,19 @@ test.each<[string, string]>([
 // -- place ------------------------------------------------------------------------
 
 describe('place', () => {
-  const coord = request({ scratch: SCRATCH }, 'coord', { floats: true, identity: SILVER });
+  const coord = request({ scratch: SCRATCH }, 'coord', { identity: SILVER });
   const created = (): Step[] => [
     call(listGroupsArgv()),
-    call(createGroupArgv(F0, coord.group, coord.version, coord.naming), { stdout: '@1\t0\n' }),
+    call(createGroupArgv(F0, coord.group, coord.version, coord.naming), { stdout: '@1\n' }),
     call(createWindowArgv(F0, 'coord'), { stdout: '@2\t%1\n' }),
     call(startRunArgv('@2', '%1', coord)),
     call(killWindowArgv('@1')),
     call(themeArgv(F0, SILVER)),
-    call(listGroupsArgv(), { stdout: rows([F0, WS, 0], [F1, WS, 1]) }),
-    call(linkWindowArgv('@2', F1)),
   ];
 
-  test('the whole of it, scripted: a new host, its run, its theme, its float', () => {
+  test('the whole of it, scripted: a new host, its run, its theme — and no other host', () => {
     const { host, played } = scripted(created());
-    expect(host.place(coord)).toEqual({
-      group: F0,
-      window: '@2',
-      createdGroup: true,
-      linkedInto: [F1],
-    });
+    expect(host.place(coord)).toEqual({ group: F0, window: '@2', createdGroup: true });
     played.finish();
   });
 
@@ -231,12 +223,6 @@ describe('place', () => {
       { exit: 1, stderr: 'odd' },
       'tmux could not clear the placeholder: odd',
     ],
-    [
-      'the float cannot be linked',
-      7,
-      { exit: 1, stderr: 'no room' },
-      `tmux could not link @2 into ${F1}: no room`,
-    ],
   ])('throws when %s', (_, at, reply, message) => {
     const steps = created()
       .slice(0, at + 1)
@@ -251,22 +237,7 @@ describe('place', () => {
       i === 5 ? ({ ...step, exit: 1, stderr: 'bad style' } as Step) : step,
     );
     const { host, played } = scripted(steps);
-    expect(host.place(coord)).toMatchObject({ group: F0, linkedInto: [F1] });
-    played.finish();
-  });
-
-  test('a run already over when it is linked is not a failed launch: the links stop, the placement stands', () => {
-    // What a run that exits 0 before the link leaves behind (EXIT_RULE): tmux no longer knows the window.
-    const steps = created().map((step, i) =>
-      i === 7 ? ({ ...step, exit: 1, stderr: "can't find window: @2\n" } as Step) : step,
-    );
-    const { host, played } = scripted(steps);
-    expect(host.place(coord)).toEqual({
-      group: F0,
-      window: '@2',
-      createdGroup: true,
-      linkedInto: [],
-    });
+    expect(host.place(coord)).toEqual({ group: F0, window: '@2', createdGroup: true });
     played.finish();
   });
 
@@ -281,33 +252,12 @@ describe('place', () => {
       group: 'main-f0-older',
       window: '@5',
       createdGroup: false,
-      linkedInto: [],
     });
-    played.finish();
-  });
-
-  test('a floating window found dead, and the run’s own tags, are not linked into a new host', () => {
-    const alpha = request({ scratch: SCRATCH }, 'alpha', {
-      floor: 1,
-      floating: ['coord', 'alpha'],
-      identity: BLUE,
-    });
-    const dead = pane([F0, '@2', '%1', '1', '3', '', 'coord', epoch('coord'), '%1', WS, '0']);
-    const { host, played } = scripted([
-      call(listGroupsArgv(), { stdout: rows([F0, WS, 0]) }),
-      call(createGroupArgv(F1, alpha.group, alpha.version, alpha.naming), { stdout: '@3\t0\n' }),
-      call(listPanesArgv(), { stdout: dead }),
-      call(createWindowArgv(F1, 'alpha'), { stdout: '@4\t%2\n' }),
-      call(startRunArgv('@4', '%2', alpha)),
-      call(killWindowArgv('@3')),
-      call(themeArgv(F1, BLUE)),
-    ]);
-    expect(host.place(alpha)).toMatchObject({ group: F1, createdGroup: true });
     played.finish();
   });
 });
 
-// -- close and link ---------------------------------------------------------------
+// -- close ------------------------------------------------------------------------
 
 test.each<[string, Step[], ReturnType<SessionHost['close']>]>([
   [
@@ -339,31 +289,6 @@ test.each<[string, Step[], ReturnType<SessionHost['close']>]>([
 ])('close: %s', (_, steps, expected) => {
   const { host, played } = scripted(steps);
   expect(host.close('@2', 'coord')).toEqual(expected);
-  played.finish();
-});
-
-test.each<[string, Step[], string]>([
-  [
-    'the host’s windows cannot be listed',
-    [
-      call(['list-windows', '-t', windowTarget(F1), '-F', '#{window_id}'], {
-        exit: 1,
-        stderr: 'gone',
-      }),
-    ],
-    'tmux could not list: gone',
-  ],
-  [
-    'the link fails',
-    [
-      call(['list-windows', '-t', windowTarget(F1), '-F', '#{window_id}'], { stdout: '@3\n' }),
-      call(linkWindowArgv('@2', F1), { exit: 1, stderr: 'no room' }),
-    ],
-    `tmux could not link @2 into ${F1}: no room`,
-  ],
-])('link throws when %s', (_, steps, message) => {
-  const { host, played } = scripted(steps);
-  expect(() => host.link('@2', F1)).toThrow(message);
   played.finish();
 });
 
@@ -881,10 +806,6 @@ function rows(...each: Row[]): string {
     )
     .map((line) => `${line}\n`)
     .join('');
-}
-
-function pane(fields: string[]): string {
-  return `${fields.join('\t')}\n`;
 }
 
 function scenario(name: string) {

@@ -85,7 +85,7 @@ export const MINIMUM_VERSION = { major: 3, minor: 2 } as const;
  * status, or is ended by a signal, leaves its pane behind, dead, with how it
  * ended readable on it. A failure is kept because nothing else would say it
  * happened; a clean exit leaves nothing to say, and a window kept for it
- * only lingers in its floor host (the coordinator's, in every one).
+ * only lingers in its floor host.
  */
 export const EXIT_RULE = 'failed';
 
@@ -228,7 +228,7 @@ export function createGroupArgv(
     String(DETACHED_SIZE.rows),
     '-P',
     '-F',
-    ['#{window_id}', '#{window_index}'].join(FIELD),
+    '#{window_id}',
     ...HOLD,
     ...setOption(['-t', target], '@ward_workspace', stamp.workspace),
     ...setOption(['-t', target], '@ward_floor', String(stamp.floor)),
@@ -240,16 +240,24 @@ export function createGroupArgv(
   ];
 }
 
-/** The window that will hold the run — created holding, not yet running it. */
+/**
+ * The window that will hold the run — created holding, not yet running it —
+ * AFTER the host's last window (`-a` on `{end}`), so a host's windows stand in
+ * the order they were placed (design/0086-coordinator-stays-home/). tmux's own
+ * default is the lowest free index, which hands a slot a window left (the
+ * placeholder's, or an ended run's) to the next window placed — in front of
+ * windows placed before it — unless the server happens to renumber.
+ */
 export function createWindowArgv(group: string, label: string): string[] {
   return [
     'new-window',
     '-d',
+    '-a',
     '-P',
     '-F',
     ['#{window_id}', '#{pane_id}'].join(FIELD),
     '-t',
-    windowTarget(group),
+    windowTarget(group, '{end}'),
     '-n',
     label,
     ...HOLD,
@@ -283,23 +291,6 @@ export function startRunArgv(
     request.cwd,
     ...Object.entries(request.env).flatMap(([key, value]) => ['-e', `${key}=${value}`]),
     ...commandArgs(request.command),
-  ];
-}
-
-/**
- * Link a window into a host: replacing the window at `index` (the placeholder)
- * when given, else at the host's next free index. `-d` so no one's current
- * window moves.
- */
-export function linkWindowArgv(window: string, group: string, index?: string): string[] {
-  return [
-    'link-window',
-    '-d',
-    ...(index === undefined ? [] : ['-k']),
-    '-s',
-    window,
-    '-t',
-    windowTarget(group, index),
   ];
 }
 
@@ -603,8 +594,8 @@ export function listPanesArgv(): string[] {
  * Dress one tmux session — a floor host, or a view of one — in a floor's
  * identity: the status line in the floor's color with the ink that reads on
  * it, and the floor named in full at its left edge, emoji first. SESSION
- * options only, so a window linked into several hosts (the coordinator) shows
- * under each host's own theme, and nothing outside this one session changes.
+ * options only, so a window shown in several (an observe view's) shows under
+ * each one's own theme, and nothing outside this one session changes.
  * The `@ward_color` and `@ward_emoji` stamps say what it wears to anything
  * that asks; nothing finds a host by them.
  */
@@ -1180,7 +1171,7 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
         .filter((row) => row.stamp?.floor === floor)
         .sort((a, b) => a.created - b.created)[0];
       let group = existing?.name;
-      let placeholder: { window: string; index: string } | undefined;
+      let placeholder: string | undefined;
       if (group === undefined) {
         group = mintGroupName(request.naming.name);
         const minted = group;
@@ -1193,24 +1184,10 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
               'and open again',
           );
         }
-        const [window = '', index = ''] = must(
+        placeholder = must(
           createGroupArgv(minted, request.group, request.version, request.naming),
           `create host ${minted}`,
-        )
-          .trim()
-          .split(FIELD);
-        placeholder = { window, index };
-        // The floating windows sit at the left edge of every host: the first
-        // replaces the placeholder, the rest follow it.
-        for (const tags of request.floating) {
-          if (tags.session === request.tags.session) continue;
-          const window = windowsOf(find(tags.session), workspace).find(
-            (found) => found.tags.epoch === tags.epoch && !found.dead,
-          )?.window;
-          if (window === undefined) continue;
-          must(linkWindowArgv(window, minted, placeholder?.index), `link ${window} into ${minted}`);
-          placeholder = undefined;
-        }
+        ).trim();
       }
       const [window = '', pane = ''] = must(
         createWindowArgv(group, request.label),
@@ -1219,32 +1196,13 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
         .trim()
         .split(FIELD);
       must(startRunArgv(window, pane, request), `start the run in ${window}`);
-      if (placeholder !== undefined)
-        must(killWindowArgv(placeholder.window), 'clear the placeholder');
+      if (placeholder !== undefined) must(killWindowArgv(placeholder), 'clear the placeholder');
       // A host this placement made is born wearing its floor's identity; one
       // already standing was dressed by the refresh that ran before it. Best
       // effort: a run never fails to start over a status line.
       if (existing === undefined && request.naming.identity !== undefined)
         call(themeArgv(group, request.naming.identity));
-      const linkedInto: string[] = [];
-      if (request.floats) {
-        for (const other of ours(groups(), workspace)) {
-          if (other.name === group) continue;
-          const linked = call(linkWindowArgv(window, other.name));
-          // A run that has already exited cleanly took its window with it
-          // (EXIT_RULE): there is nothing left to link anywhere, and the
-          // launch is reported as it stands — gone — rather than failed.
-          if (!linked.ok && GONE_WINDOW.test(linked.stderr)) break;
-          if (!linked.ok) {
-            throw new WardError(
-              `tmux could not link ${window} into ${other.name}: ` +
-                `${linked.stderr || 'no reason given'}`,
-            );
-          }
-          linkedInto.push(other.name);
-        }
-      }
-      return { group, window, createdGroup: existing === undefined, linkedInto };
+      return { group, window, createdGroup: existing === undefined };
     },
     find,
     close(window: string, session: string): CloseResult {
@@ -1267,11 +1225,6 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
       if (killed.ok) return { outcome: 'closed' };
       if (GONE_WINDOW.test(killed.stderr)) return { outcome: 'absent' };
       return { outcome: 'unknown', reason: killed.stderr };
-    },
-    link(window: string, group: string): void {
-      const shown = must(['list-windows', '-t', windowTarget(group), '-F', '#{window_id}'], 'list');
-      if (lines(shown).includes(window)) return;
-      must(linkWindowArgv(window, group), `link ${window} into ${group}`);
     },
     typeLine(request: TypeRequest): TypeResult {
       const { window, session, text } = request;
@@ -1597,6 +1550,9 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
     endGroupCommand(group: string): string {
       return command(['kill-session', '-t', sessionTarget(group)]);
     },
+    unlinkCommand(window: string, group: string): string {
+      return command(['unlink-window', '-t', windowTarget(group, window)]);
+    },
     forgetEnvCommand(name: string): string {
       return command(['set-environment', '-gu', name]);
     },
@@ -1615,12 +1571,4 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
 
 function viewHostOf(host: string | undefined): { viewHost?: string } {
   return host === undefined ? {} : { viewHost: host };
-}
-
-/** The windows a find returned that stand in this workspace's hosts. */
-function windowsOf(result: FindResult, workspace: string): FoundWindow[] {
-  if (result.outcome !== 'answered') return [];
-  return result.windows.filter((window) =>
-    window.groups.some((group) => group.stamp?.workspace === workspace),
-  );
 }

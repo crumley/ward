@@ -44,7 +44,7 @@ export type Subject =
 /** The longest a slug or a purpose runs inside a name before it is cut. */
 export const NAME_CAP = 24;
 
-/** What the coordinator's window is called: the one window in every floor host. */
+/** What the coordinator's window is called, in the floor-0 host. */
 export const COORDINATOR = 'coord';
 
 /**

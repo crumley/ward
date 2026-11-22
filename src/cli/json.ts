@@ -924,7 +924,7 @@ export function sessionResumeAllJson(
       purpose: session.record.purpose,
       ...(session.record.machine === undefined ? {} : { machine: session.record.machine }),
       floor: session.floor,
-      floats: session.floats,
+      coordinator: session.coordinator,
       step: session.step,
       detail: session.detail,
       ...(session.outcome === undefined ? {} : { outcome: session.outcome }),

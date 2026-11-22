@@ -2,8 +2,8 @@
 // host: attach takes part through a view of the floor host and records
 // `attached`; observe watches one window read-only and records `observed`;
 // both verify the window is the record's own, and refuse — naming the way
-// forward — everything they must not join. Attach repairs a missing floating
-// link (additive only); observe never changes anything. The re-create path
+// forward — everything they must not join. Neither links a window anywhere
+// (design/0086-coordinator-stays-home/); observe never changes anything. The re-create path
 // and the real views are test/host/tmux-live.test.ts's.
 import { afterAll, beforeEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
@@ -67,7 +67,7 @@ test('attach refuses a session last run in the foreground: Ward cannot see that 
   expect(host.finds).toBe(0);
 });
 
-test("attach repairs the coordinator's missing link into the host it joins — and only adds", async () => {
+test("attaching a floor's session leaves the coordinator in the ground floor's host", async () => {
   const coordinator = await hosted();
   await openProject(ws, 'alpha');
   const floor = await hostedFloor(1);
@@ -75,22 +75,36 @@ test("attach repairs the coordinator's missing link into the host it joins — a
     windows: [own(coordinator, ['f0'], '@1'), own(floor, ['f1'], '@2')],
   });
   const joined = await attachSession(ws, floor.id, { terminal: true, host });
-  expect(host.links).toEqual([`@1 into ${group('f1')}`]);
-  expect(joined.repaired).toEqual([`${coordinator.id} into ${group('f1')}`]);
+  expect(host.views.map((view) => [view.group, view.window])).toEqual([[group('f1'), '@2']]);
+  expect(host.placed).toEqual([]);
   expect(host.closed).toEqual([]);
+  expect(joined).not.toHaveProperty('repaired');
 });
 
-test('attaching the coordinator links it into every floor host it is missing from', async () => {
+test("the coordinator is joined in the ground floor's host, whatever other hosts stand", async () => {
   const coordinator = await hosted();
   const host = fakeHost({
     windows: [own(coordinator, ['f0'], '@1')],
     groups: [
       { name: group('f2'), stamp: { workspace: id, floor: 2 }, clients: 0, windows: 1, created: 0 },
-      { name: 'someone-else', clients: 0, windows: 1, created: 0 },
     ],
   });
   await attachSession(ws, coordinator.id, { terminal: true, host });
-  expect(host.links).toEqual([`@1 into ${group('f2')}`]);
+  expect(host.views.map((view) => [view.group, view.window])).toEqual([[group('f0'), '@1']]);
+  expect(host.placed).toEqual([]);
+});
+
+test('a coordinator an older Ward linked into every host is joined in its own, and left linked', async () => {
+  const coordinator = await hosted();
+  await openProject(ws, 'alpha');
+  // Linked first into floor 1's host, as `list-panes` may well name it.
+  const host = fakeHost({ windows: [own(coordinator, ['f1', 'f0'], '@1')] });
+  const joined = await attachSession(ws, coordinator.id, { terminal: true, host });
+  expect(host.views).toEqual([
+    { group: group('f0'), window: '@1', mode: 'attach', workspace: id, ...GROUND() },
+  ]);
+  expect(joined.recreated).toBe(false);
+  expect(host.closed).toEqual([]);
 });
 
 // -- names, brought up to date in place (design/0061-host-names-and-titles/) ----
@@ -155,7 +169,7 @@ test('observe: a live window is watched through a one-window view, and recorded'
   ]);
   expect(host.renames).toEqual([]); // watching changes nothing, names included
   expect(host.entered.map((view) => view.mode)).toEqual(['observe']);
-  expect(host.links).toEqual([]); // watching changes nothing, links included
+  expect(host.placed).toEqual([]); // watching changes nothing
   expect(await events(session.id)).toEqual(['opened', 'observed']);
 });
 

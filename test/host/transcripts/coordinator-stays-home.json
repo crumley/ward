@@ -1,5 +1,5 @@
 {
-  "scenario": "floating-windows",
+  "scenario": "coordinator-stays-home",
   "recordedWith": "tmux 3.8",
   "steps": [
     {
@@ -40,7 +40,7 @@
         "40",
         "-P",
         "-F",
-        "#{window_id}\t#{window_index}",
+        "#{window_id}",
         "cat",
         ";",
         "set-option",
@@ -77,10 +77,10 @@
         "-t",
         "=main-f0-workspace:",
         "set-titles-string",
-        "#{window_name} · main f0#{?#{||:#{==:#{pane_title},},#{||:#{==:#{pane_title},#{host}},#{==:#{pane_title},#{host_short}}}},, · #{pane_title}}"
+        "🔧 #{window_name} · main f0#{?#{||:#{==:#{pane_title},},#{||:#{==:#{pane_title},#{host}},#{==:#{pane_title},#{host_short}}}},, · #{pane_title}}"
       ],
       "exit": 0,
-      "stdout": "@1\t0\n",
+      "stdout": "@1\n",
       "stderr": ""
     },
     {
@@ -88,11 +88,12 @@
       "argv": [
         "new-window",
         "-d",
+        "-a",
         "-P",
         "-F",
         "#{window_id}\t#{pane_id}",
         "-t",
-        "=main-f0-workspace:",
+        "=main-f0-workspace:{end}",
         "-n",
         "coord",
         "cat"
@@ -175,12 +176,38 @@
     {
       "kind": "run",
       "argv": [
-        "list-sessions",
-        "-F",
-        "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "status-style",
+        "bg=colour250,fg=colour16",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "status-left",
+        "#[bold] 🔧 f0 workspace #[nobold] ",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "status-left-length",
+        "19",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "@ward_color",
+        "silver",
+        ";",
+        "set-option",
+        "-t",
+        "=main-f0-workspace:",
+        "@ward_emoji",
+        "🔧"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\tws-conformance\t0\t\t1\t0\t0.1.0\t1\t\n",
+      "stdout": "",
       "stderr": ""
     },
     {
@@ -207,7 +234,7 @@
         "40",
         "-P",
         "-F",
-        "#{window_id}\t#{window_index}",
+        "#{window_id}",
         "cat",
         ";",
         "set-option",
@@ -247,46 +274,7 @@
         "🌊 #{window_name} · main f1#{?#{||:#{==:#{pane_title},},#{||:#{==:#{pane_title},#{host}},#{==:#{pane_title},#{host_short}}}},, · #{pane_title}}"
       ],
       "exit": 0,
-      "stdout": "@3\t0\n",
-      "stderr": ""
-    },
-    {
-      "kind": "run",
-      "argv": [
-        "list-panes",
-        "-a",
-        "-F",
-        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
-      ],
-      "exit": 0,
-      "stdout": "main-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\nmain-f1-alpha\t@3\t%2\t0\t\t\t\t\t\tws-conformance\t1\t0\n",
-      "stderr": ""
-    },
-    {
-      "kind": "run",
-      "argv": [
-        "link-window",
-        "-d",
-        "-k",
-        "-s",
-        "@2",
-        "-t",
-        "=main-f1-alpha:0"
-      ],
-      "exit": 0,
-      "stdout": "",
-      "stderr": ""
-    },
-    {
-      "kind": "run",
-      "argv": [
-        "list-panes",
-        "-a",
-        "-F",
-        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
-      ],
-      "exit": 0,
-      "stdout": "main-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\nmain-f1-alpha\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t1\t0\n",
+      "stdout": "@3\n",
       "stderr": ""
     },
     {
@@ -294,17 +282,18 @@
       "argv": [
         "new-window",
         "-d",
+        "-a",
         "-P",
         "-F",
         "#{window_id}\t#{pane_id}",
         "-t",
-        "=main-f1-alpha:",
+        "=main-f1-alpha:{end}",
         "-n",
         "alpha",
         "cat"
       ],
       "exit": 0,
-      "stdout": "@4\t%3\n",
+      "stdout": "@4\t%2\n",
       "stderr": ""
     },
     {
@@ -329,7 +318,7 @@
         "-t",
         "@4",
         "@ward_pane",
-        "%3",
+        "%2",
         ";",
         "set-option",
         "-w",
@@ -355,13 +344,24 @@
         "respawn-pane",
         "-k",
         "-t",
-        "%3",
+        "%2",
         "-c",
         "<scratch>",
         "-e",
         "WARD_AGENT=alpha",
         "sleep",
         "600"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "kind": "run",
+      "argv": [
+        "kill-window",
+        "-t",
+        "@3"
       ],
       "exit": 0,
       "stdout": "",
@@ -414,7 +414,7 @@
         "#{@ward_session}"
       ],
       "exit": 0,
-      "stdout": "coord\nalpha\n",
+      "stdout": "alpha\n",
       "stderr": ""
     },
     {
@@ -438,7 +438,7 @@
         "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\tws-conformance\t0\t\t1\t0\t0.1.0\t1\t\nmain-f1-alpha\tws-conformance\t1\t\t1\t0\t0.1.0\t2\t\n",
+      "stdout": "main-f0-workspace\tws-conformance\t0\t\t1\t0\t0.1.0\t1\t\nmain-f1-alpha\tws-conformance\t1\t\t1\t0\t0.1.0\t1\t\n",
       "stderr": ""
     },
     {
@@ -454,7 +454,7 @@
         "40",
         "-P",
         "-F",
-        "#{window_id}\t#{window_index}",
+        "#{window_id}",
         "cat",
         ";",
         "set-option",
@@ -494,19 +494,7 @@
         "#{window_name} · main f2#{?#{||:#{==:#{pane_title},},#{||:#{==:#{pane_title},#{host}},#{==:#{pane_title},#{host_short}}}},, · #{pane_title}}"
       ],
       "exit": 0,
-      "stdout": "@5\t0\n",
-      "stderr": ""
-    },
-    {
-      "kind": "run",
-      "argv": [
-        "list-panes",
-        "-a",
-        "-F",
-        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
-      ],
-      "exit": 0,
-      "stdout": "main-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\nmain-f1-alpha\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t1\t0\nmain-f1-alpha\t@4\t%3\t0\t\t\talpha\t2026-11-18T00:00:38.000Z\t%3\tws-conformance\t1\t1\nmain-f2-beta\t@5\t%4\t0\t\t\t\t\t\tws-conformance\t2\t0\n",
+      "stdout": "@5\n",
       "stderr": ""
     },
     {
@@ -514,17 +502,18 @@
       "argv": [
         "new-window",
         "-d",
+        "-a",
         "-P",
         "-F",
         "#{window_id}\t#{pane_id}",
         "-t",
-        "=main-f2-beta:",
+        "=main-f2-beta:{end}",
         "-n",
         "beta",
         "cat"
       ],
       "exit": 0,
-      "stdout": "@6\t%5\n",
+      "stdout": "@6\t%3\n",
       "stderr": ""
     },
     {
@@ -549,7 +538,7 @@
         "-t",
         "@6",
         "@ward_pane",
-        "%5",
+        "%3",
         ";",
         "set-option",
         "-w",
@@ -575,7 +564,7 @@
         "respawn-pane",
         "-k",
         "-t",
-        "%5",
+        "%3",
         "-c",
         "<scratch>",
         "-e",
@@ -619,7 +608,7 @@
         "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\tws-conformance\t0\t\t1\t0\t0.1.0\t1\t\nmain-f1-alpha\tws-conformance\t1\t\t1\t0\t0.1.0\t2\t\nmain-f2-beta\tws-conformance\t2\t\t1\t0\t0.1.0\t1\t\n",
+      "stdout": "main-f0-workspace\tws-conformance\t0\t\t1\t0\t0.1.0\t1\t\nmain-f1-alpha\tws-conformance\t1\t\t1\t0\t0.1.0\t1\t\nmain-f2-beta\tws-conformance\t2\t\t1\t0\t0.1.0\t1\t\n",
       "stderr": ""
     },
     {
@@ -627,17 +616,18 @@
       "argv": [
         "new-window",
         "-d",
+        "-a",
         "-P",
         "-F",
         "#{window_id}\t#{pane_id}",
         "-t",
-        "=main-f0-workspace:",
+        "=main-f0-workspace:{end}",
         "-n",
         "coord-2",
         "cat"
       ],
       "exit": 0,
-      "stdout": "@7\t%6\n",
+      "stdout": "@7\t%4\n",
       "stderr": ""
     },
     {
@@ -662,7 +652,7 @@
         "-t",
         "@7",
         "@ward_pane",
-        "%6",
+        "%4",
         ";",
         "set-option",
         "-w",
@@ -688,7 +678,7 @@
         "respawn-pane",
         "-k",
         "-t",
-        "%6",
+        "%4",
         "-c",
         "<scratch>",
         "-e",
@@ -701,42 +691,29 @@
       "stderr": ""
     },
     {
-      "kind": "run",
+      "kind": "outside",
       "argv": [
-        "list-sessions",
+        "list-windows",
+        "-t",
+        "=main-f0-workspace:",
         "-F",
-        "#{session_name}\t#{@ward_workspace}\t#{@ward_floor}\t#{@ward_view}\t#{session_created}\t#{session_attached}\t#{@ward_version}\t#{session_windows}\t#{session_group}"
+        "#{@ward_session}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\tws-conformance\t0\t\t1\t0\t0.1.0\t2\t\nmain-f1-alpha\tws-conformance\t1\t\t1\t0\t0.1.0\t2\t\nmain-f2-beta\tws-conformance\t2\t\t1\t0\t0.1.0\t1\t\n",
+      "stdout": "coord\ncoord-2\n",
       "stderr": ""
     },
     {
-      "kind": "run",
+      "kind": "outside",
       "argv": [
-        "link-window",
-        "-d",
-        "-s",
-        "@7",
+        "list-windows",
         "-t",
-        "=main-f1-alpha:"
+        "=main-f1-alpha:",
+        "-F",
+        "#{@ward_session}"
       ],
       "exit": 0,
-      "stdout": "",
-      "stderr": ""
-    },
-    {
-      "kind": "run",
-      "argv": [
-        "link-window",
-        "-d",
-        "-s",
-        "@7",
-        "-t",
-        "=main-f2-beta:"
-      ],
-      "exit": 0,
-      "stdout": "",
+      "stdout": "alpha\n",
       "stderr": ""
     },
     {
@@ -749,7 +726,7 @@
         "#{@ward_session}"
       ],
       "exit": 0,
-      "stdout": "coord-2\nbeta\n",
+      "stdout": "beta\n",
       "stderr": ""
     },
     {
@@ -761,50 +738,25 @@
         "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t0\t0\nmain-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\nmain-f1-alpha\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t1\t0\nmain-f1-alpha\t@4\t%3\t0\t\t\talpha\t2026-11-18T00:00:38.000Z\t%3\tws-conformance\t1\t1\nmain-f1-alpha\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t1\t2\nmain-f2-beta\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t2\t0\nmain-f2-beta\t@6\t%5\t0\t\t\tbeta\t2026-11-18T00:00:52.000Z\t%5\tws-conformance\t2\t1\n",
-      "stderr": ""
-    },
-    {
-      "kind": "run",
-      "argv": [
-        "list-windows",
-        "-t",
-        "=main-f1-alpha:",
-        "-F",
-        "#{window_id}"
-      ],
-      "exit": 0,
-      "stdout": "@2\n@4\n@7\n",
+      "stdout": "main-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\nmain-f0-workspace\t@7\t%4\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%4\tws-conformance\t0\t2\nmain-f1-alpha\t@4\t%2\t0\t\t\talpha\t2026-11-18T00:00:38.000Z\t%2\tws-conformance\t1\t1\nmain-f2-beta\t@6\t%3\t0\t\t\tbeta\t2026-11-18T00:00:52.000Z\t%3\tws-conformance\t2\t1\n",
       "stderr": ""
     },
     {
       "kind": "outside",
       "argv": [
-        "list-windows",
+        "link-window",
+        "-d",
+        "-s",
+        "@2",
         "-t",
-        "=main-f1-alpha:",
-        "-F",
-        "#{@ward_session}"
+        "=main-f1-alpha:"
       ],
       "exit": 0,
-      "stdout": "coord\nalpha\ncoord-2\n",
+      "stdout": "",
       "stderr": ""
     },
     {
-      "kind": "run",
-      "argv": [
-        "list-windows",
-        "-t",
-        "=main-f2-beta:",
-        "-F",
-        "#{window_id}"
-      ],
-      "exit": 0,
-      "stdout": "@7\n@6\n",
-      "stderr": ""
-    },
-    {
-      "kind": "run",
+      "kind": "outside",
       "argv": [
         "link-window",
         "-d",
@@ -818,16 +770,39 @@
       "stderr": ""
     },
     {
+      "kind": "run",
+      "argv": [
+        "list-panes",
+        "-a",
+        "-F",
+        "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
+      ],
+      "exit": 0,
+      "stdout": "main-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\nmain-f0-workspace\t@7\t%4\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%4\tws-conformance\t0\t2\nmain-f1-alpha\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t1\t0\nmain-f1-alpha\t@4\t%2\t0\t\t\talpha\t2026-11-18T00:00:38.000Z\t%2\tws-conformance\t1\t1\nmain-f2-beta\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t2\t0\nmain-f2-beta\t@6\t%3\t0\t\t\tbeta\t2026-11-18T00:00:52.000Z\t%3\tws-conformance\t2\t1\n",
+      "stderr": ""
+    },
+    {
+      "kind": "outside",
+      "argv": [
+        "unlink-window",
+        "-t",
+        "=main-f1-alpha:@2"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
       "kind": "outside",
       "argv": [
         "list-windows",
         "-t",
-        "=main-f2-beta:",
+        "=main-f1-alpha:",
         "-F",
         "#{@ward_session}"
       ],
       "exit": 0,
-      "stdout": "coord-2\nbeta\ncoord\n",
+      "stdout": "alpha\n",
       "stderr": ""
     },
     {
@@ -835,7 +810,7 @@
       "argv": [
         "kill-session",
         "-t",
-        "=main-f1-alpha"
+        "=main-f2-beta"
       ],
       "exit": 0,
       "stdout": "",
@@ -850,7 +825,7 @@
         "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t0\t0\nmain-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\nmain-f2-beta\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t2\t0\nmain-f2-beta\t@6\t%5\t0\t\t\tbeta\t2026-11-18T00:00:52.000Z\t%5\tws-conformance\t2\t1\nmain-f2-beta\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t2\t2\n",
+      "stdout": "main-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\nmain-f0-workspace\t@7\t%4\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%4\tws-conformance\t0\t2\nmain-f1-alpha\t@4\t%2\t0\t\t\talpha\t2026-11-18T00:00:38.000Z\t%2\tws-conformance\t1\t1\n",
       "stderr": ""
     },
     {
@@ -862,7 +837,7 @@
         "#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}\t#{@ward_session}\t#{@ward_epoch}\t#{@ward_pane}\t#{@ward_workspace}\t#{@ward_floor}\t#{window_index}"
       ],
       "exit": 0,
-      "stdout": "main-f0-workspace\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t0\t0\nmain-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\nmain-f2-beta\t@7\t%6\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%6\tws-conformance\t2\t0\nmain-f2-beta\t@6\t%5\t0\t\t\tbeta\t2026-11-18T00:00:52.000Z\t%5\tws-conformance\t2\t1\nmain-f2-beta\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t2\t2\n",
+      "stdout": "main-f0-workspace\t@2\t%1\t0\t\t\tcoord\t2026-11-18T00:00:55.000Z\t%1\tws-conformance\t0\t1\nmain-f0-workspace\t@7\t%4\t0\t\t\tcoord-2\t2026-11-18T00:00:30.000Z\t%4\tws-conformance\t0\t2\nmain-f1-alpha\t@4\t%2\t0\t\t\talpha\t2026-11-18T00:00:38.000Z\t%2\tws-conformance\t1\t1\n",
       "stderr": ""
     }
   ]

@@ -355,8 +355,8 @@ export async function refreshNames(
  * stamp. An ATTACH view names its host itself — the group the host says it
  * shares windows with. An OBSERVE view shares no group: it holds one window,
  * so its host is a host that window stands in — the one on the floor its
- * session is placed on when the window stands in several (the coordinator
- * floats into every host), which is the host observe was pointed at. A view
+ * session is placed on when the window stands in several (a coordinator an
+ * older Ward linked into every host), which is the host observe was pointed at. A view
  * whose host cannot be told is left exactly as it is. No name is read.
  */
 export function standingViews(
