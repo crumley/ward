@@ -34,7 +34,8 @@ test('every scope reads as what it is: coordinator, helper, floor, task', async 
   });
   const floor = await openFloorSession(ws, 1, 'Outstanding work', hosted('f'));
   const task = await openSession(ws, 'f1t1', 'build it', { handle: 'claude:t', host: 'tmux' });
-  // Started by floor 1's session for the ground floor: placed beside its parent.
+  // Started by floor 1's session for the ground floor: it stays in the ground
+  // floor's host (design/0090-floor-sessions-stay-home/), so it reads as home.
   const lineage = await openFloorSession(ws, GROUND_FLOOR, undefined, {
     ...hosted('l'),
     startedBy: floor.id,
@@ -46,7 +47,7 @@ test('every scope reads as what it is: coordinator, helper, floor, task', async 
   expect(await label(sweep)).toBe('Sweep the worktrees');
   expect(await label(floor)).toBe('alpha'); // a purpose never displaces what the session is
   expect(await label(task)).toBe('f1t1 fix-the-thing'); // the full address, at home too (0078)
-  expect(await label(lineage)).toBe('🔧f0 workspace'); // another floor's, marked with its emoji
+  expect(await label(lineage)).toBe('workspace'); // at home, whoever started it
   // Its host wears its identity (0060), whose emoji the host puts at the head
   // of the title (0064) — so where it stands carries none.
   expect(naming.group(1)).toEqual({

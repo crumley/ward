@@ -48,7 +48,7 @@ import {
   type Subject,
   windowLabel,
 } from './labels.ts';
-import { leadsHost, placementFloor } from './placement.ts';
+import { isAttending, placementFloor } from './placement.ts';
 
 const PROJECT_DIR = /^projects\/(\d+)-([^/]*)/;
 const TASK_DIR = /(?:^|\/)tasks\/t(\d+)-([^/]+)$/;
@@ -342,7 +342,7 @@ export async function refreshNames(
       // (design/0089-floor-attending/): one standing behind another window —
       // an older Ward's host, an attending opened or resumed late — is moved to
       // the front, by its id, the rest left in their order.
-      if (!leadsHost(listing, all)) continue;
+      if (!isAttending(listing.record, all)) continue;
       const home = placed(listing.record.id);
       const floorHost = inventory.groups.find(
         (group) =>

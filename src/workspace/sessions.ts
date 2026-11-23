@@ -656,8 +656,9 @@ export interface Continuation {
  *
  * The successor records no `parent`: it was not started by a run but carries
  * one on, so who opened the conversation is read through `continues` — and a
- * parent would pull its window back to the parent's floor (placement), which
- * is the opposite of a move.
+ * parent would pull a workspace-scope successor's window back to the
+ * parent's floor (placement, design/0090-floor-sessions-stay-home/), which is
+ * the opposite of a move.
  */
 export async function continueSession(
   root: string,

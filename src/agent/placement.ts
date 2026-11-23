@@ -3,8 +3,10 @@
 // every launch and never stored. Every window lives in that one host alone:
 // the coordinator, too, stays in the ground floor's host
 // (design/0086-coordinator-stays-home/). Placement reads facts
-// that do not change over a session's life (its scope, its task's floor, its
-// recorded parent), so a re-created window lands where the first one did, and
+// that do not change over a session's life (its scope, its task's floor, and
+// for a workspace-scope helper its recorded parent —
+// design/0090-floor-sessions-stay-home/), so a re-created window lands where
+// the first one did, and
 // a reboot reassembles every floor exactly as it stood without anything
 // having remembered a window. Which session is a floor's attending, the first
 // window of its host (design/0089-floor-attending/), is derived here too.
@@ -33,13 +35,17 @@ export function ownFloor(listing: OpenSessionListing): number {
 }
 
 /**
- * The floor whose host the session's window goes in: its recorded parent's
- * placement floor when that parent's record exists here and is not floor 0 —
- * so a session a floor-3 coordinator starts lands beside it — and otherwise
- * its own. A floor-0 parent never pulls a child onto floor 0: work started for
- * floor 5 belongs where floor 5 is tended. Bounded by the parent chain, with a
- * guard against a chain that loops (only a hand-edited record makes one): the
- * walk stops at the first session it has already seen.
+ * The floor whose host the session's window goes in
+ * (design/0090-floor-sessions-stay-home/). A floor's own session, and a task
+ * session, belong to the floor their scope names, whoever started them: their
+ * own floor's host is where that floor is tended, and where its attending,
+ * `wsa N` and a hand-off's line all look. Only a workspace-scope session has
+ * no floor of its own to go to, so one started by another session lands
+ * beside that parent — its parent's placement floor when that parent's record
+ * exists here and is not floor 0 — and otherwise in the ground floor's host.
+ * Bounded by the parent chain, with a guard against a chain that loops (only a
+ * hand-edited record makes one): the walk stops at the first session it has
+ * already seen.
  */
 export function placementFloor(
   listing: OpenSessionListing,
@@ -50,6 +56,7 @@ export function placementFloor(
   const walk = (entry: OpenSessionListing): number => {
     seen.add(entry.record.id);
     const own = ownFloor(entry);
+    if (sessionScopeOf(entry.record) !== 'workspace') return own;
     const parentId = entry.record.parent;
     if (parentId === undefined || seen.has(parentId)) return own;
     const parent = byId.get(parentId);
@@ -149,20 +156,4 @@ export function isAttending(record: SessionRecord, all: readonly OpenSessionList
   const floor = attendingFloorOf(record);
   if (floor === undefined) return false;
   return attendingOf(all, floor, record.machine)?.record.id === record.id;
-}
-
-/**
- * Whether the session's window leads its host: it is the attending, and it
- * stands in its own floor's host. A floor session a session of another floor
- * started is placed beside its parent ({@link placementFloor}); it is still
- * its floor's attending, but it is not that host's, and leads nothing there.
- */
-export function leadsHost(
-  listing: OpenSessionListing,
-  all: readonly OpenSessionListing[],
-): boolean {
-  return (
-    isAttending(listing.record, all) &&
-    placementFloor(listing, all) === attendingFloorOf(listing.record)
-  );
 }

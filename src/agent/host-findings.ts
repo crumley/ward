@@ -211,13 +211,23 @@ function inventoryFindings(
     const floor = placementFloor(listing, sessions);
     const home = ours.hosts.filter((group) => group.stamp?.floor === floor).map((g) => g.name);
     const standing = window.groups.filter((name) => ours.names.has(name));
+    // A window standing outside its placement floor's host — an older Ward
+    // placed a floor session another floor's session started beside that
+    // parent (design/0090-floor-sessions-stay-home/), or a human moved it.
+    // Named, with the move that takes it home, and never moved here.
     if (!standing.some((name) => home.includes(name))) {
+      const from = standing[0];
+      const to = home[0];
       findings.push({
         check: WINDOWS,
         severity: 'info',
         message:
           `session ${record.id}'s window ${window.window} stands in ${standing.join(', ')}, ` +
-          `not floor ${floor}'s host — attach follows it wherever it is`,
+          `not floor ${floor}'s host — attach follows it wherever it is. ` +
+          (from !== undefined && to !== undefined
+            ? `To move it home, its run going on: ${host.moveCommand(window.window, from, to)}`
+            : `Floor ${floor}'s host is not standing; once this run exits, ` +
+              `ward session resume ${record.id} --detach places it there`),
       });
     }
     // Ward links no window into a second host

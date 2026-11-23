@@ -423,6 +423,12 @@ export interface SessionHost {
    * leaving it standing in the others — for a finding's remedy.
    */
   unlinkCommand(window: string, group: string): string;
+  /**
+   * The command that moves one window, by its id, out of the group it stands
+   * in and to the end of another, its run going on — for a finding's remedy
+   * (design/0090-floor-sessions-stay-home/).
+   */
+  moveCommand(window: string, from: string, to: string): string;
   /** The command that stops new windows inheriting one variable from the host. */
   forgetEnvCommand(name: string): string;
 }

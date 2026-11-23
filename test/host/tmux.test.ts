@@ -577,6 +577,10 @@ test('remedies are whole commands, on the configured server', () => {
   expect(host.endGroupCommand('ward-a-f2')).toBe('tmux -L try kill-session -t =ward-a-f2');
   // Out of the one host only: the window stays in its own.
   expect(host.unlinkCommand('@4', 'ward-a-f2')).toBe('tmux -L try unlink-window -t =ward-a-f2:@4');
+  // To the end of its floor's host, named by host and id (a view may show it too).
+  expect(host.moveCommand('@4', 'ward-a-f2', 'ward-a-f5')).toBe(
+    'tmux -L try move-window -s =ward-a-f2:@4 -t =ward-a-f5:',
+  );
   expect(host.forgetEnvCommand('CLAUDECODE')).toBe('tmux -L try set-environment -gu CLAUDECODE');
 });
 
