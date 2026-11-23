@@ -13,7 +13,9 @@
 > [`0061-host-names-and-titles/`](../0061-host-names-and-titles/README.md); keeping the window of a
 > run that exited cleanly, by
 > [`0070-clean-exit-closes-window/`](../0070-clean-exit-closes-window/README.md); the floating
-> coordinator, by [`0086-coordinator-stays-home/`](../0086-coordinator-stays-home/README.md)
+> coordinator, by [`0086-coordinator-stays-home/`](../0086-coordinator-stays-home/README.md); a
+> floor or task session placed beside the parent that started it, by
+> [`0090-floor-sessions-stay-home/`](../0090-floor-sessions-stay-home/README.md)
 
 [0029](../0029-launched-sessions/README.md) made Ward launch agents — foreground, in the caller's
 terminal, dying with it — and its IF-002, since adjudicated into the

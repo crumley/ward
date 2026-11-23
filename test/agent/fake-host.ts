@@ -234,6 +234,8 @@ export function fakeHost(options: FakeHostOptions = {}): FakeHost {
     closeCommand: (window: string) => `fake kill ${window}`,
     endGroupCommand: (group: string) => `fake end ${group}`,
     unlinkCommand: (window: string, group: string) => `fake unlink ${window} from ${group}`,
+    moveCommand: (window: string, from: string, to: string) =>
+      `fake move ${window} from ${from} to ${to}`,
     forgetEnvCommand: (name: string) => `fake forget ${name}`,
   };
 }

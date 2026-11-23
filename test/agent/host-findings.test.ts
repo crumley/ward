@@ -107,7 +107,7 @@ const rows: Row[] = [
     expected: [info('host windows', 'exited 3, its window @1 kept')],
   },
   {
-    name: 'a misplaced window: attach follows it',
+    name: "a misplaced window, its floor's host not standing: resumed there once its run exits",
     arrange: async () => {
       await openProject(ws, 'alpha');
       await openProject(ws, 'beta');
@@ -116,7 +116,41 @@ const rows: Row[] = [
         windows: [{ ...win(s, ['f2']) }],
       };
     },
-    expected: [info('host windows', 'stands in', "not floor 1's host — attach follows it")],
+    expected: [
+      info(
+        'host windows',
+        `stands in ${host('f2')}`,
+        "not floor 1's host — attach follows it",
+        "Floor 1's host is not standing",
+        'ward session resume f1-1@test --detach',
+      ),
+    ],
+  },
+  {
+    // What an older Ward did (design/0090-floor-sessions-stay-home/): a floor-2
+    // session floor 1's session started was placed beside its parent.
+    name: "a floor session placed beside another floor's parent: named, with the move home",
+    arrange: async () => {
+      await openProject(ws, 'alpha');
+      await openProject(ws, 'beta');
+      const parent = await hostedFloor(1);
+      const child = await openFloorSession(ws, 2, 'hosted', {
+        handle: `claude:f-${++runs}`,
+        host: 'tmux',
+        startedBy: parent.id,
+      });
+      return {
+        windows: [win(parent, ['f1'], '@1'), win(child, ['f1'], '@2')],
+        groups: [floorHost('f2', { windows: 0 })],
+      };
+    },
+    expected: [
+      info(
+        'host windows',
+        `f2-1@test's window @2 stands in ${host('f1')}, not floor 2's host`,
+        `To move it home, its run going on: fake move @2 from ${host('f1')} to ${host('f2')}`,
+      ),
+    ],
   },
   {
     name: 'the coordinator in its own host alone, with other floor hosts standing: a clean bill',

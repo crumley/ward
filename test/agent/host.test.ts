@@ -59,10 +59,42 @@ test.each<[string, OpenSessionListing, number, boolean]>([
     false,
   ],
   ['a legacy bare task', listing('tasks/t1-old', { id: 'old-1@t', task: 't1' }), 0, false],
+  // A floor's own session stays home whoever started it
+  // (design/0090-floor-sessions-stay-home/): its floor's host is where the
+  // floor is tended.
   [
-    "a floor-5 session the floor-3 one started: its parent's floor",
+    "a floor-5 session the floor-3 one started: its own floor, not its parent's",
     listing('projects/5-e', { id: 'f5-1@t', scope: 'project', floor: 5, parent: 'f3-1@t' }),
-    3,
+    5,
+    false,
+  ],
+  [
+    'a floor-5 session working a task, started by the floor-3 one: its own floor',
+    listing('projects/5-e', {
+      id: 'f5-4@t',
+      scope: 'project',
+      floor: 5,
+      parent: 'f3-1@t',
+      events: [{ event: 'task-named', at: EPOCH, task: 'f5t2-x' }],
+    }),
+    5,
+    false,
+  ],
+  [
+    "a task session the floor-3 one started: its task's floor",
+    listing('projects/5-e/tasks/t2-x', { id: 'x-2@t', task: 't2', parent: 'f3-1@t' }),
+    5,
+    false,
+  ],
+  [
+    "a ground-floor session the floor-3 one started: the ground floor's host",
+    listing('projects/0-workspace', {
+      id: 'f0-2@t',
+      scope: 'project',
+      floor: 0,
+      parent: 'f3-1@t',
+    }),
+    0,
     false,
   ],
   [
@@ -84,6 +116,12 @@ test.each<[string, OpenSessionListing, number, boolean]>([
     false,
   ],
   [
+    "a helper's helper, the first started by floor 3's session: floor 3's host",
+    listing('', { id: 'workspace-5@t', scope: 'workspace', parent: 'workspace-3@t' }),
+    3,
+    false,
+  ],
+  [
     'a ground-floor session is not the coordinator',
     listing('projects/0-workspace', { id: 'f0-1@t', scope: 'project', floor: 0 }),
     0,
@@ -96,16 +134,18 @@ test.each<[string, OpenSessionListing, number, boolean]>([
     false,
   ],
 ])('%s → floor %p, coordinator %p', (_name, session, floor, isIt) => {
-  const all = [coordinator, floor3, session];
+  const helper = listing('', { id: 'workspace-3@t', scope: 'workspace', parent: 'f3-1@t' });
+  const all = [coordinator, floor3, helper, session];
   expect(placementFloor(session, all)).toBe(floor);
   expect(isCoordinator(session.record)).toBe(isIt);
 });
 
 test('a parent chain that loops (only a hand edit makes one) stops at the loop', () => {
-  const a = listing('projects/2-b', { id: 'a-1@t', scope: 'project', floor: 2, parent: 'b-1@t' });
-  const b = listing('projects/4-d', { id: 'b-1@t', scope: 'project', floor: 4, parent: 'a-1@t' });
-  // a → b → (a again: stop) — b answers its own floor, and a inherits it.
-  expect(placementFloor(a, [a, b])).toBe(4);
+  const a = listing('', { id: 'a-1@t', scope: 'workspace', parent: 'b-1@t' });
+  const b = listing('', { id: 'b-1@t', scope: 'workspace', parent: 'a-1@t' });
+  // a → b → (a again: stop) — b answers its own floor, and a inherits nothing.
+  expect(placementFloor(a, [a, b])).toBe(0);
+  expect(placementFloor(b, [a, b])).toBe(0);
 });
 
 // -- ownership: tag, epoch, and the workspace stamp ----------------------------

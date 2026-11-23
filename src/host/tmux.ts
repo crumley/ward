@@ -1626,6 +1626,11 @@ export function tmuxHost(env: Env = process.env, runner?: TmuxRunner): SessionHo
     unlinkCommand(window: string, group: string): string {
       return command(['unlink-window', '-t', windowTarget(group, window)]);
     },
+    moveCommand(window: string, from: string, to: string): string {
+      // The source names its host as well as its id: a bare @ID in a host
+      // with an attach view resolves through the view (design/0089).
+      return command(['move-window', '-s', windowTarget(from, window), '-t', `=${to}:`]);
+    },
     forgetEnvCommand(name: string): string {
       return command(['set-environment', '-gu', name]);
     },
